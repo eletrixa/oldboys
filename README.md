@@ -9,7 +9,17 @@ Hackathon build. Live at https://oldboys.asajj.cz (Cloudflare Workers).
 - `plans/001-deep-research-arch/` — architecture dossier; start at `00-SYNTHESIS.md`
 - `overview/index.html` — one-page overview; `cd overview && python3 -m http.server 4242`
 
-Status: scaffolded 2026-10-08, deploy target Cloudflare Workers (plans/002)
+Status: 2026-10-08 evening. Screen 1 (start) and Screen 2 (checking + lineup) work against the local Workflow; every hiring source is a live collector; brief generation needs `ANTHROPIC_API_KEY`.
+
+## What it does
+Type a candidate's name, a city or profile link, and the role. The Worker runs one declared recipe (`src/recipe/goals/hiring.ts`): Google SERP, a social-profile SERP, identity lineup (pauses and asks you at most three yes / no / not sure questions), then LinkedIn, GitHub, Stack Exchange, Hugging Face, ORCID, OpenAlex, X, Instagram, TikTok, YouTube, Bluesky, the personal site and a talks search. Claims are extracted with the primary model, verified deterministically (quote must sit inside a stored excerpt) and by a second model that can only downgrade, then written into a brief per must-have with interview questions and an explicit "not searched" list.
+
+What is live, what is not:
+- Apify actors and REST sources: live (`src/recipe/sources/*`, verified with `LIVE=1 ... vitest run live-sources`).
+- Role questions and identity scoring: model calls with a deterministic fallback. Without a model the lineup never merges on its own, it only asks.
+- Extract, verify, brief: model calls only. Without `ANTHROPIC_API_KEY` the run stops after the lineup and Screen 2 shows the failing step.
+- Verification phone calls (plans/005): `CALL_PROVIDER=mock` unless ElevenLabs keys are set; mock output is labeled MOCK.
+- Limits: no reverse image search, ISIR and Companies House are "not searched" with a reason; LinkedIn needs a public `/in/` URL from search or the form; raw payloads expire after 7 days and are purged after judging.
 
 ## Quickstart
 ```sh
@@ -17,8 +27,18 @@ pnpm install
 pnpm hooks:install            # pre-commit runs pnpm check on code changes
 cp .dev.vars.example .dev.vars
 pnpm db:migrate:local
-pnpm dev
+pnpm dev                      # UI + API on :3141 (Workflows are NOT available here)
+pnpm preview                  # full stack incl. the research Workflow on :8787 (use this for a real run)
 ```
+
+Put `APIFY_TOKEN`, `ANTHROPIC_API_KEY` and `RUN_TOKEN` into `.dev.vars`; `NEXT_PUBLIC_RUN_TOKEN=<same RUN_TOKEN>` into `.env` so the start form can call the API.
+
+Live checks (spend real Apify money, never in CI):
+```sh
+LIVE=1 SUBJECT="Jozef Buryan" ANCHOR="Praha" REPORT=/tmp/r.txt pnpm exec vitest run live-sources   # every collector, ~$0.01
+node scripts/ui-flow.mjs "Jozef Buryan" "Praha" "Senior Data Engineer" /tmp/shots                  # Screen 1 -> 2 in Chromium against :8787
+```
+CEO review loop: each iteration grades the screenshots and a live run into `eval/reviews/NNN.md`; fixes land as `fix: review NNN` commits until the score is at least 4.5 / 5.
 
 ## Deploy
 ```sh
