@@ -16,7 +16,10 @@
  * - Add other handlers (scheduled, queue) here, never inside the Next.js app
  */
 // @ts-ignore: .open-next/worker.js exists only after `opennextjs-cloudflare build`
-import { default as nextHandler } from "../.open-next/worker.js";
+import { default as generated } from "../.open-next/worker.js";
+
+// The generated module is untyped before the build runs; pin the shape we rely on.
+const nextHandler = generated as { fetch: NonNullable<ExportedHandler<CloudflareEnv>["fetch"]> };
 
 export { ResearchRunWorkflow } from "@/workflow/research-run";
 

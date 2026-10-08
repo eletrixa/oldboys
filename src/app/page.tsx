@@ -12,7 +12,7 @@
  * Design constraints:
  * - Server component; interactivity (fetch + SSE subscription) comes in a client component later
  */
-export default function HomePage() {
+export default function HomePage(): React.JSX.Element {
   return (
     <main className="mx-auto flex max-w-xl flex-col gap-8 px-4 py-16">
       <header className="flex flex-col gap-2">

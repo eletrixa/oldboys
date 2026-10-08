@@ -42,4 +42,4 @@ OpenNext emits `.open-next/worker.js`. `src/worker.ts` re-exports its default `f
 | C | SSE polling adds ≤1 s latency | acceptable; replay whole ledger on connect, events idempotent by `seq` |
 | D | D1 local vs remote drift | migrations in `migrations/`, `wrangler d1 migrations apply --local` in `dev` |
 | E | Deploy from Linux CLI only | `pnpm deploy` runs on this machine; CI deploy workflow for `main` |
-| F | Next.js 16.4 ships `preview-props.json`, which OpenNext ≤1.20.9 does not inline (Error 1101 on every route) | `next` pinned exactly to 16.3.8 in package.json until opennextjs-cloudflare PR #1356 is released; bump both together |
+| F | Next.js 16.4 ships `preview-props.json`, which OpenNext ≤1.20.9 does not inline (Error 1101 on every route) | pnpm patch on `@opennextjs/cloudflare` applying PR #1356 (one-line glob change); remove the patch once released upstream |

@@ -56,7 +56,7 @@ export async function GET(
     },
     async start(controller) {
       const send = (eventName: string, eventId: number | null, data: unknown) => {
-        const idLine = eventId === null ? "" : `id: ${eventId}\n`;
+        const idLine = eventId === null ? "" : `id: ${String(eventId)}\n`;
         controller.enqueue(
           encoder.encode(`${idLine}event: ${eventName}\ndata: ${JSON.stringify(data)}\n\n`),
         );

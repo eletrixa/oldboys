@@ -114,7 +114,7 @@ export class ResearchRunWorkflow extends WorkflowEntrypoint<CloudflareEnv, Resea
         // TODO: wire Ports (callActor via apify-client, llm via @ai-sdk/anthropic, storeSource via R2)
         // and run the step body; apply `onEmpty` (fallbackStep or Gap) when the result is empty.
         // TODO: enforce RUN_BUDGET_USD / RUN_BUDGET_CALLS before each paid call.
-        const kind: LedgerKind = recipeStep.actor ? "call" : "llm";
+        const kind: LedgerKind = recipeStep.actor === undefined ? "llm" : "call";
         return this.appendLedger(runId, {
           step: recipeStep.id,
           kind,
