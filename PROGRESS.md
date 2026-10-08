@@ -160,3 +160,6 @@ Each agent appends: what it starts, progress, what it finishes. Newest at the bo
 - Started: 01:10. Idea #23 "Close the gaps after the interview" (cheapest honest form): paste the filled interview kit back on the run page; ticked boxes or written notes count as answered, the rest is listed as still open with "Copy open points". Client-only: the kit and notes never leave the browser; note content is never read or scored.
 - Finished: 01:12. Pure `parseFilledKit` / `reviewSummary` / `openPointsText` + `KitReviewCard`. No schema change, no new endpoint; pnpm check green, wrangler dry-run bundles.
 - Files: src/app/runs/[id]/{kit-review.ts,kit-review-card.tsx,__tests__/kit-review.test.ts} (new), src/app/runs/[id]/kit-actions.tsx, CHANGELOG.md, PROGRESS.md.
+
+## 2026-10-09 · cv-consistency agent (Minas)
+- Started: 01:14. Idea #14 "CV consistency check": for runs with a CV, compare CV statements (employer, role, dates, projects, education) with the confirmed public sources; matches / differs / not found publicly; differences become neutral interview questions.
