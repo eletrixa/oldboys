@@ -107,3 +107,8 @@ Each agent appends: what it starts, progress, what it finishes. Newest at the bo
 - Started: 23:59. Idea #20 (copy-paste door): "Copy for ATS" button next to the interview kit and candidate notice buttons; pure `atsNote` builds a short plain-text note for any ATS card (subject + role, the three 30-second summary lines, up to 5 confirmed profile links, link to the full brief, "rates the research, not the candidate" + deletion date).
 - Finished: 00:01. Merged candidates only, never also_found; no Markdown. No schema change, no new endpoint; pnpm check green, wrangler dry-run bundles.
 - Files: src/app/runs/[id]/{ats-note.ts,__tests__/ats-note.test.ts} (new), src/app/runs/[id]/kit-actions.tsx, PROGRESS.md.
+
+## 2026-10-09 · reference-check agent (Minas)
+- Started: 00:12. Idea #18 "Reference-check questions": "Copy reference questions" turns research gaps (role criteria with no or partial evidence, or unchecked criteria when AI was off, plus to-verify items) into at most 8 plain-text questions for a former manager or colleague, with a consent and private-topics reminder; export buttons grouped by audience (Interview, Candidate, ATS, References).
+- Finished: 00:13. Pure `referenceQuestions`, Art. 9 filter as defense in depth, never also_found or claims. No schema change, no new endpoint; pnpm check green, wrangler dry-run bundles.
+- Files: src/app/runs/[id]/{reference-check.ts,__tests__/reference-check.test.ts} (new), src/app/runs/[id]/kit-actions.tsx, src/app/runs/[id]/summary.ts (export aiOff), PROGRESS.md.
