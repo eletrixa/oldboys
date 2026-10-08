@@ -123,7 +123,7 @@ export function NewPositionForm(): React.JSX.Element {
                 type="url"
                 inputMode="url"
                 autoFocus
-                placeholder="https://www.startupjobs.cz/nabidka/…  or  https://www.jobs.cz/rpd/…"
+                placeholder="https://www.jobs.cz/rpd/…"
                 value={url}
                 onChange={(e) => { setUrl(e.target.value); }}
               />
