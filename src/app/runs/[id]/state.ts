@@ -11,18 +11,22 @@
  * - stepRows: map the ledger step + status to the five human progress rows
  * - sortLineup: confirmed first, social platforms before web hits
  * - questionsToAsk: one open profile per platform; roleCriteria: role must-haves (mh-) only
+ * - evidenceGroup: the heading a confirmed source sits under, from its URL's platform (LinkedIn, X), not the actor
  *
  * Design constraints:
- * - Pure and import-type only, so both the route handler and client code can use it
+ * - Pure (types plus the pure platformOf), so both the route handler and client code can use it
  */
 import type { Brief, Candidate, Claim } from "@/domain/claim";
 import type { RunCost } from "@/domain/run-cost";
+import { platformOf } from "@/recipe/sources/types";
 
 export type RunStatus = "queued" | "running" | "paused" | "done" | "failed";
 
 export type RunState = {
   id: string;
   subject: string;
+  /** Role the manager is hiring for (hiring goal); null for other goals and older runs. */
+  role: string | null;
   /** ISO timestamp the run was created; drives the CACHED label. */
   created_at: string;
   status: RunStatus;
@@ -45,7 +49,26 @@ export type RunState = {
 
 export type RowState = "done" | "active" | "todo" | "failed" | "skipped";
 
-export const PLATFORM_RANK: Record<string, number> = { linkedin: 0, github: 1, x: 2, instagram: 3, tiktok: 4, youtube: 5, bluesky: 6 };
+export const PLATFORM_RANK: Record<string, number> = { linkedin: 0, github: 1, x: 2, instagram: 3, tiktok: 4, youtube: 5, bluesky: 6, facebook: 7 };
+
+export const PLATFORM_LABEL: Record<string, string> = {
+  linkedin: "LinkedIn",
+  github: "GitHub",
+  instagram: "Instagram",
+  x: "X",
+  tiktok: "TikTok",
+  youtube: "YouTube",
+  bluesky: "Bluesky",
+  facebook: "Facebook",
+};
+
+/**
+ * Heading for an evidence row: the URL's platform label ("LinkedIn" even when a web search found it); plain web
+ * pages fall back to the step label (`stepLabels`, e.g. "ARES registry", "Website") or "Web search".
+ */
+export function evidenceGroup(e: { step: string; url: string }, stepLabels: Readonly<Record<string, string>> = {}): string {
+  return PLATFORM_LABEL[platformOf(e.url)] ?? stepLabels[e.step] ?? "Web search";
+}
 const DECISION_RANK: Record<Candidate["decision"], number> = { merge: 0, "possibly-same-as": 1, rejected: 2 };
 
 /** Lineup order: confirmed first, then open questions, social platforms before plain web hits. */

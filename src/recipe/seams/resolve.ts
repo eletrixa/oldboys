@@ -10,9 +10,14 @@
  * - Draft one candidate per profile-like source; LLM scores each vs subject + anchor; thresholds decide
  * - Deterministic fallback when the LLM call fails: anchor substring caps at 0.6, name only 0.5; merge only on
  *   hard links (anchor URL itself, or cross-linked drafts with the anchor in one of them)
- * - Drops PDF, genealogy/translation noise and directory/listing pages (LinkedIn /pub/dir/, Facebook /public/,
- *   "N profiles" titles), so one "Yes" can never confirm a page that lists several people; ranks profile platforms before web and dedupes by profile key
- *   BEFORE the 12-draft cap (web hits capped at 6), so a LinkedIn hit deep in the SERP still becomes a candidate
+ * - Drops PDF, genealogy/translation noise, directory/listing pages (LinkedIn /pub/dir/, Facebook /public/,
+ *   "N profiles" titles) and election pages, so one "Yes" can never confirm a page that lists
+ *   several people; ranks profile platforms before web and dedupes by profile key BEFORE the 12-draft cap (web hits
+ *   capped at 6, each profile platform at 4), so a LinkedIn hit deep in the SERP still becomes a candidate
+ * - A draft must carry the subject's first name as well as the surname (diacritic-folded, one edit allowed, or a
+ *   leading initial "L. Pokorný") in its title line or URL handle, so surname-only namesakes never fill the lineup
+ * - Handles come only from known profile URL shapes; Instagram posts/reels and unknown paths on profile platforms
+ *   get no handle (never a post code or a path word)
  * - `sourceIdentityUpdates`: after the lineup, sources whose profile key equals a merged candidate's become
  *   "merged", sources under a rejected candidate "unverified"; extract and synthesize trust only "merged"
  *
@@ -29,10 +34,11 @@ export const MERGE_FLOOR = 0.8;
 export const ASK_FLOOR = 0.3;
 
 /** Profile platforms in value order; anything else is "web" and ranks last. */
-const PLATFORM_RANK = ["linkedin", "github", "x", "instagram", "tiktok", "youtube", "bluesky"];
+export const PLATFORM_RANK = ["linkedin", "github", "x", "instagram", "tiktok", "youtube", "bluesky", "facebook"];
 const PROFILE_PLATFORMS = new Set(PLATFORM_RANK);
 const DRAFT_MAX = 12;
 const WEB_DRAFT_MAX = 6;
+const PLATFORM_DRAFT_MAX = 4;
 
 const Scores = z.array(z.object({ id: z.string(), score: z.number().min(0).max(1), reasons: z.array(z.string()) }));
 
@@ -63,14 +69,15 @@ export function canonicalProfile(url: string): { url: string; handle: string | n
     if ((host === "x.com" || host === "twitter.com") && seg[0] !== undefined && !["search", "hashtag", "i"].includes(seg[0])) {
       return { url: `https://x.com/${clean(seg[0])}`, handle: clean(seg[0]) };
     }
-    if (host === "instagram.com" && seg[0] !== undefined && !["p", "reel", "explore"].includes(seg[0])) {
+    if (host === "instagram.com") {
+      if (seg[0] === undefined || IG_NOT_PROFILE.has(seg[0].toLowerCase())) return { url, handle: null };
       return { url: `https://www.instagram.com/${clean(seg[0])}/`, handle: clean(seg[0]) };
     }
     if (host === "tiktok.com" && seg[0]?.startsWith("@") === true) {
       return { url: `https://www.tiktok.com/${seg[0]}`, handle: clean(seg[0]) };
     }
     if (host === "github.com" && seg[0] !== undefined) return { url: `https://github.com/${seg[0]}`, handle: seg[0] };
-    if (host.endsWith("facebook.com")) {
+    if (host.endsWith("facebook.com") || host === "fb.com") {
       const id = u.searchParams.get("id");
       if (seg[0] === "profile.php" && id !== null) return { url: `https://www.facebook.com/profile.php?id=${id}`, handle: id };
       if (seg[0] === undefined || FB_NOT_PROFILE.has(seg[0].toLowerCase()) || seg[0].includes(".")) return { url, handle: null };
@@ -81,12 +88,18 @@ export function canonicalProfile(url: string): { url: string; handle: string | n
       if (["channel", "c", "user"].includes(seg[0] ?? "") && seg[1] !== undefined) return { url: `https://www.youtube.com/${seg[0] ?? ""}/${seg[1]}`, handle: seg[1] };
       return { url, handle: null };
     }
+    if (host === "bsky.app" && seg[0] === "profile" && seg[1] !== undefined) return { url: `https://bsky.app/profile/${seg[1]}`, handle: clean(seg[1]) };
+    // Generic last segment only for plain web pages; on a profile platform an unknown path is never a handle
+    if (platformOf(url) !== "web") return { url, handle: null };
     const last = seg.at(-1) ?? null;
     return { url, handle: last === null ? null : clean(last) };
   } catch {
     return { url, handle: null };
   }
 }
+
+/** Instagram first path segments that are posts, reels, stories or browse pages, never an account. */
+const IG_NOT_PROFILE = new Set(["p", "reel", "reels", "tv", "stories", "popular", "explore"]);
 
 /** Facebook first path segments that are listings, groups or content, never a person's profile. */
 const FB_NOT_PROFILE = new Set(["public", "people", "groups", "pages", "watch", "events", "search", "hashtag", "photo", "story.php", "share", "reel", "marketplace"]);
@@ -138,19 +151,24 @@ export function sourceIdentityUpdates(
 // ponytail: "ů" is not a \w char, so "profilů" is matched without a trailing \b; "Results" stays case-sensitive
 const LISTING_TITLE = /profilů|\bprofily\b|\bprofiles\b|\bpeople named\b/i;
 const RESULTS_TITLE = /\bResults\b/;
+/** Election pages (candidacy, results): political data a hiring brief must never show. */
+const ELECTION_TITLE = /výsledky voleb|(?<!\p{L})volby(?!\p{L})|election results|(?<!\p{L})kandidát|candidate list/iu;
 
 /**
  * Never a candidate: PDFs, genealogy/translation hosts, LinkedIn pages other than /in/, /posts/, /company/
- * (directories such as /pub/dir/), Facebook /public/ listings, and pages whose title reads like a listing.
+ * (directories such as /pub/dir/), Facebook /public/ listings, and pages whose title reads like a listing,
+ * is about an election.
  */
 export function isNoise(url: string, excerpt = ""): boolean {
   const key = pageKey(url) ?? "";
   if (key.endsWith(".pdf") || NOISE_HOSTS.some((h) => key.includes(h))) return true;
   const [host = "", first = ""] = key.split("/");
   if (host.endsWith("linkedin.com") && !["in", "posts", "company"].includes(first)) return true;
-  if (host.endsWith("facebook.com") && first === "public") return true;
+  if ((host.endsWith("facebook.com") || host === "fb.com") && first === "public") return true;
   const title = excerpt.split("\n")[0] ?? "";
-  return LISTING_TITLE.test(title) || RESULTS_TITLE.test(title);
+  // Art. 9 stems (health, politic...) are NOT used here: "Head of Health Partnerships" is a real profile. The
+  // protected-category filter runs on brief output (synthesize), where it belongs.
+  return LISTING_TITLE.test(title) || RESULTS_TITLE.test(title) || ELECTION_TITLE.test(title);
 }
 
 /** The anchor as a page key when it is a URL or bare domain (contains a dot, no spaces); null for a city or IČO. */
@@ -187,13 +205,47 @@ function surname(subject: string): string {
   return subject.trim().split(/\s+/).at(-1)?.toLowerCase() ?? subject.toLowerCase();
 }
 
+/** Lowercase, diacritics stripped: "Lukáš" -> "lukas". */
+function fold(text: string): string {
+  return text.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
+}
+
+/** True when a and b differ by at most one insert, delete or substitution (Jozef / Josef). */
+function withinOneEdit(a: string, b: string): boolean {
+  if (a === b) return true;
+  if (Math.abs(a.length - b.length) > 1) return false;
+  let i = 0;
+  while (i < a.length && a[i] === b[i]) i++;
+  const [long, short] = a.length >= b.length ? [a, b] : [b, a];
+  return a.length === b.length ? a.slice(i + 1) === b.slice(i + 1) : long.slice(i + 1) === short.slice(i);
+}
+
+/**
+ * The hit names the subject, not a namesake: first name (one edit allowed for names of 4+ letters, or a leading
+ * initial "L. Pokorný") and surname in the title line, or both (or initial + surname) in the URL handle.
+ */
+export function namesSubject(subject: string, url: string, excerpt: string): boolean {
+  const parts = fold(subject).split(/[^\p{L}]+/u).filter(Boolean);
+  const first = parts[0] ?? "";
+  const sur = parts.at(-1) ?? "";
+  if (first === "" || first === sur) return true;
+  const near = (w: string, name: string): boolean => (name.length >= 4 ? withinOneEdit(w, name) : w === name);
+  const line = fold(excerpt.split("\n")[0] ?? "");
+  const words = line.split(/[^\p{L}]+/u);
+  const initial = new RegExp(`(?<!\\p{L})${first.charAt(0)}\\.\\s*${sur}`, "u").test(line);
+  if (words.some((w) => near(w, sur)) && (words.some((w) => near(w, first)) || initial)) return true;
+  const handle = fold(canonicalProfile(url).handle ?? "").replace(/[^a-z]/g, "");
+  return handle.includes(sur) && (handle.includes(first) || handle.startsWith(`${first.charAt(0)}${sur}`));
+}
+
 const rankOf = (url: string): number => {
   const i = PLATFORM_RANK.indexOf(platformOf(url));
   return i < 0 ? PLATFORM_RANK.length : i;
 };
 
 /**
- * Rank (profile platforms first, stable within a platform), dedupe by profile key, cap web hits, THEN cap the total.
+ * Rank (profile platforms first, stable within a platform), drop surname-only namesakes, dedupe by profile key,
+ * cap each platform (web 6, profile platforms 4), THEN cap the total.
  * Duplicate hits for one profile pool their excerpts so the scorer sees every mention of the anchor.
  */
 export function pickDrafts(ctx: Pick<StepContext, "candidates" | "sources" | "subject">): { url: string; excerpt: string }[] {
@@ -202,9 +254,10 @@ export function pickDrafts(ctx: Pick<StepContext, "candidates" | "sources" | "su
   const eligible = ctx.sources
     .filter((s) => !isNoise(s.url, s.excerpt) && !known.has(profileKey(s.url)))
     .filter((s) => PROFILE_PLATFORMS.has(platformOf(s.url)) || s.excerpt.toLowerCase().includes(name))
+    .filter((s) => namesSubject(ctx.subject, s.url, s.excerpt))
     .sort((a, b) => rankOf(a.url) - rankOf(b.url));
   const byKey = new Map<string, { url: string; excerpt: string }>();
-  let web = 0;
+  const perPlatform = new Map<string, number>();
   for (const s of eligible) {
     const key = profileKey(s.url) ?? s.url;
     const prev = byKey.get(key);
@@ -212,7 +265,10 @@ export function pickDrafts(ctx: Pick<StepContext, "candidates" | "sources" | "su
       prev.excerpt = clip(`${prev.excerpt}\n${s.excerpt}`);
       continue;
     }
-    if (platformOf(s.url) === "web" && ++web > WEB_DRAFT_MAX) continue;
+    const platform = platformOf(s.url);
+    const n = (perPlatform.get(platform) ?? 0) + 1;
+    perPlatform.set(platform, n);
+    if (n > (platform === "web" ? WEB_DRAFT_MAX : PLATFORM_DRAFT_MAX)) continue;
     if (byKey.size >= DRAFT_MAX) continue;
     byKey.set(key, { url: s.url, excerpt: s.excerpt });
   }

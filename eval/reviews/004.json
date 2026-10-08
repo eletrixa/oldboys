@@ -1,0 +1,38 @@
+{
+  "iteration": 4,
+  "stars": 3.8,
+  "weighted_mean": 3.78,
+  "ceiling_without_key": 4.1,
+  "weights": {"screen1": 0.10, "screen2": 0.20, "breadth": 0.15, "identity": 0.20, "honesty": 0.15, "judge_value": 0.20},
+  "scores": {"screen1": 4.5, "screen2": 4.0, "breadth": 3.5, "identity": 4.0, "honesty": 4.0, "judge_value": 3.0},
+  "deltas": {"screen1": 0.5, "screen2": 0, "breadth": 0, "identity": 0.5, "honesty": 0.5, "judge_value": 0},
+  "previous": {"iteration": 3, "stars": 3.6, "scores": {"screen1": 4.0, "screen2": 4.0, "breadth": 3.5, "identity": 3.5, "honesty": 3.5, "judge_value": 3.0}},
+  "claimed_not_real": [
+    "Interview identity questions: logic fixed, but canonicalProfile falls through to the last path segment for instagram.com/p/<code>, so Buryan's brief asks about 'Instagram account dcyoaufaoyx' and 'dbvybjfptwj' (post codes); /reels/, /tv/, /stories/, /popular/ also become handles",
+    "Talks gap: only the empty text was reworded; 'talk hits found, none confirmed' when unconfirmed hits exist is still missing",
+    "Purge 'in full': call result objects at callResultR2Key and webhook_events rows are not deleted",
+    "Start route: 403 for plain curl is real, forged Origin/Sec-Fetch-Site pass (code admits it); the global 6/hour cap is the real brake and is not atomic",
+    "Facebook platform label: platformOf still returns 'web', row reads 'facebook.com' with the same icon as fiba.basketball"
+  ],
+  "fixes": [
+    {"rank": 1, "file": "src/recipe/seams/resolve.ts", "change": "canonicalProfile: null handle for Instagram p/reel/reels/tv/stories/popular; generic last-segment fallback only for web, never for profile platforms; test instagram.com/p/DCYoauFAOYx/ has null handle."},
+    {"rank": 2, "file": "src/recipe/seams/resolve.ts", "change": "pickDrafts: require first name (diacritic-folded, edit distance 1) as well as surname; cap 4 drafts per platform so Instagram/X/Facebook reach the 12; test Pokorny GitHub set drops Martin/Daniel/Robin/Alex."},
+    {"rank": 3, "file": "src/recipe/seams/synthesize.ts", "change": "profileQuestion names the profile by snippet title, not slug; skip candidates with null handle."},
+    {"rank": 4, "file": "src/recipe/seams/synthesize.ts, src/app/runs/[id]/parts.tsx", "change": "Degraded brief top line: confirmed LinkedIn headline quoted as current role, next to the role being hired for."},
+    {"rank": 5, "file": "src/recipe/sources/types.ts, src/app/runs/[id]/parts.tsx, src/recipe/goals/hiring.ts", "change": "platformOf returns 'facebook' with its own label and icon; reasoned Facebook gap 'not collected, public profiles need a login'."},
+    {"rank": 6, "file": "src/recipe/seams/resolve.ts", "change": "isNoise rejects titles matching the shared Art. 9 denylist plus election terms (výsledky voleb, volby, election results); Buryan lineup showed a kurzy.cz election results page."},
+    {"rank": 7, "file": "src/recipe/seams/synthesize.ts, src/app/runs/[id]/parts.tsx", "change": "Dedupe confirmed evidence by excerpt; group confirmed rows by platform, not 'Web search'."},
+    {"rank": 8, "file": "src/app/api/start/route.ts, src/app/api/runs/route.ts", "change": "Turnstile before attaching RUN_TOKEN; atomic conditional insert for the caps; judge path not sharing the anonymous 6/hour."},
+    {"rank": 9, "file": "src/workflow/purge.ts", "change": "Also delete calls.result_r2_key objects and matching webhook_events; keep CACHED demo runs until judging ends."},
+    {"rank": 10, "file": "src/app/runs/[id]/parts.tsx, src/app/runs/[id]/run-view.tsx, src/recipe/goals/hiring.ts", "change": "Plain degraded notice, MOCK label for CALL_PROVIDER=mock, 'talk hits found, none confirmed' gap, ranked contradiction for two IČOs or two current employers."}
+  ],
+  "to_reach_4_5_with_key": [
+    "Fixes 1-3 with tests: no post codes, slugs or different first names in lineup or interview card",
+    "Keyed run on both demo subjects: FACT claims with verbatim quotes from merged sources only, INFERENCE labeled, one contradiction by rank",
+    "Top of brief answers the hiring question in 10 seconds with evidence-based interview questions (fix 4 is the keyless floor)",
+    "E3 goal delta >= 50% shown live",
+    "End-to-end <= 4 min with Opus on both subjects",
+    "Fix 8: jury cannot be locked out by the anonymous cap"
+  ],
+  "deploy_blocker": "Migration 0006_via.sql must be applied remotely (pnpm db:migrate:remote) before deploy, or every run insert fails on the missing via column"
+}

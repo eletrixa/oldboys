@@ -157,5 +157,7 @@ export const Brief = z.object({
   evidence: z.array(z.object({ step: z.string(), url: z.string(), excerpt: z.string().max(300) })).default([]),
   /** SERP and name-search hits whose identity was never confirmed: shown as "also found, not confirmed", never claimed. */
   also_found: z.array(z.object({ step: z.string(), url: z.string(), excerpt: z.string().max(300) })).default([]),
+  /** Title line of the best confirmed profile (LinkedIn first), max 160 chars: a quote, never an inference. Defaulted for older briefs. */
+  headline: z.string().max(160).nullable().default(null),
 });
 export type Brief = z.infer<typeof Brief>;

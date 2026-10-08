@@ -10,6 +10,7 @@
  * - Read investigation, candidates, claims, sources, brief and last ledger step from D1
  * - Questions = recipe base questions + investigations.questions_json; mentions = COUNT(sources)
  * - step_index/step_count from the recipe; failed_step = first recipe step without a ledger row on a failed run
+ * - role = investigations.role (the brief's "Hiring for" line)
  * - cost = runCost over the ledger rows (seq order) from investigations.created_at
  *
  * Design constraints:
@@ -26,6 +27,7 @@ type HeadRow = {
   id: string;
   subject: string;
   goal: string;
+  role: string | null;
   status: RunStatus;
   questions_json: string | null;
   created_at: string;
@@ -51,7 +53,7 @@ export async function GET(
   const { env } = getCloudflareContext();
 
   const head = await env.DB.prepare(
-    "SELECT id, subject, goal, status, questions_json, created_at FROM investigations WHERE id = ?",
+    "SELECT id, subject, goal, role, status, questions_json, created_at FROM investigations WHERE id = ?",
   )
     .bind(id)
     .first<HeadRow>();
@@ -89,6 +91,7 @@ export async function GET(
   const state: RunState = {
     id: head.id,
     subject: head.subject,
+    role: head.role,
     created_at: head.created_at,
     status: head.status,
     step: last?.step ?? null,

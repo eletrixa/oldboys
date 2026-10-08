@@ -9,9 +9,9 @@
 import { describe, expect, it } from "vitest";
 import type { Candidate, Claim, Source } from "@/domain/claim";
 import { extractClaims } from "@/recipe/seams/extract";
-import { canonicalProfile, decisionFor, fallbackScores, isNoise, pickDrafts, profileKey, resolveCandidates, sourceIdentityUpdates } from "@/recipe/seams/resolve";
+import { canonicalProfile, decisionFor, fallbackScores, isNoise, namesSubject, pickDrafts, profileKey, resolveCandidates, sourceIdentityUpdates } from "@/recipe/seams/resolve";
 import { verifyClaims } from "@/recipe/seams/verify";
-import { askCandidate, coverageOf, synthesizeBrief } from "@/recipe/seams/synthesize";
+import { askCandidate, coverageOf, headlineOf, profileQuestion, synthesizeBrief } from "@/recipe/seams/synthesize";
 import { baseContext, fakeLlm, fakePorts } from "@/recipe/__tests__/fakes";
 
 const s = (id: string, url: string, excerpt: string): Source => ({ id, run_id: "run-1", url, actor: "apify/google-search-scraper", fetched_at: "t", excerpt, r2_key: "k", expires_at: "e", identity: "unverified" });
@@ -294,7 +294,7 @@ describe("canonicalProfile", () => {
       handle: "lukáš-pokorný-436438295",
     });
     expect(canonicalProfile("https://x.com/josefburyan/status/123")).toEqual({ url: "https://x.com/josefburyan", handle: "josefburyan" });
-    expect(canonicalProfile("https://www.instagram.com/p/abc/")).toEqual({ url: "https://www.instagram.com/p/abc/", handle: "abc" });
+    expect(canonicalProfile("https://www.instagram.com/p/abc/")).toEqual({ url: "https://www.instagram.com/p/abc/", handle: null });
     expect(canonicalProfile("https://www.linkedin.com/pub/dir/Lukas/Pokorny")).toEqual({ url: "https://www.linkedin.com/pub/dir/Lukas/Pokorny", handle: null });
   });
 });
@@ -363,5 +363,87 @@ describe("AI call counts are truthful", () => {
     expect((await verifyClaims(baseContext({ sources: merged, claims: [fact] }), ok)).calls).toBe(1);
     // protected-category check + summary
     expect((await synthesizeBrief(baseContext({ sources: merged, claims: [fact] }), ok)).calls).toBe(2);
+  });
+});
+
+describe("review 004: handles, namesakes, political pages, brief top line", () => {
+  it("never turns an Instagram post, reel or browse path into a handle; generic last segment only on web", () => {
+    expect(canonicalProfile("https://www.instagram.com/p/DCYoauFAOYx/")).toEqual({ url: "https://www.instagram.com/p/DCYoauFAOYx/", handle: null });
+    for (const path of ["reel/x", "reels/x", "tv/x", "stories/josef/1", "popular/josef", "explore/tags/x"]) {
+      expect(canonicalProfile(`https://www.instagram.com/${path}/`).handle).toBeNull();
+    }
+    expect(canonicalProfile("https://www.instagram.com/josefburyan/").handle).toBe("josefburyan");
+    expect(canonicalProfile("https://www.tiktok.com/discover/josef-buryan").handle).toBeNull();
+    expect(canonicalProfile("https://x.com/search?q=x").handle).toBeNull();
+    expect(canonicalProfile("https://bsky.app/profile/jana.bsky.social/post/1").handle).toBe("jana.bsky.social");
+    expect(canonicalProfile("https://rejstrik.penize.cz/osoba/jana-dvorakova").handle).toBe("jana-dvorakova");
+  });
+
+  it("drops surname-only namesakes: the Pokorný GitHub set keeps Lukáš only", () => {
+    const gh = (h: string, name: string) => s(h, `https://github.com/${h}`, `${h} (${name}) · GitHub`);
+    const ctx = baseContext({
+      subject: "Lukáš Pokorný",
+      sources: [gh("mpokorny", "Martin Pokorný"), gh("dpokorny", "Daniel Pokorný"), gh("robinp", "Robin Pokorný"), gh("alexpokorny", "Alex Pokorný"), gh("lpokorny", "Lukas Pokorny")],
+    });
+    expect(pickDrafts(ctx).map((d) => d.url)).toEqual(["https://github.com/lpokorny"]);
+    expect(namesSubject("Jozef Buryan", "https://www.linkedin.com/in/x", "Josef Buryan - CMO, Groupon | LinkedIn")).toBe(true);
+    expect(namesSubject("Lukáš Pokorný", "https://example.cz/a", "L. Pokorný: interview")).toBe(true);
+    expect(namesSubject("Lukáš Pokorný", "https://www.linkedin.com/in/lukas-pokorny-1", "Profile")).toBe(true);
+    expect(namesSubject("Lukáš Pokorný", "https://www.linkedin.com/in/martin-pokorny", "Martin Pokorný | LinkedIn")).toBe(false);
+  });
+
+  it("caps each profile platform at 4 so Instagram, X and Facebook still reach the 12", () => {
+    const li = Array.from({ length: 8 }, (_, i) => s(`l${String(i)}`, `https://www.linkedin.com/in/lukas-pokorny-${String(i)}`, "Lukáš Pokorný | LinkedIn"));
+    const gh = Array.from({ length: 8 }, (_, i) => s(`g${String(i)}`, `https://github.com/lukaspokorny${String(i)}`, "Lukáš Pokorný · GitHub"));
+    const ig = s("ig", "https://www.instagram.com/lukas.pokorny/", "Lukáš Pokorný (@lukas.pokorny) • Instagram");
+    const x = s("x", "https://x.com/lukaspokorny", "Lukáš Pokorný (@lukaspokorny) / X");
+    const urls = pickDrafts(baseContext({ subject: "Lukáš Pokorný", sources: [...li, ...gh, ig, x] })).map((d) => d.url);
+    expect(urls.filter((u) => u.includes("linkedin"))).toHaveLength(4);
+    expect(urls.filter((u) => u.includes("github"))).toHaveLength(4);
+    expect(urls).toContain(ig.url);
+    expect(urls).toContain(x.url);
+  });
+
+  it("keeps election pages out of the lineup but never drops a real profile on an Art. 9 word", () => {
+    const kurzy = s("k", "https://www.kurzy.cz/volby/osoba/josef-buryan", "Josef Buryan - Výsledky voleb | Kurzy.cz");
+    expect(isNoise(kurzy.url, kurzy.excerpt)).toBe(true);
+    expect(isNoise("https://example.cz/a", "Josef Buryan, kandidát do zastupitelstva")).toBe(true);
+    expect(isNoise("https://www.linkedin.com/in/jb", "Josef Buryan - Head of Health Partnerships")).toBe(false);
+    expect(pickDrafts(baseContext({ subject: "Josef Buryan", sources: [kurzy] }))).toEqual([]);
+  });
+
+  it("asks about a profile by its title, never by slug, and skips profiles without a handle", async () => {
+    const li = { ...cand("l", "https://www.linkedin.com/in/josef-buryan-1a2b/", "possibly-same-as", "linkedin", "josef-buryan-1a2b"), snippet: "Josef Buryan - CMO, Groupon | LinkedIn" };
+    expect(profileQuestion(li)).toBe("Is the LinkedIn profile 'Josef Buryan - CMO, Groupon | LinkedIn' yours?");
+    const post = cand("p", "https://www.instagram.com/p/DCYoauFAOYx/", "possibly-same-as", "instagram", null);
+    const qs = (await synthesizeBrief(baseContext({ candidates: [post, li] }), fakePorts())).brief?.interview_questions ?? [];
+    expect(qs).toEqual(["Is the LinkedIn profile 'Josef Buryan - CMO, Groupon | LinkedIn' yours?"]);
+  });
+
+  it("quotes the best merged profile's title as the headline (LinkedIn first) and dedupes evidence by excerpt", async () => {
+    const merged = (id: string, url: string, platform: string, snippet: string): Candidate => ({ ...cand(id, url, "merge", platform, id), snippet });
+    expect(headlineOf([merged("x", "https://x.com/jb", "x", "JB on X"), merged("l", "https://www.linkedin.com/in/jb", "linkedin", "Josef Buryan - CMO, Groupon")])).toBe("Josef Buryan - CMO, Groupon");
+    expect(headlineOf([cand("o", "https://www.linkedin.com/in/jb", "possibly-same-as")])).toBeNull();
+    expect(headlineOf([merged("l", "https://www.linkedin.com/in/jb", "linkedin", "a".repeat(200))])?.length).toBe(160);
+    const twice = [
+      { ...s("e1", "https://www.linkedin.com/in/jb", "Josef Buryan - CMO, Groupon"), identity: "merged" as const },
+      { ...s("e2", "https://cz.linkedin.com/in/jb/cs", "Josef  Buryan - CMO, Groupon "), identity: "merged" as const },
+    ];
+    const brief = (await synthesizeBrief(baseContext({ sources: twice }), fakePorts())).brief;
+    expect(brief?.evidence).toHaveLength(1);
+    expect(brief?.degraded).toBe("no verified claims");
+  });
+});
+
+describe("Facebook as a profile platform", () => {
+  it("canonicalises fb.com, asks about a Facebook profile by title, and keeps unmerged Facebook out of evidence", async () => {
+    expect(canonicalProfile("https://fb.com/josefburyan")).toEqual({ url: "https://www.facebook.com/josefburyan", handle: "josefburyan" });
+    expect(isNoise("https://fb.com/public/Josef-Buryan")).toBe(true);
+    const fb = { ...cand("f", "https://www.facebook.com/josefburyan", "possibly-same-as", "facebook", "josefburyan"), snippet: "Josef Buryan | Facebook" };
+    const src = s("fs", "https://www.facebook.com/josefburyan", "Josef Buryan | Facebook");
+    const brief = (await synthesizeBrief(baseContext({ candidates: [fb], sources: [src] }), fakePorts())).brief;
+    expect(brief?.interview_questions[0]).toBe("Is the Facebook profile 'Josef Buryan | Facebook' yours?");
+    expect(brief?.evidence).toEqual([]);
+    expect(brief?.also_found.map((e) => e.url)).toEqual([src.url]);
   });
 });

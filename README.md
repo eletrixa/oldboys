@@ -19,7 +19,7 @@ What is live, what is not:
 - Role questions and identity scoring: model calls with a deterministic fallback. Without a model the lineup never merges on its own, it only asks.
 - Extract, verify, brief: model calls only. Without `ANTHROPIC_API_KEY` the run stops after the lineup and Screen 2 shows the failing step.
 - Verification phone calls (plans/005): `CALL_PROVIDER=mock` unless ElevenLabs keys are set; mock output is labeled MOCK.
-- Limits: no reverse image search, ISIR and Companies House are "not searched" with a reason; LinkedIn needs a public `/in/` URL from search or the form; a nightly cron (`src/workflow/purge.ts`, 03:00 UTC) deletes every run older than 7 days: raw payloads in R2, sources, claims, candidates, gaps, brief, calls, ledger and the run row.
+- Limits: no reverse image search; Facebook profiles are not collected (public pages need a login, the lineup still shows Facebook hits from search); ISIR and Companies House are "not searched" with a reason; LinkedIn needs a public `/in/` URL from search or the form; a nightly cron (`src/workflow/purge.ts`, 03:00 UTC) deletes every run older than 7 days: raw payloads in R2, sources, claims, candidates, gaps, brief, calls, ledger and the run row.
 
 ## Quickstart
 ```sh

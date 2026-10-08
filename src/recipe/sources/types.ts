@@ -131,6 +131,7 @@ export function platformOf(url: string): string {
   if (host.endsWith("tiktok.com")) return "tiktok";
   if (host.endsWith("youtube.com")) return "youtube";
   if (host.endsWith("bsky.app")) return "bluesky";
+  if (host.endsWith("facebook.com") || host.endsWith("fb.com")) return "facebook";
   if (host.endsWith("ares.gov.cz")) return "ares";
   return "web";
 }

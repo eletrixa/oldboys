@@ -9,13 +9,15 @@
  * Key responsibilities:
  * - ProgressSteps, ProfileList, QuestionCard, BriefView, CostLine
  * - Pure rendering from props; all fetching and state lives in run-view.tsx
+ * - Brief top line: "Confirmed profile: <headline>" next to "Hiring for: <role>" (both quoted, no model needed)
+ * - Confirmed evidence grouped by the URL's platform (evidenceGroup), not by the actor that fetched it
  *
  * Design constraints:
  * - No data fetching here; callbacks are passed in by the view
  */
 import type { Brief, Candidate, CandidateDecision } from "@/domain/claim";
 import { formatDuration, type RunCost } from "@/domain/run-cost";
-import { type RowState, type RunState, roleCriteria } from "./state";
+import { PLATFORM_LABEL, type RowState, type RunState, evidenceGroup, roleCriteria } from "./state";
 
 const CARD = "rounded-2xl border border-zinc-800 bg-zinc-900/60 p-5";
 
@@ -101,7 +103,7 @@ const BADGE: Record<CandidateDecision, { text: string; cls: string }> = {
   "possibly-same-as": { text: "Not sure yet", cls: "bg-amber-500/15 text-amber-300" },
 };
 
-const MARK: Record<string, string> = { linkedin: "in", x: "X", github: "gh", instagram: "ig", tiktok: "tt", youtube: "yt", bluesky: "bs" };
+const MARK: Record<string, string> = { linkedin: "in", x: "X", github: "gh", instagram: "ig", tiktok: "tt", youtube: "yt", bluesky: "bs", facebook: "fb" };
 
 /** Two-letter platform badge; plain web hits get their hostname initial. */
 function PlatformMark({ c }: { c: Pick<Candidate, "platform" | "profile_urls"> }): React.JSX.Element {
@@ -112,16 +114,6 @@ function PlatformMark({ c }: { c: Pick<Candidate, "platform" | "profile_urls"> }
     </span>
   );
 }
-
-const PLATFORM_LABEL: Record<string, string> = {
-  linkedin: "LinkedIn",
-  github: "GitHub",
-  instagram: "Instagram",
-  x: "X",
-  tiktok: "TikTok",
-  youtube: "YouTube",
-  bluesky: "Bluesky",
-};
 
 /** "LinkedIn", or the site's hostname for plain web hits. */
 export function platformLabel(c: Pick<Candidate, "platform" | "profile_urls">): string {
@@ -267,12 +259,12 @@ const STEP_LABEL: Record<string, string> = {
 const EVIDENCE_VISIBLE = 10;
 
 function EvidenceGroups({ items }: { items: Evidence[] }): React.JSX.Element {
-  const byStep = Map.groupBy(items, (e) => e.step);
+  const byGroup = Map.groupBy(items, (e) => evidenceGroup(e, STEP_LABEL));
   return (
     <>
-      {[...byStep].map(([step, rows]) => (
-        <div key={step} className="mt-4">
-          <h3 className="text-sm font-semibold">{STEP_LABEL[step] ?? step}</h3>
+      {[...byGroup].map(([group, rows]) => (
+        <div key={group} className="mt-4">
+          <h3 className="text-sm font-semibold">{group}</h3>
           <ul className="mt-2 flex flex-col gap-2">
             {rows.map((e) => (
               <li key={`${e.url}${e.excerpt}`} className="text-sm text-zinc-300">
@@ -320,7 +312,30 @@ function AlsoFound({ items }: { items: Evidence[] }): React.JSX.Element | null {
 function DegradedNotice({ reason }: { reason: string }): React.JSX.Element {
   return (
     <section className="rounded-2xl border border-amber-700/50 bg-amber-950/30 p-5">
-      <p className="text-sm text-amber-200">AI summary unavailable: {reason.replace(/\.$/, "")}.</p>
+      <p className="text-sm text-amber-200">AI summary unavailable ({reason.replace(/\.$/, "")}). This brief lists only what we confirmed.</p>
+    </section>
+  );
+}
+
+/** Who this is (quoted from a confirmed profile) next to what they are being screened for. */
+function TopLine({ headline, role }: { headline: string | null; role: string | null }): React.JSX.Element | null {
+  if (headline === null && role === null) return null;
+  return (
+    <section className={CARD}>
+      <dl className="grid gap-2 text-sm sm:grid-cols-2">
+        {headline !== null && (
+          <div>
+            <dt className="text-zinc-500">Confirmed profile</dt>
+            <dd className="font-medium">{headline}</dd>
+          </div>
+        )}
+        {role !== null && (
+          <div>
+            <dt className="text-zinc-500">Hiring for</dt>
+            <dd className="font-medium">{role}</dd>
+          </div>
+        )}
+      </dl>
     </section>
   );
 }
@@ -389,6 +404,7 @@ export function BriefView({ state }: { state: RunState }): React.JSX.Element | n
   const allUnavailable = brief.per_question.length > 0 && brief.per_question.every((q) => q.summary.startsWith("AI summary unavailable"));
   return (
     <div id="brief" className="flex scroll-mt-6 flex-col gap-4">
+      <TopLine headline={brief.headline ?? null} role={state.role} />
       {brief.degraded !== null && <DegradedNotice reason={brief.degraded} />}
       {brief.degraded !== null && <ConfirmedEvidence items={brief.evidence} />}
       {allUnavailable ? (

@@ -9,13 +9,14 @@
  * Key responsibilities:
  * - questionsToAsk: one question per platform, web hits only as filler
  * - roleCriteria: mh- questions only
+ * - evidenceGroup: platform label from the URL, step label or "Web search" for plain pages
  *
  * Design constraints:
  * - Pure: no React, no fetch
  */
 import { describe, expect, it } from "vitest";
 import type { Candidate } from "@/domain/claim";
-import { questionsToAsk, roleCriteria } from "../state";
+import { evidenceGroup, questionsToAsk, roleCriteria } from "../state";
 
 const cand = (id: string, platform: string, score: number, decision: Candidate["decision"] = "possibly-same-as"): Candidate => ({
   id, run_id: "r", name: "x", profile_urls: [`https://${id}`], anchor_match: null, score, decision, platform, handle: id, snippet: "", reasons: [],
@@ -43,5 +44,24 @@ describe("roleCriteria", () => {
     ];
     expect(roleCriteria(qs)).toEqual(["Has held a Senior Data Engineer position or equivalent"]);
     expect(roleCriteria(qs.slice(0, 1))).toEqual([]);
+  });
+});
+
+describe("evidenceGroup", () => {
+  it("groups by the URL's platform, not the actor that found it", () => {
+    const serp = "apify/google-search-scraper";
+    const labels = { [serp]: "Web search", "ares/ekonomicke-subjekty/vyhledat": "ARES registry" };
+    expect(evidenceGroup({ step: serp, url: "https://cz.linkedin.com/in/josef-buryan" }, labels)).toBe("LinkedIn");
+    expect(evidenceGroup({ step: serp, url: "https://x.com/jb" }, labels)).toBe("X");
+    expect(evidenceGroup({ step: serp, url: "https://www.fiba.basketball/player/1" }, labels)).toBe("Web search");
+    expect(evidenceGroup({ step: "ares/ekonomicke-subjekty/vyhledat", url: "https://example.cz/firma" }, labels)).toBe("ARES registry");
+  });
+});
+
+describe("facebook", () => {
+  it("is a profile platform: asked about, ranked after bluesky, labelled", () => {
+    const picked = questionsToAsk([cand("w", "web", 0.9), cand("fb", "facebook", 0.5), cand("bs", "bluesky", 0.5)], 2);
+    expect(picked.map((c) => c.id)).toEqual(["bs", "fb"]);
+    expect(evidenceGroup({ step: "apify/google-search-scraper", url: "https://www.facebook.com/jb" })).toBe("Facebook");
   });
 });

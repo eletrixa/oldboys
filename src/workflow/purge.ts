@@ -8,7 +8,7 @@
  *
  * Key responsibilities:
  * - Backs the privacy line on Screen 1 ("deleted after 7 days"): raw payloads in R2, sources, claims, candidates,
- *   gaps, briefs, calls and the ledger all go, then the investigation row itself
+ *   gaps, briefs, calls (with their R2 result objects and webhook events) and the ledger all go, then the run row
  *
  * Design constraints:
  * - Batches of 20 runs per tick; idempotent, safe to rerun
@@ -23,13 +23,22 @@ export async function purgeExpired(db: D1Database, bucket: R2Bucket, now: Date):
     const old = await db.prepare("SELECT id FROM investigations WHERE created_at < ? LIMIT ?").bind(cutoff, BATCH).all<{ id: string }>();
     if (old.results.length === 0) return { runs };
     for (const { id } of old.results) {
-      const keys = await db.prepare("SELECT r2_key FROM sources WHERE run_id = ?").bind(id).all<{ r2_key: string }>();
-      if (keys.results.length > 0) await bucket.delete(keys.results.map((k) => k.r2_key));
-      await db.batch(
-        ["sources", "claims", "candidates", "gaps", "briefs", "calls", "ledger_entries"].map((table) =>
+      const [keys, calls] = await Promise.all([
+        db.prepare("SELECT r2_key FROM sources WHERE run_id = ?").bind(id).all<{ r2_key: string }>(),
+        db
+          .prepare("SELECT result_r2_key, provider_conversation_id FROM calls WHERE run_id = ?")
+          .bind(id)
+          .all<{ result_r2_key: string | null; provider_conversation_id: string | null }>(),
+      ]);
+      const objects = [...keys.results.map((k) => k.r2_key), ...calls.results.flatMap((c) => (c.result_r2_key === null ? [] : [c.result_r2_key]))];
+      if (objects.length > 0) await bucket.delete(objects);
+      const conversations = calls.results.flatMap((c) => (c.provider_conversation_id === null ? [] : [c.provider_conversation_id]));
+      await db.batch([
+        ...["sources", "claims", "candidates", "gaps", "briefs", "calls", "ledger_entries"].map((table) =>
           db.prepare(`DELETE FROM ${table} WHERE run_id = ?`).bind(id),
         ),
-      );
+        ...conversations.map((cid) => db.prepare("DELETE FROM webhook_events WHERE conversation_id = ?").bind(cid)),
+      ]);
       await db.prepare("DELETE FROM investigations WHERE id = ?").bind(id).run();
       runs += 1;
     }

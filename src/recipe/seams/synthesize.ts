@@ -15,14 +15,16 @@
  * - Always returns a Brief: model failure or zero claims gives an evidence-only brief with `degraded` set,
  *   confirmed source links (`evidence`) and templated interview questions (open social profiles, unevidenced role must-haves)
  * - Gaps split: `not_searched` (no request made, prefix stripped) vs `searched_empty`; `source` is the step id
- * - Confirmed = identity "merged" only; SERP hits on namesakes stay in `also_found`
+ * - Confirmed = identity "merged" only; SERP hits on namesakes stay in `also_found`; both deduped by excerpt text
+ * - `headline`: the title line of the best merged profile (LinkedIn first), quoted, so a keyless brief still says who this is
+ * - Identity questions name the profile by its title line, never by URL slug; profiles without a handle are not asked
  */
 import { z } from "zod";
 import { containsArt9Topic } from "@/domain/art9";
 import type { Brief, Candidate, Claim, Coverage, Source } from "@/domain/claim";
 import type { Ports } from "@/domain/ports";
 import { emptyOutcome } from "@/recipe/runner";
-import { profileKey } from "@/recipe/seams/resolve";
+import { PLATFORM_RANK, profileKey } from "@/recipe/seams/resolve";
 import type { StepContext, StepOutcome } from "@/recipe/sources/types";
 
 const Protected = z.array(z.object({ id: z.string(), protected: z.boolean() }));
@@ -70,7 +72,23 @@ function notRejected(ctx: StepContext): (s: Source) => boolean {
   return (s) => !rejected.has(profileKey(s.url));
 }
 
-const PLATFORM_LABEL: Record<string, string> = { linkedin: "LinkedIn", github: "GitHub", x: "X", instagram: "Instagram", tiktok: "TikTok", youtube: "YouTube", bluesky: "Bluesky" };
+const PLATFORM_LABEL: Record<string, string> = {
+  linkedin: "LinkedIn",
+  github: "GitHub",
+  x: "X",
+  instagram: "Instagram",
+  tiktok: "TikTok",
+  youtube: "YouTube",
+  bluesky: "Bluesky",
+  facebook: "Facebook",
+};
+const TITLE_MAX = 90;
+const HEADLINE_MAX = 160;
+
+function cut(text: string, max: number): string {
+  const t = text.trim();
+  return t.length <= max ? t : `${t.slice(0, max - 1)}…`;
+}
 
 function host(url: string): string {
   try {
@@ -80,12 +98,13 @@ function host(url: string): string {
   }
 }
 
-/** "Is the LinkedIn account josef-buryan yours?" for a profile the manager left open. */
-export function profileQuestion(c: Pick<Candidate, "platform" | "handle" | "profile_urls">): string {
+/** "Is the LinkedIn profile 'Josef Buryan - CMO, Groupon' yours?" for a profile the manager left open; slug only when there is no title. */
+export function profileQuestion(c: Pick<Candidate, "platform" | "handle" | "profile_urls" | "snippet">): string {
   const url = c.profile_urls[0] ?? "";
   const label = PLATFORM_LABEL[c.platform];
   if (label === undefined) return `Is the page on ${host(url)} about you?`;
-  return `Is the ${label} account ${c.handle ?? host(url)} yours?`;
+  const title = c.snippet.trim();
+  return title !== "" ? `Is the ${label} profile '${cut(title, TITLE_MAX)}' yours?` : `Is the ${label} account ${c.handle ?? host(url)} yours?`;
 }
 
 /**
@@ -106,13 +125,36 @@ function row(s: Source): Brief["evidence"][number] {
   return { step: s.actor, url: s.url, excerpt: s.excerpt.slice(0, 300) };
 }
 
+/** One row per excerpt text (case and whitespace ignored): the same snippet from two hosts reads as one fact. */
+function uniqueRows(sources: readonly Source[]): Brief["evidence"] {
+  const seen = new Set<string>();
+  return sources
+    .map(row)
+    .filter((r) => {
+      const k = r.excerpt.toLowerCase().replace(/\s+/g, " ").trim();
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    })
+    .slice(0, EVIDENCE_MAX);
+}
+
 export function evidenceOf(ctx: StepContext): Brief["evidence"] {
-  return ctx.sources.filter(notRejected(ctx)).filter(confirmed).slice(0, EVIDENCE_MAX).map(row);
+  return uniqueRows(ctx.sources.filter(notRejected(ctx)).filter(confirmed));
 }
 
 /** Unverified name-search hits: surfaced for the reader, never fed to the model. */
 export function alsoFoundOf(ctx: StepContext): Brief["also_found"] {
-  return ctx.sources.filter(notRejected(ctx)).filter((s) => !confirmed(s)).slice(0, EVIDENCE_MAX).map(row);
+  return uniqueRows(ctx.sources.filter(notRejected(ctx)).filter((s) => !confirmed(s)));
+}
+
+/** Title line of the best merged profile (platform rank: LinkedIn first), or null when nothing is confirmed. */
+export function headlineOf(candidates: readonly Candidate[]): string | null {
+  const rank = (p: string): number => (PLATFORM_RANK.includes(p) ? PLATFORM_RANK.indexOf(p) : PLATFORM_RANK.length);
+  const best = candidates
+    .filter((c) => c.decision === "merge" && c.snippet.trim() !== "")
+    .sort((a, b) => rank(a.platform) - rank(b.platform) || b.score - a.score)[0];
+  return best === undefined ? null : cut(best.snippet, HEADLINE_MAX);
 }
 
 const PROFILE_PLATFORMS = new Set(Object.keys(PLATFORM_LABEL));
@@ -125,7 +167,7 @@ const IDENTITY_MAX = 2;
  */
 function templatedQuestions(ctx: StepContext, byQ: ReadonlyMap<string, readonly Claim[]>): string[] {
   const open = ctx.candidates
-    .filter((c) => c.decision === "possibly-same-as" && PROFILE_PLATFORMS.has(c.platform))
+    .filter((c) => c.decision === "possibly-same-as" && PROFILE_PLATFORMS.has(c.platform) && c.handle !== null)
     .sort((a, b) => b.score - a.score)
     .slice(0, IDENTITY_MAX);
   const mustHaves = ctx.questions
@@ -146,7 +188,7 @@ export async function synthesizeBrief(ctx: StepContext, ports: Ports): Promise<S
 
   let summaries = new Map<string, { summary: string; interview_question: string | null }>();
   // No claims = nothing for a model to summarise: skip the call, ship an evidence-only brief
-  let degraded: string | null = kept.length === 0 ? "no verified claims (AI extraction unavailable or found nothing)" : null;
+  let degraded: string | null = kept.length === 0 ? "no verified claims" : null;
   if (degraded === null) {
     try {
       const r = await ports.llm({
@@ -192,6 +234,7 @@ export async function synthesizeBrief(ctx: StepContext, ports: Ports): Promise<S
     degraded,
     evidence: evidenceOf(ctx),
     also_found: alsoFoundOf(ctx),
+    headline: headlineOf(ctx.candidates),
   };
   out.brief = brief;
   out.empty = false;
