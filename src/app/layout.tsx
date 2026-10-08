@@ -8,7 +8,7 @@
  *
  * Key responsibilities:
  * - Metadata and the <html>/<body> wrapper for every page
- * - Radar brand header (Echo r mark + wordmark, New brief, Roles) and a short honesty footer
+ * - Radar brand header (Echo r mark + wordmark, Positions, Roles, New brief) and a short honesty footer
  *
  * Design constraints:
  * - No runtime = "edge"; no next/font network fetch at build (fonts are self-hosted in public/fonts)
@@ -45,6 +45,9 @@ export default function RootLayout({
               <span className="font-serif text-[26px] leading-none font-semibold tracking-tight">radar</span>
             </Link>
             <nav aria-label="Main" className="flex items-center gap-1">
+              <Link href="/positions" className="flex min-h-11 items-center rounded-lg px-3 text-sm font-medium text-muted hover:bg-sage hover:text-ink">
+                Positions
+              </Link>
               <Link href="/roles" className="flex min-h-11 items-center rounded-lg px-3 text-sm font-medium text-muted hover:bg-sage hover:text-ink">
                 Roles
               </Link>
