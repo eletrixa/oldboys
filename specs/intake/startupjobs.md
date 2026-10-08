@@ -16,22 +16,23 @@ The company API (`GET https://api.startupjobs.cz/company/applications`, bearer p
 
 ## `domain/startupjobs.ts`
 ```ts
-export const StartupJobsWebhook = z.looseObject({ candidateID: z.coerce.number().int(), offerID: z.coerce.number().int(), name: z.string().optional(), email: z.string().optional(), phone: z.string().optional(), why: z.string().optional(), linkedin: z.string().optional(), internalPositionName: z.string().optional(), files: z.array(z.string()).default([]), test: z.boolean().optional(), date: z.string().optional() });
+export const StartupJobsWebhook = z.looseObject({ candidateID: z.coerce.number().int(), offerID: z.coerce.number().int(), name, email, phone, why, linkedin, position, internalPositionName, date: z.string().nullish(), files: z.array(z.string()).nullish() /* -> [] */, test: z.boolean().nullish() });
 export function toIntakeInput(p: StartupJobsWebhook, tag: string | undefined, cv?: CvFile): IntakeInput
-  // source "startupjobs"; externalId `${offerID}:${candidateID}`; coverLetter = htmlToText(why) (reuse from email-intake.ts; move htmlToText to src/domain/html-text.ts if both need it); note "startupjobs offer <offerID> <position>"; test → note "StartupJobs test payload"
-export function tagFor(p, lookup: { byOfferId?: string; }): string | undefined  // offer id mapping wins; else internalPositionName when it validates as IntakeTag
+  // source "startupjobs"; externalId `${offerID}:${candidateID}` (`test:` prefix on a test payload); coverLetter = htmlToText(why) (src/domain/html-text.ts); note "startupjobs offer <offerID> <position>"; test → note "StartupJobs test payload"
+export function tagFor(p, lookup: { byOfferId?: string; }): string | undefined  // offer id mapping wins; else internalPositionName (trimmed, lower-cased) when it validates as IntakeTag
 ```
+Optional fields are `nullish` (a real payload may send `null` for an absent phone or LinkedIn, and a 422 would lose the application). `toIntakeInput` never produces something the funnel's own `IntakeInput.parse` rejects: blank fields are dropped, over-long ones truncated, an invalid email is dropped with the note "invalid email". The `test:` prefix keeps a test payload from shadowing a real application with the same ids.
 
 ## Handler
 ```ts
 export type StartupJobsEnv = IntakeEnv & { STARTUPJOBS_WEBHOOK_TOKEN?: string; STARTUPJOBS_TOKEN?: string };
 export async function handleStartupJobsWebhook(request: Request, token: string, env: StartupJobsEnv, now: Date, fetchImpl = fetch): Promise<Response>
 ```
-1. `STARTUPJOBS_WEBHOOK_TOKEN` unset → 503; `!timingSafeEqual(token, secret)` → 404 (not 401: do not confirm the route exists).
+1. `STARTUPJOBS_WEBHOOK_TOKEN` unset → 503 (the only 5xx, reachable only while no valid webhook URL can exist); `!timingSafeEqual(token, secret)` → 404 (not 401: do not confirm the route exists).
 2. Body JSON + `StartupJobsWebhook.safeParse` → 422 `{error}` (keeps the webhook alive, StartupJobs stops retrying).
-3. `test === true` → `ingestApplication` with no tag so it lands as `unmatched` with the test note, 200 `{received: true, test: true}`. No download.
+3. `test === true` → `ingestApplication` with no tag so it lands as `unmatched` with the note "unknown tag; StartupJobs test payload", 200 `{received: true, test: true}`. No download.
 4. Tag: `SELECT tag FROM intake_tags WHERE startupjobs_offer_id = ?` (offerID as text) → else `internalPositionName`.
-5. First `files[]` entry ending `.pdf` (case-insensitive): `fetchImpl(url)`; on 401/403 retry once with `Authorization: Bearer ${STARTUPJOBS_TOKEN}` when set; ≤ 10 MiB; any failure → no cv, note "cv download failed <status>". Never fail the webhook over the file.
+5. First `files[]` entry whose URL path ends `.pdf` (case-insensitive): `fetchImpl(url)` with a 15 s timeout, https only; on 401/403 retry once with `Authorization: Bearer ${STARTUPJOBS_TOKEN}` when set **and the host is `startupjobs.cz` or a subdomain** (the file URL comes from the payload; the bearer never goes elsewhere); ≤ 10 MiB; any failure → no cv, note "cv download failed <status or reason>". Files without a PDF → note "no PDF among N files". Never fail the webhook over the file.
 6. `ingestApplication(toIntakeInput(...), env, now)` → 200 `{received: true}` (duplicate also 200). An unexpected throw → 500 is **not acceptable** (webhook deletion): catch, log, answer 202 `{received: false}` so StartupJobs keeps the webhook; the application row, if any, stays `received` and shows on `/intake`.
 
 ## Ops (goes into `docs/ops/intake.md`)
