@@ -7,7 +7,7 @@
  * Tested:  n/a (test file)
  *
  * Key responsibilities:
- * - interviewKit: null without a brief; header, coverage, checklist, gaps, footer in order
+ * - interviewKit: null without a brief; Hiring for uses the position title when the run has one; header, coverage, checklist, gaps, footer in order
  * - Empty lists leave no heading; degraded brief shows the note, role criteria and evidence links
  * - also_found never reaches the kit; model text is escaped and non-http links are dropped
  * - Sections replace coverage, by confidence with the reason; facts before inferences; source-only links
@@ -51,6 +51,7 @@ const run = (over: Partial<RunState> = {}): RunState => ({
   subject: "Jan Novak",
   headline: null,
   role: "Senior Data Engineer",
+  position: null,
   organization_name: null,
   created_at: "2026-10-08T21:00:00.000Z",
   status: "done",
@@ -75,6 +76,17 @@ const kit = (over: Partial<RunState> = {}): string => interviewKit(run(over), AT
 describe("interviewKit", () => {
   it("returns null while there is no brief", () => {
     expect(interviewKit(run({ brief: null }), AT)).toBeNull();
+  });
+
+  it("names the position title in Hiring for when the run has a position, escaped", () => {
+    const md = kit({ position: { id: "pos-1", title: "Staff *Data* Engineer" } });
+    expect(md).toContain("Hiring for: Staff \\*Data\\* Engineer");
+    expect(md).not.toContain("Hiring for: Senior Data Engineer");
+  });
+
+  it("falls back to the role without a position, and omits the line without either", () => {
+    expect(kit({ position: null })).toContain("Hiring for: Senior Data Engineer");
+    expect(kit({ position: null, role: null })).not.toContain("Hiring for");
   });
 
   it("has header, coverage, checklist, gaps and footer in order", () => {

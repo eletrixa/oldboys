@@ -7,7 +7,7 @@
  * Tested:  src/app/runs/[id]/__tests__/interview-kit.test.ts
  *
  * Key responsibilities:
- * - interviewKit: header (role, confirmed profile, date, research cost), coverage per question with sourced claims,
+ * - interviewKit: header (role, or the position title when the run has one, confirmed profile, date, research cost), coverage per question with sourced claims,
  *   interview questions as a checklist with room for notes, to-verify list, gap lists, footer
  * - Findings by section (confidence descending, with the reason) replace per-question coverage; briefs stored
  *   before sections fall back to coverage
@@ -25,7 +25,7 @@
 import { formatDuration } from "@/domain/run-cost";
 import type { Brief, BriefSection, Claim } from "@/domain/claim";
 import { ANSWER_BADGE, type CallView, formatAt, placedCalls } from "./call-panel";
-import { type RunState, briefSections, confidenceBand, gapLine, roleCriteria, searchedEmpty, searchedTitle } from "./state";
+import { type RunState, briefSections, confidenceBand, gapLine, hiringFor, roleCriteria, searchedEmpty, searchedTitle } from "./state";
 
 const FOOTER = "This kit rates the research, never the candidate. Public sources only; run data is deleted after 7 days.";
 
@@ -64,8 +64,9 @@ function section(title: string, lines: readonly string[]): string[] {
 
 function header(state: RunState, brief: Brief, generatedAt: string): string[] {
   const { cost } = state;
+  const hiring = hiringFor(state);
   const lines = [
-    state.role !== null ? `Hiring for: ${escapeMd(state.role)}` : null,
+    hiring !== null ? `Hiring for: ${escapeMd(hiring)}` : null,
     brief.headline !== null ? `Confirmed profile: ${escapeMd(brief.headline)}` : null,
     brief.location_note !== null ? escapeMd(brief.location_note) : null,
     `Generated: ${day(generatedAt)}`,

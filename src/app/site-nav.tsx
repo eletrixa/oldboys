@@ -7,7 +7,7 @@
  * Tested:  n/a
  *
  * Key responsibilities:
- * - Logged out: Log in, Create account. Logged in: Roles, Applications, My briefs, organization name, Log out, New brief (primary)
+ * - Logged out: Log in, Create account. Logged in: Positions, Roles, Applications, My briefs, organization name, Log out, New brief (primary)
  *
  * Design constraints:
  * - Server component; rendered inside the layout's header next to the Radar mark
@@ -30,6 +30,7 @@ export function SiteNav({ user }: { user: SessionUser | null }): React.JSX.Eleme
         </>
       ) : (
         <>
+          <NavLink href="/positions">Positions</NavLink>
           <NavLink href="/roles">Roles</NavLink>
           <NavLink href="/intake">Applications</NavLink>
           <NavLink href="/briefs">My briefs</NavLink>

@@ -7,9 +7,10 @@
  * Tested:  src/app/api/_lib/__tests__/run-body.test.ts
  *
  * Key responsibilities:
- * - Validate {goal, role?, profileUrl?, cvText?, subject?, anchor?, sourceUrl?}; profileUrl normalised to
+ * - Validate {goal, role?, positionId?, profileUrl?, cvText?, subject?, anchor?, sourceUrl?}; profileUrl normalised to
  *   https://www.linkedin.com/in/<handle> (no query), cvText at most 20000 chars
  * - At least one of profileUrl, cvText or subject + anchor; due-diligence keeps the subject + anchor pair
+ * - Optional positionId (hiring only, specs/positions-start): 1..64 chars of [A-Za-z0-9_-]; it never identifies a candidate
  * - Hiring run from the extension on a LinkedIn profile page: sourceUrl doubles as profileUrl
  *
  * Design constraints:
@@ -39,6 +40,8 @@ export const StartRunBody = z
     goal: GoalId,
     /** Free-text role the manager is hiring for; drives the must-have questions (hiring goal). */
     role: z.string().trim().min(1).max(300).optional(),
+    /** A stored position (hiring only): its title becomes the role and its must-haves the run's questions. */
+    positionId: z.string().trim().min(1).max(64).regex(/^[A-Za-z0-9_-]+$/).optional(),
     profileUrl: ProfileUrl.optional(),
     cvText: z.string().trim().min(1).max(CV_MAX).optional(),
     subject: z.string().trim().min(1).max(200).optional(),
@@ -50,6 +53,10 @@ export const StartRunBody = z
     return { ...b, profileUrl: b.profileUrl ?? fromPage ?? undefined };
   })
   .superRefine((b, ctx) => {
+    if (b.positionId !== undefined && b.goal !== "hiring") {
+      ctx.addIssue({ code: "custom", path: ["positionId"], message: "positionId is only for the hiring goal" });
+      return;
+    }
     const pair = b.subject !== undefined && b.anchor !== undefined;
     if (b.goal === "hiring" && (pair || b.profileUrl !== undefined || b.cvText !== undefined)) return;
     if (b.goal !== "hiring" && pair) return;

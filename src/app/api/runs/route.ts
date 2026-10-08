@@ -8,7 +8,7 @@
  *
  * Key responsibilities:
  * - Bearer auth against secret RUN_TOKEN (401 when missing or wrong, 503 when the secret is unset)
- * - Delegates everything else to createRun with origin via = api (account and organization stay NULL)
+ * - Delegates everything else to createRun with origin via = api (account and organization stay NULL); positionId, caps and dedupe live there too
  *
  * Design constraints:
  * - No runtime = "edge"

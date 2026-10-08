@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/runs/[id]/reference-check.ts
- * Deps:    src/domain/art9 (containsArt9Topic), ./summary (aiOff, shorten), ./state (RunState)
+ * Deps:    src/domain/art9 (containsArt9Topic), ./summary (aiOff, shorten), ./state (RunState, hiringFor)
  * Tested:  src/app/runs/[id]/__tests__/reference-check.test.ts
  *
  * Key responsibilities:
@@ -18,7 +18,7 @@
  * - Rates the research, never the candidate: no scores, ranks or traits; Art. 9 topics dropped as defense in depth
  */
 import { containsArt9Topic } from "@/domain/art9";
-import type { RunState } from "./state";
+import { hiringFor, type RunState } from "./state";
 import { aiOff, shorten } from "./summary";
 
 /** Most questions in the list; a reference call is short. */
@@ -61,7 +61,7 @@ function questions(state: RunState, name: string): string[] {
 export function referenceQuestions(state: RunState): string | null {
   if (state.brief === null) return null;
   const subject = state.subject.trim() === "" ? "unnamed person" : state.subject.trim();
-  const role = state.role?.trim() ?? "";
+  const role = hiringFor(state)?.trim() ?? "";
   const name = state.subject.trim().split(/\s+/)[0] ?? "";
   const first = name === "" ? "the candidate" : name;
   const list = questions(state, first);

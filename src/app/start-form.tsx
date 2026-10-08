@@ -3,27 +3,32 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/start-form.tsx
- * Deps:    react, next/navigation, ./ui (Radar tokens), src/app/_lib/form-text
- * Tested:  n/a
+ * Deps:    react, next/navigation, ./ui (Radar tokens), ./start-body, ./start-position, src/app/_lib/form-text
+ * Tested:  n/a (body builder: src/app/__tests__/start-body.test.ts)
  *
  * Key responsibilities:
  * - Submit {goal: "hiring", role, profileUrl?, cvText?} (plans/006); on 201 route to /runs/<id>
+ * - With `?positionId=<id>` (specs/positions-pages): show the position's title and must-haves read-only, hide the role
+ *   field and send positionId instead of role; an unknown id shows an inline note and the normal form
  * - Client check: one of profile URL or CV; the server normalises and validates the URL
  * - initialRole / autoFocusRole prefill and focus the role field; 401 shows a log-in link
  * - Inline humane error on 4xx/5xx or network failure
  *
  * Design constraints:
- * - Client component; posts to /api/start with the session cookie; no token ships to the browser
+ * - Client component; reads the query with useSearchParams inside Suspense so the home page stays static; posts to /api/start
+ *   with the session cookie; no token ships to the browser
  * - Helper text sits beside the label (aria-describedby), never inside it; CV summary is a 44px target
  * - Copy stays short and calm; no emoji
  */
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useState } from "react";
 import { formText } from "@/app/_lib/form-text";
-import { BTN_PRIMARY, CARD_SAGE, Chevron, FIELD, LINK, SUMMARY } from "./ui";
+import { buildStartBody, positionIdParam } from "./start-body";
+import { PositionBanner, usePositionSummary } from "./start-position";
+import { BTN_PRIMARY, CARD_PEACH, CARD_SAGE, Chevron, FIELD, LINK, SUMMARY } from "./ui";
 
 const CV_MAX = 20_000;
 
@@ -65,8 +70,10 @@ function Field({ name, label, helper, type = "text", placeholder, required = fal
 
 type StartFormProps = { initialRole?: string; autoFocusRole?: boolean };
 
-export function StartForm({ initialRole, autoFocusRole = false }: StartFormProps): React.JSX.Element {
+function StartFormInner({ initialRole, autoFocusRole = false }: StartFormProps): React.JSX.Element {
   const router = useRouter();
+  const position = usePositionSummary(positionIdParam(useSearchParams()));
+  const positionId = position.status === "ready" ? position.summary.id : null;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [expired, setExpired] = useState(false);
@@ -75,6 +82,7 @@ export function StartForm({ initialRole, autoFocusRole = false }: StartFormProps
     const data = new FormData(form);
     const profileUrl = formText(data, "profileUrl").trim();
     const cvText = formText(data, "cvText").trim();
+    if (position.status === "loading") return;
     if (profileUrl === "" && cvText === "") {
       setError("Please add their LinkedIn profile or paste their CV.");
       return;
@@ -86,12 +94,7 @@ export function StartForm({ initialRole, autoFocusRole = false }: StartFormProps
       const res = await fetch("/api/start", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          goal: "hiring",
-          role: formText(data, "role").trim(),
-          ...(profileUrl === "" ? {} : { profileUrl }),
-          ...(cvText === "" ? {} : { cvText }),
-        }),
+        body: JSON.stringify(buildStartBody({ role: formText(data, "role").trim(), profileUrl, cvText, positionId })),
       });
       if (res.status === 201) {
         const { id } = await res.json<{ id: string }>();
@@ -108,7 +111,9 @@ export function StartForm({ initialRole, autoFocusRole = false }: StartFormProps
           ? "Too many briefs started just now. Please try again in a little while."
           : res.status === 503
             ? "The service is not fully configured yet. Please tell the team."
-            : res.status === 400
+            : res.status === 404
+              ? "That position is no longer available. Please pick it again from Positions."
+              : res.status === 400
               ? "Please check the LinkedIn link (it looks like linkedin.com/in/...) and the role, and try again."
               : "We could not start the brief. Please try again.",
       );
@@ -127,6 +132,12 @@ export function StartForm({ initialRole, autoFocusRole = false }: StartFormProps
         void submit(e.currentTarget);
       }}
     >
+      {position.status === "ready" && <PositionBanner summary={position.summary} />}
+      {position.status === "error" && (
+        <p role="status" className={`${CARD_PEACH} text-sm`}>
+          We could not load that position, so you can name the role yourself.
+        </p>
+      )}
       <Field
         name="profileUrl"
         type="url"
@@ -145,7 +156,9 @@ export function StartForm({ initialRole, autoFocusRole = false }: StartFormProps
           className={`${FIELD} mt-3`}
         />
       </details>
-      <Field name="role" label="Role you are hiring for" required defaultValue={initialRole} autoFocus={autoFocusRole} helper="The brief focuses on what matters for this role." />
+      {positionId === null && position.status !== "loading" && (
+        <Field name="role" label="Role you are hiring for" required defaultValue={initialRole} autoFocus={autoFocusRole} helper="The brief focuses on what matters for this role." />
+      )}
       <p className={`${CARD_SAGE} text-sm text-ink`}>
         <strong>Privacy:</strong> Public information only. We never look at private accounts, and we do not judge
         personality, health, religion or politics. Everything we collect is deleted after 7 days.
@@ -167,7 +180,7 @@ export function StartForm({ initialRole, autoFocusRole = false }: StartFormProps
       <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:gap-4">
         <button
           type="submit"
-          disabled={busy}
+          disabled={busy || position.status === "loading"}
           className={BTN_PRIMARY}
         >
           {busy ? "Creating..." : "Create brief"}
@@ -175,5 +188,13 @@ export function StartForm({ initialRole, autoFocusRole = false }: StartFormProps
         <span className="text-sm text-muted">Usually takes 2 to 4 minutes</span>
       </div>
     </form>
+  );
+}
+
+export function StartForm(props: StartFormProps): React.JSX.Element {
+  return (
+    <Suspense>
+      <StartFormInner {...props} />
+    </Suspense>
   );
 }

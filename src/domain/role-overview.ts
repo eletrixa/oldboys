@@ -108,7 +108,7 @@ function byNewest(a: { created_at: string }, b: { created_at: string }): number 
   return b.created_at.localeCompare(a.created_at);
 }
 
-function buildGroup(key: string, rows: RoleRunRow[]): RoleGroup {
+export function buildGroup(key: string, rows: RoleRunRow[]): RoleGroup {
   const sorted = [...rows].sort(byNewest);
   const columns = new Map<string, string>();
   for (const row of sorted) {

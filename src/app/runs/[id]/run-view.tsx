@@ -10,6 +10,7 @@
  * - Poll GET /api/runs/:id/state every 2 s until done or failed
  * - Header: derived name once the seed step knows it ("the candidate" before), the seed headline under it,
  *   then "From <source> · <tag> · <date>" when an intake application started the run
+ * - "Researched for: <position title>" link to /positions/<id> under the name when the run came from a position
  * - When done, the brief comes first and the confirmation steps fold into a closed "How we confirmed it" disclosure
  * - One footer closes the page: running hint (not done), then "Back to home" and "Audit record" links
  * - Not-found view: eyebrow, heading, muted sentence and a primary back link on the header rhythm
@@ -157,6 +158,7 @@ export function RunView({ id }: { id: string }): React.JSX.Element {
   }
 
   const first = firstName(state.subject) ?? "the candidate";
+  const forPosition = state.position ?? null;
   const created = Date.parse(state.created_at);
   const cached = state.status === "done" && !Number.isNaN(created) && openedAt - created > CACHED_AFTER_MS;
   const degraded = state.brief !== null && state.brief.degraded !== null;
@@ -211,6 +213,11 @@ export function RunView({ id }: { id: string }): React.JSX.Element {
         </h1>
         {state.headline !== null && <p className="text-lg text-muted">{state.headline}</p>}
         {state.intake !== null && <p className="text-sm text-muted">{intakeLine(state.intake)}</p>}
+        {forPosition !== null && (
+          <p className="text-sm text-muted">
+            <Link href={`/positions/${encodeURIComponent(forPosition.id)}`} className={LINK}>Researched for: {forPosition.title}</Link>
+          </p>
+        )}
         {state.status !== "done" && (
           <p className="text-sm text-muted">This usually takes 2 to 4 minutes. Keep this tab open.</p>
         )}

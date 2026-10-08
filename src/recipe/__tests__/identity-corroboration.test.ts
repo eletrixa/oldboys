@@ -120,6 +120,11 @@ describe("resolve merge cap and reasons hygiene", () => {
     expect(ig?.snippet).not.toMatch(/Dad|Rugby/);
   });
 
+  it("never sets anchor_match to an empty anchor, even when the model says the location matched", async () => {
+    const out = await resolveCandidates({ ...ctx, anchor: "" }, fakePorts({ llm: scoreAll }));
+    expect(out.candidates.map((c) => c.anchor_match)).toEqual([null, null, null]);
+  });
+
   it("tells the model the merge rule and the professional-only reasons rule", async () => {
     let system = "";
     const llm = ((input: { system: string; prompt: string }) => {

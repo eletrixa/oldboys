@@ -12,6 +12,8 @@ GITHUB_TOKEN=
 STACKEXCHANGE_KEY=
 # Optional: OpenAlex free API key (openalex.org/settings/api); anonymous budget is shared and answers 429 from the Worker IP
 OPENALEX_API_KEY=
+# Budget cap (USD) for the LLM call that extracts a position's must-haves
+POSITION_INGEST_USD=0.05
 # Intake: bearer token the Google Forms Apps Script sends to POST /api/intake/form (openssl rand -hex 24)
 INTAKE_TOKEN=
 # Intake: secret path segment of the StartupJobs webhook URL /api/intake/startupjobs/<token> (openssl rand -hex 24)

@@ -70,7 +70,8 @@ describe("createRun", () => {
     const { id } = await res.json<{ id: string }>();
     const row = inserts[0] ?? [];
     expect(row[0]).toBe(id);
-    expect(row.slice(9)).toEqual(["api", null, null, null, null, null]);
+    // via, profile_url, cv_text, application_id, account_id, organization_id, position_id, questions_json
+    expect(row.slice(9)).toEqual(["api", null, null, null, null, null, null, null]);
     expect(create).toHaveBeenCalledWith({ id, params: { runId: id } });
   });
 
@@ -78,7 +79,7 @@ describe("createRun", () => {
     const { env, inserts } = makeEnv();
     const res = await createRun(post(hiring), env, start, NOW);
     expect(res.status).toBe(201);
-    expect((inserts[0] ?? []).slice(9)).toEqual(["start", null, null, null, "acc_1", "org_1"]);
+    expect((inserts[0] ?? []).slice(9)).toEqual(["start", null, null, null, "acc_1", "org_1", null, null]);
   });
 
   const withUrl = { ...hiring, sourceUrl: "https://example.com/p" };

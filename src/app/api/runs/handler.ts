@@ -12,6 +12,7 @@
  * - Optional sourceUrl (browser extension): same page + goal within 24 h returns the earlier run (200), scoped to the
  *   caller's organization (start) or to organization-less runs (api); never another tenant's run id
  * - Shared cap: more than RUNS_PER_HOUR_CAP runs in the last hour → 429; START_PER_HOUR_CAP per organization for via = start (one COUNT query)
+ * - Optional positionId (hiring): the position's must-haves become the run's questions; unknown id is a 404 (specs/positions-start)
  * - Session runs (via = start) store account_id and organization_id; bearer runs keep NULL
  * - runId == Workflow instance id == investigations.id
  *
@@ -23,7 +24,7 @@ import { parseJsonBody } from "@/app/api/_lib/body";
 import { StartRunBody } from "@/app/api/_lib/run-body";
 import { HOUR_MS, since } from "@/domain/auth-limits";
 import { dedupeSince, RUNS_PER_HOUR_CAP, START_PER_HOUR_CAP } from "@/domain/run-status";
-import { startRun, type StartRunEnv } from "@/workflow/start-run";
+import { loadPositionQuestions, startRun, type StartRunEnv } from "@/workflow/start-run";
 
 export type RunsEnv = StartRunEnv;
 
@@ -63,9 +64,13 @@ export async function createRun(
     return Response.json({ error: "run cap reached, try again later" }, { status: 429 });
   }
 
+  const position = parsed.data.positionId === undefined ? undefined : await loadPositionQuestions(env.DB, parsed.data.positionId);
+  if (position === null) return Response.json({ error: "unknown position" }, { status: 404 });
+
   const { id } = await startRun(env, {
     ...parsed.data,
     via: origin.via,
+    position,
     accountId: accountId ?? undefined,
     organizationId: organizationId ?? undefined,
   }, now);

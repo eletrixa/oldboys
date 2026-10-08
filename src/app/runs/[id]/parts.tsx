@@ -9,7 +9,7 @@
  * Key responsibilities:
  * - ProgressSteps, ProfileList, QuestionCard, BriefView, CostLine
  * - Pure rendering from props; all fetching and state lives in run-view.tsx
- * - Brief top line: "Confirmed profile: <headline>" next to "Hiring for: <role>" (both quoted, no model needed),
+ * - Brief top line: "Confirmed profile: <headline>" next to "Hiring for: <position title or role>" (both quoted, no model needed),
  *   with the location note (confirmed profile names another city than the anchor) under the profile line
  * - Gap list reads "Searched, nothing confirmed" when any searched gap is a namesake-only one
  * - Confirmed evidence grouped by the URL's platform (evidenceGroup), not by the actor that fetched it; the pasted CV
@@ -35,7 +35,7 @@ import { KitActions } from "./kit-actions";
 import { ClaimList, SectionList } from "./sections";
 import { SummaryCard } from "./summary-card";
 import { STEP_LABEL } from "./source-labels";
-import { PLATFORM_LABEL, type RowState, type RunState, briefSections, evidenceGroup, gapLine, host, roleCriteria, searchedEmpty, searchedTitle } from "./state";
+import { PLATFORM_LABEL, type RowState, type RunState, briefSections, evidenceGroup, gapLine, hiringFor, host, roleCriteria, searchedEmpty, searchedTitle } from "./state";
 
 function Mark({ state }: { state: RowState }): React.JSX.Element {
   const base = "relative flex size-5 shrink-0 items-center justify-center rounded-full text-xs";
@@ -421,7 +421,7 @@ export function BriefView({ state }: { state: RunState }): React.JSX.Element | n
   return (
     <div id="brief" className="flex scroll-mt-6 flex-col gap-4">
       <SummaryCard state={state} />
-      <TopLine headline={brief.headline ?? null} locationNote={brief.location_note ?? null} role={state.role} />
+      <TopLine headline={brief.headline ?? null} locationNote={brief.location_note ?? null} role={hiringFor(state)} />
       {brief.degraded !== null && <DegradedNotice reason={brief.degraded} />}
       {brief.degraded !== null && <ConfirmedEvidence items={brief.evidence} />}
       {sections !== null && <SectionList sections={sections} claims={state.claims} urlOf={urlOf} noteOf={noteOf} />}

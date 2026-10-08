@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/recipe/seams/role.ts
- * Deps:    zod
+ * Deps:    zod, src/domain/position (shapeMustHaves, fallbackMustHaves, mustHavesToQuestions)
  * Tested:  src/recipe/__tests__/role.test.ts
  *
  * Key responsibilities:
@@ -16,13 +16,9 @@
  * - `profileFor` is pure and order-sensitive: first matching rule wins (credentialed, audience, makers, track-record)
  */
 import { z } from "zod";
+import { errorMessage, fallbackMustHaves, mustHavesToQuestions, shapeMustHaves } from "@/domain/position";
 import type { Ports } from "@/domain/ports";
 import type { Question } from "@/recipe/step";
-
-const BASE_IDS = new Set(["current-role", "career-history", "public-code", "public-talks", "location-match", "contradictions"]);
-const MAX_QUESTIONS = 5;
-const MAX_TEXT = 160;
-const MAX_TITLE = 48;
 
 const MustHaves = z.array(z.object({ id: z.string(), text: z.string().min(1), title: z.string().optional(), accepted_evidence: z.array(z.string()) }));
 
@@ -38,15 +34,6 @@ const RULES: readonly [Exclude<RoleProfile, "verify-only">, RegExp][] = [
 export function profileFor(role: string): RoleProfile {
   const r = role.toLowerCase();
   return RULES.find(([, re]) => re.test(r))?.[0] ?? "verify-only";
-}
-
-function kebab(s: string): string {
-  return s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
-}
-
-function fit(text: string, evidence: string[]): string {
-  const full = evidence.length ? `${text} (${evidence.join(", ")})` : text;
-  return full.length <= MAX_TEXT ? full : `${full.slice(0, MAX_TEXT - 1)}…`;
 }
 
 const WORK_MODE = /^(hybrid|remote|on-?site|office|full[- ]time|part[- ]time|contract|freelance)$/i;
@@ -67,13 +54,7 @@ export function roleLocation(role: string, anchor = ""): string | null {
 /** Generic questions from the role title only; used when the LLM call fails. */
 function fallback(role: string, anchor: string): Question[] {
   const title = (role.split(",")[0] ?? role).trim();
-  const label = title === "" ? "this role" : title;
-  const where = roleLocation(role, anchor);
-  return [
-    { id: "mh-title-experience", title: "Role experience", text: fit(`Has held a ${label} position or equivalent`, ["job history", "profile"]) },
-    { id: "mh-public-work", title: "Public work", text: fit(`Has public work showing ${label} skills`, ["repo", "talk", "article", "portfolio"]) },
-    { id: "mh-location-fit", title: "Location fit", text: fit(`Location compatible with ${where ?? "the role"}`, ["profile location"]) },
-  ];
+  return mustHavesToQuestions({ must_haves: fallbackMustHaves(title, roleLocation(role, anchor)) });
 }
 
 export async function roleQuestions(
@@ -89,20 +70,11 @@ export async function roleQuestions(
       prompt: `Role: ${role}`,
       schema: MustHaves,
     });
-    const seen = new Set<string>();
-    const questions: Question[] = [];
-    for (const m of r.value) {
-      const id = kebab(m.id);
-      if (!id.startsWith("mh-") || BASE_IDS.has(id) || seen.has(id)) continue;
-      seen.add(id);
-      const title = m.title?.trim().slice(0, MAX_TITLE).trim();
-      questions.push({ id, text: fit(m.text, m.accepted_evidence), ...(title !== undefined && title !== "" ? { title } : {}) });
-      if (questions.length === MAX_QUESTIONS) break;
-    }
+    const questions = mustHavesToQuestions({ must_haves: shapeMustHaves(r.value) });
     if (questions.length > 0) return { questions, cost_usd: r.cost_usd, calls: 1, notes: [] };
     return { questions: fallback(role, anchor), cost_usd: r.cost_usd, calls: 1, notes: ["role questions: no usable LLM output, used generic fallback"] };
   } catch (e) {
-    const why = e instanceof Error ? e.message : "unknown error";
+    const why = errorMessage(e);
     return { questions: fallback(role, anchor), cost_usd: 0, calls: 0, notes: [`role questions: LLM failed (${why}), used generic fallback`] };
   }
 }

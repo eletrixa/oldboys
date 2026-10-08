@@ -20,7 +20,7 @@
  *   get no handle (never a post code or a path word)
  * - Model merges need a deterministic corroboration (anchor/place, merged-profile employer, cross-link to a merged
  *   profile); a name/handle-only hit is capped at UNCORROBORATED_CAP (possibly-same-as). anchor_match is also set
- *   when the model's reasons say the location matched
+ *   when the model's reasons say the location matched, never while the anchor is still empty
  * - Lineup reasons and snippets carry professional identifiers only (personal-life details filtered, prompt says so)
  * - `sourceIdentityUpdates`: after the lineup, sources whose profile key equals a merged candidate's become
  *   "merged", sources under a rejected candidate "unverified"; then (rule 2) a still-unverified source naming the
@@ -398,7 +398,7 @@ export async function resolveCandidates(ctx: StepContext, ports: Ports): Promise
     scores = fallbackScores(drafts, ctx.anchor);
   }
   const byId = new Map(scores.map((s) => [s.id, s]));
-  const tokens = orgTokens(mergedProfileOrgs(ctx.sources), ctx.subject);
+  const tokens = orgTokens(employers, ctx.subject);
   const all = drafts.map((d) => {
     const s = byId.get(d.id) ?? { score: 0.5, reasons: ["unscored"] };
     const why = corroboration(d, ctx, tokens);
@@ -410,7 +410,7 @@ export async function resolveCandidates(ctx: StepContext, ports: Ports): Promise
       run_id: ctx.runId,
       name: ctx.subject,
       profile_urls: [d.url],
-      anchor_match: anchorMatched(ctx.anchor, why, s.reasons) ? ctx.anchor : null,
+      anchor_match: ctx.anchor !== "" && anchorMatched(ctx.anchor, why, s.reasons) ? ctx.anchor : null,
       score,
       decision: decisionFor(score),
       platform: d.platform,

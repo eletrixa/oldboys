@@ -101,6 +101,7 @@ Oldboys invariants (from plans/001-deep-research-arch). They override the generi
 - [linting-workflow.md](tools/linting-workflow.md) — linting-workflow.md: Strategy: Fast checks during dev, thorough validation before PR.
 - [plans.md](tools/plans.md) — Plans Folder Convention: Part of [[Global Code Settings]].
 - [project-cli-scripts.md](tools/project-cli-scripts.md) — Project-Local CLI Scripts (Repo Jumper + Cheatsheet): Every project must contain:
+- [specs.md](tools/specs.md) — specs.md: When specs/ exists, each slice re-reads its spec in refactor 1; spec drift is fixed in spec and code in the same commit.
 - [when-to-lint.md](tools/when-to-lint.md) — when-to-lint.md: CRITICAL: Do NOT run full npm run lint or bun run typecheck during active development!
 
 ### [architecture/](architecture/)

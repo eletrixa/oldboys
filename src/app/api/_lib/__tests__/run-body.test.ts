@@ -50,3 +50,29 @@ describe("StartRunBody", () => {
     expect(ok({ goal: "due-diligence", profileUrl: "https://www.linkedin.com/in/josef-buryan" }).success).toBe(false);
   });
 });
+
+describe("StartRunBody positionId (specs/positions-start)", () => {
+  const hiring = { goal: "hiring", profileUrl: "https://www.linkedin.com/in/josef-buryan" };
+
+  it("S1: accepts positionId with a hiring goal and a profileUrl", () => {
+    const r = ok({ ...hiring, positionId: "pos_abc-123" });
+    expect(r.success && r.data.positionId).toBe("pos_abc-123");
+  });
+
+  it("S2: rejects empty, 65-char and unsafe-character ids", () => {
+    for (const positionId of ["", "   ", "a".repeat(65), "a;b", "a b", "a'--"]) {
+      expect(ok({ ...hiring, positionId }).success).toBe(false);
+    }
+    const trimmed = ok({ ...hiring, positionId: " abc " });
+    expect(trimmed.success && trimmed.data.positionId).toBe("abc");
+    expect(ok({ ...hiring, positionId: "a".repeat(64) }).success).toBe(true);
+  });
+
+  it("S3: rejects positionId with due-diligence", () => {
+    expect(ok({ goal: "due-diligence", subject: "Acme s.r.o.", anchor: "12345678", positionId: "abc" }).success).toBe(false);
+  });
+
+  it("S4: positionId alone does not identify a candidate", () => {
+    expect(ok({ goal: "hiring", positionId: "abc" }).success).toBe(false);
+  });
+});

@@ -46,6 +46,8 @@ function global:cheatoldboys {
     Write-Host "Run Vitest once" -ForegroundColor White
     Write-Host "    pnpm test:watch                        " -NoNewline -ForegroundColor Green
     Write-Host "Vitest watch mode" -ForegroundColor White
+    Write-Host "    pnpm e2e                               " -NoNewline -ForegroundColor Green
+    Write-Host "Root Playwright smoke against pnpm dev on port 3141" -ForegroundColor White
     Write-Host "    LIVE=1 SUBJECT=.. ANCHOR=.. REPORT=out.txt pnpm exec vitest run live-sources" -ForegroundColor Green
     Write-Host "                                           Live Apify smoke of every hiring collector (spends ~\$0.01)" -ForegroundColor White
     Write-Host "    node scripts/ui-flow.mjs name city role prefix" -NoNewline -ForegroundColor Green
@@ -82,10 +84,12 @@ function global:cheatoldboys {
     Write-Host "Apply migrations to remote D1" -ForegroundColor White
     Write-Host ""
     Write-Host "  ┌─────────────────────────────────────────────────────────────────┐" -ForegroundColor DarkGray
-    Write-Host "  │  VERIFICATION CALLS                                            │" -ForegroundColor Yellow
+    Write-Host "  │  ENVIRONMENT VARIABLES                                         │" -ForegroundColor Yellow
     Write-Host "  └─────────────────────────────────────────────────────────────────┘" -ForegroundColor DarkGray
+    Write-Host "    POSITION_INGEST_USD=0.05               " -NoNewline -ForegroundColor Green
+    Write-Host "Budget cap for position must-haves LLM call (wrangler.jsonc var)" -ForegroundColor White
     Write-Host "    CALL_PROVIDER=mock|elevenlabs          " -NoNewline -ForegroundColor Green
-    Write-Host "wrangler.jsonc var" -ForegroundColor White
+    Write-Host "wrangler.jsonc var for verification calls" -ForegroundColor White
     Write-Host "    POST /api/runs/:id/calls               " -NoNewline -ForegroundColor Green
     Write-Host "Draft a verification call" -ForegroundColor White
     Write-Host "    POST /api/calls/:id/approve            " -NoNewline -ForegroundColor Green

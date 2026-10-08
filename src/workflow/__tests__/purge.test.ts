@@ -12,7 +12,8 @@
  *
  * Design constraints:
  * - No module mocks; fakes match on SQL prefixes, keep state in plain arrays and record executed SQL in order
- * - The D1 fake enforces the applications.run_id foreign key like D1 does
+ * - The D1 fake enforces the applications.run_id foreign key like D1 does; the positions table exists and is empty
+ *   (the positions sweep is covered in purge-positions.test.ts)
  */
 import { describe, expect, it } from "vitest";
 import { purgeExpired } from "../purge";
@@ -71,12 +72,21 @@ function makeEnv(seed: Seed = {}) {
     }
     if (/^DELETE FROM (claims|candidates|gaps|briefs|ledger_entries) WHERE run_id = \?$/.test(sql)) return [];
     if (sql.startsWith("DELETE FROM webhook_events WHERE conversation_id = ?")) return [];
+    if (sql.startsWith("SELECT 1 AS present FROM sqlite_master")) return [{ present: 1 }];
+    if (sql.startsWith("SELECT id, r2_key FROM positions")) return [];
     throw new Error(`unexpected SQL: ${sql}`);
   };
 
-  type Stmt = { bind: (...a: unknown[]) => Stmt; all: () => Promise<{ results: unknown[] }>; run: () => Promise<{ meta: { changes: number } }>; exec: () => void };
+  type Stmt = {
+    bind: (...a: unknown[]) => Stmt;
+    all: () => Promise<{ results: unknown[] }>;
+    first: () => Promise<unknown>;
+    run: () => Promise<{ meta: { changes: number } }>;
+    exec: () => void;
+  };
   const stmt = (sql: string, args: unknown[] = []): Stmt => ({
     bind: (...a: unknown[]) => stmt(sql, a),
+    first: () => Promise.resolve().then(() => exec(sql, args)[0] ?? null),
     all: () => Promise.resolve().then(() => ({ results: exec(sql, args) })),
     run: () => Promise.resolve().then(() => (exec(sql, args), { meta: { changes: 1 } })),
     exec: () => {
@@ -118,7 +128,7 @@ describe("purgeExpired", () => {
 
     const res = await purgeExpired(env.db, env.bucket, NOW);
 
-    expect(res).toEqual({ runs: 1, applications: 1 });
+    expect(res).toEqual({ runs: 1, positions: 0, applications: 1 });
     expect(env.r2Deletes.flat().sort()).toEqual(["calls/call-1.json", "intake/app-1/cv.pdf", "run-1/src-a.json", "run-1/src-b.json"]);
     const appDelete = env.index("DELETE FROM applications WHERE run_id = ?");
     const runDelete = env.index("DELETE FROM investigations WHERE id = ?");
@@ -139,7 +149,7 @@ describe("purgeExpired", () => {
 
     const res = await purgeExpired(env.db, env.bucket, NOW);
 
-    expect(res).toEqual({ runs: 1, applications: 0 });
+    expect(res).toEqual({ runs: 1, positions: 0, applications: 0 });
     expect(env.r2Deletes).toEqual([["run-2/src.json"]]);
     const childDeletes = env.executed.filter((e) => /^DELETE FROM \w+ WHERE run_id = \?$/.test(e.sql)).map((e) => e.sql.split(" ")[2]);
     expect(childDeletes).toEqual(["sources", "claims", "candidates", "gaps", "briefs", "calls", "ledger_entries", "applications"]);
@@ -157,7 +167,7 @@ describe("purgeExpired", () => {
 
     const res = await purgeExpired(env.db, env.bucket, NOW);
 
-    expect(res).toEqual({ runs: 0, applications: 2 });
+    expect(res).toEqual({ runs: 0, positions: 0, applications: 2 });
     expect(env.r2Deletes).toEqual([["intake/app-old-cv/cv.pdf"]]);
     expect(env.r2Deletes.flat().every((k) => typeof k === "string" && k.length > 0)).toBe(true);
     expect(env.state.applications().map((a) => a.id)).toEqual(["app-new"]);
@@ -172,7 +182,7 @@ describe("purgeExpired", () => {
 
     const res = await purgeExpired(env.db, env.bucket, NOW);
 
-    expect(res).toEqual({ runs: 0, applications: 0 });
+    expect(res).toEqual({ runs: 0, positions: 0, applications: 0 });
     expect(env.r2Deletes).toEqual([]);
     expect(env.executed.filter((e) => e.sql.startsWith("DELETE"))).toEqual([]);
     expect(env.state.investigations).toHaveLength(1);
@@ -184,8 +194,13 @@ describe("purgeExpired", () => {
 
     const res = await purgeExpired(env.db, env.bucket, NOW);
 
-    expect(res).toEqual({ runs: 0, applications: 0 });
+    expect(res).toEqual({ runs: 0, positions: 0, applications: 0 });
     expect(env.r2Deletes).toEqual([]);
-    expect(env.executed.map((e) => e.sql.split(" WHERE")[0])).toEqual(["SELECT id FROM investigations", "SELECT id, cv_key FROM applications"]);
+    expect(env.executed.map((e) => e.sql.split(" WHERE")[0])).toEqual([
+      "SELECT id FROM investigations",
+      "SELECT id, cv_key FROM applications",
+      "SELECT 1 AS present FROM sqlite_master",
+      "SELECT id, r2_key FROM positions",
+    ]);
   });
 });

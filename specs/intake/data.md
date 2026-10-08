@@ -1,4 +1,4 @@
-# Unit: data (migration 0009 + Application schema)
+# Unit: data (migration 0010 + Application schema)
 
 ## Files
 - `migrations/0009_intake.sql` (new; SQL header comment like `0007_profile_first.sql`)

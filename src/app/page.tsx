@@ -9,7 +9,7 @@
  * Key responsibilities:
  * - Editorial heading, sub copy and the client start form (Screen 1) in a white card
  * - Three plain steps (what Radar does) and the "never a score" line
- * - Small link to /roles (candidates overview per role, idea #16)
+ * - Small link to /positions (pick or add a position; /roles stays reachable by URL)
  *
  * Design constraints:
  * - Server component; interactivity lives in start-form.tsx
@@ -62,9 +62,9 @@ export default async function HomePage(): Promise<React.JSX.Element> {
           <StartForm />
         </div>
         <p className="px-1 text-sm text-muted">
-          Several people for one role?{" "}
-          <Link href="/roles" className={LINK}>
-            See roles
+          Hiring for a position?{" "}
+          <Link href="/positions" className={LINK}>
+            See positions
           </Link>
         </p>
       </section>

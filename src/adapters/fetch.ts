@@ -16,10 +16,10 @@
  */
 import type { JsonFetch } from "@/domain/ports";
 
-const TIMEOUT_MS = 20_000;
+export const TIMEOUT_MS = 20_000;
 const RETRY_DELAY_MS = 2_000;
 const SNIPPET_CHARS = 160;
-const UA = "oldboys-hackathon/0.1 (+https://oldboys.asajj.cz)";
+export const UA = "oldboys-hackathon/0.1 (+https://oldboys.asajj.cz)";
 
 export type FetchCreds = { githubToken?: string; stackExchangeKey?: string; openAlexKey?: string; retryDelayMs?: number };
 
