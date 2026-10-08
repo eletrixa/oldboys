@@ -3,13 +3,14 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/positions/position-detail.tsx
- * Deps:    next/link, src/app/ui, src/domain/position-links, src/app/_components (role-table, auth-states, use-authed-json), ./must-have-editor
+ * Deps:    next/link, src/app/ui, src/domain/position-links, src/app/_components (role-table, auth-states, use-authed-json, token), ./must-have-editor, ./candidate-pool, ./intake-channels
  * Tested:  view by e2e/positions.spec.ts
  *
  * Key responsibilities:
  * - GET /api/positions/:id; show title, company, location, family chip, ingest label
  * - Actions: Research a candidate (primary), Search people on LinkedIn, Open posting
  * - Notes: fallback must-haves (AI was off), "edited by hand"
+ * - Candidates (pool) and Intake channels sections; reload re-GETs the detail after an add, bind or enrichment start
  * - Coverage table via RoleTable with its disclaimer, or "No candidates researched yet."
  *
  * Design constraints:
@@ -19,12 +20,15 @@
 "use client";
 
 import Link from "next/link";
+import { authFetch, readToken } from "@/app/_components/token";
 import { AuthStates } from "@/app/_components/auth-states";
 import { RoleTable } from "@/app/_components/role-table";
 import { useAuthedJson } from "@/app/_components/use-authed-json";
 import type { PositionDetail } from "@/app/api/positions/handler";
 import { BTN_PRIMARY, CARD_PEACH, Eyebrow, LINK, Pill } from "@/app/ui";
 import { ingestLabel } from "@/domain/position-links";
+import { CandidatePool } from "./candidate-pool";
+import { IntakeChannels } from "./intake-channels";
 import { MustHaveEditor } from "./must-have-editor";
 import { PositionBasics } from "./position-basics";
 
@@ -36,6 +40,10 @@ function Body({ detail, onChange }: { detail: PositionDetail; onChange: (d: Posi
   const search = `${position.title} ${position.location ?? ""}`.trim();
   function saved(p: PositionDetail["position"]): void {
     onChange({ ...detail, position: p });
+  }
+  async function reload(): Promise<void> {
+    const res = await authFetch(`/api/positions/${encodeURIComponent(position.id)}`, readToken());
+    if (res.ok) onChange(await res.json<PositionDetail>());
   }
   return (
     <>
@@ -64,6 +72,8 @@ function Body({ detail, onChange }: { detail: PositionDetail; onChange: (d: Posi
         </p>
       )}
       <MustHaveEditor position={position} onSaved={saved} />
+      <CandidatePool positionId={position.id} rows={detail.candidates} onReload={reload} />
+      <IntakeChannels positionId={position.id} title={position.title} tags={detail.tags} onReload={reload} />
       {group === null ? <p className="text-muted">No candidates researched yet.</p> : <RoleTable group={group} />}
     </>
   );

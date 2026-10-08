@@ -7,7 +7,7 @@
  * Tested:  n/a (this is the test)
  *
  * Key responsibilities:
- * - Add a position, see its must-haves, open the research start form with it, find it in the list
+ * - Add a position, see its must-haves, open the research start form with it, add a candidate to its pool, find it in the list
  *
  * Design constraints:
  * - Logs in through a throwaway account (session cookie), no team token; no research run is started (no spend)
@@ -44,6 +44,13 @@ test("paste a posting, research from it, find it in the list", async ({ page }) 
   await expect(page).toHaveURL(`/?positionId=${id}`);
   await expect(page.getByText(TITLE)).toBeVisible();
   await expect(page.locator("input[name=role]")).toHaveCount(0);
+
+  await page.goto(`/positions/${id}`);
+  await page.getByLabel("LinkedIn URL").fill(`https://www.linkedin.com/in/e2e-${SUFFIX}`);
+  await page.getByRole("button", { name: "Add to pool" }).click();
+  const row = page.getByRole("row", { name: /Added by hand/ });
+  await expect(row).toContainText("In pool");
+  await expect(page.getByRole("button", { name: "Start enrichment (0)" })).toBeDisabled(); // never started here: it spends budget
 
   await page.goto("/positions");
   const section = page.locator("section", { has: page.getByRole("heading", { name: "data", exact: true }) });

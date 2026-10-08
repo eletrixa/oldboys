@@ -36,12 +36,13 @@ export type ApplicationListRow = {
 };
 
 /** One intake_tags row as GET /api/intake/tags returns it. */
-export type TagRow = { tag: string; role: string; goal: GoalId; startupjobs_offer_id: string | null; created_at: string };
+export type TagRow = { tag: string; role: string; goal: GoalId; startupjobs_offer_id: string | null; position_id: string | null; created_at: string };
 
 export type StatusTone = "ok" | "unsure" | "conflict" | "neutral";
 
 export const STATUS_LABEL: Readonly<Record<ApplicationStatus, string>> = {
   received: "Received",
+  pooled: "In pool",
   "run-started": "Run started",
   unmatched: "Unmatched",
   incomplete: "Incomplete",
@@ -50,6 +51,7 @@ export const STATUS_LABEL: Readonly<Record<ApplicationStatus, string>> = {
 
 export const STATUS_TONE: Readonly<Record<ApplicationStatus, StatusTone>> = {
   received: "neutral",
+  pooled: "neutral",
   "run-started": "ok",
   unmatched: "conflict",
   incomplete: "unsure",
@@ -61,6 +63,7 @@ export const SOURCE_LABEL: Readonly<Record<ApplicationSource, string>> = {
   form: "Google Form",
   "apply-page": "Apply page",
   startupjobs: "StartupJobs",
+  manual: "Added by hand",
 };
 
 /** "2026-10-09 14:05" in UTC; the raw string when it does not parse. */

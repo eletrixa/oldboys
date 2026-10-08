@@ -37,8 +37,9 @@ function makeEnv(opts: { positions?: Pos[]; applications?: App[]; runIds?: strin
       return rows;
     }
     if (q.startsWith("SELECT 1 AS present FROM sqlite_master")) return opts.noTable === true ? [] : [{ present: 1 }];
-    if (q.startsWith("UPDATE investigations SET position_id = NULL WHERE position_id IN")) {
-      log.push(`update:${a.join(",")}`);
+    const unlink = /^UPDATE (investigations|applications|intake_tags) SET position_id = NULL WHERE position_id IN/.exec(q);
+    if (unlink) {
+      log.push(`update-${unlink[1] ?? ""}:${a.join(",")}`);
       return [];
     }
     if (q.startsWith("DELETE FROM positions WHERE id IN")) {
@@ -111,11 +112,11 @@ describe("purgeExpired positions", () => {
     expect(env.deleted).toEqual([["positions/p2.json"]]);
   });
 
-  it("U4: investigations lose their position_id and the UPDATE is recorded before the DELETE", async () => {
+  it("U4: investigations, applications and intake tags lose their position_id and the UPDATEs is recorded before the DELETE", async () => {
     const env = makeEnv({ positions: [{ id: "p1", r2_key: null, expires_at: PAST }] });
     await purgeExpired(env.db, env.bucket, NOW);
-    expect(env.log).toEqual(["update:p1", "delete:p1"]);
-    expect(env.batches).toEqual([2]);
+    expect(env.log).toEqual(["update-investigations:p1", "update-applications:p1", "update-intake_tags:p1", "delete:p1"]);
+    expect(env.batches).toEqual([4]);
   });
 
   it("U5: 45 expired positions run in batches of 20 and the result reports 45", async () => {
@@ -125,7 +126,7 @@ describe("purgeExpired positions", () => {
     expect(r.positions).toBe(45);
     expect(env.selects).toEqual([20, 20, 5, 0]);
     expect(env.deleted.map((k) => k.length)).toEqual([20, 20, 5]);
-    expect(env.batches).toEqual([2, 2, 2]);
+    expect(env.batches).toEqual([4, 4, 4]);
   });
 
   it("U6: a second sweep deletes nothing and returns positions 0", async () => {

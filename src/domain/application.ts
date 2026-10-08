@@ -3,13 +3,13 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/domain/application.ts
- * Deps:    zod, src/domain/profile-url
+ * Deps:    zod, src/domain/profile-url, src/domain/position (POSITION_ID)
  * Tested:  src/domain/__tests__/application.test.ts
  *
  * Key responsibilities:
  * - Zod schemas for an intake tag, source, status, CV file and IntakeInput (specs/intake/data.md)
  * - `candidateInput`: LinkedIn URL normalised or dropped with a note, CV text passed through
- * - `decideStatus`: unmatched > incomplete > capped > run-started, in that order; CAPPED_NOTE is the capped note
+ * - `decideStatus`: unmatched > incomplete > pooled (position-bound) > capped > run-started, in that order; CAPPED_NOTE is the capped note
  * - `safeFilename` / `cvR2Key`: the R2 key a CV file is stored under
  * - Owns CV_MAX (run-body.ts re-exports it)
  *
@@ -17,6 +17,7 @@
  * - Pure: no I/O; the funnel (src/workflow/intake.ts) is the only writer of applications
  */
 import { z } from "zod";
+import { POSITION_ID } from "./position";
 import { normalizeLinkedinProfile } from "./profile-url";
 
 /** Longest CV text a run accepts (pasted or extracted). */
@@ -36,10 +37,10 @@ export const CV_FILENAME_MAX = 200;
 /** Routing key of an open position: plus-address, apply page path, form hidden field, StartupJobs mapping. */
 export const IntakeTag = z.string().regex(/^[a-z0-9][a-z0-9-]{1,39}$/);
 
-export const ApplicationSource = z.enum(["email", "form", "apply-page", "startupjobs"]);
+export const ApplicationSource = z.enum(["email", "form", "apply-page", "startupjobs", "manual"]);
 export type ApplicationSource = z.infer<typeof ApplicationSource>;
 
-export const ApplicationStatus = z.enum(["received", "run-started", "unmatched", "incomplete", "capped"]);
+export const ApplicationStatus = z.enum(["received", "pooled", "run-started", "unmatched", "incomplete", "capped"]);
 export type ApplicationStatus = z.infer<typeof ApplicationStatus>;
 
 export const CvFile = z.object({
@@ -80,6 +81,8 @@ export const IntakeInput = z.object({
   cv: CvFile.optional(),
   coverLetter: z.string().trim().min(1).max(COVER_LETTER_MAX).optional(),
   note: z.string().max(NOTE_MAX).optional(),
+  /** The position whose pool a manual add goes into (plans/010); a manual add without one is `unmatched` (the funnel decides, so callers can still `.omit()` this schema). */
+  positionId: POSITION_ID.optional(),
 });
 export type IntakeInput = z.infer<typeof IntakeInput>;
 
@@ -126,12 +129,15 @@ export function decideStatus(args: {
   senderAllowed: boolean;
   candidate: { profileUrl?: string; cvText?: string };
   capped: boolean;
+  /** The row sits in a position's pool: it waits for a recruiter instead of starting a run. */
+  pool: boolean;
 }): { status: DecidedStatus; note: string | null } {
   if (!args.tagKnown) return { status: "unmatched", note: "unknown tag" };
   if (!args.senderAllowed) return { status: "unmatched", note: "sender not allowed" };
   if (args.candidate.profileUrl === undefined && args.candidate.cvText === undefined) {
     return { status: "incomplete", note: "no LinkedIn profile URL and no readable CV text" };
   }
+  if (args.pool) return { status: "pooled", note: null };
   if (args.capped) return { status: "capped", note: CAPPED_NOTE };
   return { status: "run-started", note: null };
 }

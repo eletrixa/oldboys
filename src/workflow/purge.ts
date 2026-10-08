@@ -13,7 +13,7 @@
  *   their run, before the run row (applications.run_id references it); applications that never started a run go
  *   RETENTION_DAYS after received_at
  * - Positions (plans/007) go at their own `expires_at`, after the runs sweep: R2 objects, then one `db.batch` per batch of ids
- *   that sets `investigations.position_id` NULL and deletes the rows
+ *   that sets `position_id` NULL on investigations, applications and intake_tags and deletes the rows
  *
  * Design constraints:
  * - Batches of 20 runs / applications / positions per tick; idempotent, safe to rerun
@@ -98,7 +98,9 @@ async function purgePositions(db: D1Database, bucket: R2Bucket, now: Date): Prom
     const ids = results.map((p) => p.id);
     const marks = ids.map(() => "?").join(", ");
     await db.batch([
-      db.prepare(`UPDATE investigations SET position_id = NULL WHERE position_id IN (${marks})`).bind(...ids),
+      ...["investigations", "applications", "intake_tags"].map((table) =>
+        db.prepare(`UPDATE ${table} SET position_id = NULL WHERE position_id IN (${marks})`).bind(...ids),
+      ),
       db.prepare(`DELETE FROM positions WHERE id IN (${marks})`).bind(...ids),
     ]);
     positions += ids.length;
