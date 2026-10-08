@@ -29,7 +29,11 @@ function global:cheatoldboys {
     Write-Host "    pnpm lint                              " -NoNewline -ForegroundColor Green
     Write-Host "Lint" -ForegroundColor White
     Write-Host "    pnpm check                             " -NoNewline -ForegroundColor Green
-    Write-Host "typecheck + lint + test" -ForegroundColor White
+    Write-Host "typecheck + lint + test (app + extension)" -ForegroundColor White
+    Write-Host "    pnpm ext:build                         " -NoNewline -ForegroundColor Green
+    Write-Host "Build the browser extension: extension/.output/chrome-mv3 (Chrome+Edge) and firefox-mv3" -ForegroundColor White
+    Write-Host "    pnpm --filter oldboys-extension check  " -NoNewline -ForegroundColor Green
+    Write-Host "Extension only: wxt prepare + tsc + eslint + vitest" -ForegroundColor White
     Write-Host "    pnpm hooks:install                     " -NoNewline -ForegroundColor Green
     Write-Host "Enable pre-commit hook (runs pnpm check on code changes)" -ForegroundColor White
     Write-Host "    scripts/agent-check.sh                 " -NoNewline -ForegroundColor Green

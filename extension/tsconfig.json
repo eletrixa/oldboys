@@ -1,0 +1,10 @@
+{
+  "extends": "./.wxt/tsconfig.json",
+  "compilerOptions": {
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "skipLibCheck": true
+  },
+  "include": [".wxt/wxt.d.ts", "**/*.ts", "../src/domain/run-status.ts", "../src/domain/claim.ts"],
+  "exclude": ["node_modules", ".output"]
+}

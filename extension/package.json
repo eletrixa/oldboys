@@ -1,0 +1,32 @@
+{
+  "name": "oldboys-extension",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Browser extension (Chrome, Edge, Firefox): mark a person on LinkedIn or any page, get notified when the sourced report is ready.",
+  "scripts": {
+    "dev": "wxt",
+    "dev:firefox": "wxt -b firefox",
+    "build": "wxt build",
+    "build:firefox": "wxt build -b firefox",
+    "zip": "wxt zip",
+    "zip:firefox": "wxt zip -b firefox",
+    "prepare": "wxt prepare",
+    "typecheck": "wxt prepare && tsc --noEmit",
+    "lint": "eslint",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "check": "pnpm typecheck && pnpm lint && pnpm test"
+  },
+  "dependencies": {
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "eslint": "^10.12.0",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.71.1",
+    "vitest": "^5.0.3",
+    "web-ext": "^10.7.0",
+    "wxt": "0.21.4"
+  }
+}
