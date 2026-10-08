@@ -8,12 +8,14 @@
  *
  * Key responsibilities:
  * - Name the four seams between pure recipe logic and the outside world
+ * - Name the two verification-call seams (plans/003): place a call, fetch its result
  *
  * Design constraints:
  * - Plain function types only; no interfaces with a single implementation, no DI container
  * - Real adapters (apify-client, @ai-sdk/anthropic, D1, R2) live outside src/domain and are passed in
  */
 import type { z } from "zod";
+import type { CallBrief, CallResult } from "@/domain/call";
 import type { LedgerEntry, Source } from "@/domain/claim";
 
 /** Run one Apify actor (or ARES fetch) with a hard timeout and cost cap; returns dataset items. */
@@ -37,6 +39,20 @@ export type LedgerAppend = (entry: Omit<LedgerEntry, "seq" | "ts">) => Promise<L
 
 /** Persist a source's raw payload (R2) and its metadata row; returns the stored Source. */
 export type SourceStore = (source: Omit<Source, "r2_key">, raw: unknown) => Promise<Source>;
+
+/**
+ * Place one outbound verification call. Called exactly once per approved call, from a request
+ * handler (never from a retried Workflow step). A synchronous `result` is returned only by the
+ * mock provider; the live provider delivers it later through the webhook or `FetchCallResult`.
+ */
+export type PlaceCall = (input: {
+  callId: string;
+  toNumber: string;
+  brief: CallBrief;
+}) => Promise<{ provider_conversation_id: string; result: CallResult | null }>;
+
+/** Fetch a finished call result by provider conversation id; null while still in progress. */
+export type FetchCallResult = (providerConversationId: string) => Promise<CallResult | null>;
 
 /** The bag the runner receives. Tests pass fakes; the Workflow passes real adapters. */
 export type Ports = {

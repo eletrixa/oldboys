@@ -8,7 +8,7 @@
  *
  * Key responsibilities:
  * - Every aggregate parses its own canonical example back to an equal value
- * - FACT without a quote is rejected; INFERENCE without a quote is fine
+ * - FACT or STATEMENT without a quote is rejected; INFERENCE without a quote is fine
  *
  * Design constraints:
  * - Fixtures stay inline; no shared fixture module until a second test needs one
@@ -106,6 +106,13 @@ describe("Claim invariants", () => {
   it("accepts an INFERENCE without a quote", () => {
     const inference = { ...fact, id: "claim-2", kind: "INFERENCE", quote: null, supports: [] };
     expect(Claim.safeParse(inference).success).toBe(true);
+  });
+
+  it("holds STATEMENT to the same quote and support rule as FACT", () => {
+    const statement = { ...fact, id: "claim-3", kind: "STATEMENT" };
+    expect(Claim.safeParse(statement).success).toBe(true);
+    expect(Claim.safeParse({ ...statement, quote: null }).success).toBe(false);
+    expect(Claim.safeParse({ ...statement, supports: [] }).success).toBe(false);
   });
 
   it("rejects an unknown kind and an out-of-range confidence", () => {

@@ -9,6 +9,8 @@
  * Key responsibilities:
  * - Single source of truth for the domain shapes (plans/001 domain map); every track imports from here
  * - Enforce the FACT invariant: a FACT must carry a quote (verify.ts, TODO, will check quote ⊂ excerpt)
+ * - STATEMENT (plans/003): a consented callee said it on a verification call; same quote + support
+ *   rule as FACT, but never presented as a public fact (confidence capped in call-ingest.ts)
  *
  * Design constraints:
  * - Field names are snake_case and mirror migrations/0001_init.sql one to one (no mapping layer)
@@ -61,7 +63,7 @@ export const Source = z.object({
 });
 export type Source = z.infer<typeof Source>;
 
-export const ClaimKind = z.enum(["FACT", "INFERENCE"]);
+export const ClaimKind = z.enum(["FACT", "INFERENCE", "STATEMENT"]);
 export type ClaimKind = z.infer<typeof ClaimKind>;
 
 export const Claim = z
@@ -78,12 +80,12 @@ export const Claim = z
     contradicts: z.array(z.string().min(1)),
     rank: z.number().int().nonnegative(),
   })
-  .refine((c) => c.kind !== "FACT" || (c.quote !== null && c.quote.trim().length > 0), {
-    message: "A FACT claim must carry a verbatim quote",
+  .refine((c) => c.kind === "INFERENCE" || (c.quote !== null && c.quote.trim().length > 0), {
+    message: "A FACT or STATEMENT claim must carry a verbatim quote",
     path: ["quote"],
   })
-  .refine((c) => c.kind !== "FACT" || c.supports.length > 0, {
-    message: "A FACT claim must cite at least one supporting source",
+  .refine((c) => c.kind === "INFERENCE" || c.supports.length > 0, {
+    message: "A FACT or STATEMENT claim must cite at least one supporting source",
     path: ["supports"],
   });
 export type Claim = z.infer<typeof Claim>;
