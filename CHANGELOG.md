@@ -37,6 +37,7 @@ All notable changes to oldboys are documented here. The format follows [Keep a C
 - Ledger entries include successful AI model call counts and cost tracking
 
 ### Fixed
+- Phone verification proposal never reads internal gap reasons to the candidate: a source gap becomes a question only when it is a plain "no … found" statement (scrubbed of links, e-mails and numbers); failed requests (URLs, HTTP codes), budget, fallback and namesake-only gaps are no longer asked about
 - Nightly purge: intake applications (rows and R2 CV files) are deleted after 7 days and before the runs they started, so `applications.run_id` never blocks the runs sweep; the purge result reports `applications`
 - Extract and synthesize steps now degrade gracefully instead of failing, producing evidence-only briefs and completed runs
 - Resolve fallback no longer merges on name text alone; uses URL anchor (0.6) or cross-link only, drops PDF/genealogy noise
