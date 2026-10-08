@@ -7,7 +7,7 @@
  * Tested:  n/a (test file)
  *
  * Key responsibilities:
- * - seedProfile: profile ok, profile fails, CV ok, CV model fails
+ * - seedProfile: profile ok, profile fails, CV ok, CV model fails, same ids on a retry
  * - linkedin_profile does not scrape a profile the seed already fetched
  * - lineupNeedsAnswer: a seed merge means no "who is it?" pause
  *
@@ -103,6 +103,21 @@ describe("seedProfile with a pasted CV", () => {
       ["github", "jburyan", "merge"],
       ["linkedin", "josef-buryan-cv", "merge"],
     ]);
+  });
+
+  it("is idempotent: a second run with the same input yields the same source and candidate ids", async () => {
+    const cvFacts = () => ({ full_name: "Josef Buryan", headline: "", location: "", current_employer: "", links: ["github.com/jburyan"] });
+    const run = () =>
+      seedProfile(
+        input({ cvText: CV }),
+        fakePorts({ storeSource: strictStore, callActor: () => Promise.resolve({ items: [profileItem], cost_usd: 0.004 }), llm: fakeLlm(cvFacts) }),
+      );
+    const [a, b] = [await run(), await run()];
+    const ids = (r: typeof a) => [...r.out.sources.map((s) => s.id), ...r.out.candidates.map((c) => c.id)];
+    expect(ids(a)).toHaveLength(4);
+    expect(new Set(ids(a)).size).toBe(4);
+    expect(ids(b)).toEqual(ids(a));
+    expect((await seedProfile(input({ runId: "run-2", cvText: CV }), fakePorts({ llm: fakeLlm(cvFacts) }))).out.sources.map((s) => s.id)).not.toContain(a.out.sources[1]?.id);
   });
 
   it("keeps the run going when the model fails: CV source stored, no name, a note", async () => {

@@ -42,7 +42,7 @@ const QUESTION_TITLE: Record<string, string> = {
 
 /** Social profiles carry no claim of their own, so a "Social presence" section would only list links: it is not emitted. */
 const SOCIAL = new Set(["linkedin", "x", "instagram", "tiktok", "youtube", "bluesky", "facebook"]);
-const GROUP_TITLE: Record<string, string> = { github: "GitHub", ares: "Business registry", web: "Web pages" };
+const GROUP_TITLE: Record<string, string> = { github: "GitHub", ares: "Business registry", web: "Web pages", cv: "CV" };
 const TITLE_MAX = 48;
 
 /** Deterministic short title from a question text: cut at the first " (", ", " or " such as", then at a word end within 48 chars. */

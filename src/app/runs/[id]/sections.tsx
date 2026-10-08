@@ -11,12 +11,13 @@
  * - ClaimList: one claim per row with its kind tag and source links (muted "confirmed: <identity_reason>" note when a
  *   source was confirmed by name + employer); also used for the per-question fallback
  * - Source-only sections (platforms without claims) list their confirmed source links; empty ones are not rendered
+ * - SourceLink: the pasted CV renders as "Candidate's CV (pasted)" with no href (its URL is "cv:<runId>")
  *
  * Design constraints:
  * - Pure rendering; the confidence rates the research behind a section, never the person
  */
 import type { BriefSection, Claim } from "@/domain/claim";
-import { type ConfidenceBand, confidenceBand, host } from "./state";
+import { type ConfidenceBand, confidenceBand, CV_SOURCE_TEXT, host, isCvSource } from "./state";
 
 const CARD = "rounded-2xl border border-zinc-800 bg-zinc-900/60 p-5";
 
@@ -26,10 +27,12 @@ const BAND: Record<ConfidenceBand, string> = {
   weak: "bg-zinc-800 text-zinc-400",
 };
 
-function SourceLink({ url }: { url: string }): React.JSX.Element {
+/** A source as a link; the pasted CV ("cv:<runId>") as plain text with no href. `label` defaults to the host. */
+export function SourceLink({ url, label, className = "ml-2" }: { url: string; label?: string; className?: string }): React.JSX.Element {
+  if (isCvSource(url)) return <span className={`${className} text-zinc-400`}>{CV_SOURCE_TEXT}</span>;
   return (
-    <a href={url} target="_blank" rel="noreferrer" className="ml-2 text-teal-400 underline">
-      {host(url)}
+    <a href={url} target="_blank" rel="noreferrer" className={`${className} text-teal-400 underline`}>
+      {label ?? host(url)}
     </a>
   );
 }
@@ -88,9 +91,7 @@ function SectionCard({ section, claims, urlOf, noteOf }: { section: BriefSection
         <ul className="mt-3 flex flex-col gap-1 text-sm">
           {links.map((url) => (
             <li key={url}>
-              <a href={url} target="_blank" rel="noreferrer" className="text-teal-400 underline">
-                {url.replace(/^https?:\/\/(www\.)?/, "")}
-              </a>
+              <SourceLink url={url} label={url.replace(/^https?:\/\/(www\.)?/, "")} className="" />
             </li>
           ))}
         </ul>

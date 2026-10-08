@@ -41,6 +41,16 @@ describe("executeStep collection", () => {
     expect(out.sources.map((s) => s.url)).toEqual(["https://podcasts.apple.com/us/podcast/ep?i=1&l=ru"]);
   });
 
+  it("is not empty when every hit was already stored by an earlier step, and says so in a note", async () => {
+    const items = [{ organicResults: [{ title: "B", url: "https://cz.linkedin.com/in/jana-dvorakova-data/cs", description: "Jana" }] }];
+    const ctx = baseContext();
+    const earlier = { ...ctx, sources: [{ id: "s0", run_id: ctx.runId, url: "https://www.linkedin.com/in/jana-dvorakova-data", actor: "x", fetched_at: "t", excerpt: "e", r2_key: "k", expires_at: "t", identity: "merged" as const }] };
+    const out = await executeStep(serp, earlier, fakePorts({ callActor: () => Promise.resolve({ items, cost_usd: 0 }) }));
+    expect(out.sources).toHaveLength(0);
+    expect(out.empty).toBe(false);
+    expect(out.notes).toContain("1 hits already in the run");
+  });
+
   it("reports empty when the actor returns nothing", async () => {
     const out = await executeStep(serp, baseContext(), fakePorts());
     expect(out.empty).toBe(true);
