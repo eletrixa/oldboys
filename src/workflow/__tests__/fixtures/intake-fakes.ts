@@ -4,7 +4,7 @@
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/workflow/__tests__/fixtures/intake-fakes.ts
  * Deps:    vitest (vi.fn), src/workflow/intake (IntakeEnv type)
- * Tested:  n/a (test helper; used by the form, startupjobs, apply and intake-email tests)
+ * Tested:  n/a (test helper; used by the intake, form, startupjobs, apply and intake-email tests)
  *
  * Key responsibilities:
  * - `makeIntakeFakes(opts)`: an IntakeEnv whose DB serves the funnel's statements from plain maps, whose SOURCES
@@ -13,6 +13,7 @@
  *
  * Design constraints:
  * - No module mocks; an unknown statement throws, so a new funnel query fails loudly instead of returning nothing
+ * - The applications INSERT enforces the (source, external_id) unique index like D1 does; `raceInsert` fakes a lost race
  * - The duplicate SELECT is matched on its column prefix and the capped re-read on `FROM applications WHERE id`,
  *   so a trimmed column list in the funnel does not break the connector tests
  */
@@ -34,6 +35,8 @@ export type IntakeFakeOpts = {
   r2Error?: Error;
   /** Every D1 statement throws it. */
   dbError?: Error;
+  /** The applications INSERT fails as if another delivery of the same message committed first (row "app-winner"). */
+  raceInsert?: boolean;
 };
 
 export type CvPut = { key: string; bytes: ArrayBuffer; contentType: string | undefined };
@@ -44,6 +47,8 @@ export type IntakeFakes = {
   investigations: Row[];
   puts: CvPut[];
   writes: string[];
+  /** Bind arguments of every hourly-cap COUNT query. */
+  countArgs: unknown[][];
   create: Mock<(params: unknown) => Promise<{ id: string }>>;
 };
 
@@ -55,6 +60,7 @@ export function makeIntakeFakes(opts: IntakeFakeOpts = {}): IntakeFakes {
   const puts: CvPut[] = [];
   /** Every INSERT and UPDATE on applications, to prove a rejected request wrote nothing. */
   const writes: string[] = [];
+  const countArgs: unknown[][] = [];
   const create = vi.fn((_: unknown) => Promise.resolve({ id: "wf" }));
 
   const exec = (sql: string, args: unknown[]): { rows: Row[]; changes: number } => {
@@ -76,6 +82,12 @@ export function makeIntakeFakes(opts: IntakeFakeOpts = {}): IntakeFakes {
       const cols = /\(([^)]*)\)/.exec(sql)?.[1]?.split(", ") ?? [];
       const row: Row = Object.fromEntries(cols.map((c, i) => [c, args[i]]));
       row.status = "received";
+      const clash = [...apps.values()].some((a) => a.source === row.source && a.external_id === row.external_id);
+      if (opts.raceInsert === true) {
+        apps.set("app-winner", { ...row, id: "app-winner", status: "run-started", run_id: "run-winner", note: null });
+        throw new Error("D1_ERROR: UNIQUE constraint failed: applications.source, applications.external_id: SQLITE_CONSTRAINT");
+      }
+      if (clash) throw new Error("D1_ERROR: UNIQUE constraint failed: applications.source, applications.external_id");
       apps.set(row.id as string, row);
       return { rows: [], changes: 1 };
     }
@@ -83,7 +95,10 @@ export function makeIntakeFakes(opts: IntakeFakeOpts = {}): IntakeFakes {
       const t = tags.get(args[0] as string);
       return { rows: t ? [t] : [], changes: 0 };
     }
-    if (sql.startsWith("SELECT COUNT(*) AS n FROM investigations")) return { rows: [{ n: opts.intakeRunsLastHour ?? 0 }], changes: 0 };
+    if (sql.startsWith("SELECT COUNT(*) AS n FROM investigations")) {
+      countArgs.push(args);
+      return { rows: [{ n: opts.intakeRunsLastHour ?? 0 }], changes: 0 };
+    }
     if (sql.startsWith("INSERT INTO investigations")) {
       const cols = /\(([^)]*)\)/.exec(sql)?.[1]?.split(", ") ?? [];
       const values = [...args.slice(0, 4), "queued", ...args.slice(4)];
@@ -123,5 +138,5 @@ export function makeIntakeFakes(opts: IntakeFakeOpts = {}): IntakeFakes {
     },
   } as unknown as IntakeEnv;
 
-  return { env, apps, investigations, puts, writes, create };
+  return { env, apps, investigations, puts, writes, countArgs, create };
 }

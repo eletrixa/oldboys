@@ -9,8 +9,8 @@
  * Key responsibilities:
  * - Validate {tag, externalId, name?, email?, phone?, linkedinUrl?, cvText?, cvBase64?, cvFilename?, cvContentType?, coverLetter?}
  *   by deriving from IntakeInput (omit source, note, cv, tag), so the limits cannot drift from the funnel's own parse
- * - At least one of linkedinUrl, cvText, cvBase64; cvBase64 (standard or url-safe) is decoded into cv.bytes
- *   with default filename cv.pdf and content type application/pdf
+ * - At least one of linkedinUrl, cvText, cvBase64; cvBase64 (standard or url-safe) is decoded into cv.bytes;
+ *   toCvFile fills a blank or missing cvFilename / cvContentType (cv.pdf, application/pdf)
  *
  * Design constraints:
  * - Lives outside route.ts because Next.js route modules may only export handlers
@@ -43,8 +43,8 @@ export const IntakeFormBody = IntakeInput.omit({ source: true, note: true, cv: t
   .extend({
     tag: z.string().trim().toLowerCase().pipe(IntakeTag),
     cvBase64: z.string().min(1).max(CV_BASE64_MAX).optional(),
-    cvFilename: z.string().min(1).max(CV_FILENAME_MAX).default("cv.pdf"),
-    cvContentType: z.string().max(100).default("application/pdf"),
+    cvFilename: z.string().max(CV_FILENAME_MAX).optional(),
+    cvContentType: z.string().max(100).optional(),
   })
   .superRefine((b, ctx) => {
     if (b.linkedinUrl === undefined && b.cvText === undefined && b.cvBase64 === undefined) {

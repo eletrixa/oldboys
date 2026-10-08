@@ -55,6 +55,9 @@ describe("StartupJobsWebhook", () => {
   it("rejects a payload without ids", () => {
     expect(StartupJobsWebhook.safeParse({ name: "x" }).success).toBe(false);
     expect(StartupJobsWebhook.safeParse({ candidateID: "abc", offerID: 1 }).success).toBe(false);
+    for (const bad of [null, "", 0, -1]) {
+      expect(StartupJobsWebhook.safeParse({ candidateID: bad, offerID: 1 }).success, String(bad)).toBe(false);
+    }
   });
 });
 

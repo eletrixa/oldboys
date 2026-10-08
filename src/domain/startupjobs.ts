@@ -7,7 +7,8 @@
  * Tested:  src/domain/__tests__/startupjobs.test.ts
  *
  * Key responsibilities:
- * - `StartupJobsWebhook`: the documented payload (specs/intake/startupjobs.md), tolerant of null fields and string ids
+ * - `StartupJobsWebhook`: the documented payload (specs/intake/startupjobs.md), tolerant of null fields and string ids;
+ *   candidateID and offerID must be positive integers (null and "" would otherwise coerce to 0 and collide)
  * - `toIntakeInput`: payload (+ tag, + downloaded CV) to one IntakeInput literal (undefined for absent fields) that always passes
  *   the funnel's own parse; limits come from src/domain/application
  * - `tagFor`: offer id mapping wins, else the internal position name when it is a valid tag
@@ -33,8 +34,8 @@ import { htmlToText } from "./html-text";
 const optionalText = z.string().nullish();
 
 export const StartupJobsWebhook = z.looseObject({
-  candidateID: z.coerce.number().int(),
-  offerID: z.coerce.number().int(),
+  candidateID: z.coerce.number().int().positive(),
+  offerID: z.coerce.number().int().positive(),
   name: optionalText,
   email: optionalText,
   phone: optionalText,

@@ -9,7 +9,7 @@
  * Key responsibilities:
  * - Zod schemas for an intake tag, source, status, CV file and IntakeInput (specs/intake/data.md)
  * - `candidateInput`: LinkedIn URL normalised or dropped with a note, CV text passed through
- * - `decideStatus`: unmatched > incomplete > capped > run-started, in that order
+ * - `decideStatus`: unmatched > incomplete > capped > run-started, in that order; CAPPED_NOTE is the capped note
  * - `safeFilename` / `cvR2Key`: the R2 key a CV file is stored under
  * - Owns CV_MAX (run-body.ts re-exports it)
  *
@@ -118,6 +118,9 @@ export function candidateInput(app: Pick<IntakeInput, "linkedinUrl" | "cvText">)
 
 export type DecidedStatus = Exclude<ApplicationStatus, "received">;
 
+/** The note a capped row carries; the capped retry drops it when the run finally starts. */
+export const CAPPED_NOTE = "intake run cap reached for this hour";
+
 export function decideStatus(args: {
   tagKnown: boolean;
   senderAllowed: boolean;
@@ -129,7 +132,7 @@ export function decideStatus(args: {
   if (args.candidate.profileUrl === undefined && args.candidate.cvText === undefined) {
     return { status: "incomplete", note: "no LinkedIn profile URL and no readable CV text" };
   }
-  if (args.capped) return { status: "capped", note: "intake run cap reached for this hour" };
+  if (args.capped) return { status: "capped", note: CAPPED_NOTE };
   return { status: "run-started", note: null };
 }
 

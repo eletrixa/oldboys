@@ -22,6 +22,7 @@
  */
 import {
   candidateInput,
+  CAPPED_NOTE,
   cvR2Key,
   decideStatus,
   IntakeInput,
@@ -158,8 +159,9 @@ function toResult(row: ExistingRow): IntakeResult {
 
 /**
  * A delivery that was capped is the one duplicate worth re-deciding: the stored candidate input goes through the same
- * decision tail now, and the run starts if there is room. The new payload is ignored; the row keeps what it had, and
- * is only written when the run starts. The sender check passed when the row was capped.
+ * decision tail now, and the run starts if there is room. The new payload is ignored; the row keeps what it had
+ * (parser and subject notes included, only the cap note goes), and is only written when the run starts. The sender
+ * check passed when the row was capped.
  */
 async function retryCapped(row: ExistingRow, env: IntakeEnv, now: Date): Promise<IntakeResult> {
   const [position, stored] = await Promise.all([
@@ -170,10 +172,11 @@ async function retryCapped(row: ExistingRow, env: IntakeEnv, now: Date): Promise
   const decision = await decideAndStart(env, { id: row.id, position, candidate, senderAllowed: true }, now);
   if (decision.status !== "run-started") return toResult(row);
 
+  const note = joinNotes(decision.note, ...(row.note?.split("; ").filter((n) => n !== CAPPED_NOTE) ?? []));
   await env.DB.prepare("UPDATE applications SET status = ?, run_id = ?, note = ? WHERE id = ?")
-    .bind(decision.status, decision.runId, decision.note, row.id)
+    .bind(decision.status, decision.runId, note, row.id)
     .run();
-  return { applicationId: row.id, status: decision.status, runId: decision.runId, duplicate: true, note: decision.note };
+  return { applicationId: row.id, status: decision.status, runId: decision.runId, duplicate: true, note };
 }
 
 function isUniqueViolation(err: unknown): boolean {

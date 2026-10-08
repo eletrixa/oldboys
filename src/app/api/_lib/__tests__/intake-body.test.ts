@@ -55,6 +55,11 @@ describe("IntakeFormBody", () => {
     expect("cvBase64" in r.data).toBe(false);
   });
 
+  it("a blank cvFilename or cvContentType falls back to the defaults instead of a 400", () => {
+    const r = parse({ ...base, cvBase64: b64([1]), cvFilename: "", cvContentType: "" });
+    expect(r.success && r.data.cv).toMatchObject({ filename: "cv.pdf", contentType: "application/pdf" });
+  });
+
   it("keeps a given filename and content type", () => {
     const r = parse({ ...base, cvBase64: b64([1]), cvFilename: "Josef CV.docx", cvContentType: "application/msword" });
     expect(r.success && r.data.cv).toMatchObject({ filename: "Josef CV.docx", contentType: "application/msword" });
