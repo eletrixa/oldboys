@@ -10,12 +10,16 @@
  * - auditRecord(rows): start channel (form / extension / api), legal basis + purpose + candidate notice note, every
  *   collector step with status (ok / empty / failed / not searched + reason), items and cost, model call count,
  *   lineup answers, verification call statuses (MOCK flagged) and the scheduled deletion date
+ * - purpose names the recruiter's organization when known (run.organization_name)
+ * - run.started_by: the account name of the person who started the run (null for API, extension and intake runs)
+ * - processors: always Cloudflare, Apify, Anthropic, ElevenLabs in this order, each "used" only when this run's ledger
+ *   or call rows show it (Apify: a call row with an Apify actor id; Anthropic: an llm row; ElevenLabs: a live call)
  * - LEGAL_BASIS states only what the hiring team declares; NOTICE_NOTE says the tool records no candidate notice
  * - RETENTION_DAYS / deletionDate: single source of the 7-day retention, also used by src/workflow/purge.ts
  *
  * Design constraints:
  * - Pure: no I/O; rows come from D1 via the caller, recipe steps are passed as plain data
- * - Never carries traits, claims, excerpts, profile URLs or phone numbers; lineup rows keep platform + answer, and
+ * - Never carries traits, claims, excerpts, profile URLs, phone numbers or account e-mails; lineup rows keep platform + answer, and
  *   the title only for "yes" (the subject's confirmed profile), null for namesakes and "not sure"
  * - Every source reason passes scrubReason once, in auditRecord (no URLs with queries, e-mails or phone numbers)
  * - Never claims the candidate was informed: no code records a notice
@@ -48,6 +52,10 @@ export type AuditRun = {
   anchor: string;
   goal: string;
   role: string | null;
+  /** Recruiter's organization (LEFT JOIN organizations); null for bearer/extension runs. */
+  organization_name: string | null;
+  /** Account that started the run (LEFT JOIN accounts, name only); null for API, extension and intake runs. */
+  started_by_name: string | null;
   status: string;
   via: string;
   source_url: string | null;
@@ -68,6 +76,8 @@ export type AuditRows = {
   calls: readonly AuditCall[];
   now: string;
 };
+
+export type AuditProcessor = { name: string; role: string; used: boolean; note: string | null };
 
 export type AuditSource = {
   step: string;
@@ -91,8 +101,11 @@ export type AuditRecord = {
     subject: string;
     anchor: string;
     role: string | null;
+    organization: string | null;
+    started_by: string | null;
   };
   legal: { basis: string; purpose: string; notice: string };
+  processors: AuditProcessor[];
   sources: AuditSource[];
   model_calls: number;
   total_cost_usd: number;
@@ -104,6 +117,7 @@ export type AuditRecord = {
 const CallRef = z.object({ sources: z.number().optional() });
 const SkipRef = z.object({ skipped: z.string() });
 const FailRef = z.object({ failed: z.literal(true), reason: z.string() });
+const ActorRef = z.object({ actor: z.string() });
 const DecisionsRef = z.object({ decisions: z.array(z.object({ id: z.string(), decision: z.string() })) });
 
 function ref<T>(schema: z.ZodType<T>, json: string | null): T | null {
@@ -114,6 +128,36 @@ function ref<T>(schema: z.ZodType<T>, json: string | null): T | null {
   } catch {
     return null;
   }
+}
+
+/** Actor ids that are not Apify: free REST APIs, the ARES register, call transcripts and the CV model lane. */
+const NOT_APIFY = ["rest/", "ares/", "elevenlabs/", "mock/"];
+
+/** Apify actor ids read "owner/name" ("apify/google-search-scraper", "harvestapi/…"). */
+function isApifyActor(actor: string): boolean {
+  return actor.includes("/") && !NOT_APIFY.some((prefix) => actor.startsWith(prefix));
+}
+
+/** The services that processed this run's data (GDPR Art. 13/14 recipients), from rows already in the record input. */
+function processors(ledger: readonly AuditLedgerRow[], calls: readonly AuditCall[], modelCalls: number): AuditProcessor[] {
+  const apify = ledger.some((r) => r.kind === "call" && isApifyActor(ref(ActorRef, r.ref_json)?.actor ?? ""));
+  const llm = ledger.some((r) => r.kind === "llm");
+  const live = calls.filter((c) => c.provider === "elevenlabs").length;
+  const mock = calls.length - live;
+  let callNote: string | null = null;
+  if (live > 0) callNote = `${String(live)} ${live === 1 ? "call" : "calls"}`;
+  else if (mock > 0) callNote = "mock calls only";
+  return [
+    { name: "Cloudflare", role: "hosting, database and file storage", used: true, note: null },
+    { name: "Apify", role: "web and social profile scraping", used: apify, note: null },
+    {
+      name: "Anthropic",
+      role: "AI model",
+      used: llm,
+      note: llm ? (modelCalls > 0 ? `${String(modelCalls)} model calls` : "AI steps ran, no successful model call") : null,
+    },
+    { name: "ElevenLabs", role: "phone verification calls", used: live > 0, note: callNote },
+  ];
 }
 
 function round2(n: number): number {
@@ -138,7 +182,10 @@ function lineupAnswer(decision: string): LineupAnswer {
 }
 
 function purpose(run: AuditRun): string {
-  if (run.role !== null && run.role !== "") return `Pre-employment screening for the role: ${run.role}`;
+  if (run.role !== null && run.role !== "") {
+    const by = run.organization_name !== null ? ` by ${run.organization_name}` : "";
+    return `Pre-employment screening${by} for the role: ${run.role}`;
+  }
   return `Research goal: ${run.goal} (no role entered)`;
 }
 
@@ -214,8 +261,11 @@ export function auditRecord(rows: AuditRows): AuditRecord {
       subject: run.subject,
       anchor: run.anchor,
       role: run.role,
+      organization: run.organization_name,
+      started_by: run.started_by_name,
     },
     legal: { basis: LEGAL_BASIS, purpose: purpose(run), notice: NOTICE_NOTE },
+    processors: processors(ledger, calls, cost.llm_calls),
     sources: sources.map((s) => ({ ...s, reason: s.reason === null ? null : scrubReason(s.reason) })),
     model_calls: cost.llm_calls,
     total_cost_usd: cost.usd,

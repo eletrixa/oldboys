@@ -22,7 +22,8 @@
  *   post-lineup collector whose hits are all unconfirmed records UNCONFIRMED_GAP, so every source ends in a row or a gap;
  *   a collector whose hits were all stored by an earlier step is not empty (runner), so no onEmpty gap is recorded
  * - Model failures degrade (evidence-only brief, ledger `{degraded}`) and the run still ends `done`;
- *   `failed` is only for unexpected throws
+ *   `failed` is only for unexpected throws and for a missing APIFY_TOKEN / ANTHROPIC_API_KEY (check-secrets step,
+ *   src/domain/secrets.ts), whose reason ("APIFY_TOKEN is not set") lands in the ledger
  *
  * Design constraints:
  * - Imports only src/domain, src/recipe and src/adapters, never Next.js
@@ -35,6 +36,7 @@ import { makeFetchJson } from "@/adapters/fetch";
 import { makeLlmCall } from "@/adapters/llm";
 import type { Candidate, GoalId } from "@/domain/claim";
 import type { Ports } from "@/domain/ports";
+import { missingSecrets } from "@/domain/secrets";
 import { planBatch } from "@/recipe/batch";
 import { recipeFor } from "@/recipe/goals";
 import { executeStep } from "@/recipe/runner";
@@ -99,6 +101,12 @@ export class ResearchRunWorkflow extends WorkflowEntrypoint<CloudflareEnv, Resea
       if (!row) throw new Error(`investigation ${runId} not found`);
       await this.setStatus(runId, "running");
       return row;
+    });
+    // An empty key would turn every actor or model call into a 401 and end the run "done" with nothing: fail instead
+    await step.do("check-secrets", { retries: { limit: 0, delay: 0 } }, () => {
+      const missing = missingSecrets(this.env);
+      if (missing.length > 0) throw new Error(missing.join("; "));
+      return Promise.resolve();
     });
     const recipe = recipeFor(head.goal);
     const seed = recipe.steps.find((s) => s.kind === "seed");

@@ -8,7 +8,7 @@
  *
  * Key responsibilities:
  * - Cover U1-U8 of specs/positions-purge.md: expiry, R2 keys, link clearing order, batches, idempotence, un-migrated database
- * - U9-U10: expired applications lose their R2 CV and row, and go before the runs sweep (applications.run_id references investigations)
+ * - U9-U10: expired run-less applications lose their R2 CV and row; a run's applications go before its row (applications.run_id references investigations)
  *
  * Design constraints:
  * - No module mocks; the fake matches SQL prefixes and throws on anything unexpected
@@ -17,7 +17,7 @@ import { describe, expect, it } from "vitest";
 import { purgeExpired } from "@/workflow/purge";
 
 type Pos = { id: string; r2_key: string | null; expires_at: string };
-type App = { id: string; cv_key: string | null; received_at: string };
+type App = { id: string; cv_key: string | null; received_at: string; run_id?: string };
 const NOW = new Date("2026-10-09T10:00:00.000Z");
 const PAST = "2026-10-09T09:00:00.000Z";
 
@@ -51,10 +51,14 @@ function makeEnv(opts: { positions?: Pos[]; applications?: App[]; runIds?: strin
       log.push(`delete-run:${String(a[0])}`);
       return [];
     }
-    if (q.startsWith("SELECT id, cv_key FROM applications")) return applications.filter((x) => x.received_at < (a[0] as string)).slice(0, 20);
-    if (q.startsWith("DELETE FROM applications WHERE id IN")) {
-      log.push(`delete-app:${a.join(",")}`);
-      for (const id of a) applications.splice(applications.findIndex((x) => x.id === id), 1);
+    if (q.startsWith("SELECT id, cv_key FROM applications WHERE run_id = ?")) return applications.filter((x) => x.run_id === a[0]);
+    if (q.startsWith("SELECT id, cv_key FROM applications WHERE run_id IS NULL")) {
+      return applications.filter((x) => x.run_id === undefined && x.received_at < (a[0] as string)).slice(0, 20);
+    }
+    if (q.startsWith("DELETE FROM applications WHERE")) {
+      const gone = applications.filter((x) => (q.includes("run_id = ?") ? x.run_id : x.id) === a[0]);
+      log.push(...gone.map((x) => `delete-app:${x.id}`));
+      for (const x of gone) applications.splice(applications.indexOf(x), 1);
       return [];
     }
     if (/^(SELECT .* FROM (sources|calls)|DELETE FROM|SELECT r2_key)/.test(q)) return [];
@@ -150,7 +154,7 @@ describe("purgeExpired applications", () => {
   const EIGHT_DAYS_AGO = "2026-10-01T10:00:00.000Z";
   const SIX_DAYS_AGO = "2026-10-03T10:00:00.000Z";
 
-  it("U9: applications received over 7 days ago lose their R2 CV and their row; a younger one and a null key are left alone", async () => {
+  it("U9: run-less applications received over 7 days ago lose their R2 CV and their row; a younger one and a null key are left alone", async () => {
     const env = makeEnv({
       applications: [
         { id: "a1", cv_key: "intake/a1/cv.pdf", received_at: EIGHT_DAYS_AGO },
@@ -165,7 +169,7 @@ describe("purgeExpired applications", () => {
   });
 
   it("U10: application rows go before the run rows they reference", async () => {
-    const env = makeEnv({ applications: [{ id: "a1", cv_key: null, received_at: EIGHT_DAYS_AGO }], runIds: ["r1"] });
+    const env = makeEnv({ applications: [{ id: "a1", cv_key: null, received_at: EIGHT_DAYS_AGO, run_id: "r1" }], runIds: ["r1"] });
     await purgeExpired(env.db, env.bucket, NOW);
     expect(env.log).toEqual(["delete-app:a1", "delete-run:r1"]);
   });

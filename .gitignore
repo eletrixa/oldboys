@@ -18,3 +18,4 @@ AGENTS.md
 .playwright-mcp/
 .claude/worktrees/
 test-results/
+tmp/

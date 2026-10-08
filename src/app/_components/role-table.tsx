@@ -11,11 +11,12 @@
  * - DISCLAIMER: the one sentence every use of the table must show
  *
  * Design constraints:
+ * - Table scrolls sideways inside a focusable labelled region; the person column stays sticky; status shows as a pill unless done
  * - Shows the amount of evidence found, never a verdict on the person: no total, no ranking, no coverage sort
  */
 import Link from "next/link";
 import type { CoverageLabel, RoleGroup } from "@/domain/role-overview";
-import { CARD, CARD_SAGE, LINK } from "@/app/ui";
+import { CARD_FLUSH, CARD_SAGE, LINK, Pill } from "@/app/ui";
 
 export const DISCLAIMER = "This table shows how much public evidence the research found, not how good a candidate is.";
 
@@ -30,18 +31,18 @@ export function RoleTable({ group }: { group: RoleGroup }): React.JSX.Element {
   return (
     <div className="flex flex-col gap-4">
       <h2 className="font-serif text-2xl">{group.role}</h2>
-      <p className={`${CARD_SAGE} text-sm`}>{DISCLAIMER}</p>
-      <div className={`${CARD} overflow-hidden p-0 md:p-0`}>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
+      <p className={`${CARD_SAGE} text-sm text-muted`}>{DISCLAIMER}</p>
+      <div className={CARD_FLUSH}>
+        <p className="px-4 pt-3 text-xs text-muted md:hidden">Swipe sideways to see every must-have.</p>
+        <div role="region" aria-label="Evidence per must-have" tabIndex={0} className="overflow-x-auto">
+          <table className="w-full min-w-[44rem] text-left text-sm">
             <caption className="sr-only">Evidence found per must-have for {group.role}, newest brief first</caption>
             <thead className="bg-canvas text-xs font-semibold tracking-[0.08em] text-muted uppercase">
               <tr>
-                <th scope="col" className="px-4 py-3 font-semibold">Person</th>
+                <th scope="col" className="sticky left-0 z-10 bg-canvas px-4 py-3 font-semibold">Person</th>
                 <th scope="col" className="px-4 py-3 font-semibold">Date</th>
-                <th scope="col" className="px-4 py-3 font-semibold">Status</th>
                 {group.questions.map((q) => (
-                  <th key={q} scope="col" className="min-w-40 px-4 py-3 font-semibold">{q}</th>
+                  <th key={q} scope="col" className="min-w-[10rem] px-4 py-3 text-xs font-semibold tracking-normal text-muted normal-case">{q}</th>
                 ))}
                 <th scope="col" className="px-4 py-3 font-semibold">Sources confirmed</th>
               </tr>
@@ -49,11 +50,13 @@ export function RoleTable({ group }: { group: RoleGroup }): React.JSX.Element {
             <tbody className="divide-y divide-divider">
               {group.runs.map((run) => (
                 <tr key={run.id}>
-                  <th scope="row" className="px-4 py-3">
-                    <Link href={`/runs/${run.id}`} className={LINK}>{run.subject}</Link>
+                  <th scope="row" className="sticky left-0 z-10 bg-surface px-4 py-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Link href={`/runs/${run.id}`} className={LINK}>{run.subject}</Link>
+                      {run.status !== "done" && <Pill tone={run.status === "failed" ? "conflict" : "unsure"}>{run.status}</Pill>}
+                    </div>
                   </th>
                   <td className="whitespace-nowrap px-4 py-3 text-muted tabular-nums">{run.created_at.slice(0, 10)}</td>
-                  <td className="px-4 py-3 text-muted tabular-nums">{run.status}</td>
                   {run.cells.map((label, i) => (
                     <td key={group.questions[i] ?? i} className={`px-4 py-3 ${CELL_STYLE[label].text}`}>
                       <span aria-hidden="true" className={`mr-2 inline-block size-2 rounded-full ${CELL_STYLE[label].dot}`} />

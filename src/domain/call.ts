@@ -1,5 +1,5 @@
 /**
- * Zod schemas for the Verification Call aggregate: CallBrief, Call, CallResult, and its status machine.
+ * Zod schemas for the Verification Call aggregate: CallBrief, Call, CallResult, CallAnswer, and its status machine.
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/domain/call.ts
@@ -9,6 +9,7 @@
  * Key responsibilities:
  * - Single source of truth for the call shapes (plans/005-call-verification); routes, Workflow and
  *   providers import from here
+ * - CallAnswer: the per-question result shown in the report (stored in the `call:finish` ledger row, no column)
  * - `allowedFrom` / `targetStatus` are the only place that knows which status changes are legal;
  *   `transitionCall` is the in-memory form, `applyCallEvent` (src/workflow/calls.ts) the atomic SQL form
  *
@@ -39,6 +40,8 @@ export const CallQuestion = z.object({
   question_id: z.string().min(1),
   text: z.string().min(1),
   expected: z.string(),
+  /** Why this question is asked, shown to the operator before the call ("No public evidence: Go backend"). */
+  why: z.string().optional(),
 });
 export type CallQuestion = z.infer<typeof CallQuestion>;
 
@@ -49,6 +52,10 @@ export const CallBrief = z.object({
   questions: z.array(CallQuestion).max(5),
   /** Full agent script: AI disclosure, consent line, identity question, questions, closing. */
   script: z.string().min(1),
+  /** What the agent says first: AI disclosure, purpose, recording, skip/stop, consent question. Optional for rows stored before it existed. */
+  first_message: z.string().optional(),
+  /** System prompt for the voice agent (role, steps, questions, rules). Optional for rows stored before it existed. */
+  agent_prompt: z.string().optional(),
 });
 export type CallBrief = z.infer<typeof CallBrief>;
 
@@ -100,6 +107,25 @@ export const CallResult = z.object({
   failure_reason: z.string().nullable(),
 });
 export type CallResult = z.infer<typeof CallResult>;
+
+export const CallAnswerStatus = z.enum(["answered", "unclear", "declined", "no_answer", "not_asked"]);
+export type CallAnswerStatus = z.infer<typeof CallAnswerStatus>;
+
+/**
+ * What one brief question got on the call. Said by the callee, never public evidence: `answered` means a
+ * verbatim quote was found in a callee turn (a STATEMENT claim), `unclear` an answer without such a quote.
+ */
+export const CallAnswer = z.object({
+  question_id: z.string().min(1),
+  question: z.string().min(1),
+  why: z.string().optional(),
+  status: CallAnswerStatus,
+  summary: z.string().nullable(),
+  quote: z.string().nullable(),
+  /** Seconds into the call of the first callee turn that contains the quote; null without a quote. */
+  at_secs: z.number().nonnegative().nullable(),
+});
+export type CallAnswer = z.infer<typeof CallAnswer>;
 
 export type CallEvent =
   | { type: "approve" }

@@ -108,6 +108,14 @@ Each agent appends: what it starts, progress, what it finishes. Newest at the bo
 - Finished: 00:01. Merged candidates only, never also_found; no Markdown. No schema change, no new endpoint; pnpm check green, wrangler dry-run bundles.
 - Files: src/app/runs/[id]/{ats-note.ts,__tests__/ats-note.test.ts} (new), src/app/runs/[id]/kit-actions.tsx, PROGRESS.md.
 
+## 2026-10-09 · phone-verify agent (Minas)
+- Started: 00:03. Phone verification of the candidate (ElevenLabs + Twilio, English) on Robert's plan 005 backend, no new migration. Proposal from the brief: must-haves without evidence, then partial, then "to verify" (`tv-<n>`), then gaps and weak claims (max 5, Art. 9 filter); hiring identity question asks only the candidate. `composeCallBrief` adds `first_message` (AI disclosure, purpose, recording, skip/stop, consent question) and `agent_prompt` (steps, questions in order, no evaluation, no personal topics, voicemail, `end_call`), sent as the ElevenLabs overrides (old briefs fall back to the script). `briefFromHrQuestions`: the operator's edited questions (1–5, 5–300 chars, Art. 9 → 400 with the index).
+- Results: `callAnswers` gives each question answered (STATEMENT, quote, time in call) / unclear (INFERENCE) / declined (`declined_question_ids` in the extraction) / no_answer / not_asked (refused, not completed, identity not confirmed); stored in the `call:finish` ledger ref, served as `answers` on `GET /api/calls/:id`. New `GET /api/runs/:id/calls` (proposal, provider, max, used, calls); `POST /api/runs/:id/calls` accepts `questions` (backward compatible). `identity_confirmed` read from the ElevenLabs `{value}` object. Mock answers by position (answer, decline, answer).
+- UI: "Verify with the candidate by phone" card after "To verify": editable questions with reason chips, first message, number + consent + note + operator form, live status, per-question results labelled "said by the candidate, not public evidence" (coverage unchanged), MOCK badge, calls used. Token helpers moved to `src/app/run-token.tsx` (shared with /roles). Interview kit gets a "Phone verification" section.
+- Finished: 00:16. pnpm check green, wrangler dry-run bundles. Not done: the live ElevenLabs/Twilio setup (docs/ops/call-verification.md, "Manual Setup"); not run against a live or local MOCK run.
+- Files: src/domain/{call.ts,call-brief.ts,call-ingest.ts}, src/domain/__tests__/{call-brief,call-ingest}.test.ts, src/workflow/{verification-call.ts,providers/elevenlabs.ts,providers/mock-call.ts}, src/workflow/__tests__/{elevenlabs,mock-call}.test.ts, src/app/api/runs/[id]/calls/{route.ts,load.ts (new)}, src/app/api/calls/[id]/route.ts, src/app/run-token.tsx (new), src/app/roles/roles-view.tsx, src/app/runs/[id]/{call-panel.ts,call-panel-view.tsx,call-setup.tsx,call-results.tsx,__tests__/call-panel.test.ts (new),parts.tsx,interview-kit.ts,kit-actions.tsx,__tests__/interview-kit.test.ts}, docs/ops/call-verification.md, plans/005-call-verification/06-elevenlabs-contract.md, PROGRESS.md.
+- Merge with main (00:25): shared token form and the STATEMENT label moved to Radar tokens; kit buttons keep main's audience rows, the kit still fetches the calls.
+
 ## 2026-10-09 · reference-check agent (Minas)
 - Started: 00:12. Idea #18 "Reference-check questions": "Copy reference questions" turns research gaps (role criteria with no or partial evidence, or unchecked criteria when AI was off, plus to-verify items) into at most 8 plain-text questions for a former manager or colleague, with a consent and private-topics reminder; export buttons grouped by audience (Interview, Candidate, ATS, References).
 - Finished: 00:13. Pure `referenceQuestions`, Art. 9 filter as defense in depth, never also_found or claims. No schema change, no new endpoint; pnpm check green, wrangler dry-run bundles.
@@ -118,3 +126,22 @@ Each agent appends: what it starts, progress, what it finishes. Newest at the bo
 - Finished: 00:40. Migration renumbered to `0010_positions.sql` (0009 is intake); position start folded into the shared `startRun`. `pnpm check` 626 tests green, `pnpm e2e` 2 green. Dossier `plans/007-position-selector/`, specs `specs/positions-*.md`, PM pages `docs/07..09-position-*.md`.
 - Files: src/domain/{position,position-links}.ts, src/recipe/seams/{posting-plan,posting-parse,posting-parse-jobscz,posting-html,posting-strip,position-extract}.ts, src/workflow/{ingest-position,purge,start-run}.ts, src/app/api/positions/**, src/app/api/_lib/{position-body,role-rows}.ts, src/app/positions/**, src/app/_components/**, src/app/{start-form,start-position}.tsx, src/app/start-body.ts, migrations/0010_positions.sql, e2e/positions.spec.ts, CHANGELOG.md.
 
+## 2026-10-09 · candidate-notice-cs agent (Minas)
+- Started: 00:23. Idea #24 (part) for the candidate notice (#7): Czech version with an EN | CZ switch next to "Copy candidate notice" / "Download candidate notice (.md)"; formal, gender-neutral Czech, Czech date format, generic source labels and known "not searched" reasons translated (unknown ones pass through scrubbed), file name candidate-notice-<id>-cs.md.
+- Finished: 00:28. English output unchanged. No schema change, no new endpoint; pnpm check green, wrangler dry-run bundles.
+- Files: src/app/runs/[id]/{candidate-copy.ts,candidate-copy-cs.ts,kit-actions.tsx,__tests__/candidate-copy.test.ts}, PROGRESS.md.
+
+## 2026-10-09 · purge-intake agent (Minas)
+- Started: 00:38. Retention fix: the 7-day purge now also deletes intake `applications` (contact data, CV text, cover letter) and their CV files in R2, before the run row (FK) and for applications that never started a run.
+- Finished: 00:46. Local D1 check: `DELETE FROM investigations` with an application still pointing at the run fails with `FOREIGN KEY constraint failed (SQLITE_CONSTRAINT_FOREIGNKEY)`, so before this fix the first expired intake run would have made every purge tick throw; deleting the application first lets the run delete succeed. No schema change; pnpm check green, wrangler dry-run bundles.
+- Files: src/workflow/purge.ts, src/workflow/__tests__/purge.test.ts (new), PROGRESS.md.
+
+## 2026-10-09 · phone-verify live switch (Minas)
+- Switched production `CALL_PROVIDER` from `"mock"` to `"elevenlabs"` and set `ELEVENLABS_AGENT_ID` / `ELEVENLABS_PHONE_NUMBER_ID` (non-secret dashboard ids) in `wrangler.jsonc`. Documented the live ElevenLabs/Twilio setup state in `docs/ops/call-verification.md`.
+- Worker secrets `ELEVENLABS_API_KEY` and `ELEVENLABS_WEBHOOK_SECRET` are still Robert's step (`wrangler secret put`); until set, the webhook route answers 503. No code or schema change; pnpm check green, wrangler dry-run bundles.
+- Files: wrangler.jsonc, docs/ops/call-verification.md, PROGRESS.md.
+
+## 2026-10-09 · audit-who-processors agent (Minas)
+- Started: 00:48. Idea #17 follow-up: audit record shows who started the run (account name from investigations.account_id; "not recorded" for API, extension and intake runs) and the services that processed the run's data (Cloudflare always; Apify, Anthropic, ElevenLabs only when this run used them, from the ledger and call rows).
+- Finished: 00:52. No e-mail in the record. No schema change, no new endpoint; pnpm check green, wrangler dry-run bundles.
+- Files: src/domain/audit.ts, src/domain/__tests__/audit.test.ts, src/app/api/runs/[id]/audit/load.ts, src/app/runs/[id]/audit/page.tsx, PROGRESS.md.

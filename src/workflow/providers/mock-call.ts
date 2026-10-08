@@ -8,6 +8,8 @@
  *
  * Key responsibilities:
  * - Return a deterministic, synchronous CallResult so the full call flow runs without a phone
+ * - Questions without an expected answer get a canned reply by position (answer, decline, answer) so a
+ *   MOCK demo shows the answered and declined states
  *
  * Design constraints:
  * - Never touches the network and never reads secrets
@@ -15,6 +17,18 @@
  */
 import type { CallResult, TranscriptTurn } from "@/domain/call";
 import type { PlaceCall } from "@/domain/ports";
+
+/** Canned callee replies by question index, for questions without an expected answer. */
+export const MOCK_REPLIES = [
+  "Yes. I used it every day in my current job for about two years.",
+  "I would rather not answer that one.",
+  "Yes, I did that on a project last year.",
+] as const;
+
+function mockReply(expected: string, index: number): string {
+  if (expected.length > 0) return `Yes, I can confirm: ${expected}`;
+  return MOCK_REPLIES[Math.min(index, MOCK_REPLIES.length - 1)] ?? MOCK_REPLIES[2];
+}
 
 export function mockPlaceCall(): PlaceCall {
   return ({ callId, brief }) => {
@@ -28,9 +42,9 @@ export function mockPlaceCall(): PlaceCall {
     time = 0;
     turn("agent", brief.identity_question);
     turn("user", "Yes, that's me.");
-    for (const q of brief.questions) {
+    for (const [i, q] of brief.questions.entries()) {
       turn("agent", q.text);
-      turn("user", q.expected.length > 0 ? `Yes, I can confirm: ${q.expected}` : "I don't know.");
+      turn("user", mockReply(q.expected, i));
     }
     const last = transcript[transcript.length - 1];
     const providerConversationId = `mock-${callId}`;

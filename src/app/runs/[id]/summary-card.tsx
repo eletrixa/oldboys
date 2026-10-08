@@ -7,7 +7,8 @@
  * Tested:  n/a (the sentences are tested in __tests__/summary.test.ts)
  *
  * Key responsibilities:
- * - SummaryCard: the three sentences from summary30s (documented, missing, ask); nothing while there is no brief
+ * - SummaryCard: the three sentences from summary30s (documented, missing, ask), each lead word (Confirmed, Missing,
+ *   Ask) coloured; nothing while there is no brief
  * - ReadAloud: browser SpeechSynthesis only (no external service); hidden when the browser has none; toggles Stop
  *
  * Design constraints:
@@ -59,6 +60,17 @@ function ReadAloud({ text }: { text: string }): React.JSX.Element | null {
   );
 }
 
+/** Lead word of a summary sentence ("Confirmed: ...") in its tone colour; a sentence without that lead renders unchanged. */
+function Row({ lead, tone, sentence }: { lead: string; tone: string; sentence: string }): React.JSX.Element {
+  if (!sentence.startsWith(`${lead}: `)) return <li className="py-1.5">{sentence}</li>;
+  return (
+    <li className="py-1.5">
+      <span className={`font-semibold ${tone}`}>{lead}</span>
+      {sentence.slice(lead.length)}
+    </li>
+  );
+}
+
 export function SummaryCard({ state }: { state: RunState }): React.JSX.Element | null {
   const s = summary30s(state);
   if (s === null) return null;
@@ -74,9 +86,9 @@ export function SummaryCard({ state }: { state: RunState }): React.JSX.Element |
         <ReadAloud text={summaryText(s)} />
       </div>
       <ul className="mt-3 divide-y divide-divider text-sm text-ink">
-        <li className="py-1.5">{s.documented}</li>
-        <li className="py-1.5">{s.missing}</li>
-        <li className="py-1.5">{s.ask}</li>
+        <Row lead="Confirmed" tone="text-ok" sentence={s.documented} />
+        <Row lead="Missing" tone="text-unsure" sentence={s.missing} />
+        <Row lead="Ask" tone="text-action" sentence={s.ask} />
       </ul>
     </section>
   );

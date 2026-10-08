@@ -16,7 +16,7 @@ Hackathon Case 01 (Apify): social media deep research. Input (hiring, plans/006)
 | Claims | claim + references + rank; contradictions via rank, never delete |
 | Budget | enforced in runner, never by the LLM: $0.50 and 16 paid actor runs per run (free REST fetches and LLM calls count USD only) |
 | Runner | Cloudflare Workflow `ResearchRunWorkflow` (binding `RESEARCH_RUN`), one `step.do` per recipe step, `step.waitForEvent` for lineup |
-| Ledger | D1 `DB`: `ledger_entries` (append-only, `seq`), `claims`, `gaps`, `candidates`, `investigations`, `calls`, `webhook_events` |
+| Ledger | D1 `DB`: `ledger_entries` (append-only, `seq`), `claims`, `gaps`, `candidates`, `investigations`, `calls`, `webhook_events`, `organizations`, `accounts`, `sessions`, `auth_attempts`, `ares_cache` |
 | Raw payloads | R2 `SOURCES` (`oldboys-sources/<run>/<source>.json`), only `{sourceId, excerpt}` returned from steps (1 MiB cap) |
 | Streaming | SSE route polls D1 `seq > last` every 1s, replays whole ledger on connect, events idempotent by `seq` |
 | Replay | serve old ledger, labeled CACHED |
@@ -27,6 +27,7 @@ Hackathon Case 01 (Apify): social media deep research. Input (hiring, plans/006)
 Next.js 16 on Workers via `@opennextjs/cloudflare`; `ai` + `@ai-sdk/anthropic`; `apify-client`; Zod; Vitest; pnpm; Node 26 locally, 22 in CI.
 Bindings in `wrangler.jsonc`: `DB` (D1), `SOURCES` (R2), `RESEARCH_RUN` and `VERIFY_CALL` (Workflows), `ASSETS`. Vars: `LLM_MODEL_PRIMARY=claude-opus-5-5`, `LLM_MODEL_VERIFY=claude-sonnet-5-5`, `RUN_BUDGET_USD`, `RUN_BUDGET_CALLS`, `CALL_PROVIDER` (`mock`|`elevenlabs`), `CALL_BUDGET_USD`, `RUN_CALL_MAX`, `ELEVENLABS_AGENT_ID`, `ELEVENLABS_PHONE_NUMBER_ID`, `POSITION_INGEST_USD` (cap for the one LLM call that extracts a position's must-haves), `INTAKE_PER_HOUR_CAP`, `INTAKE_FORWARD_TO` (verified Email Routing destination for a human copy, may be empty), `INTAKE_FROM_ALLOW` (sender domains or addresses allowed to start runs by email, empty = any). Secrets: `ANTHROPIC_API_KEY`, `APIFY_TOKEN`, `RUN_TOKEN` (bearer for POST /api/runs and the call routes), `ELEVENLABS_API_KEY` and `ELEVENLABS_WEBHOOK_SECRET` (live calls only); optional `GITHUB_TOKEN`, `STACKEXCHANGE_KEY` and `OPENALEX_API_KEY` (added by `makeFetchJson` for api.github.com / api.stackexchange.com / api.openalex.org only); intake: `INTAKE_TOKEN` (bearer for `POST /api/intake/form`), `STARTUPJOBS_WEBHOOK_TOKEN` (path token of the StartupJobs webhook), optional `STARTUPJOBS_TOKEN`.
 Worker entry `src/worker.ts` re-exports the OpenNext `fetch` and exports `ResearchRunWorkflow` and `VerificationCallWorkflow`. The Workflow imports only `src/domain/*` and `src/recipe/*`, never Next.js.
+Recruiter auth: cookie sessions (`src/domain/session.ts`, D1 `sessions`), PBKDF2 passwords (`src/domain/password.ts`); the RUN_TOKEN bearer stays for `/api/runs`, the call routes and the `/api/roles` fallback.
 
 ## Scripts (pnpm)
 `dev`, `build`, `preview`, `deploy`, `cf-typegen`, `typecheck`, `lint`, `test`, `test:watch`, `db:migrate:local`, `db:migrate:remote`, `check` (= typecheck && lint && test, app and extension), `ext:build`. Do not rename.
@@ -82,6 +83,7 @@ Every change to `src/`, `migrations/`, `scripts/` or any root config must pass `
 - Every user-visible change adds a line to `CHANGELOG.md` under Unreleased in the same commit.
 
 ## Known gotchas
+- `migrations/0010_accounts.sql` must be applied with `pnpm db:migrate:remote` before merging/deploying the accounts PR.
 - `extension/` is a second pnpm workspace package; after pulling, run `pnpm install --frozen-lockfile` once or `pnpm check` fails with `wxt: command not found`.
 - CI deploys on push to main but cannot migrate D1 (token has no D1 scope). A PR that adds a file under `migrations/` must say so; Robert runs `pnpm db:migrate:remote` before merging.
 - `next` 16.4 runs on Workers only with `patches/@opennextjs__cloudflare@1.20.9.patch` (adds `preview-props.json` to the manifest glob, upstream PR #1356). Drop the patch when an OpenNext release includes it; bump `@opennextjs/cloudflare` and re-check `pnpm exec opennextjs-cloudflare build`.

@@ -16,6 +16,7 @@
  * - Profile-first runs insert subject "" / anchor ""; the Workflow's seed_profile step fills them
  * - With a position: role = position title (an input role is ignored) and questions_json is never null, so the
  *   Workflow skips role_questions; without one, position_id and questions_json are bound NULL
+ * - account_id / organization_id are set only for runs started by a logged-in recruiter (plans/009), NULL otherwise
  * - Caps, auth and dedup belong to the callers; this module only starts what it is told to
  * - No Next.js imports (called from the Worker email handler too)
  */
@@ -40,6 +41,9 @@ export type StartRunInput = {
   via: "api" | "start" | "intake";
   applicationId?: string;
   position?: PositionQuestions;
+  /** Set for runs started by a logged-in recruiter (via = start); NULL for bearer, extension and intake runs. */
+  accountId?: string;
+  organizationId?: string;
 };
 
 export type PositionQuestions = { id: string; title: string; questionsJson: string };
@@ -47,8 +51,8 @@ export type PositionQuestions = { id: string; title: string; questionsJson: stri
 export async function startRun(env: StartRunEnv, input: StartRunInput, now: Date): Promise<{ id: string }> {
   const id = crypto.randomUUID();
   await env.DB.prepare(
-    `INSERT INTO investigations (id, subject, anchor, goal, status, budget_usd, budget_calls, created_at, source_url, role, via, profile_url, cv_text, application_id, position_id, questions_json)
-     VALUES (?, ?, ?, ?, 'queued', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO investigations (id, subject, anchor, goal, status, budget_usd, budget_calls, created_at, source_url, role, via, profile_url, cv_text, application_id, account_id, organization_id, position_id, questions_json)
+     VALUES (?, ?, ?, ?, 'queued', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   )
     .bind(
       id,
@@ -64,6 +68,8 @@ export async function startRun(env: StartRunEnv, input: StartRunInput, now: Date
       input.profileUrl ?? null,
       input.cvText ?? null,
       input.applicationId ?? null,
+      input.accountId ?? null,
+      input.organizationId ?? null,
       input.position?.id ?? null,
       input.position?.questionsJson ?? null,
     )

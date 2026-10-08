@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/runs/[id]/interview-kit.ts
- * Deps:    src/domain/run-cost (formatDuration), ./state (RunState, gap helpers, roleCriteria, briefSections, confidenceBand)
+ * Deps:    src/domain/run-cost (formatDuration), ./call-panel (CallView, formatAt), ./state (RunState, gap helpers, roleCriteria, briefSections, confidenceBand)
  * Tested:  src/app/runs/[id]/__tests__/interview-kit.test.ts
  *
  * Key responsibilities:
@@ -12,6 +12,8 @@
  * - Findings by section (confidence descending, with the reason) replace per-question coverage; briefs stored
  *   before sections fall back to coverage
  * - Degraded brief: the "AI summary unavailable" note, role criteria and confirmed evidence links, then the sections
+ * - Phone verification: the latest call with answers, one line per question, labelled as said by the candidate
+ *   (never public evidence); without calls the kit is unchanged
  * - kitFileName: interview-kit-<run id prefix>.md, never the candidate's name
  *
  * Design constraints:
@@ -22,6 +24,7 @@
  */
 import { formatDuration } from "@/domain/run-cost";
 import type { Brief, BriefSection, Claim } from "@/domain/claim";
+import { ANSWER_BADGE, type CallView, formatAt, placedCalls } from "./call-panel";
 import { type RunState, briefSections, confidenceBand, gapLine, hiringFor, roleCriteria, searchedEmpty, searchedTitle } from "./state";
 
 const FOOTER = "This kit rates the research, never the candidate. Public sources only; run data is deleted after 7 days.";
@@ -136,8 +139,25 @@ function degradedCoverage(state: RunState, brief: Brief, reason: string): string
   ];
 }
 
+/** One line per question of the latest call that has answers; nothing without one. */
+function phoneLines(calls: readonly CallView[]): string[] {
+  const call = placedCalls(calls).find((c) => c.answers !== null && c.answers.length > 0);
+  const answers = call?.answers ?? [];
+  if (call === undefined || answers.length === 0) return [];
+  const lines = answers.map((a) => {
+    const { label } = ANSWER_BADGE[a.status];
+    if (a.status === "answered" && a.summary !== null && a.quote !== null) {
+      const at = a.at_secs === null ? "" : ` (at ${formatAt(a.at_secs)})`;
+      return `- ${label}: ${escapeMd(a.summary)} — "${escapeMd(a.quote)}"${at}`;
+    }
+    if (a.status === "unclear" && a.summary !== null) return `- ${label}: ${escapeMd(a.summary)}`;
+    return `- ${label}: ${escapeMd(a.question)}`;
+  });
+  return call.provider === "mock" ? [...lines, "", "_MOCK call: the answers are simulated._"] : lines;
+}
+
 /** The interview kit as Markdown, or null while there is no brief. `generatedAt` is an ISO timestamp. */
-export function interviewKit(state: RunState, generatedAt: string): string | null {
+export function interviewKit(state: RunState, generatedAt: string, calls: readonly CallView[] = []): string | null {
   const { brief } = state;
   if (brief === null) return null;
   const empty = searchedEmpty(brief);
@@ -155,6 +175,7 @@ export function interviewKit(state: RunState, generatedAt: string): string | nul
     ...section("To verify", brief.to_verify.map((t) => `- [ ] ${escapeMd(t)}`)),
     ...section(searchedTitle(empty), empty.map((g) => `- ${escapeMd(gapLine(g))}`)),
     ...section("Not searched, and why", brief.not_searched.map((g) => `- ${escapeMd(gapLine(g))}`)),
+    ...section("Phone verification (said by the candidate, not public evidence)", phoneLines(calls)),
     "---",
     "",
     footer.join("  \n"),

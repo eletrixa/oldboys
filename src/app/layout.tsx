@@ -3,12 +3,12 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/layout.tsx
- * Deps:    next, tailwindcss
+ * Deps:    next, tailwindcss, ./site-nav, ./api/_lib/current-user
  * Tested:  n/a
  *
  * Key responsibilities:
  * - Metadata and the <html>/<body> wrapper for every page
- * - Radar brand header (Echo r mark + wordmark, Positions, Roles, New brief) and a short honesty footer
+ * - Radar brand header (Echo r mark + wordmark, SiteNav: Positions, Roles, New brief as a secondary button so each page keeps one rust action) and a short honesty footer
  *
  * Design constraints:
  * - No runtime = "edge"; no next/font network fetch at build (fonts are self-hosted in public/fonts)
@@ -17,6 +17,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import "./globals.css";
+import { currentUser } from "./api/_lib/current-user";
+import { SiteNav } from "./site-nav";
 
 export const metadata: Metadata = {
   title: "Radar — evidence-led research",
@@ -32,9 +34,10 @@ function EchoMark({ size }: Readonly<{ size: number }>): React.JSX.Element {
   );
 }
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
-}: Readonly<{ children: React.ReactNode }>): React.JSX.Element {
+}: Readonly<{ children: React.ReactNode }>): Promise<React.JSX.Element> {
+  const user = await currentUser();
   return (
     <html lang="en">
       <body className="flex min-h-screen flex-col bg-canvas text-ink antialiased">
@@ -44,17 +47,7 @@ export default function RootLayout({
               <EchoMark size={28} />
               <span className="font-serif text-[26px] leading-none font-semibold tracking-tight">radar</span>
             </Link>
-            <nav aria-label="Main" className="flex items-center gap-1">
-              <Link href="/positions" className="flex min-h-11 items-center rounded-lg px-3 text-sm font-medium text-muted hover:bg-sage hover:text-ink">
-                Positions
-              </Link>
-              <Link href="/roles" className="flex min-h-11 items-center rounded-lg px-3 text-sm font-medium text-muted hover:bg-sage hover:text-ink">
-                Roles
-              </Link>
-              <Link href="/" className="flex min-h-11 items-center rounded-lg bg-action px-4 text-sm font-semibold text-white hover:bg-action-hover">
-                New brief
-              </Link>
-            </nav>
+            <SiteNav user={user} />
           </div>
         </header>
         <div className="flex-1">{children}</div>

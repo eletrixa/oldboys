@@ -105,9 +105,12 @@ function missing(state: RunState, brief: Brief, off: boolean): string {
   return gaps.length === 0 ? "Missing: no gaps recorded." : `Missing: ${gaps.join("; ")}.`;
 }
 
+/** A question is never cut short of being askable: it may run to ASK_MAX before the ellipsis. */
+const ASK_MAX = 220;
+
 /** Shortened text with its own end: "…" when cut, "?" for a question, "." otherwise. */
-function sentence(text: string): string {
-  const short = shorten(text);
+function sentence(text: string, max = MAX_PART): string {
+  const short = shorten(text, max);
   if (short.endsWith("…")) return short;
   return `${short}${text.trim().endsWith("?") ? "?" : "."}`;
 }
@@ -115,9 +118,9 @@ function sentence(text: string): string {
 /** The first interview question (identity checks come first on a degraded brief), else the first to-verify item. */
 function ask(brief: Brief): string {
   const question = brief.interview_questions.find((q) => q.trim() !== "");
-  if (question !== undefined) return `Ask: ${sentence(question)}`;
+  if (question !== undefined) return `Ask: ${sentence(question, ASK_MAX)}`;
   const check = brief.to_verify.find((t) => t.trim() !== "");
-  if (check !== undefined) return `Check: ${sentence(check)}`;
+  if (check !== undefined) return `Check: ${sentence(check, ASK_MAX)}`;
   return "Ask: no interview question yet.";
 }
 

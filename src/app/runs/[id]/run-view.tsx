@@ -10,6 +10,9 @@
  * - Poll GET /api/runs/:id/state every 2 s until done or failed
  * - Header: derived name once the seed step knows it ("the candidate" before), the seed headline under it
  * - "Researched for: <position title>" link to /positions/<id> under the name when the run came from a position
+ * - When done, the brief comes first and the confirmation steps fold into a closed "How we confirmed it" disclosure
+ * - One footer closes the page: running hint (not done), then "Back to home" and "Audit record" links
+ * - Not-found view: eyebrow, heading, muted sentence and a primary back link on the header rhythm
  * - Show the run cost and research time line (ledger projection) while running and when done
  * - Identity map above the profile list (same live decisions)
  * - On failure keep the progress rows, mark the failed one, show the reason, sources so far and a retry link
@@ -24,7 +27,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Candidate, CandidateDecision } from "@/domain/claim";
-import { BTN_PRIMARY, BTN_QUIET, BTN_SECONDARY, CARD, Eyebrow, LINK, Pill } from "../../ui";
+import { BTN_SECONDARY, CARD_CONFLICT, Chevron, Eyebrow, LINK, Pill, SUMMARY } from "../../ui";
 import { IdentityMapCard } from "./identity-map-card";
 import { type Answer, BriefView, CostLine, ProfileList, ProgressSteps, QuestionCard } from "./parts";
 import { type RunState, firstName, headerText, questionsToAsk, sortLineup, stepRows } from "./state";
@@ -134,10 +137,11 @@ export function RunView({ id }: { id: string }): React.JSX.Element {
 
   if (missing) {
     return (
-      <main className="mx-auto flex max-w-3xl flex-col gap-4 px-4 py-10 md:py-14">
+      <main className="mx-auto flex max-w-3xl flex-col items-start gap-4 px-4 py-10 md:py-14">
+        <Eyebrow>Brief</Eyebrow>
         <h1 className="font-serif text-4xl leading-[1.05] md:text-5xl">We could not find this brief</h1>
         <p className="text-muted">The link may be mistyped, or the run is no longer available.</p>
-        <Link href="/" className={`${LINK} w-fit`}>Back</Link>
+        <Link href="/" className={LINK}>Back to home</Link>
       </main>
     );
   }
@@ -164,8 +168,42 @@ export function RunView({ id }: { id: string }): React.JSX.Element {
     "Writing your brief",
   ];
 
+  const progress = <ProgressSteps rows={stepRows({ ...state, degraded })} labels={labels} stepIndex={state.step_index} stepCount={state.step_count} />;
+  const failed = state.status === "failed" && (
+    <div role="alert" className={`${CARD_CONFLICT} flex flex-col gap-2 text-sm text-conflict`}>
+      <p>{failureText(state)}</p>
+      {state.mentions > 0 && <p>We still found {String(state.mentions)} public {state.mentions === 1 ? "mention" : "mentions"}.</p>}
+      <Link href="/" className={`${LINK} w-fit`}>Try again</Link>
+    </div>
+  );
+  const identity = (
+    <>
+      {question !== undefined && <QuestionCard key={question.id} candidate={question} first={first} onAnswer={answer} />}
+      {state.candidates.length > 1 && <IdentityMapCard candidates={state.candidates} decisionOf={decisionOf} first={first} />}
+      {state.candidates.length > 0 && <ProfileList candidates={sortLineup(state.candidates, decisionOf)} decisionOf={decisionOf} />}
+    </>
+  );
+  const sendRows = (
+    <>
+      {sendFailed && (
+        <p role="alert" className="flex items-center gap-3 text-sm text-conflict">
+          We could not send your answers.
+          <button type="button" className={BTN_SECONDARY} onClick={() => {
+              setSendFailed(false);
+              void submit(lastDecisions.current);
+            }}>
+            Try again
+          </button>
+        </p>
+      )}
+      {sent && !sendFailed && state.status === "paused" && <p className="text-sm text-muted">Thanks, continuing...</p>}
+    </>
+  );
+  const briefFirst = state.status === "done" && state.brief !== null;
+  const running = state.status !== "done" && state.status !== "failed";
+
   return (
-    <main className="mx-auto flex max-w-3xl flex-col gap-8 px-4 py-10 md:py-14">
+    <main className={`mx-auto flex max-w-3xl flex-col px-4 py-10 md:py-14 ${briefFirst ? "gap-10" : "gap-8"}`}>
       <header className="flex flex-col gap-3 border-b border-divider pb-8">
         <Eyebrow>{state.status === "done" ? "Candidate brief" : "Research in progress"}</Eyebrow>
         <h1 className="font-serif text-4xl leading-[1.05] md:text-5xl">
@@ -187,47 +225,35 @@ export function RunView({ id }: { id: string }): React.JSX.Element {
         )}
         <CostLine cost={state.cost} />
       </header>
-      <ProgressSteps rows={stepRows({ ...state, degraded })} labels={labels} stepIndex={state.step_index} stepCount={state.step_count} />
-      {state.status === "failed" && (
-        <div role="alert" className={`${CARD} flex flex-col gap-2 border-conflict bg-conflict-bg text-sm text-conflict`}>
-          <p>{failureText(state)}</p>
-          {state.mentions > 0 && <p>We still found {String(state.mentions)} public {state.mentions === 1 ? "mention" : "mentions"}.</p>}
-          <Link href="/" className={`${LINK} w-fit`}>Try again</Link>
-        </div>
+      {briefFirst ? (
+        <>
+          <BriefView state={state} />
+          <details className="group border-t border-divider pt-4">
+            <summary className={`${SUMMARY} text-base text-ink`}>
+              <Chevron />
+              How we confirmed it is {first}
+            </summary>
+            <div className="mt-4 flex flex-col gap-8">
+              {progress}
+              {identity}
+              {sendRows}
+            </div>
+          </details>
+        </>
+      ) : (
+        <>
+          {progress}
+          {failed}
+          {identity}
+          {sendRows}
+        </>
       )}
-      {question !== undefined && <QuestionCard key={question.id} candidate={question} first={first} onAnswer={answer} />}
-      {state.candidates.length > 1 && <IdentityMapCard candidates={state.candidates} decisionOf={decisionOf} first={first} />}
-      {state.candidates.length > 0 && <ProfileList candidates={sortLineup(state.candidates, decisionOf)} decisionOf={decisionOf} />}
-      {sendFailed && (
-        <p role="alert" className="flex items-center gap-3 text-sm text-conflict">
-          We could not send your answers.
-          <button type="button" className={BTN_SECONDARY} onClick={() => {
-              setSendFailed(false);
-              void submit(lastDecisions.current);
-            }}>
-            Try again
-          </button>
-        </p>
-      )}
-      {sent && !sendFailed && state.status === "paused" && <p className="text-sm text-muted">Thanks, continuing...</p>}
-      <div className="flex items-center justify-between">
-        <Link href="/" className={BTN_QUIET}>Back</Link>
-        {state.brief !== null ? (
-          <a
-            href="#brief"
-            onClick={(e) => {
-              e.preventDefault();
-              document.getElementById("brief")?.scrollIntoView({ behavior: "smooth" });
-            }}
-            className={BTN_PRIMARY}
-          >
-            See the brief
-          </a>
-        ) : (
-          <button type="button" disabled className={BTN_PRIMARY}>See the brief</button>
-        )}
+      {!briefFirst && <BriefView state={state} />}
+      {running && <p className="text-sm text-muted">The brief appears here when the research is done.</p>}
+      <div className="flex items-center gap-6 border-t border-divider pt-6 text-sm">
+        <Link href="/" className={LINK}>Back to home</Link>
+        <Link href={`/runs/${id}/audit`} className={LINK}>Audit record</Link>
       </div>
-      <BriefView state={state} />
     </main>
   );
 }

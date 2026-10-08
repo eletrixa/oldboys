@@ -72,7 +72,7 @@ const MARGIN = 8;
 
 /** Cuts to `max` characters including the trailing "…". */
 export function clip(text: string, max: number): string {
-  return text.length > max ? `${text.slice(0, max - 1)}…` : text;
+  return text.length > max ? `${text.slice(0, max - 1).replace(/[\s.,;:!?-]+$/, "")}…` : text;
 }
 
 function host(url: string): string {

@@ -9,6 +9,8 @@
  * Key responsibilities:
  * - Read the investigation head, ledger (seq order), gaps, lineup candidates (id, platform, title) and calls
  *   (status, provider, times) and project them with auditRecord
+ * - organization_name comes from LEFT JOIN organizations on investigations.organization_id
+ * - started_by_name comes from LEFT JOIN accounts on investigations.account_id (name only, never the e-mail)
  * - Recipe steps come from recipeFor(goal); an unknown goal yields no source rows
  *
  * Design constraints:
@@ -21,7 +23,7 @@ import { recipeFor } from "@/recipe/goals";
 /** null when the run does not exist (or was already purged). */
 export async function loadAuditRecord(db: D1Database, id: string, now: Date): Promise<AuditRecord | null> {
   const run = await db
-    .prepare("SELECT id, subject, anchor, goal, role, status, via, source_url, created_at FROM investigations WHERE id = ?")
+    .prepare("SELECT i.id, i.subject, i.anchor, i.goal, i.role, i.status, i.via, i.source_url, i.created_at, o.name AS organization_name, a.name AS started_by_name FROM investigations i LEFT JOIN organizations o ON o.id = i.organization_id LEFT JOIN accounts a ON a.id = i.account_id WHERE i.id = ?")
     .bind(id)
     .first<AuditRun>();
   if (!run) return null;

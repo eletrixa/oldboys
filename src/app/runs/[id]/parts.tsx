@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/runs/[id]/parts.tsx
- * Deps:    react, src/domain/claim (types), src/domain/run-cost, ../../ui (Radar vocabulary), ./sections, ./state
+ * Deps:    react (client component, imported only by run-view.tsx), src/domain/claim (types), src/domain/run-cost, ../../ui (Radar vocabulary), ./sections, ./state, ./call-panel-view
  * Tested:  n/a
  *
  * Key responsibilities:
@@ -14,28 +14,36 @@
  * - Gap list reads "Searched, nothing confirmed" when any searched gap is a namesake-only one
  * - Confirmed evidence grouped by the URL's platform (evidenceGroup), not by the actor that fetched it; the pasted CV
  *   is plain text, not a link (SourceLink)
- * - Interview kit buttons (KitActions) under the top line; gap labels come from state.ts (GAP_LABEL, gapLine)
+ * - Phone verification panel (CallPanel, client) right after "To verify"; it fetches its own data
+ * - Interview kit exports (KitActions) after the gap lists, one block with AlsoFound and the removed line;
+ *   gap rows split "Label: reason" into a medium label and muted reason; Check rows hang under a grid; gap labels come from state.ts (GAP_LABEL, gapLine)
  * - Findings as sections by confidence (SectionList); briefs stored before sections render per question
+ * - Accessibility: labelled progressbar with status text, QuestionCard focuses its heading on mount, 44px summary and link targets
  *
  * Design constraints:
- * - No data fetching here; callbacks are passed in by the view
+ * - No data fetching here (CallPanel and KitActions are self-contained client components); callbacks are passed in by the view
  * - Radar tokens only (docs/design/radar-ui.md): semantic colours via ../../ui, no raw palette classes
  */
+"use client";
+
+import { useEffect, useRef } from "react";
 import type { Brief, Candidate, CandidateDecision } from "@/domain/claim";
 import { formatDuration, type RunCost } from "@/domain/run-cost";
-import { BTN_PRIMARY, BTN_QUIET, BTN_SECONDARY, CARD, CARD_PEACH, Pill, SourceLink, type Tone } from "../../ui";
+import { BTN_PRIMARY, BTN_QUIET, BTN_SECONDARY, CARD, CARD_PEACH, CARD_UNSURE, Chevron, Pill, SUMMARY, SourceLink, type Tone } from "../../ui";
+import { CallPanel } from "./call-panel-view";
 import { KitActions } from "./kit-actions";
 import { ClaimList, SectionList } from "./sections";
 import { SummaryCard } from "./summary-card";
+import { STEP_LABEL } from "./source-labels";
 import { PLATFORM_LABEL, type RowState, type RunState, briefSections, evidenceGroup, gapLine, hiringFor, host, roleCriteria, searchedEmpty, searchedTitle } from "./state";
 
 function Mark({ state }: { state: RowState }): React.JSX.Element {
   const base = "relative flex size-5 shrink-0 items-center justify-center rounded-full text-xs";
-  if (state === "done") return <span className={`${base} bg-ok text-white`}>✓</span>;
-  if (state === "failed") return <span className={`${base} bg-conflict text-white`}>✕</span>;
-  if (state === "active") return <span className={`${base} animate-pulse border-2 border-action bg-canvas`} />;
-  if (state === "skipped") return <span className={`${base} bg-divider text-muted`}>–</span>;
-  return <span className={`${base} border-2 border-divider bg-canvas`} />;
+  if (state === "done") return <span className={`${base} bg-ok text-white`}><span aria-hidden="true">✓</span><span className="sr-only">Done</span></span>;
+  if (state === "failed") return <span className={`${base} bg-conflict text-white`}><span aria-hidden="true">✕</span><span className="sr-only">Failed</span></span>;
+  if (state === "active") return <span className={`${base} animate-pulse border-2 border-action bg-canvas`}><span className="sr-only">In progress</span></span>;
+  if (state === "skipped") return <span className={`${base} bg-divider text-muted`}><span aria-hidden="true">–</span><span className="sr-only">Skipped</span></span>;
+  return <span className={`${base} border-2 border-divider bg-canvas`}><span className="sr-only">Waiting</span></span>;
 }
 
 /** Percent of the recipe already in the ledger; never fully empty so the bar reads as alive. */
@@ -58,15 +66,29 @@ export function ProgressSteps({
 }): React.JSX.Element {
   const pct = percent(rows, stepIndex, stepCount);
   const failed = rows.includes("failed");
+  const activeIndex = rows.indexOf("active");
+  const activeLabel = activeIndex >= 0 ? labels[activeIndex] : undefined;
+  const valueText = failed ? "Failed" : pct === 100 ? "Done" : (activeLabel ?? "Working");
   return (
     <div className="flex flex-col gap-4">
-      <div className="h-1.5 overflow-hidden rounded-full bg-divider" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
+      <p role="status" className="sr-only">
+        {activeLabel ?? (failed ? "Research failed" : "Research finished")}
+      </p>
+      <div
+        className="h-1.5 overflow-hidden rounded-full bg-divider"
+        role="progressbar"
+        aria-label="Research progress"
+        aria-valuetext={valueText}
+        aria-valuenow={pct}
+        aria-valuemin={0}
+        aria-valuemax={100}
+      >
         <div className={`h-full transition-[width] duration-700 ${failed ? "bg-conflict" : pct === 100 ? "bg-ok" : "bg-action"}`} style={{ width: `${String(pct)}%` }} />
       </div>
       <ol className="relative flex flex-col gap-3">
         <span aria-hidden="true" className="absolute top-2.5 bottom-2.5 left-[9.5px] w-px bg-divider" />
         {labels.map((label, i) => (
-          <li key={label} className={`flex items-center gap-3 text-sm ${rows[i] === "todo" || rows[i] === "skipped" ? "text-muted" : rows[i] === "failed" ? "text-conflict" : "text-ink"}`}>
+          <li key={label} aria-current={i === activeIndex ? "step" : undefined} className={`flex items-center gap-3 text-sm ${rows[i] === "todo" || rows[i] === "skipped" ? "text-muted" : rows[i] === "failed" ? "text-conflict" : "text-ink"}`}>
             <Mark state={rows[i] ?? "todo"} />
             {label}
           </li>
@@ -119,11 +141,11 @@ function ProfileRow({ c, decision }: { c: Candidate; decision: CandidateDecision
     <li className="flex items-center gap-3 py-3">
       <PlatformMark c={c} />
       <div className="min-w-0 flex-1">
-        <a href={c.profile_urls[0]} target="_blank" rel="noreferrer" className="text-sm font-medium hover:underline">
+        <a href={c.profile_urls[0]} target="_blank" rel="noreferrer" className="flex min-h-11 items-center text-sm font-medium hover:underline">
           {platformLabel(c)}
         </a>
-        <p className="truncate text-sm text-muted">{c.snippet}</p>
-        {reason !== undefined && reason !== "" && <p className="truncate text-xs text-muted">{reason}</p>}
+        <p className="line-clamp-2 text-sm text-muted">{c.snippet}</p>
+        {reason !== undefined && reason !== "" && <p className="text-xs text-muted">{reason}</p>}
       </div>
       <Pill tone={badge.tone}>{badge.text}</Pill>
     </li>
@@ -142,15 +164,15 @@ export function ProfileList({
   const extra = web.slice(WEB_VISIBLE);
   return (
     <section>
-      <h3 className="text-base font-semibold">Profiles we found</h3>
+      <h2 className="text-base font-semibold">Profiles we found</h2>
       <ul className="mt-2 divide-y divide-divider">
         {[...profiles, ...web.slice(0, WEB_VISIBLE)].map((c) => (
           <ProfileRow key={c.id} c={c} decision={decisionOf(c)} />
         ))}
       </ul>
       {extra.length > 0 && (
-        <details className="mt-3">
-          <summary className="cursor-pointer text-sm text-muted hover:text-ink">Show {String(extra.length)} more web hits</summary>
+        <details className="group mt-3">
+          <summary className={SUMMARY}><Chevron />Show {String(extra.length)} more web hits</summary>
           <ul className="mt-2 divide-y divide-divider">
             {extra.map((c) => (
               <ProfileRow key={c.id} c={c} decision={decisionOf(c)} />
@@ -174,10 +196,15 @@ export function QuestionCard({
   onAnswer: (id: string, answer: Answer) => void;
 }): React.JSX.Element {
   const label = platformLabel(candidate);
+  const heading = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    heading.current?.focus();
+  }, []);
   const who = candidate.handle !== null && candidate.platform !== "web" ? `${label} · @${candidate.handle}` : label;
   return (
-    <section className={CARD_PEACH} aria-live="polite">
-      <h2 className="font-serif text-2xl">Quick question: is this {label} profile also {first}?</h2>
+    <section className={CARD_PEACH}>
+      <h2 ref={heading} tabIndex={-1} className="font-serif text-2xl focus:outline-none">Quick question: is this {label} profile also {first}?</h2>
+      <p className="mt-1 text-sm text-muted">Your answer decides whether we use this profile in the brief.</p>
       <div className="mt-3 flex items-start gap-3">
         <PlatformMark c={candidate} />
         <div className="min-w-0">
@@ -207,50 +234,70 @@ const COVERAGE = { evidenced: "ok", partial: "unsure", none: "neutral" } as cons
 /** A gap as a list item: the plain line, with the full reason on hover. */
 const gapItem = (g: Brief["not_searched"][number]): { text: string; hint: string } => ({ text: gapLine(g), hint: g.reason });
 
-function List({ title, items }: { title: string; items: (string | { text: string; hint: string })[] }): React.JSX.Element | null {
+function List({
+  title,
+  items,
+  numbered = false,
+  check = false,
+}: {
+  title: string;
+  items: (string | { text: string; hint: string })[];
+  numbered?: boolean;
+  check?: boolean;
+}): React.JSX.Element | null {
   if (items.length === 0) return null;
+  if (numbered) {
+    return (
+      <section>
+        <h2 className="font-serif text-xl">{title}</h2>
+        <ol className="mt-2 divide-y divide-divider">
+          {items.map((t, i) => {
+            const text = typeof t === "string" ? t : t.text;
+            return (
+              <li key={text} className="grid grid-cols-[2rem_minmax(0,1fr)] gap-3 py-3">
+                <span className="font-serif text-xl text-action tabular-nums">{i + 1}</span>
+                <span className="text-sm">{text}</span>
+              </li>
+            );
+          })}
+        </ol>
+      </section>
+    );
+  }
   return (
     <section>
-      <h3 className="text-base font-semibold">{title}</h3>
+      <h2 className="font-serif text-xl">{title}</h2>
       <ul className="mt-2 divide-y divide-divider">
-        {items.map((t) =>
-          typeof t === "string" ? (
-            <li key={t} className="py-2 text-sm">
-              {t}
+        {items.map((t) => {
+          const text = typeof t === "string" ? t : t.text;
+          if (check) {
+            return (
+              <li key={text} className="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-x-2 py-2 text-sm">
+                <Pill tone="unsure" className="mt-0.5">Check</Pill>
+                <span className="min-w-0">{text}</span>
+              </li>
+            );
+          }
+          const cut = text.indexOf(": ");
+          return (
+            <li key={text} title={typeof t === "string" ? undefined : t.hint} className="py-2 text-sm">
+              {cut > 0 && cut < 40 ? (
+                <>
+                  <span className="font-medium text-ink">{text.slice(0, cut)}</span>
+                  <span className="text-muted">{text.slice(cut)}</span>
+                </>
+              ) : (
+                text
+              )}
             </li>
-          ) : (
-            <li key={t.text} title={t.hint} className="py-2 text-sm">
-              {t.text}
-            </li>
-          ),
-        )}
+          );
+        })}
       </ul>
     </section>
   );
 }
 
 type Evidence = Brief["evidence"][number];
-
-/** Plain words for the actor id a source came from. */
-const STEP_LABEL: Record<string, string> = {
-  "apify/google-search-scraper": "Web search",
-  "harvestapi/linkedin-profile-scraper": "LinkedIn",
-  "apimaestro/linkedin-profile-detail": "LinkedIn",
-  "harvestapi/linkedin-company": "LinkedIn company",
-  "rest/github": "GitHub",
-  "rest/stackexchange": "Stack Exchange",
-  "rest/huggingface": "Hugging Face",
-  "rest/orcid": "ORCID",
-  "rest/openalex": "OpenAlex",
-  "apidojo/tweet-scraper": "X",
-  "apify/instagram-profile-scraper": "Instagram",
-  "clockworks/tiktok-profile-scraper": "TikTok",
-  "streamers/youtube-scraper": "YouTube",
-  "rest/bluesky": "Bluesky",
-  "apify/website-content-crawler": "Website",
-  "ares/ekonomicke-subjekty/vyhledat": "ARES registry",
-  "ares/ekonomicke-subjekty-vr": "ARES public register",
-};
 
 const EVIDENCE_VISIBLE = 10;
 
@@ -282,8 +329,8 @@ function EvidenceList({ items }: { items: Evidence[] }): React.JSX.Element {
     <>
       <EvidenceGroups items={items.slice(0, EVIDENCE_VISIBLE)} />
       {rest.length > 0 && (
-        <details className="mt-3">
-          <summary className="cursor-pointer text-sm text-muted hover:text-ink">Show {String(rest.length)} more</summary>
+        <details className="group mt-3">
+          <summary className={SUMMARY}><Chevron />Show {String(rest.length)} more</summary>
           <EvidenceGroups items={rest} />
         </details>
       )}
@@ -294,10 +341,12 @@ function EvidenceList({ items }: { items: Evidence[] }): React.JSX.Element {
 function AlsoFound({ items }: { items: Evidence[] }): React.JSX.Element | null {
   if (items.length === 0) return null;
   return (
-    <details>
-      <summary className="cursor-pointer text-sm font-semibold text-muted hover:text-ink">
-        Mentions of the name, not confirmed ({String(items.length)}) — identity not verified, not used in the brief
+    <details className="group">
+      <summary className={SUMMARY}>
+        <Chevron />
+        Same name, not confirmed as them ({String(items.length)})
       </summary>
+      <p className="text-xs text-muted">Not used in your brief.</p>
       <EvidenceList items={items} />
     </details>
   );
@@ -305,7 +354,7 @@ function AlsoFound({ items }: { items: Evidence[] }): React.JSX.Element | null {
 
 function DegradedNotice({ reason }: { reason: string }): React.JSX.Element {
   return (
-    <section className={`${CARD} border-unsure-bg bg-unsure-bg`}>
+    <section className={CARD_UNSURE}>
       <p className="text-sm text-unsure">AI summary unavailable ({reason.replace(/\.$/, "")}). This brief lists only what we confirmed.</p>
     </section>
   );
@@ -337,7 +386,7 @@ function ConfirmedEvidence({ items }: { items: Evidence[] }): React.JSX.Element 
   if (items.length === 0) return null;
   return (
     <section className={CARD}>
-      <h3 className="text-base font-semibold">From profiles you confirmed</h3>
+      <h2 className="font-serif text-xl">From profiles you confirmed</h2>
       <EvidenceList items={items} />
     </section>
   );
@@ -347,7 +396,7 @@ function ConfirmedEvidence({ items }: { items: Evidence[] }): React.JSX.Element 
 function RoleCriteria({ texts }: { texts: string[] }): React.JSX.Element {
   return (
     <section className={CARD}>
-      <h3 className="text-base font-semibold">Role criteria (not checked, AI unavailable)</h3>
+      <h2 className="font-serif text-xl">Role criteria (not checked, AI unavailable)</h2>
       {texts.length === 0 ? (
         <p className="mt-2 text-sm text-muted">No role criteria yet</p>
       ) : (
@@ -373,7 +422,6 @@ export function BriefView({ state }: { state: RunState }): React.JSX.Element | n
     <div id="brief" className="flex scroll-mt-6 flex-col gap-4">
       <SummaryCard state={state} />
       <TopLine headline={brief.headline ?? null} locationNote={brief.location_note ?? null} role={hiringFor(state)} />
-      <KitActions state={state} />
       {brief.degraded !== null && <DegradedNotice reason={brief.degraded} />}
       {brief.degraded !== null && <ConfirmedEvidence items={brief.evidence} />}
       {sections !== null && <SectionList sections={sections} claims={state.claims} urlOf={urlOf} noteOf={noteOf} />}
@@ -392,14 +440,18 @@ export function BriefView({ state }: { state: RunState }): React.JSX.Element | n
           </section>
         ))
       )}
-      <List title="Interview questions" items={brief.interview_questions} />
-      <List title="To verify" items={brief.to_verify} />
+      <List title="Interview questions" items={brief.interview_questions} numbered />
+      <List title="To verify" items={brief.to_verify} check />
+      <CallPanel state={state} />
       <List title={searchedTitle(searchedEmpty(brief))} items={searchedEmpty(brief).map(gapItem)} />
       <List title="Not searched, and why" items={brief.not_searched.map(gapItem)} />
-      <AlsoFound items={brief.also_found} />
-      {brief.removed_protected > 0 ? (
-        <p className="text-xs text-muted">{String(brief.removed_protected)} items removed (protected categories)</p>
-      ) : null}
+      <div className="flex flex-col gap-3">
+        <KitActions state={state} />
+        <AlsoFound items={brief.also_found} />
+        {brief.removed_protected > 0 ? (
+          <p className="text-xs text-muted">{String(brief.removed_protected)} {brief.removed_protected === 1 ? "item" : "items"} removed (protected categories)</p>
+        ) : null}
+      </div>
     </div>
   );
 }
