@@ -8,9 +8,11 @@
  *
  * Key responsibilities:
  * - One `step.do` per recipe step: load context from D1 -> executeStep -> persist -> ledger row
+ * - `seed` step (plans/006) runs first, before role_questions: the manager's LinkedIn URL / CV become the merged
+ *   identity and set investigations.subject/anchor; a scrape or model failure is a ledger note, never a failed run
  * - `onEmpty`: run the declared fallback step once, or record a Gap (ledger decision with ref.gap)
  * - resolve: persist candidates; pause with `step.waitForEvent('lineup-answer')` when any candidate is
- *   possibly-same-as or none merged; apply the manager's decisions on resume
+ *   possibly-same-as or none merged (lineupNeedsAnswer, seed merges count); apply the manager's decisions on resume
  * - Budget (RUN_BUDGET_USD / RUN_BUDGET_CALLS) enforced here for collector steps, never by the LLM; parallel
  *   batches run at most (budget - spent) paid actor steps at once (planBatch), free REST steps always run
  * - Source identity re-marked after the lineup and before extract (applySourceIdentity), so only SERP hits on
@@ -34,8 +36,10 @@ import type { Ports } from "@/domain/ports";
 import { planBatch } from "@/recipe/batch";
 import { recipeFor } from "@/recipe/goals";
 import { executeStep } from "@/recipe/runner";
-import { noneConfirmed, UNCONFIRMED_GAP } from "@/recipe/seams/resolve";
+import { lineupNeedsAnswer, noneConfirmed, UNCONFIRMED_GAP } from "@/recipe/seams/resolve";
 import { roleQuestions } from "@/recipe/seams/role";
+import { CV_ACTOR, seedProfile } from "@/recipe/seams/seed";
+import { HARVEST_ACTOR } from "@/recipe/sources/linkedin";
 import type { StepOutcome } from "@/recipe/sources/types";
 import type { Step } from "@/recipe/step";
 
@@ -43,7 +47,15 @@ export type ResearchRunParams = { runId: string };
 
 export type LineupAnswer = { decisions: { id: string; decision: Candidate["decision"] }[] };
 
-type Head = { subject: string; anchor: string; goal: GoalId; role: string | null; questions_json: string | null };
+type Head = {
+  subject: string;
+  anchor: string;
+  goal: GoalId;
+  role: string | null;
+  questions_json: string | null;
+  profile_url: string | null;
+  cv_text: string | null;
+};
 
 const COLLECTOR_KINDS = new Set<Step["kind"]>(["serp", "actor", "ares"]);
 /** Collector steps run concurrently after the lineup; Apify + REST calls are I/O bound and independent. */
@@ -79,7 +91,7 @@ export class ResearchRunWorkflow extends WorkflowEntrypoint<CloudflareEnv, Resea
 
   private async runRecipe(runId: string, step: WorkflowStep): Promise<void> {
     const head = await step.do("load-investigation", async () => {
-      const row = await this.env.DB.prepare("SELECT subject, anchor, goal, role, questions_json FROM investigations WHERE id = ?")
+      const row = await this.env.DB.prepare("SELECT subject, anchor, goal, role, questions_json, profile_url, cv_text FROM investigations WHERE id = ?")
         .bind(runId)
         .first<Head>();
       if (!row) throw new Error(`investigation ${runId} not found`);
@@ -87,6 +99,13 @@ export class ResearchRunWorkflow extends WorkflowEntrypoint<CloudflareEnv, Resea
       return row;
     });
     const recipe = recipeFor(head.goal);
+    const seed = recipe.steps.find((s) => s.kind === "seed");
+    if (seed !== undefined && (head.profile_url !== null || head.cv_text !== null)) {
+      const derived = await this.seedStep(runId, seed, head, step);
+      head.subject = derived.subject;
+      head.anchor = derived.anchor;
+    }
+    if (head.subject.trim() === "") throw new Error("could not work out the candidate's name from the profile or CV");
 
     if (head.role !== null && head.role.length > 0 && head.questions_json === null) {
       await step.do("role_questions", async () => {
@@ -197,9 +216,25 @@ export class ResearchRunWorkflow extends WorkflowEntrypoint<CloudflareEnv, Resea
       });
       const degraded = out.brief?.degraded ?? null;
       if (degraded !== null) await this.ledger(runId, recipeStep.id, "decision", 0, 0, { degraded });
-      const skipped = COLLECTOR_KINDS.has(recipeStep.kind) && out.calls === 0 && out.notes.length > 0 ? out.notes.join("; ") : null;
+      // Reused seed evidence (not empty) is not a skip
+      const skipped = COLLECTOR_KINDS.has(recipeStep.kind) && out.empty && out.calls === 0 && out.notes.length > 0 ? out.notes.join("; ") : null;
       const unconfirmed = COLLECTOR_KINDS.has(recipeStep.kind) && noneConfirmed(out.sources, ctx.candidates);
       return { empty: out.empty, skipped, unconfirmed };
+    });
+  }
+
+  /** Profile URL / CV -> merged Source + Candidates, subject and anchor; one ledger row per lane used (actor, model). */
+  private async seedStep(runId: string, recipeStep: Step, head: Head, step: WorkflowStep): Promise<{ subject: string; anchor: string }> {
+    return step.do(recipeStep.id, { retries: { limit: 1, delay: "5 seconds" } }, async () => {
+      const started = Date.now();
+      const r = await seedProfile({ runId, subject: head.subject, anchor: head.anchor, profileUrl: head.profile_url, cvText: head.cv_text }, this.ports());
+      await persistOutcome(this.env.DB, runId, r.out);
+      await this.env.DB.prepare("UPDATE investigations SET subject = ?, anchor = ? WHERE id = ?").bind(r.subject, r.anchor, runId).run();
+      const ref = { subject: r.subject, anchor: r.anchor, headline: r.headline, employer: r.employer, sources: r.out.sources.length, candidates: r.out.candidates.length, notes: r.out.notes };
+      const ms = Date.now() - started;
+      if (head.profile_url !== null) await this.ledger(runId, recipeStep.id, "call", r.actor.cost_usd, ms, { ...ref, actor: HARVEST_ACTOR, calls: r.actor.calls });
+      if (head.cv_text !== null) await this.ledger(runId, recipeStep.id, "llm", r.llm.cost_usd, ms, { ...ref, actor: CV_ACTOR, calls: r.llm.calls });
+      return { subject: r.subject, anchor: r.anchor };
     });
   }
 
@@ -210,14 +245,14 @@ export class ResearchRunWorkflow extends WorkflowEntrypoint<CloudflareEnv, Resea
       const out = await executeStep(recipeStep, ctx, this.ports());
       await persistOutcome(this.env.DB, runId, out);
       const all = [...ctx.candidates, ...out.candidates];
-      const ask = all.some((c) => c.decision === "possibly-same-as") || !all.some((c) => c.decision === "merge");
+      const ask = lineupNeedsAnswer(all);
       await this.ledger(runId, recipeStep.id, "llm", out.cost_usd, Date.now() - started, {
         candidates: out.candidates.map((c) => ({ id: c.id, platform: c.platform, url: c.profile_urls[0], score: c.score, decision: c.decision, snippet: c.snippet, reasons: c.reasons })),
         calls: out.calls,
         notes: out.notes,
         ask,
       });
-      return ask && all.length > 0;
+      return ask;
     });
     if (!needsAnswer) return;
 

@@ -8,7 +8,8 @@
  *
  * Key responsibilities:
  * - StepContext: everything a step may read (never mutate)
- * - Collector: `requests()` decides what to fetch (empty array = nothing to do, triggers onEmpty); `parse()` maps one payload to sources
+ * - Collector: `requests()` decides what to fetch (empty array = nothing to do, triggers onEmpty); `parse()` maps one payload to sources;
+ *   optional `alreadyFetched()` names sources an earlier step (seed) fetched, so the step does not scrape them twice
  * - identityFor(): "merged" only for urls under a merged candidate (profile url prefix or handle segment), else "unverified"
  *
  * Design constraints:
@@ -51,6 +52,8 @@ export type Collector = {
   /** Matches Step.actor. */
   id: string;
   requests: (ctx: StepContext, step: Step) => CollectorRequest[];
+  /** Sources an earlier step already fetched for this collector (seed); with no requests left the step reuses them. */
+  alreadyFetched?: (ctx: StepContext) => Source[];
   parse: (payload: unknown, ctx: StepContext, step: Step) => ParsedSource[];
 };
 

@@ -45,6 +45,7 @@ const brief = (over: Partial<Brief> = {}): Brief => ({
 const run = (over: Partial<RunState> = {}): RunState => ({
   id: "0123456789abcdef",
   subject: "Jan Novak",
+  headline: null,
   role: "Senior Data Engineer",
   created_at: "2026-10-08T21:00:00.000Z",
   status: "done",
