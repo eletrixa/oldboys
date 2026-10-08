@@ -3,46 +3,46 @@
   "diagram_type": "sequence",
   "meta": {
     "title": "Oldboys: jeden běh",
+    "subtitle": "ResearchRun Workflow · stav k 8. 10. 23:30",
     "viewBox": [
       1080,
-      880
+      980
     ],
     "column_fit": "spread",
     "quality_profile": "showcase",
     "views": [
       {
         "id": "resolve",
-        "label": "Jmenovci",
+        "label": "Profil a jmenovci",
         "focus": [
           "ui",
-          "runner",
-          "apify",
+          "api",
+          "wf",
           "llm",
-          "ledger"
+          "src"
         ],
-        "note": "SERP najde kandidáty, LLM je oskóruje proti kotvě, pod prahem se běh zastaví a zeptá uživatele."
+        "note": "Zadaný LinkedIn profil (nebo CV) je potvrzená identita; lineup se ptá jen, jestli další profily stejného jména patří témuž člověku."
       },
       {
         "id": "collect",
-        "label": "Sběr a onEmpty",
+        "label": "Sběr",
         "focus": [
-          "runner",
-          "apify",
-          "ares",
-          "ledger"
+          "wf",
+          "src",
+          "d1"
         ],
-        "note": "Prázdný LinkedIn nespadne potichu: fallback na SERP snippet a štítek PARTIAL."
+        "note": "Kolektory běží paralelně v rozpočtu; prázdný zdroj nebo jen jmenovci = Gap s důvodem, nikdy ticho."
       },
       {
         "id": "verify",
-        "label": "Ověření a report",
+        "label": "Ověření a brief",
         "focus": [
-          "runner",
+          "wf",
           "llm",
-          "ledger",
+          "d1",
           "ui"
         ],
-        "note": "Citace musí ležet v excerptu, URL musí být v ledgeru, zbytek posoudí druhý model."
+        "note": "Do modelu jdou jen potvrzené zdroje, FACT potřebuje citaci ve výňatku, bez AI vznikne degradovaný brief z evidence."
       }
     ]
   },
@@ -51,25 +51,25 @@
       "id": "ui",
       "type": "frontend",
       "label": "UI",
-      "sublabel": "Next.js"
+      "sublabel": "Next.js · rozšíření"
     },
     {
-      "id": "runner",
+      "id": "api",
       "type": "backend",
-      "label": "Runner",
-      "sublabel": "recipe"
+      "label": "API",
+      "sublabel": "routes"
     },
     {
-      "id": "apify",
-      "type": "external",
-      "label": "Apify",
-      "sublabel": "actors"
+      "id": "wf",
+      "type": "backend",
+      "label": "Workflow",
+      "sublabel": "ResearchRun"
     },
     {
-      "id": "ares",
+      "id": "src",
       "type": "external",
-      "label": "ARES",
-      "sublabel": "registr"
+      "label": "Zdroje",
+      "sublabel": "Apify · REST"
     },
     {
       "id": "llm",
@@ -78,160 +78,165 @@
       "sublabel": "Anthropic"
     },
     {
-      "id": "ledger",
-      "type": "messagebus",
-      "label": "Ledger",
-      "sublabel": "jsonl + SSE"
+      "id": "d1",
+      "type": "database",
+      "label": "D1",
+      "sublabel": "ledger · stav"
     }
   ],
   "segments": [
     {
       "from": 150,
-      "to": 418,
-      "label": "Jmenovci"
+      "to": 532,
+      "label": "Profil a jmenovci"
     },
     {
-      "from": 422,
-      "to": 608,
+      "from": 542,
+      "to": 684,
       "label": "Sběr"
     },
     {
-      "from": 612,
-      "to": 802,
-      "label": "Ověření a report"
+      "from": 694,
+      "to": 886,
+      "label": "Ověření a brief"
     }
   ],
   "messages": [
     {
       "from": "ui",
-      "to": "runner",
+      "to": "api",
       "y": 176,
-      "label": "POST /runs {subject, anchor, goal}",
+      "label": "POST /api/start {LinkedIn URL nebo CV, role}",
       "variant": "emphasis"
     },
     {
-      "from": "runner",
-      "to": "apify",
+      "from": "api",
+      "to": "wf",
       "y": 214,
-      "label": "SERP(subject + anchor)"
+      "label": "RESEARCH_RUN.create(runId)"
     },
     {
-      "from": "runner",
+      "from": "wf",
+      "to": "src",
+      "label": "seed_profile: LinkedIn = potvrzený profil",
+      "y": 252
+    },
+    {
+      "from": "wf",
       "to": "llm",
-      "y": 252,
-      "label": "score candidates vs anchor"
-    },
-    {
-      "from": "llm",
-      "to": "runner",
       "y": 290,
-      "label": "c1 0.91 merge · c2 0.55 maybe",
-      "variant": "return"
+      "label": "role_questions: must-have otázky"
     },
     {
-      "from": "runner",
-      "to": "ledger",
+      "from": "wf",
+      "to": "src",
       "y": 328,
-      "label": "decision: lineup, pause",
+      "label": "SERP: další profily stejného jména"
+    },
+    {
+      "from": "wf",
+      "to": "llm",
+      "y": 366,
+      "label": "resolve: je i tohle on/ona?"
+    },
+    {
+      "from": "wf",
+      "to": "d1",
+      "y": 404,
+      "label": "kandidáti, status paused",
       "variant": "dashed"
     },
     {
-      "from": "ledger",
+      "from": "api",
       "to": "ui",
-      "y": 366,
-      "label": "data-lineup (SSE)",
-      "variant": "dashed"
+      "y": 442,
+      "label": "GET /state (polling): lineup",
+      "variant": "return"
     },
     {
       "from": "ui",
-      "to": "runner",
-      "y": 404,
-      "label": "POST /answer {pick: c1}",
+      "to": "api",
+      "y": 480,
+      "label": "POST /answer {ano · ne · nevím}",
       "variant": "emphasis"
     },
     {
-      "from": "runner",
-      "to": "apify",
-      "y": 442,
-      "label": "linkedin(c1), timeout 45s"
+      "from": "api",
+      "to": "wf",
+      "y": 518,
+      "label": "sendEvent lineup-answer"
     },
     {
-      "from": "apify",
-      "to": "runner",
-      "y": 480,
-      "label": "[] empty",
+      "from": "wf",
+      "to": "src",
+      "y": 556,
+      "label": "13 kolektorů, dávky po 5, v rozpočtu"
+    },
+    {
+      "from": "src",
+      "to": "wf",
+      "y": 594,
+      "label": "[] prázdné nebo jen jmenovci",
       "variant": "return"
     },
     {
-      "from": "runner",
-      "to": "ledger",
-      "y": 518,
-      "label": "onEmpty: snippet, PARTIAL",
+      "from": "wf",
+      "to": "d1",
+      "y": 632,
+      "label": "Gap s důvodem · nepotvrzeno",
       "variant": "dashed"
     },
     {
-      "from": "runner",
-      "to": "apify",
-      "y": 556,
-      "label": "instagram · x · website"
-    },
-    {
-      "from": "runner",
-      "to": "ares",
-      "y": 594,
-      "label": "vyhledat + vr/{ico}"
-    },
-    {
-      "from": "runner",
-      "to": "llm",
-      "y": 632,
-      "label": "extract claims, quote required"
-    },
-    {
-      "from": "runner",
-      "to": "ledger",
+      "from": "wf",
+      "to": "d1",
       "y": 670,
-      "label": "verified claims.json + gaps",
+      "label": "identita: potvrzené jen merged zdroje",
+      "variant": "dashed"
+    },
+    {
+      "from": "wf",
+      "to": "llm",
+      "y": 708,
+      "label": "extract: tvrzení s citací"
+    },
+    {
+      "from": "wf",
+      "to": "llm",
+      "y": 746,
+      "label": "verify: citace ve výňatku, pak Sonnet"
+    },
+    {
+      "from": "wf",
+      "to": "llm",
+      "y": 784,
+      "label": "synthesize: brief k otázkám"
+    },
+    {
+      "from": "wf",
+      "to": "d1",
+      "y": 822,
+      "label": "brief · claims · gaps · done",
       "variant": "emphasis"
     },
     {
-      "from": "ledger",
+      "from": "api",
       "to": "ui",
-      "y": 708,
-      "label": "data-claim · data-gap",
-      "variant": "dashed"
-    },
-    {
-      "from": "runner",
-      "to": "llm",
-      "y": 746,
-      "label": "synthesize per question"
-    },
-    {
-      "from": "ledger",
-      "to": "ui",
-      "y": 784,
-      "label": "data-report",
-      "variant": "dashed"
+      "y": 860,
+      "label": "GET /state: brief, kit, audit",
+      "variant": "return"
     }
   ],
   "activations": [
     {
-      "participant": "runner",
-      "from": 170,
-      "to": 790,
+      "participant": "wf",
+      "from": 208,
+      "to": 828,
       "type": "backend"
     },
     {
-      "participant": "llm",
-      "from": 246,
-      "to": 296,
-      "type": "external"
-    },
-    {
-      "participant": "apify",
-      "from": 436,
-      "to": 486,
+      "participant": "src",
+      "from": 550,
+      "to": 600,
       "type": "external"
     }
   ],
@@ -240,27 +245,27 @@
       "dot": "cyan",
       "title": "Pauza na lineup",
       "items": [
-        "Pod prahem shody se běh zeptá",
-        "possibly-same-as zůstává oddělený kandidát",
-        "Tvrzení nesou id kandidáta"
+        "Zadaný profil je potvrzená identita",
+        "Další profil se sloučí jen po ano",
+        "Max 3 otázky, jedna na platformu"
       ]
     },
     {
       "dot": "orange",
-      "title": "onEmpty",
+      "title": "Pravdivé mezery",
       "items": [
-        "Každý krok má deklarovaný fallback",
-        "Prázdný zdroj = Gap s důvodem",
-        "UI ukáže štítek PARTIAL"
+        "Každý zdroj skončí řádkem nebo Gapem",
+        "„nehledáno: proč“ u rozpočtu",
+        "„nalezeno, nic nepotvrzeno“ u jmenovců"
       ]
     },
     {
       "dot": "emerald",
       "title": "Ověření",
       "items": [
-        "Nejdřív deterministická kontrola citace",
-        "LLM jen na zbytek",
-        "Neověřený FACT klesne na INFERENCE"
+        "Do modelu jen potvrzené zdroje",
+        "Citace musí ležet ve výňatku",
+        "Selhání modelu = degradovaný brief"
       ]
     }
   ]
