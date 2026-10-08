@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/api/apply/handler.ts
- * Deps:    src/workflow/intake, src/domain (application, digest), src/app/apply/[tag]/apply-fields, src/app/_lib/form-text, src/app/api/_lib/origin
+ * Deps:    src/workflow/intake, src/domain (application, digest), src/app/apply/[tag]/apply-fields, src/app/_lib/form-text, src/app/api/_lib/same-origin
  * Tested:  src/app/api/apply/__tests__/apply.test.ts
  *
  * Key responsibilities:
@@ -19,7 +19,7 @@
  */
 import { checkApply, MESSAGES } from "@/app/apply/[tag]/apply-fields";
 import { formText } from "@/app/_lib/form-text";
-import { fromOurPage } from "@/app/api/_lib/origin";
+import { rejectCrossOrigin } from "@/app/api/_lib/same-origin";
 import { CV_MAX_BYTES, IntakeTag, toCvFile } from "@/domain/application";
 import { sha256Hex } from "@/domain/digest";
 import { ingestApplication, type IntakeEnv } from "@/workflow/intake";
@@ -31,7 +31,8 @@ const bad = (error: string): Response => Response.json({ error }, { status: 400 
 const received = (status: 200 | 201): Response => Response.json({ received: true }, { status });
 
 export async function handleApply(request: Request, env: IntakeEnv, now: Date): Promise<Response> {
-  if (!fromOurPage(request)) return Response.json({ error: "apply page only" }, { status: 403 });
+  const denied = rejectCrossOrigin(request);
+  if (denied) return denied;
 
   const declared = Number(request.headers.get("Content-Length") ?? 0);
   if (declared > BODY_MAX_BYTES) return bad(MESSAGES.cvSize);

@@ -3,26 +3,27 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/start-form.tsx
- * Deps:    react, next/navigation, src/app/_lib/form-text
+ * Deps:    react, next/navigation, ./ui (Radar tokens), src/app/_lib/form-text
  * Tested:  n/a
  *
  * Key responsibilities:
  * - Submit {goal: "hiring", role, profileUrl?, cvText?} (plans/006); on 201 route to /runs/<id>
  * - Client check: one of profile URL or CV; the server normalises and validates the URL
+ * - initialRole / autoFocusRole prefill and focus the role field; 401 shows a log-in link
  * - Inline humane error on 4xx/5xx or network failure
  *
  * Design constraints:
- * - Client component; posts to /api/start, which adds RUN_TOKEN server-side, so no token ships to the browser
+ * - Client component; posts to /api/start with the session cookie; no token ships to the browser
+ * - Helper text sits beside the label (aria-describedby), never inside it; CV summary is a 44px target
  * - Copy stays short and calm; no emoji
  */
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { formText } from "@/app/_lib/form-text";
-
-const FIELD =
-  "w-full rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-zinc-100 placeholder:text-zinc-500 focus:border-teal-400 focus:outline-none";
+import { BTN_PRIMARY, CARD_SAGE, Chevron, FIELD, LINK, SUMMARY } from "./ui";
 
 const CV_MAX = 20_000;
 
@@ -33,23 +34,42 @@ type FieldProps = {
   type?: "text" | "url";
   placeholder?: string;
   required?: boolean;
+  defaultValue?: string;
+  autoFocus?: boolean;
+  invalid?: boolean;
 };
 
-function Field({ name, label, helper, type = "text", placeholder, required = false }: FieldProps): React.JSX.Element {
+function Field({ name, label, helper, type = "text", placeholder, required = false, defaultValue, autoFocus = false, invalid = false }: FieldProps): React.JSX.Element {
   return (
-    <label className="flex flex-col gap-1.5 text-sm font-medium">
-      {label}
+    <div className="flex flex-col gap-1.5">
+      <label htmlFor={name} className="text-sm font-semibold">{label}</label>
       {/* type="text" with a url keyboard: the browser would reject "linkedin.com/in/..." without https, the server accepts it */}
-      <input name={name} type="text" inputMode={type === "url" ? "url" : "text"} required={required} maxLength={type === "url" ? 500 : 300} placeholder={placeholder} className={FIELD} />
-      {helper !== undefined && <span className="text-xs font-normal text-zinc-400">{helper}</span>}
-    </label>
+      <input
+        id={name}
+        name={name}
+        type="text"
+        inputMode={type === "url" ? "url" : "text"}
+        required={required}
+        maxLength={type === "url" ? 500 : 300}
+        placeholder={placeholder}
+        defaultValue={defaultValue}
+        autoFocus={autoFocus}
+        aria-describedby={helper === undefined ? undefined : `${name}-help`}
+        aria-invalid={invalid || undefined}
+        className={FIELD}
+      />
+      {helper !== undefined && <span id={`${name}-help`} className="text-xs text-muted">{helper}</span>}
+    </div>
   );
 }
 
-export function StartForm(): React.JSX.Element {
+type StartFormProps = { initialRole?: string; autoFocusRole?: boolean };
+
+export function StartForm({ initialRole, autoFocusRole = false }: StartFormProps): React.JSX.Element {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [expired, setExpired] = useState(false);
 
   async function submit(form: HTMLFormElement): Promise<void> {
     const data = new FormData(form);
@@ -61,6 +81,7 @@ export function StartForm(): React.JSX.Element {
     }
     setBusy(true);
     setError(null);
+    setExpired(false);
     try {
       const res = await fetch("/api/start", {
         method: "POST",
@@ -75,6 +96,11 @@ export function StartForm(): React.JSX.Element {
       if (res.status === 201) {
         const { id } = await res.json<{ id: string }>();
         router.push(`/runs/${id}`);
+        return;
+      }
+      if (res.status === 401) {
+        setExpired(true);
+        setBusy(false);
         return;
       }
       setError(
@@ -104,12 +130,13 @@ export function StartForm(): React.JSX.Element {
       <Field
         name="profileUrl"
         type="url"
+        invalid={error?.includes("LinkedIn") === true}
         label="Candidate's LinkedIn profile"
         placeholder="https://www.linkedin.com/in/..."
         helper="We read their name, location and employer from it, so we know exactly who they are."
       />
-      <details className="group rounded-xl border border-zinc-800 p-4">
-        <summary className="cursor-pointer text-sm font-medium text-zinc-300">or paste their CV</summary>
+      <details className="group border-t border-divider pt-2">
+        <summary className={SUMMARY}><Chevron />Or paste their CV instead</summary>
         <textarea
           name="cvText"
           rows={8}
@@ -118,25 +145,34 @@ export function StartForm(): React.JSX.Element {
           className={`${FIELD} mt-3`}
         />
       </details>
-      <Field name="role" label="Role you are hiring for" required helper="The brief focuses on what matters for this role." />
-      <p className="rounded-xl border border-emerald-900 bg-emerald-950/50 p-4 text-sm text-emerald-100">
+      <Field name="role" label="Role you are hiring for" required defaultValue={initialRole} autoFocus={autoFocusRole} helper="The brief focuses on what matters for this role." />
+      <p className={`${CARD_SAGE} text-sm text-ink`}>
         <strong>Privacy:</strong> Public information only. We never look at private accounts, and we do not judge
         personality, health, religion or politics. Everything we collect is deleted after 7 days.
       </p>
       {error !== null && (
-        <p role="alert" className="text-sm text-red-300">
+        <p role="alert" className="text-sm text-conflict">
           {error}
         </p>
       )}
-      <div className="flex items-center gap-4">
+      {expired && (
+        <p role="alert" className="text-sm text-conflict">
+          Your session has ended. Please{" "}
+          <Link href="/login" className={LINK}>
+            log in
+          </Link>{" "}
+          again.
+        </p>
+      )}
+      <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:gap-4">
         <button
           type="submit"
           disabled={busy}
-          className="rounded-xl bg-teal-500 px-5 py-3 font-semibold text-zinc-950 hover:bg-teal-400 disabled:opacity-60"
+          className={BTN_PRIMARY}
         >
           {busy ? "Creating..." : "Create brief"}
         </button>
-        <span className="text-sm text-zinc-400">Usually takes 2 to 4 minutes</span>
+        <span className="text-sm text-muted">Usually takes 2 to 4 minutes</span>
       </div>
     </form>
   );

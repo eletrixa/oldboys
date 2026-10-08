@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/runs/[id]/parts.tsx
- * Deps:    react, src/domain/claim (types), src/domain/run-cost, ./sections, ./state
+ * Deps:    react (client component, imported only by run-view.tsx), src/domain/claim (types), src/domain/run-cost, ../../ui (Radar vocabulary), ./sections, ./state, ./call-panel-view
  * Tested:  n/a
  *
  * Key responsibilities:
@@ -12,40 +12,38 @@
  * - Brief top line: "Confirmed profile: <headline>" next to "Hiring for: <role>" (both quoted, no model needed),
  *   with the location note (confirmed profile names another city than the anchor) under the profile line
  * - Gap list reads "Searched, nothing confirmed" when any searched gap is a namesake-only one
- * - Confirmed evidence grouped by the URL's platform (evidenceGroup), not by the actor that fetched it
- * - Interview kit buttons (KitActions) under the top line; gap labels come from state.ts (GAP_LABEL, gapLine)
+ * - Confirmed evidence grouped by the URL's platform (evidenceGroup), not by the actor that fetched it; the pasted CV
+ *   is plain text, not a link (SourceLink)
+ * - Phone verification panel (CallPanel, client) right after "To verify"; it fetches its own data
+ * - Interview kit exports (KitActions) after the gap lists, one block with AlsoFound and the removed line;
+ *   gap rows split "Label: reason" into a medium label and muted reason; Check rows hang under a grid; gap labels come from state.ts (GAP_LABEL, gapLine)
  * - Findings as sections by confidence (SectionList); briefs stored before sections render per question
+ * - Accessibility: labelled progressbar with status text, QuestionCard focuses its heading on mount, 44px summary and link targets
  *
  * Design constraints:
- * - No data fetching here; callbacks are passed in by the view
+ * - No data fetching here (CallPanel and KitActions are self-contained client components); callbacks are passed in by the view
+ * - Radar tokens only (docs/design/radar-ui.md): semantic colours via ../../ui, no raw palette classes
  */
+"use client";
+
+import { useEffect, useRef } from "react";
 import type { Brief, Candidate, CandidateDecision } from "@/domain/claim";
 import { formatDuration, type RunCost } from "@/domain/run-cost";
+import { BTN_PRIMARY, BTN_QUIET, BTN_SECONDARY, CARD, CARD_PEACH, CARD_UNSURE, Chevron, Pill, SUMMARY, SourceLink, type Tone } from "../../ui";
+import { CallPanel } from "./call-panel-view";
 import { KitActions } from "./kit-actions";
 import { ClaimList, SectionList } from "./sections";
 import { SummaryCard } from "./summary-card";
+import { STEP_LABEL } from "./source-labels";
 import { PLATFORM_LABEL, type RowState, type RunState, briefSections, evidenceGroup, gapLine, host, roleCriteria, searchedEmpty, searchedTitle } from "./state";
 
-const CARD = "rounded-2xl border border-zinc-800 bg-zinc-900/60 p-5";
-
 function Mark({ state }: { state: RowState }): React.JSX.Element {
-  if (state === "done") {
-    return (
-      <span className="flex size-5 items-center justify-center rounded-full bg-teal-500 text-xs text-zinc-950">
-        ✓
-      </span>
-    );
-  }
-  if (state === "failed") {
-    return <span className="flex size-5 items-center justify-center rounded-full bg-red-500 text-xs text-zinc-950">✕</span>;
-  }
-  if (state === "active") {
-    return <span className="size-5 animate-spin rounded-full border-2 border-teal-400 border-t-transparent" />;
-  }
-  if (state === "skipped") {
-    return <span className="flex size-5 items-center justify-center rounded-full bg-zinc-700 text-xs text-zinc-300">–</span>;
-  }
-  return <span className="size-5 rounded-full border-2 border-zinc-700" />;
+  const base = "relative flex size-5 shrink-0 items-center justify-center rounded-full text-xs";
+  if (state === "done") return <span className={`${base} bg-ok text-white`}><span aria-hidden="true">✓</span><span className="sr-only">Done</span></span>;
+  if (state === "failed") return <span className={`${base} bg-conflict text-white`}><span aria-hidden="true">✕</span><span className="sr-only">Failed</span></span>;
+  if (state === "active") return <span className={`${base} animate-pulse border-2 border-action bg-canvas`}><span className="sr-only">In progress</span></span>;
+  if (state === "skipped") return <span className={`${base} bg-divider text-muted`}><span aria-hidden="true">–</span><span className="sr-only">Skipped</span></span>;
+  return <span className={`${base} border-2 border-divider bg-canvas`}><span className="sr-only">Waiting</span></span>;
 }
 
 /** Percent of the recipe already in the ledger; never fully empty so the bar reads as alive. */
@@ -68,19 +66,34 @@ export function ProgressSteps({
 }): React.JSX.Element {
   const pct = percent(rows, stepIndex, stepCount);
   const failed = rows.includes("failed");
+  const activeIndex = rows.indexOf("active");
+  const activeLabel = activeIndex >= 0 ? labels[activeIndex] : undefined;
+  const valueText = failed ? "Failed" : pct === 100 ? "Done" : (activeLabel ?? "Working");
   return (
     <div className="flex flex-col gap-4">
-      <div className="h-2 overflow-hidden rounded-full bg-zinc-800" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
-        <div className={`h-full transition-all ${failed ? "bg-red-500" : "bg-teal-500"}`} style={{ width: `${String(pct)}%` }} />
+      <p role="status" className="sr-only">
+        {activeLabel ?? (failed ? "Research failed" : "Research finished")}
+      </p>
+      <div
+        className="h-1.5 overflow-hidden rounded-full bg-divider"
+        role="progressbar"
+        aria-label="Research progress"
+        aria-valuetext={valueText}
+        aria-valuenow={pct}
+        aria-valuemin={0}
+        aria-valuemax={100}
+      >
+        <div className={`h-full transition-[width] duration-700 ${failed ? "bg-conflict" : pct === 100 ? "bg-ok" : "bg-action"}`} style={{ width: `${String(pct)}%` }} />
       </div>
-      <ul className="flex flex-col gap-3">
+      <ol className="relative flex flex-col gap-3">
+        <span aria-hidden="true" className="absolute top-2.5 bottom-2.5 left-[9.5px] w-px bg-divider" />
         {labels.map((label, i) => (
-          <li key={label} className={`flex items-center gap-3 ${rows[i] === "todo" || rows[i] === "skipped" ? "text-zinc-500" : rows[i] === "failed" ? "text-red-300" : ""}`}>
+          <li key={label} aria-current={i === activeIndex ? "step" : undefined} className={`flex items-center gap-3 text-sm ${rows[i] === "todo" || rows[i] === "skipped" ? "text-muted" : rows[i] === "failed" ? "text-conflict" : "text-ink"}`}>
             <Mark state={rows[i] ?? "todo"} />
             {label}
           </li>
         ))}
-      </ul>
+      </ol>
     </div>
   );
 }
@@ -93,13 +106,13 @@ export function CostLine({ cost }: { cost: RunCost }): React.JSX.Element {
     `${String(cost.llm_calls)} AI ${cost.llm_calls === 1 ? "call" : "calls"}`,
     formatDuration(cost.duration_ms),
   ];
-  return <p className="text-sm text-zinc-500">{parts.join(" · ")}</p>;
+  return <p className="text-sm text-muted tabular-nums">{parts.join(" · ")}</p>;
 }
 
-const BADGE: Record<CandidateDecision, { text: string; cls: string }> = {
-  merge: { text: "This is them", cls: "bg-ok-bg text-ok" },
-  rejected: { text: "Someone else", cls: "bg-zinc-800 text-zinc-400" },
-  "possibly-same-as": { text: "Not sure yet", cls: "bg-amber-500/15 text-amber-300" },
+const BADGE: Record<CandidateDecision, { text: string; tone: Tone }> = {
+  merge: { text: "This is them", tone: "ok" },
+  rejected: { text: "Someone else", tone: "neutral" },
+  "possibly-same-as": { text: "Not sure yet", tone: "unsure" },
 };
 
 const MARK: Record<string, string> = { linkedin: "in", x: "X", github: "gh", instagram: "ig", tiktok: "tt", youtube: "yt", bluesky: "bs", facebook: "fb" };
@@ -108,7 +121,7 @@ const MARK: Record<string, string> = { linkedin: "in", x: "X", github: "gh", ins
 function PlatformMark({ c }: { c: Pick<Candidate, "platform" | "profile_urls"> }): React.JSX.Element {
   const text = MARK[c.platform] ?? host(c.profile_urls[0] ?? "web").charAt(0);
   return (
-    <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-teal-500/15 text-xs font-semibold text-teal-300">
+    <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-sage text-xs font-semibold text-ink">
       {text}
     </span>
   );
@@ -125,16 +138,16 @@ function ProfileRow({ c, decision }: { c: Candidate; decision: CandidateDecision
   const badge = BADGE[decision];
   const reason = c.reasons[0]?.replace(/^fallback:\s*/i, "");
   return (
-    <li className="flex items-center gap-3">
+    <li className="flex items-center gap-3 py-3">
       <PlatformMark c={c} />
       <div className="min-w-0 flex-1">
-        <a href={c.profile_urls[0]} target="_blank" rel="noreferrer" className="text-sm font-medium hover:underline">
+        <a href={c.profile_urls[0]} target="_blank" rel="noreferrer" className="flex min-h-11 items-center text-sm font-medium hover:underline">
           {platformLabel(c)}
         </a>
-        <p className="truncate text-sm text-zinc-400">{c.snippet}</p>
-        {reason !== undefined && reason !== "" && <p className="truncate text-xs text-zinc-500">{reason}</p>}
+        <p className="line-clamp-2 text-sm text-muted">{c.snippet}</p>
+        {reason !== undefined && reason !== "" && <p className="text-xs text-muted">{reason}</p>}
       </div>
-      <span className={`shrink-0 rounded-full px-3 py-1 text-xs ${badge.cls}`}>{badge.text}</span>
+      <Pill tone={badge.tone}>{badge.text}</Pill>
     </li>
   );
 }
@@ -150,17 +163,17 @@ export function ProfileList({
   const web = candidates.filter((c) => c.platform === "web");
   const extra = web.slice(WEB_VISIBLE);
   return (
-    <section className={CARD}>
-      <h2 className="mb-3 font-semibold">Profiles we found</h2>
-      <ul className="flex flex-col gap-3">
+    <section>
+      <h2 className="text-base font-semibold">Profiles we found</h2>
+      <ul className="mt-2 divide-y divide-divider">
         {[...profiles, ...web.slice(0, WEB_VISIBLE)].map((c) => (
           <ProfileRow key={c.id} c={c} decision={decisionOf(c)} />
         ))}
       </ul>
       {extra.length > 0 && (
-        <details className="mt-3">
-          <summary className="cursor-pointer text-sm text-zinc-400 hover:text-zinc-200">Show {String(extra.length)} more web hits</summary>
-          <ul className="mt-3 flex flex-col gap-3">
+        <details className="group mt-3">
+          <summary className={SUMMARY}><Chevron />Show {String(extra.length)} more web hits</summary>
+          <ul className="mt-2 divide-y divide-divider">
             {extra.map((c) => (
               <ProfileRow key={c.id} c={c} decision={decisionOf(c)} />
             ))}
@@ -182,29 +195,33 @@ export function QuestionCard({
   first: string;
   onAnswer: (id: string, answer: Answer) => void;
 }): React.JSX.Element {
-  const btn = "rounded-xl border border-amber-700/60 px-4 py-2 text-sm hover:bg-amber-500/10";
   const label = platformLabel(candidate);
+  const heading = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    heading.current?.focus();
+  }, []);
   const who = candidate.handle !== null && candidate.platform !== "web" ? `${label} · @${candidate.handle}` : label;
   return (
-    <section className="rounded-2xl border border-amber-700/50 bg-amber-950/30 p-5" aria-live="polite">
-      <h2 className="font-semibold text-amber-200">Quick question: is this {label} profile also {first}?</h2>
+    <section className={CARD_PEACH}>
+      <h2 ref={heading} tabIndex={-1} className="font-serif text-2xl focus:outline-none">Quick question: is this {label} profile also {first}?</h2>
+      <p className="mt-1 text-sm text-muted">Your answer decides whether we use this profile in the brief.</p>
       <div className="mt-3 flex items-start gap-3">
         <PlatformMark c={candidate} />
         <div className="min-w-0">
           <a href={candidate.profile_urls[0]} target="_blank" rel="noreferrer" className="text-sm font-medium hover:underline">
             {who}
           </a>
-          <p className="text-sm text-zinc-400">{candidate.snippet}</p>
+          <p className="text-sm text-muted">{candidate.snippet}</p>
         </div>
       </div>
       <div className="mt-4 flex flex-wrap gap-2">
-        <button type="button" className={`${btn} bg-amber-500 text-zinc-950 hover:bg-amber-400`} onClick={() => { onAnswer(candidate.id, "merge"); }}>
+        <button type="button" className={BTN_PRIMARY} onClick={() => { onAnswer(candidate.id, "merge"); }}>
           Yes, it&apos;s them
         </button>
-        <button type="button" className={btn} onClick={() => { onAnswer(candidate.id, "rejected"); }}>
+        <button type="button" className={BTN_SECONDARY} onClick={() => { onAnswer(candidate.id, "rejected"); }}>
           No
         </button>
-        <button type="button" className={btn} onClick={() => { onAnswer(candidate.id, "possibly-same-as"); }}>
+        <button type="button" className={BTN_QUIET} onClick={() => { onAnswer(candidate.id, "possibly-same-as"); }}>
           I&apos;m not sure
         </button>
       </div>
@@ -212,57 +229,75 @@ export function QuestionCard({
   );
 }
 
-const COVERAGE = {
-  evidenced: "bg-ok-bg text-ok",
-  partial: "bg-amber-500/15 text-amber-300",
-  none: "bg-zinc-800 text-zinc-400",
-} as const;
+const COVERAGE = { evidenced: "ok", partial: "unsure", none: "neutral" } as const satisfies Record<string, Tone>;
 
 /** A gap as a list item: the plain line, with the full reason on hover. */
 const gapItem = (g: Brief["not_searched"][number]): { text: string; hint: string } => ({ text: gapLine(g), hint: g.reason });
 
-function List({ title, items }: { title: string; items: (string | { text: string; hint: string })[] }): React.JSX.Element | null {
+function List({
+  title,
+  items,
+  numbered = false,
+  check = false,
+}: {
+  title: string;
+  items: (string | { text: string; hint: string })[];
+  numbered?: boolean;
+  check?: boolean;
+}): React.JSX.Element | null {
   if (items.length === 0) return null;
+  if (numbered) {
+    return (
+      <section>
+        <h2 className="font-serif text-xl">{title}</h2>
+        <ol className="mt-2 divide-y divide-divider">
+          {items.map((t, i) => {
+            const text = typeof t === "string" ? t : t.text;
+            return (
+              <li key={text} className="grid grid-cols-[2rem_minmax(0,1fr)] gap-3 py-3">
+                <span className="font-serif text-xl text-action tabular-nums">{i + 1}</span>
+                <span className="text-sm">{text}</span>
+              </li>
+            );
+          })}
+        </ol>
+      </section>
+    );
+  }
   return (
-    <section className={CARD}>
-      <h3 className="mb-2 font-semibold">{title}</h3>
-      <ul className="list-disc space-y-1 pl-5 text-sm text-zinc-300">
-        {items.map((t) =>
-          typeof t === "string" ? (
-            <li key={t}>{t}</li>
-          ) : (
-            <li key={t.text} title={t.hint}>
-              {t.text}
+    <section>
+      <h2 className="font-serif text-xl">{title}</h2>
+      <ul className="mt-2 divide-y divide-divider">
+        {items.map((t) => {
+          const text = typeof t === "string" ? t : t.text;
+          if (check) {
+            return (
+              <li key={text} className="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-x-2 py-2 text-sm">
+                <Pill tone="unsure" className="mt-0.5">Check</Pill>
+                <span className="min-w-0">{text}</span>
+              </li>
+            );
+          }
+          const cut = text.indexOf(": ");
+          return (
+            <li key={text} title={typeof t === "string" ? undefined : t.hint} className="py-2 text-sm">
+              {cut > 0 && cut < 40 ? (
+                <>
+                  <span className="font-medium text-ink">{text.slice(0, cut)}</span>
+                  <span className="text-muted">{text.slice(cut)}</span>
+                </>
+              ) : (
+                text
+              )}
             </li>
-          ),
-        )}
+          );
+        })}
       </ul>
     </section>
   );
 }
 
 type Evidence = Brief["evidence"][number];
-
-/** Plain words for the actor id a source came from. */
-const STEP_LABEL: Record<string, string> = {
-  "apify/google-search-scraper": "Web search",
-  "harvestapi/linkedin-profile-scraper": "LinkedIn",
-  "apimaestro/linkedin-profile-detail": "LinkedIn",
-  "harvestapi/linkedin-company": "LinkedIn company",
-  "rest/github": "GitHub",
-  "rest/stackexchange": "Stack Exchange",
-  "rest/huggingface": "Hugging Face",
-  "rest/orcid": "ORCID",
-  "rest/openalex": "OpenAlex",
-  "apidojo/tweet-scraper": "X",
-  "apify/instagram-profile-scraper": "Instagram",
-  "clockworks/tiktok-profile-scraper": "TikTok",
-  "streamers/youtube-scraper": "YouTube",
-  "rest/bluesky": "Bluesky",
-  "apify/website-content-crawler": "Website",
-  "ares/ekonomicke-subjekty/vyhledat": "ARES registry",
-  "ares/ekonomicke-subjekty-vr": "ARES public register",
-};
 
 const EVIDENCE_VISIBLE = 10;
 
@@ -273,13 +308,11 @@ function EvidenceGroups({ items }: { items: Evidence[] }): React.JSX.Element {
       {[...byGroup].map(([group, rows]) => (
         <div key={group} className="mt-4">
           <h3 className="text-sm font-semibold">{group}</h3>
-          <ul className="mt-2 flex flex-col gap-2">
+          <ul className="mt-1 divide-y divide-divider">
             {rows.map((e) => (
-              <li key={`${e.url}${e.excerpt}`} className="text-sm text-zinc-300">
+              <li key={`${e.url}${e.excerpt}`} className="py-2 text-sm text-ink">
                 {e.excerpt}
-                <a href={e.url} target="_blank" rel="noreferrer" className="ml-2 text-teal-400 underline">
-                  {host(e.url)}
-                </a>
+                <SourceLink url={e.url} className="ml-2" />
               </li>
             ))}
           </ul>
@@ -296,8 +329,8 @@ function EvidenceList({ items }: { items: Evidence[] }): React.JSX.Element {
     <>
       <EvidenceGroups items={items.slice(0, EVIDENCE_VISIBLE)} />
       {rest.length > 0 && (
-        <details className="mt-3">
-          <summary className="cursor-pointer text-sm text-zinc-400 hover:text-zinc-200">Show {String(rest.length)} more</summary>
+        <details className="group mt-3">
+          <summary className={SUMMARY}><Chevron />Show {String(rest.length)} more</summary>
           <EvidenceGroups items={rest} />
         </details>
       )}
@@ -308,10 +341,12 @@ function EvidenceList({ items }: { items: Evidence[] }): React.JSX.Element {
 function AlsoFound({ items }: { items: Evidence[] }): React.JSX.Element | null {
   if (items.length === 0) return null;
   return (
-    <details className={CARD}>
-      <summary className="cursor-pointer text-sm font-semibold">
-        Mentions of the name, not confirmed ({String(items.length)}) — identity not verified, not used in the brief
+    <details className="group">
+      <summary className={SUMMARY}>
+        <Chevron />
+        Same name, not confirmed as them ({String(items.length)})
       </summary>
+      <p className="text-xs text-muted">Not used in your brief.</p>
       <EvidenceList items={items} />
     </details>
   );
@@ -319,8 +354,8 @@ function AlsoFound({ items }: { items: Evidence[] }): React.JSX.Element | null {
 
 function DegradedNotice({ reason }: { reason: string }): React.JSX.Element {
   return (
-    <section className="rounded-2xl border border-amber-700/50 bg-amber-950/30 p-5">
-      <p className="text-sm text-amber-200">AI summary unavailable ({reason.replace(/\.$/, "")}). This brief lists only what we confirmed.</p>
+    <section className={CARD_UNSURE}>
+      <p className="text-sm text-unsure">AI summary unavailable ({reason.replace(/\.$/, "")}). This brief lists only what we confirmed.</p>
     </section>
   );
 }
@@ -329,23 +364,21 @@ function DegradedNotice({ reason }: { reason: string }): React.JSX.Element {
 function TopLine({ headline, locationNote, role }: { headline: string | null; locationNote: string | null; role: string | null }): React.JSX.Element | null {
   if (headline === null && role === null) return null;
   return (
-    <section className={CARD}>
-      <dl className="grid gap-2 text-sm sm:grid-cols-2">
-        {headline !== null && (
-          <div>
-            <dt className="text-zinc-500">Confirmed profile</dt>
-            <dd className="font-medium">{headline}</dd>
-            {locationNote !== null && <dd className="mt-1 text-amber-300">{locationNote}</dd>}
-          </div>
-        )}
-        {role !== null && (
-          <div>
-            <dt className="text-zinc-500">Hiring for</dt>
-            <dd className="font-medium">{role}</dd>
-          </div>
-        )}
-      </dl>
-    </section>
+    <dl className="grid gap-4 sm:grid-cols-2">
+      {headline !== null && (
+        <div>
+          <dt className="text-xs font-semibold tracking-[0.08em] text-muted uppercase">Confirmed profile</dt>
+          <dd className="mt-1 font-medium">{headline}</dd>
+          {locationNote !== null && <dd className="mt-1 text-sm text-unsure">{locationNote}</dd>}
+        </div>
+      )}
+      {role !== null && (
+        <div>
+          <dt className="text-xs font-semibold tracking-[0.08em] text-muted uppercase">Hiring for</dt>
+          <dd className="mt-1 font-medium">{role}</dd>
+        </div>
+      )}
+    </dl>
   );
 }
 
@@ -353,7 +386,7 @@ function ConfirmedEvidence({ items }: { items: Evidence[] }): React.JSX.Element 
   if (items.length === 0) return null;
   return (
     <section className={CARD}>
-      <h2 className="font-semibold">From profiles you confirmed</h2>
+      <h2 className="font-serif text-xl">From profiles you confirmed</h2>
       <EvidenceList items={items} />
     </section>
   );
@@ -363,11 +396,11 @@ function ConfirmedEvidence({ items }: { items: Evidence[] }): React.JSX.Element 
 function RoleCriteria({ texts }: { texts: string[] }): React.JSX.Element {
   return (
     <section className={CARD}>
-      <h3 className="font-semibold">Role criteria (not checked, AI unavailable)</h3>
+      <h2 className="font-serif text-xl">Role criteria (not checked, AI unavailable)</h2>
       {texts.length === 0 ? (
-        <p className="mt-2 text-sm text-zinc-400">No role criteria yet</p>
+        <p className="mt-2 text-sm text-muted">No role criteria yet</p>
       ) : (
-        <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-zinc-300">
+        <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-ink">
           {texts.map((t) => (
             <li key={t}>{t}</li>
           ))}
@@ -389,7 +422,6 @@ export function BriefView({ state }: { state: RunState }): React.JSX.Element | n
     <div id="brief" className="flex scroll-mt-6 flex-col gap-4">
       <SummaryCard state={state} />
       <TopLine headline={brief.headline ?? null} locationNote={brief.location_note ?? null} role={state.role} />
-      <KitActions state={state} />
       {brief.degraded !== null && <DegradedNotice reason={brief.degraded} />}
       {brief.degraded !== null && <ConfirmedEvidence items={brief.evidence} />}
       {sections !== null && <SectionList sections={sections} claims={state.claims} urlOf={urlOf} noteOf={noteOf} />}
@@ -400,22 +432,26 @@ export function BriefView({ state }: { state: RunState }): React.JSX.Element | n
         brief.per_question.map((q) => (
           <section key={q.question_id} className={CARD}>
             <div className="flex items-start justify-between gap-3">
-              <h3 className="font-semibold">{textOf.get(q.question_id) ?? q.question_id}</h3>
-              <span className={`shrink-0 rounded-full px-3 py-1 text-xs ${COVERAGE[q.coverage]}`}>{q.coverage}</span>
+              <h3 className="text-base font-semibold">{textOf.get(q.question_id) ?? q.question_id}</h3>
+              <Pill tone={COVERAGE[q.coverage]}>{q.coverage}</Pill>
             </div>
-            <p className="mt-2 text-sm text-zinc-300">{q.summary}</p>
+            <p className="mt-2 text-sm text-ink">{q.summary}</p>
             <ClaimList claims={state.claims.filter((c) => q.claim_ids.includes(c.id))} urlOf={urlOf} noteOf={noteOf} />
           </section>
         ))
       )}
-      <List title="Interview questions" items={brief.interview_questions} />
-      <List title="To verify" items={brief.to_verify} />
+      <List title="Interview questions" items={brief.interview_questions} numbered />
+      <List title="To verify" items={brief.to_verify} check />
+      <CallPanel state={state} />
       <List title={searchedTitle(searchedEmpty(brief))} items={searchedEmpty(brief).map(gapItem)} />
       <List title="Not searched, and why" items={brief.not_searched.map(gapItem)} />
-      <AlsoFound items={brief.also_found} />
-      {brief.removed_protected > 0 ? (
-        <p className="text-xs text-zinc-500">{String(brief.removed_protected)} items removed (protected categories)</p>
-      ) : null}
+      <div className="flex flex-col gap-3">
+        <KitActions state={state} />
+        <AlsoFound items={brief.also_found} />
+        {brief.removed_protected > 0 ? (
+          <p className="text-xs text-muted">{String(brief.removed_protected)} {brief.removed_protected === 1 ? "item" : "items"} removed (protected categories)</p>
+        ) : null}
+      </div>
     </div>
   );
 }

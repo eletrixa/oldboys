@@ -13,6 +13,8 @@
  * - Source origin (self / mirror / independent) comes from sourceOrigin with the merged candidates' profile URLs
  * - Counts per section feed sectionConfidence: facts need a merged supporting source, sources are distinct canonical URLs;
  *   a support id that is not among the run's sources counts as no source and puts "source missing" in the reason
+ * - A claim counts as contradicted when `contradicts` is non-empty or a surviving "contradictions" claim cites one
+ *   of its supporting sources (the contradictions section itself is not marked down for disagreeing)
  *
  * Design constraints:
  * - Pure, called by synthesizeBrief; never asks the model, so a degraded brief gets the same sections
@@ -40,7 +42,7 @@ const QUESTION_TITLE: Record<string, string> = {
 
 /** Social profiles carry no claim of their own, so a "Social presence" section would only list links: it is not emitted. */
 const SOCIAL = new Set(["linkedin", "x", "instagram", "tiktok", "youtube", "bluesky", "facebook"]);
-const GROUP_TITLE: Record<string, string> = { github: "GitHub", ares: "Business registry", web: "Web pages" };
+const GROUP_TITLE: Record<string, string> = { github: "GitHub", ares: "Business registry", web: "Web pages", cv: "CV" };
 const TITLE_MAX = 48;
 
 /** Deterministic short title from a question text: cut at the first " (", ", " or " such as", then at a word end within 48 chars. */
@@ -67,6 +69,8 @@ function section(
   urlOf: ReadonlyMap<string, string>,
   summary: string,
   profileUrls: readonly string[],
+  disputed: ReadonlySet<string>,
+  actorOf: ReadonlyMap<string, string>,
 ): BriefSection {
   const isMerged = (sid: string): boolean => identityOf.get(sid) === "merged";
   // unknown ids are no source; one source per canonical URL, preferring the confirmed copy
@@ -80,7 +84,7 @@ function section(
   }
   const ids = [...byUrl.values()];
   const missing = claims.filter((c) => c.supports.some((sid) => !identityOf.has(sid))).length;
-  const origins = ids.map((sid) => sourceOrigin(urlOf.get(sid) ?? "", profileUrls));
+  const origins = ids.map((sid) => sourceOrigin(urlOf.get(sid) ?? "", profileUrls, actorOf.get(sid)));
   const conf = sectionConfidence({
     self_sources: origins.filter((o) => o === "self").length,
     mirror_sources: origins.filter((o) => o === "mirror").length,
@@ -90,7 +94,7 @@ function section(
     inferences: claims.filter((c) => c.kind === "INFERENCE").length,
     sources: ids.length,
     confirmed_sources: ids.filter(isMerged).length,
-    contradictions: claims.filter((c) => c.contradicts.length > 0).length,
+    contradictions: claims.filter((c) => c.contradicts.length > 0 || (c.question_id !== "contradictions" && c.supports.some((sid) => disputed.has(sid)))).length,
   });
   const confidence_reason = missing === 0 ? conf.confidence_reason : `${conf.confidence_reason}; ${missing === 1 ? "a cited source is missing" : `${String(missing)} cited sources are missing`}`;
   return { id, title, ...conf, confidence_reason, claim_ids: claims.map((c) => c.id), source_ids: ids, summary };
@@ -112,11 +116,14 @@ export function sectionsOf(
 ): BriefSection[] {
   const identityOf = new Map(allSources.map((s) => [s.id, s.identity]));
   const urlOf = new Map(allSources.map((s) => [s.id, s.url]));
+  const actorOf = new Map(allSources.map((s) => [s.id, s.actor]));
   const summaryOf = new Map(perQuestion.map((q) => [q.question_id, q.summary]));
+  // Sources a surviving contradiction claim cites: every other claim resting on one of them is disputed
+  const disputed = new Set(claims.filter((c) => c.question_id === "contradictions").flatMap((c) => c.supports));
   const fromQuestions = questions.flatMap((q) => {
     const cs = claims.filter((c) => c.question_id === q.id);
     if (cs.length === 0) return [];
-    return [section(q.id, sectionTitle(q), cs, cs.flatMap((c) => c.supports), identityOf, urlOf, summaryOf.get(q.id) ?? "", profileUrls)];
+    return [section(q.id, sectionTitle(q), cs, cs.flatMap((c) => c.supports), identityOf, urlOf, summaryOf.get(q.id) ?? "", profileUrls, disputed, actorOf)];
   });
 
   const cited = new Set(claims.flatMap((c) => c.supports));
@@ -125,7 +132,7 @@ export function sectionsOf(
   const groups = uncited
     .filter(([p]) => !SOCIAL.has(p))
     .map(([p, ss]) =>
-      section(`evidence-${p}`, GROUP_TITLE[p] ?? p, [], ss.map((s) => s.id), identityOf, urlOf, `${plural(ss.length, "confirmed source")}; nothing from them is used in a claim.`, profileUrls),
+      section(`evidence-${p}`, GROUP_TITLE[p] ?? p, [], ss.map((s) => s.id), identityOf, urlOf, `${plural(ss.length, "confirmed source")}; nothing from them is used in a claim.`, profileUrls, disputed, actorOf),
     );
   return [...fromQuestions, ...groups];
 }

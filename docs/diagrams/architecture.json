@@ -3,7 +3,7 @@
   "diagram_type": "architecture",
   "meta": {
     "title": "Oldboys: deep-research agent",
-    "subtitle": "Cloudflare Workers · stav k 8. 10. 23:30",
+    "subtitle": "Cloudflare Workers · stav k 9. 10.",
     "quality_profile": "showcase",
     "views": [
       {
@@ -14,9 +14,10 @@
           "routes",
           "research",
           "seams",
-          "anthropic"
+          "anthropic",
+          "ext"
         ],
-        "note": "Od formuláře nebo rozšíření přes Workflow běhu k LLM švům."
+        "note": "Přihlášený náborář nebo rozšíření pošle LinkedIn/CV a roli, Workflow běhu volá LLM švy."
       },
       {
         "id": "sources",
@@ -37,7 +38,7 @@
           "d1",
           "r2"
         ],
-        "note": "Ledger, zdroje a hovory v D1, surová data v R2, cron maže vše po 7 dnech."
+        "note": "Ledger, účty, hovory a přihlášky v D1, surová data a CV v R2, cron maže vše po 7 dnech."
       },
       {
         "id": "call",
@@ -48,6 +49,17 @@
           "elevenlabs"
         ],
         "note": "Manažer schválí hovor, API ho vytočí přes ElevenLabs, Workflow čeká na webhook a zapíše STATEMENT."
+      },
+      {
+        "id": "intake",
+        "label": "Přihlášky",
+        "focus": [
+          "intake",
+          "d1",
+          "r2",
+          "research"
+        ],
+        "note": "Přihláška z e-mailu, formuláře nebo StartupJobs projde jedním funnelem: uloží CV, zkontroluje tag a limit, spustí běh přes startRun."
       }
     ]
   },
@@ -56,7 +68,7 @@
       "id": "ui",
       "type": "frontend",
       "label": "Next.js UI",
-      "sublabel": "LinkedIn/CV · brief · /roles",
+      "sublabel": "účty · start · brief · hovor",
       "pos": [
         40,
         300
@@ -84,7 +96,7 @@
       "id": "routes",
       "type": "backend",
       "label": "API routes",
-      "sublabel": "/api/start · runs · calls",
+      "sublabel": "start · runs · calls · auth",
       "pos": [
         270,
         300
@@ -192,19 +204,19 @@
         180,
         64
       ],
-      "tag": "mock / live"
+      "tag": "live ElevenLabs"
     },
     {
       "id": "d1",
       "type": "database",
       "label": "D1",
-      "sublabel": "běhy · ledger · hovory",
+      "sublabel": "běhy · ledger · účty · přihlášky",
       "pos": [
         560,
         490
       ],
       "size": [
-        170,
+        190,
         64
       ],
       "tag": "purge 7 dní"
@@ -213,15 +225,30 @@
       "id": "r2",
       "type": "database",
       "label": "R2",
-      "sublabel": "surová data zdrojů",
+      "sublabel": "surová data · CV",
       "pos": [
-        800,
+        820,
         490
       ],
       "size": [
         150,
         64
       ]
+    },
+    {
+      "id": "intake",
+      "type": "backend",
+      "label": "Intake funnel",
+      "sublabel": "přihláška · CV · startRun",
+      "pos": [
+        1030,
+        490
+      ],
+      "size": [
+        180,
+        64
+      ],
+      "tag": "kanály se zapojují"
     }
   ],
   "boundaries": [
@@ -234,7 +261,8 @@
         "seams",
         "call",
         "d1",
-        "r2"
+        "r2",
+        "intake"
       ]
     }
   ],
@@ -325,6 +353,22 @@
       "label": "webhook",
       "variant": "dashed",
       "labelDy": 56
+    },
+    {
+      "id": "intake-d1",
+      "from": "intake",
+      "to": "d1",
+      "label": "applications",
+      "fromSide": "bottom",
+      "toSide": "bottom"
+    },
+    {
+      "id": "intake-r2",
+      "from": "intake",
+      "to": "r2",
+      "label": "CV soubor",
+      "fromSide": "left",
+      "toSide": "right"
     }
   ],
   "cards": [
@@ -348,11 +392,11 @@
     },
     {
       "dot": "amber",
-      "title": "GDPR",
+      "title": "Účty a GDPR",
       "items": [
-        "Art. 9 denylist",
-        "Audit záznam ke každému běhu",
-        "Cron maže data po 7 dnech"
+        "Firma přes IČO z ARES, brief jen pro ni",
+        "Kandidát dostane oznámení",
+        "Cron maže data i CV po 7 dnech"
       ]
     }
   ]

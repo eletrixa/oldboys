@@ -10,7 +10,7 @@
  * - Server shell for the client RolesView without a selected role
  *
  * Design constraints:
- * - Server component; token handling and fetching live in roles-view.tsx
+ * - Server component; fetching and the log-in prompt live in roles-view.tsx
  */
 import { RolesView } from "./roles-view";
 

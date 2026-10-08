@@ -1,5 +1,5 @@
 /**
- * Operator token for the bearer-protected list pages (/roles, /intake): storage, form and the gated fetch.
+ * Operator token for the bearer-protected /intake page: storage, form and the gated fetch (/roles moved to sessions, plan 009).
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/_lib/operator-token.tsx

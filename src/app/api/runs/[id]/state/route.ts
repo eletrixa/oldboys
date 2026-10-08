@@ -12,6 +12,7 @@
  * - step_index/step_count from the recipe; failed_step = first recipe step without a ledger row on a failed run
  * - role = investigations.role (the brief's "Hiring for" line); subject is "" until the seed step derived it;
  *   headline = what the seed_profile ledger row recorded (plans/006); sources carry identity_reason (migration 0008)
+ * - organization_name = LEFT JOIN organizations (null for bearer/extension runs)
  * - cost = runCost over the ledger rows (seq order) from investigations.created_at
  * - intake = the applications row LEFT JOINed into the head query on investigations.application_id ({source, tag, receivedAt}), null for runs started by hand; never cv_text or cover_letter
  *
@@ -34,6 +35,7 @@ type HeadRow = {
   status: RunStatus;
   questions_json: string | null;
   created_at: string;
+  organization_name: string | null;
   intake_source: RunIntake["source"] | null;
   intake_tag: string | null;
   intake_received_at: string | null;
@@ -59,11 +61,13 @@ export async function GET(
   const { env } = getCloudflareContext();
 
   const head = await env.DB.prepare(
-    `SELECT investigations.id, investigations.subject, investigations.goal, investigations.role, investigations.status,
-            investigations.questions_json, investigations.created_at,
+    `SELECT i.id, i.subject, i.goal, i.role, i.status, i.questions_json, i.created_at,
+            o.name AS organization_name,
             a.source AS intake_source, a.tag AS intake_tag, a.received_at AS intake_received_at
-     FROM investigations LEFT JOIN applications a ON a.id = investigations.application_id
-     WHERE investigations.id = ?`,
+     FROM investigations i
+     LEFT JOIN organizations o ON o.id = i.organization_id
+     LEFT JOIN applications a ON a.id = i.application_id
+     WHERE i.id = ?`,
   )
     .bind(id)
     .first<HeadRow>();
@@ -103,6 +107,7 @@ export async function GET(
     subject: head.subject,
     headline: seedHeadline(ledger.results),
     role: head.role,
+    organization_name: head.organization_name,
     created_at: head.created_at,
     status: head.status,
     step: last?.step ?? null,

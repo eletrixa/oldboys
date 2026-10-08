@@ -16,3 +16,4 @@ extension/.output/
 extension/.wxt/
 AGENTS.md
 .playwright-mcp/
+tmp/

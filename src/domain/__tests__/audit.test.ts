@@ -40,6 +40,7 @@ function rows(over: Partial<AuditRows> = {}): AuditRows {
       anchor: "Brno",
       goal: "hiring",
       role: "Senior backend engineer",
+      organization_name: null,
       status: "done",
       via: "start",
       source_url: null,
@@ -64,6 +65,12 @@ describe("startChannel", () => {
 });
 
 describe("deletionDate", () => {
+  it("names the recruiter's organization in the purpose and run when known", () => {
+    const a = auditRecord({ ...rows(), run: { ...rows().run, organization_name: "Acme s.r.o." } });
+    expect(a.legal.purpose).toBe("Pre-employment screening by Acme s.r.o. for the role: Senior backend engineer");
+    expect(a.run.organization).toBe("Acme s.r.o.");
+  });
+
   it("is created_at plus the retention days, empty for an unreadable date", () => {
     expect(RETENTION_DAYS).toBe(7);
     expect(deletionDate(START)).toBe("2026-10-15T20:00:00.000Z");
@@ -83,6 +90,7 @@ describe("auditRecord", () => {
       subject: "Jana Dvořáková",
       anchor: "Brno",
       role: "Senior backend engineer",
+      organization: null,
     });
     expect(a.legal).toEqual({ basis: LEGAL_BASIS, purpose: "Pre-employment screening for the role: Senior backend engineer", notice: NOTICE_NOTE });
     expect(a.legal.basis).not.toContain("informed");

@@ -542,6 +542,17 @@ describe("Buryan fact check: extract prompt, interview questions, to_verify, als
     expect(system).toMatch(/aliases of one organisation/);
   });
 
+  it("tells the extract prompt to describe the candidate and skip company-wide figures not tied to them", async () => {
+    let system = "";
+    const llm = ((input: { system: string }) => {
+      system = input.system;
+      return Promise.resolve({ value: [], cost_usd: 0 });
+    }) as Ports["llm"];
+    await extractClaims(baseContext({ subject: "Josef Buryan", sources: [li] }), fakePorts({ llm }));
+    expect(system).toMatch(/A claim must describe the candidate/);
+    expect(system).toMatch(/Company-wide figures .* only when the quote ties them to the candidate's own responsibility or result; otherwise skip them/);
+  });
+
   it("asks a CMO only about unevidenced must-haves (max 5), never public-code or a dropped alias contradiction, which also stays out of to_verify", async () => {
     const mh = ["mh-a", "mh-b", "mh-c", "mh-d", "mh-e", "mh-f", "mh-g"];
     const ctx = baseContext({

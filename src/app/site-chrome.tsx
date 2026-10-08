@@ -7,26 +7,19 @@
  * Tested:  n/a (QA in the browser; see docs/ops/intake.md)
  *
  * Key responsibilities:
- * - SiteHeader: Echo r mark + wordmark, the NAV links (Roles, Applications, New brief)
+ * - SiteHeader: Echo r mark + wordmark and the nav the layout passes in (SiteNav, a server component)
  * - SiteFooter: the short honesty line
  * - Both render nothing under /apply/<tag> (plans/008: the candidate sees "received", never the research product)
  *
  * Design constraints:
- * - Client component only because usePathname needs it; no state, no fetches
+ * - Client component only because usePathname needs it; no state, no fetches; the nav arrives as a prop so the
+ *   session-aware SiteNav stays a server component
  * - The Echo r mark is concept artwork from the Radar design work, not a cleared trademark
  */
 "use client";
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-
-const NAV = [
-  { href: "/roles", label: "Roles" },
-  { href: "/intake", label: "Applications" },
-  { href: "/", label: "New brief", primary: true },
-] as const;
-
-const NAV_LINK = "flex min-h-11 items-center rounded-lg text-sm";
 
 function EchoMark({ size }: Readonly<{ size: number }>): React.JSX.Element {
   return (
@@ -40,7 +33,7 @@ function EchoMark({ size }: Readonly<{ size: number }>): React.JSX.Element {
 // Candidate pages live at /apply/<tag>; bare /apply has no page.
 const isCandidateRoute = (pathname: string | null): boolean => pathname?.startsWith("/apply/") ?? false;
 
-export function SiteHeader(): React.JSX.Element | null {
+export function SiteHeader({ nav }: Readonly<{ nav: React.ReactNode }>): React.JSX.Element | null {
   if (isCandidateRoute(usePathname())) return null;
   return (
     <header className="border-b border-divider bg-canvas/90 backdrop-blur">
@@ -49,21 +42,7 @@ export function SiteHeader(): React.JSX.Element | null {
           <EchoMark size={28} />
           <span className="font-serif text-[26px] leading-none font-semibold tracking-tight">radar</span>
         </Link>
-        <nav aria-label="Main" className="flex items-center gap-1">
-          {NAV.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={
-                "primary" in item
-                  ? `${NAV_LINK} bg-action px-4 font-semibold text-white hover:bg-action-hover`
-                  : `${NAV_LINK} px-3 font-medium text-muted hover:bg-sage hover:text-ink`
-              }
-            >
-              {item.label}
-            </Link>
-          ))}
-        </nav>
+        {nav}
       </div>
     </header>
   );

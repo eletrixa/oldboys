@@ -9,8 +9,8 @@
  * Key responsibilities:
  * - Drop claims about GDPR Art. 9 categories before anything is summarised (count only, content never stored)
  * - Coverage: evidenced = ≥1 FACT, partial = INFERENCE only, none = no claim
- * - Re-applies verify's screenClaims (noise, alias contradictions), so dropped claims never reach summaries,
- *   interview questions or to_verify
+ * - Re-applies verify's screenClaims (noise, alias contradictions); dropped claims and alias contradictions (kept in
+ *   the ledger, ranked last) never reach summaries, sections, interview questions or to_verify
  * - Model interview questions: at most 5, only for questions interviewAllowed admits (unevidenced must-haves,
  *   surviving contradictions; `public-code` only for a technical role)
  * - also_found (hiring): a hit must name the subject's surname in excerpt or URL, otherwise it is noise and dropped
@@ -26,6 +26,8 @@
  *   at most one per platform, none for a platform that already has a merged profile
  * - Evidence dedupe ignores trailing "...", "…", "Read more", "See more", "Více" and keeps the longer excerpt
  * - `location_note`: a merged profile names a known Czech city/region and never the anchor (stated, nothing deleted)
+ * - A step's UNCONFIRMED_GAP is dropped once a merged source from its actor exists (staleGap); the heading follows the gaps left
+ * - `contradictions`: claims or a model summary saying "compatible" are dropped; no claim left = coverage none, no section
  * - Facebook: a Facebook candidate adds a static not_searched line (no collector; public pages need a login)
  * - `sections`: findings cut by what was found, confidence computed deterministically (seams/sections.ts), never by the model
  */
@@ -34,9 +36,10 @@ import { containsArt9Topic } from "@/domain/art9";
 import type { Brief, Candidate, Claim, Coverage, Source } from "@/domain/claim";
 import type { Ports } from "@/domain/ports";
 import { emptyOutcome } from "@/recipe/runner";
-import { PLATFORM_RANK, profileKey } from "@/recipe/seams/resolve";
+import { recipeFor } from "@/recipe/goals";
+import { confirmedSources, PLATFORM_RANK, profileKey, UNCONFIRMED_GAP } from "@/recipe/seams/resolve";
 import { sectionsOf } from "@/recipe/seams/sections";
-import { screenClaims } from "@/recipe/seams/verify";
+import { aliasNoted, saysCompatible, screenClaims } from "@/recipe/seams/verify";
 import { platformOf, type StepContext, type StepOutcome } from "@/recipe/sources/types";
 
 const Protected = z.array(z.object({ id: z.string(), protected: z.boolean() }));
@@ -69,6 +72,18 @@ async function dropProtected(claims: readonly Claim[], ports: Ports, out: StepOu
 const EVIDENCE_MAX = 40;
 const INTERVIEW_MAX = 6;
 const NOT_SEARCHED = "not searched:";
+const CONTRADICTIONS = "contradictions";
+const NO_DISAGREEMENT = "No disagreement between sources was found.";
+
+/**
+ * Collectors record UNCONFIRMED_GAP before extract; a later identity pass may corroborate their sources. A gap is
+ * stale once a merged source came from the gap's step (question_id = step id, Source.actor = step.actor).
+ */
+export function staleGap(ctx: Pick<StepContext, "goal" | "sources">, gap: { question_id: string; reason: string }): boolean {
+  if (gap.reason !== UNCONFIRMED_GAP) return false;
+  const actor = recipeFor(ctx.goal).steps.find((st) => st.id === gap.question_id)?.actor;
+  return actor !== undefined && ctx.sources.some((s) => s.actor === actor && confirmed(s));
+}
 
 function message(error: unknown): string {
   return (error instanceof Error ? error.message : String(error)).slice(0, 120);
@@ -154,10 +169,6 @@ function uniqueRows(sources: readonly Source[]): Brief["evidence"] {
 }
 
 /** Merged-identity sources whose profile the manager did not reject: the only ones a brief may present as found. */
-function confirmedSources(ctx: StepContext): Source[] {
-  return ctx.sources.filter(notRejected(ctx)).filter(confirmed);
-}
-
 export function evidenceOf(ctx: StepContext): Brief["evidence"] {
   return uniqueRows(confirmedSources(ctx));
 }
@@ -288,14 +299,14 @@ export async function synthesizeBrief(ctx: StepContext, ports: Ports): Promise<S
   const unprotected = await dropProtected(ctx.claims, ports, out);
   const removed = ctx.claims.length - unprotected.length;
   if (removed > 0) out.notes.push(`removed protected category: ${String(removed)}`);
-  // Same noise / alias screen as verify: a dropped false contradiction never reaches summaries, questions or to_verify
+  // Same noise / alias screen as verify: a false contradiction never reaches summaries, questions or to_verify
   const screened = screenClaims(unprotected, ctx.sources, ctx.subject);
   out.notes.push(...screened.notes);
-  const kept = screened.kept;
+  let kept = screened.kept.filter((c) => !aliasNoted(c));
 
   const byQ = new Map<string, Claim[]>(ctx.questions.map((q) => [q.id, []]));
   for (const c of kept) byQ.get(c.question_id)?.push(c);
-  const askable = interviewAllowed(ctx, byQ);
+  let askable = interviewAllowed(ctx, byQ);
 
   let summaries = new Map<string, { summary: string; interview_question: string | null }>();
   // No claims = nothing for a model to summarise: skip the call, ship an evidence-only brief
@@ -327,12 +338,21 @@ export async function synthesizeBrief(ctx: StepContext, ports: Ports): Promise<S
     }
   }
 
+  // The model itself calls the "contradiction" compatible: there is none, so the section and its interview question go
+  if (saysCompatible(summaries.get(CONTRADICTIONS)?.summary ?? "") && (byQ.get(CONTRADICTIONS)?.length ?? 0) > 0) {
+    out.notes.push("dropped contradiction (summary says compatible)");
+    kept = kept.filter((c) => c.question_id !== CONTRADICTIONS);
+    byQ.set(CONTRADICTIONS, []);
+    askable = interviewAllowed(ctx, byQ);
+  }
+
   const fallbackSummary = (cs: readonly Claim[]): string =>
     [`AI summary unavailable: ${degraded ?? "no summary returned"}.`, ...cs.map((c) => c.text)].join(" ");
 
   const perQuestion: Brief["per_question"] = ctx.questions.map((q) => {
     const cs = byQ.get(q.id) ?? [];
-    return { question_id: q.id, coverage: coverageOf(cs), claim_ids: cs.map((c) => c.id), summary: summaries.get(q.id)?.summary ?? fallbackSummary(cs) };
+    const summary = q.id === CONTRADICTIONS && cs.length === 0 ? NO_DISAGREEMENT : (summaries.get(q.id)?.summary ?? fallbackSummary(cs));
+    return { question_id: q.id, coverage: coverageOf(cs), claim_ids: cs.map((c) => c.id), summary };
   });
   const brief: Brief = {
     run_id: ctx.runId,
@@ -350,7 +370,7 @@ export async function synthesizeBrief(ctx: StepContext, ports: Ports): Promise<S
       .filter((g) => g.reason.startsWith(NOT_SEARCHED))
       .map((g) => ({ source: g.question_id, reason: g.reason.slice(NOT_SEARCHED.length).trim() || "no reason recorded" }))
       .concat(ctx.candidates.some((c) => c.platform === "facebook") ? [FACEBOOK_GAP] : []),
-    searched_empty: ctx.gaps.filter((g) => !g.reason.startsWith(NOT_SEARCHED)).map((g) => ({ source: g.question_id, reason: g.reason })),
+    searched_empty: ctx.gaps.filter((g) => !g.reason.startsWith(NOT_SEARCHED) && !staleGap(ctx, g)).map((g) => ({ source: g.question_id, reason: g.reason })),
     removed_protected: removed,
     degraded,
     evidence: evidenceOf(ctx),

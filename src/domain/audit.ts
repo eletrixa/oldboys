@@ -10,6 +10,7 @@
  * - auditRecord(rows): start channel (form / extension / api), legal basis + purpose + candidate notice note, every
  *   collector step with status (ok / empty / failed / not searched + reason), items and cost, model call count,
  *   lineup answers, verification call statuses (MOCK flagged) and the scheduled deletion date
+ * - purpose names the recruiter's organization when known (run.organization_name)
  * - LEGAL_BASIS states only what the hiring team declares; NOTICE_NOTE says the tool records no candidate notice
  * - RETENTION_DAYS / deletionDate: single source of the 7-day retention, also used by src/workflow/purge.ts
  *
@@ -48,6 +49,8 @@ export type AuditRun = {
   anchor: string;
   goal: string;
   role: string | null;
+  /** Recruiter's organization (LEFT JOIN organizations); null for bearer/extension runs. */
+  organization_name: string | null;
   status: string;
   via: string;
   source_url: string | null;
@@ -91,6 +94,7 @@ export type AuditRecord = {
     subject: string;
     anchor: string;
     role: string | null;
+    organization: string | null;
   };
   legal: { basis: string; purpose: string; notice: string };
   sources: AuditSource[];
@@ -138,7 +142,10 @@ function lineupAnswer(decision: string): LineupAnswer {
 }
 
 function purpose(run: AuditRun): string {
-  if (run.role !== null && run.role !== "") return `Pre-employment screening for the role: ${run.role}`;
+  if (run.role !== null && run.role !== "") {
+    const by = run.organization_name !== null ? ` by ${run.organization_name}` : "";
+    return `Pre-employment screening${by} for the role: ${run.role}`;
+  }
   return `Research goal: ${run.goal} (no role entered)`;
 }
 
@@ -214,6 +221,7 @@ export function auditRecord(rows: AuditRows): AuditRecord {
       subject: run.subject,
       anchor: run.anchor,
       role: run.role,
+      organization: run.organization_name,
     },
     legal: { basis: LEGAL_BASIS, purpose: purpose(run), notice: NOTICE_NOTE },
     sources: sources.map((s) => ({ ...s, reason: s.reason === null ? null : scrubReason(s.reason) })),

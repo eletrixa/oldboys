@@ -48,10 +48,10 @@ describe("startRun", () => {
     expect(calls).toHaveLength(1);
     const [insert] = calls;
     expect(insert?.sql).toMatch(
-      /^INSERT INTO investigations \(id, subject, anchor, goal, status, budget_usd, budget_calls, created_at, source_url, role, via, profile_url, cv_text, application_id\)/,
+      /^INSERT INTO investigations \(id, subject, anchor, goal, status, budget_usd, budget_calls, created_at, source_url, role, via, profile_url, cv_text, application_id, account_id, organization_id\)/,
     );
     expect(insert?.args).toEqual([
-      id, "", "", "hiring", 0.5, 16, NOW.toISOString(), null, "CTO", "api", "https://www.linkedin.com/in/x1", null, null,
+      id, "", "", "hiring", 0.5, 16, NOW.toISOString(), null, "CTO", "api", "https://www.linkedin.com/in/x1", null, null, null, null,
     ]);
     expect(create).toHaveBeenCalledWith({ id, params: { runId: id } });
   });
@@ -64,7 +64,7 @@ describe("startRun", () => {
       NOW,
     );
     expect(calls[0]?.args).toEqual([
-      id, "Acme", "Prague", "due-diligence", 0.5, 16, NOW.toISOString(), "https://a.test/", null, "intake", null, "cv", "app-1",
+      id, "Acme", "Prague", "due-diligence", 0.5, 16, NOW.toISOString(), "https://a.test/", null, "intake", null, "cv", "app-1", null, null,
     ]);
   });
 

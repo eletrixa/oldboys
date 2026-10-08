@@ -15,7 +15,7 @@ The URL we put into LinkedIn Jobs "apply on external website", Jobs.cz and Start
 ```ts
 export async function handleApply(request: Request, env: IntakeEnv, now: Date): Promise<Response>
 ```
-1. `fromOurPage(request)` (move the helper from `src/app/api/start/route.ts` into `src/app/api/_lib/origin.ts`; `/api/start` imports it) → 403.
+1. `rejectCrossOrigin(request)` from `src/app/api/_lib/same-origin.ts` (the shared browser check from plan 009: Sec-Fetch-Site same-origin and Origin matching Host) → 403 `{error: "browser only"}`.
 2. A declared `Content-Length` over CV limit + 256 KiB → 400 before buffering. `request.formData()` (parse failure → 400); `website` non-empty → 200 `{received: true}` (silent drop; nothing stored).
 3. Validate (`checkApply` once; it owns the `z.email()` check): `tag` IntakeTag, `name` 1..200, `email` z.email, `linkedinUrl` ≤ 500 optional and a valid LinkedIn profile URL, `coverLetter` ≤ 10000 optional, `cv` File optional: size ≤ 10 MiB (`CV_MAX_BYTES`), type `application/pdf` or name `.pdf` → else 400 `{error}`. LinkedIn or CV required → 400.
 4. `externalId = sha256Hex(`${tag}|${email.toLowerCase()}`)` (one application per email per position; a resubmit is a duplicate).
@@ -26,5 +26,5 @@ export async function handleApply(request: Request, env: IntakeEnv, now: Date): 
 
 ## Tests (`apply.test.ts`)
 - 403 wrong origin; honeypot → 200 and no D1 write; 400 bad tag / missing name / bad email / not a LinkedIn link / non-PDF / > 10 MiB / long message / oversized Content-Length; 201 with LinkedIn only; 201 with PDF → R2 put; duplicate → 201 `{received:true}` and no second run; unknown tag → 201 stored `unmatched`; capped → 429; funnel failure → 500 without detail; no success body ever differs from `{"received":true}`.
-- `apply-fields.test.ts` covers `checkApply` (PDF detection is the domain `isPdf`, tested in `digest.test.ts`); `_lib/__tests__/origin.test.ts` covers `fromOurPage`.
+- `apply-fields.test.ts` covers `checkApply` (PDF detection is the domain `isPdf`, tested in `digest.test.ts`); `_lib/__tests__/same-origin.test.ts` covers `rejectCrossOrigin`.
 - Build a multipart `Request` with `FormData` + `File` in Node (undici globals in Node 22+).

@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/recipe/seams/seed.ts
- * Deps:    zod
+ * Deps:    zod, src/domain/stable-id
  * Tested:  src/recipe/__tests__/seed.test.ts
  *
  * Key responsibilities:
@@ -19,11 +19,14 @@
  * - Never throws for an actor or model failure: the run continues, the reason goes to `out.notes` for the ledger
  * - Pure apart from ports; the Workflow persists the outcome and updates investigations.subject/anchor
  * - Paid actor runs are counted in `actor.calls` (also on failure), model calls in `llm.calls`
+ * - Idempotent: source and candidate ids are stableId(runId, "seed", kind, url), so a retried seed step upserts
+ *   the same rows (INSERT OR REPLACE) instead of duplicating the profile, the CV and the merge candidate
  */
 import { z } from "zod";
 import type { Candidate } from "@/domain/claim";
 import { nameFromHandle, normalizeLinkedinProfile } from "@/domain/profile-url";
 import type { Ports } from "@/domain/ports";
+import { stableId } from "@/domain/stable-id";
 import { emptyOutcome, SOURCE_TTL_MS } from "@/recipe/runner";
 import { canonicalProfile, profileKey } from "@/recipe/seams/resolve";
 import { HARVEST_ACTOR, harvestProfiles, harvestRequest } from "@/recipe/sources/linkedin";
@@ -63,7 +66,7 @@ function store(input: SeedInput, ports: Ports, url: string, actor: string, excer
   const fetched = ports.now();
   return ports.storeSource(
     {
-      id: ports.newId(),
+      id: stableId(input.runId, "seed", "source", url),
       run_id: input.runId,
       url,
       actor,
@@ -167,7 +170,7 @@ export async function seedProfile(input: SeedInput, ports: Ports): Promise<SeedR
 
   const name = r.subject === "" ? "the candidate" : r.subject;
   const merged = (url: string, platform: string, handle: string | null, reason: string): Candidate => ({
-    id: ports.newId(),
+    id: stableId(input.runId, "seed", "candidate", url),
     run_id: input.runId,
     name,
     profile_urls: [url],

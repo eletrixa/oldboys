@@ -3,8 +3,8 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/recipe/sources/ares.ts
- * Deps:    none (REST via ports.fetchJson)
- * Tested:  src/recipe/__tests__/sources.test.ts
+ * Deps:    zod, src/domain/organization (ARES_BASE, AresSubjekt), REST via ports.fetchJson
+ * Tested:  src/recipe/__tests__/sources-identity.test.ts
  *
  * Key responsibilities:
  * - `ares/ekonomicke-subjekty/vyhledat`: POST name search; one Source per entity
@@ -14,19 +14,11 @@
  * - Free API, no key; stay well under 500 req/min
  */
 import { z } from "zod";
+import { ARES_BASE, AresSubjekt } from "@/domain/organization";
 import type { Collector } from "@/recipe/sources/types";
 import { clip } from "@/recipe/sources/types";
 
-const BASE = "https://ares.gov.cz/ekonomicke-subjekty-v-be/rest";
-
-const Subjekt = z.object({
-  ico: z.string(),
-  obchodniJmeno: z.string().optional(),
-  sidlo: z.object({ textovaAdresa: z.string().optional() }).optional(),
-  pravniForma: z.string().optional(),
-  datumVzniku: z.string().optional(),
-});
-const Search = z.object({ pocetCelkem: z.number().optional(), ekonomickeSubjekty: z.array(Subjekt).default([]) });
+const Search = z.object({ pocetCelkem: z.number().optional(), ekonomickeSubjekty: z.array(AresSubjekt).default([]) });
 
 /** The IČO anchor is the identity: a record carrying it is the subject, a name search hit is not. */
 function anchorIco(anchor: string): string | null {
@@ -40,7 +32,7 @@ export const aresSearch: Collector = {
     return [
       {
         via: "fetch",
-        url: `${BASE}/ekonomicke-subjekty/vyhledat`,
+        url: `${ARES_BASE}/ekonomicke-subjekty/vyhledat`,
         init: {
           method: "POST",
           headers: { "content-type": "application/json" },
@@ -90,7 +82,7 @@ export const aresVr: Collector = {
   requests: (ctx) =>
     icosFrom(ctx.sources.map((s) => s.url)).map((ico) => ({
       via: "fetch" as const,
-      url: `${BASE}/ekonomicke-subjekty-vr/${ico}`,
+      url: `${ARES_BASE}/ekonomicke-subjekty-vr/${ico}`,
     })),
   parse: (payload, ctx) => {
     const r = Vr.safeParse(payload);

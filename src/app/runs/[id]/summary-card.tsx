@@ -3,11 +3,12 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/runs/[id]/summary-card.tsx
- * Deps:    react, ./summary
+ * Deps:    react, ./summary, ../../ui (Radar primitives)
  * Tested:  n/a (the sentences are tested in __tests__/summary.test.ts)
  *
  * Key responsibilities:
- * - SummaryCard: the three sentences from summary30s (documented, missing, ask); nothing while there is no brief
+ * - SummaryCard: the three sentences from summary30s (documented, missing, ask), each lead word (Confirmed, Missing,
+ *   Ask) coloured; nothing while there is no brief
  * - ReadAloud: browser SpeechSynthesis only (no external service); hidden when the browser has none; toggles Stop
  *
  * Design constraints:
@@ -16,6 +17,7 @@
 "use client";
 
 import { useEffect, useState, useSyncExternalStore } from "react";
+import { BTN_QUIET, CARD, Eyebrow } from "../../ui";
 import type { RunState } from "./state";
 import { summary30s, summaryText } from "./summary";
 
@@ -52,9 +54,20 @@ function ReadAloud({ text }: { text: string }): React.JSX.Element | null {
   };
 
   return (
-    <button type="button" className="shrink-0 rounded-xl border border-zinc-700 px-3 py-1 text-xs hover:bg-zinc-800" onClick={toggle} aria-pressed={speaking}>
+    <button type="button" className={`${BTN_QUIET} shrink-0`} onClick={toggle} aria-pressed={speaking}>
       {speaking ? "Stop" : "Read aloud"}
     </button>
+  );
+}
+
+/** Lead word of a summary sentence ("Confirmed: ...") in its tone colour; a sentence without that lead renders unchanged. */
+function Row({ lead, tone, sentence }: { lead: string; tone: string; sentence: string }): React.JSX.Element {
+  if (!sentence.startsWith(`${lead}: `)) return <li className="py-1.5">{sentence}</li>;
+  return (
+    <li className="py-1.5">
+      <span className={`font-semibold ${tone}`}>{lead}</span>
+      {sentence.slice(lead.length)}
+    </li>
   );
 }
 
@@ -62,17 +75,20 @@ export function SummaryCard({ state }: { state: RunState }): React.JSX.Element |
   const s = summary30s(state);
   if (s === null) return null;
   return (
-    <section className="rounded-2xl border border-teal-800/60 bg-teal-950/20 p-5" aria-labelledby="summary-30s">
+    <section className={`${CARD} border-l-4 border-l-action`} aria-labelledby="summary-30s">
       <div className="flex items-start justify-between gap-3">
-        <h2 id="summary-30s" className="font-semibold">
-          In 30 seconds
-        </h2>
+        <div>
+          <Eyebrow>Summary</Eyebrow>
+          <h2 id="summary-30s" className="mt-1 font-serif text-2xl">
+            In 30 seconds
+          </h2>
+        </div>
         <ReadAloud text={summaryText(s)} />
       </div>
-      <ul className="mt-2 flex flex-col gap-1 text-sm text-zinc-300">
-        <li>{s.documented}</li>
-        <li>{s.missing}</li>
-        <li>{s.ask}</li>
+      <ul className="mt-3 divide-y divide-divider text-sm text-ink">
+        <Row lead="Confirmed" tone="text-ok" sentence={s.documented} />
+        <Row lead="Missing" tone="text-unsure" sentence={s.missing} />
+        <Row lead="Ask" tone="text-action" sentence={s.ask} />
       </ul>
     </section>
   );

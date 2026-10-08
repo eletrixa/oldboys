@@ -9,6 +9,7 @@
  * Key responsibilities:
  * - identityFor(): profile-url prefix and handle-segment matches against merged candidates only
  * - every collector's parse() sets identity: merged for handle-driven fetches, unverified for name search and serp
+ * - platformOf: the pasted CV pseudo-URL is "cv", not "web"
  *
  * Design constraints:
  * - No network; fixtures are minimal approximations of actor/API output
@@ -28,7 +29,7 @@ import { openalex } from "@/recipe/sources/openalex";
 import { orcid } from "@/recipe/sources/orcid";
 import { stackexchange } from "@/recipe/sources/stackexchange";
 import { tiktok } from "@/recipe/sources/tiktok";
-import { identityFor, type ParsedSource } from "@/recipe/sources/types";
+import { identityFor, platformOf, type ParsedSource } from "@/recipe/sources/types";
 import { websiteCrawler } from "@/recipe/sources/website";
 import { x } from "@/recipe/sources/x";
 import { youtube } from "@/recipe/sources/youtube";
@@ -135,5 +136,13 @@ describe("collector identity", () => {
   it("website: pages under a merged site are merged, excerpt-link crawls are not", () => {
     const pages = [{ url: "https://jana.dev/about" }, { url: "https://other.cz/" }];
     expect(ids(websiteCrawler.parse(pages, merged({ profile_urls: ["https://jana.dev"] }), step))).toEqual(["merged", "unverified"]);
+  });
+});
+
+describe("platformOf", () => {
+  it("returns cv for the pasted CV pseudo-URL, web for plain pages", () => {
+    expect(platformOf("cv:run-1")).toBe("cv");
+    expect(platformOf("https://cz.linkedin.com/in/josef-buryan")).toBe("linkedin");
+    expect(platformOf("https://example.com/cv")).toBe("web");
   });
 });

@@ -51,6 +51,7 @@ const run = (over: Partial<RunState> = {}): RunState => ({
   subject: "Jan Novak",
   headline: null,
   role: "Senior Data Engineer",
+  organization_name: null,
   created_at: "2026-10-08T21:00:00.000Z",
   status: "done",
   step: null,
@@ -146,6 +147,14 @@ describe("summary30s", () => {
     );
     expect(s?.documented).toBe("Confirmed: LinkedIn and GitHub profiles; 1 of 1 research questions have evidence.");
     expect(s?.ask).toBe("Check: Dates at Acme.");
+  });
+});
+
+describe("ask length", () => {
+  it("keeps a long interview question whole up to 220 characters", () => {
+    const q = "How many engineers worked with you on the events platform rebuild, and what did you decide yourself when the migration plan changed halfway through?";
+    const s = summary30s(run({ brief: brief({ interview_questions: [q] }) }));
+    expect(s?.ask).toBe(`Ask: ${q}`);
   });
 });
 
