@@ -27,6 +27,7 @@ All notable changes to oldboys are documented here. The format follows [Keep a C
 - OPENALEX_API_KEY support for OpenAlex API calls
 
 ### Changed
+- Verification calls now dial from a Twilio US number (+1 443 316 2585) instead of the Czech verified caller ID, which Czech carriers reject as spoofed; `RUN_CALL_MAX` raised from 2 to 3 calls per run; the ElevenLabs webhook now also sends `call_initiation_failure` so busy / no-answer reaches the app immediately
 - Phone verification on the run page uses the login session instead of the team token: the call panel no longer asks for `RUN_TOKEN` and shows "Your login has expired. Log in again." on a 401; `POST /api/runs/:id/calls`, `POST /api/calls/:id/approve` and `/skip` and `GET /api/roles` accept a session or the bearer, `POST /api/runs` stays bearer-only
 - Radar design applied to every page: run page (timeline progress, question card, brief sections, evidence lists), roles overview and table, audit record, start form, not-found and loading states. Shared class vocabulary in `src/app/ui.tsx`, spec in `docs/design/radar-ui.md`; the temporary zinc/teal remap in `globals.css` is gone.
 - Brief sections now shown only if content was found; honest gaps for unavailable sections
