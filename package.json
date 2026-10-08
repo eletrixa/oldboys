@@ -15,8 +15,9 @@
     "test:watch": "vitest",
     "db:migrate:local": "wrangler d1 migrations apply oldboys --local",
     "db:migrate:remote": "wrangler d1 migrations apply oldboys --remote",
-    "check": "pnpm typecheck && pnpm lint && pnpm test",
-    "hooks:install": "git config core.hooksPath .githooks"
+    "check": "pnpm typecheck && pnpm lint && pnpm test && pnpm --filter oldboys-extension check",
+    "hooks:install": "git config core.hooksPath .githooks",
+    "ext:build": "pnpm --filter oldboys-extension build && pnpm --filter oldboys-extension build:firefox"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4.0.74",

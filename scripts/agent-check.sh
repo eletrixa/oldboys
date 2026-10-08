@@ -15,7 +15,7 @@
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 changed=$( { git diff --name-only HEAD; git diff --name-only --cached; git ls-files --others --exclude-standard; } | sort -u )
-if ! grep -qE '^(src/|migrations/|scripts/|package\.json|pnpm-lock\.yaml|tsconfig\.json|wrangler\.jsonc|next\.config\.ts|open-next\.config\.ts|eslint\.config\.mjs|vitest\.config\.ts)' <<<"$changed"; then
+if ! grep -qE '^(src/|extension/|migrations/|scripts/|package\.json|pnpm-lock\.yaml|tsconfig\.json|wrangler\.jsonc|next\.config\.ts|open-next\.config\.ts|eslint\.config\.mjs|vitest\.config\.ts)' <<<"$changed"; then
   echo "agent-check: no code or config changes, skipping" >&2
   exit 0
 fi

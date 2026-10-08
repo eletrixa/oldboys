@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>oldboys research</title>
+    <style>
+      :root { color-scheme: light dark; font: 13px system-ui, sans-serif; }
+      body { margin: 0; width: 340px; padding: 12px; }
+      h1 { font-size: 14px; margin: 0 0 8px; }
+      form { display: grid; gap: 6px; margin-bottom: 10px; }
+      label { display: grid; gap: 2px; }
+      input, select, button { font: inherit; }
+      ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+      li { display: grid; grid-template-columns: 1fr auto auto; gap: 6px; align-items: center;
+           padding: 6px 8px; border: 1px solid color-mix(in srgb, currentColor 25%, transparent); border-radius: 6px; }
+      .status { font-size: 11px; opacity: .75; }
+      .needs { font-weight: 600; }
+      .row { display: flex; gap: 6px; justify-content: space-between; align-items: center; }
+      small { opacity: .7; }
+    </style>
+  </head>
+  <body>
+    <h1>oldboys research</h1>
+    <form id="settings">
+      <label>Goal
+        <select name="goal">
+          <option value="hiring">hiring</option>
+          <option value="due-diligence">due diligence</option>
+        </select>
+      </label>
+      <label>Run token <input name="token" type="password" autocomplete="off" placeholder="paste RUN_TOKEN" /></label>
+      <label>API base <input name="apiBase" type="url" /></label>
+      <button type="submit">Save</button>
+    </form>
+    <div class="row">
+      <strong>Marked people</strong>
+      <button id="refresh" type="button">Refresh</button>
+    </div>
+    <ul id="runs"></ul>
+    <p><small>Public data only. Reads the profile URL, name and location you are looking at; research runs on the oldboys server. Raw data is purged after judging.</small></p>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>
