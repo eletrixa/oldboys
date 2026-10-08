@@ -9,6 +9,7 @@
  * Key responsibilities:
  * - POST /v2/acts/{id}/runs with `timeout`, `maxTotalChargeUsd` and `waitForFinish` (returns the Run object;
  *   `run-sync` would return the actor's OUTPUT record instead), then GET dataset items (clean, limited)
+ * - Only a SUCCEEDED run is read; anything else throws so the runner records a gap or falls back
  * - Cost comes from the run's `usageTotalUsd`, never estimated
  *
  * Design constraints:
@@ -44,6 +45,8 @@ export function makeActorCall(token: string): ActorCall {
     });
     if (!runRes.ok) throw new Error(`apify ${actor}: HTTP ${String(runRes.status)} ${(await runRes.text()).slice(0, 200)}`);
     const run = RunResponse.parse(await runRes.json()).data;
+    // The runs endpoint answers when waitForFinish elapses; a run still going or ended badly has no usable dataset.
+    if (run.status !== "SUCCEEDED") throw new Error(`apify ${actor}: run ${run.id} ${run.status}`);
     const itemsRes = await fetch(
       `https://api.apify.com/v2/datasets/${run.defaultDatasetId}/items?clean=true&limit=${String(MAX_ITEMS)}`,
       { headers: { Authorization: `Bearer ${token}` } },

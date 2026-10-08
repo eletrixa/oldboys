@@ -11,11 +11,12 @@
  *
  * Design constraints:
  * - Stems match at the start of a word (suffixes allowed), case-insensitive, Unicode-aware (`\b` is ASCII-only)
- * - Over-matching is the safe direction: a dropped harmless claim costs less than one Art. 9 inference
+ * - Over-matching is the safe direction, but professions and employers stay askable: `odborník` (expert),
+ *   `nemocnice` (hospital), `zdravotník` (paramedic), "medical device company" and "customer orientation" pass
  */
 
 export const ART9_PATTERN =
-  /(?<![\p{L}])(health|medical|illness|disease|pregnan|disab|religio|church|muslim|christian|jewish|politic|party member|vote|ethnic|race|racial|nationality|romani|sexual|sexuality|orientation|gay|lesbian|transgender|trade union|union member|biometric|genetic|zdravot|nemoc|nábožen|politick|etnick|sexuál|odbor)\p{L}*/iu;
+  /(?<![\p{L}])(health|medical (condition|history|record|leave|diagnos)|illness|disease|diagnos|pregnan|disab|religio|church|muslim|christian|jewish|politic|party member|vote|ethnic|race|racial|nationality|romani|sexual|sexuality|gay|lesbian|transgender|trade union|union member|biometric|genetic|zdravotní (stav|problém|potíž|omezen)|nemoc(?!nic)|nábožen|politick|etnick|sexuál|odborov|odborář|odbory(?![\p{L}])|odborů(?![\p{L}]))\p{L}*/iu;
 
 export function containsArt9Topic(text: string): boolean {
   return ART9_PATTERN.test(text);

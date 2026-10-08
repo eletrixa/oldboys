@@ -23,6 +23,9 @@ describe("containsArt9Topic", () => {
     expect(containsArt9Topic("attends church weekly")).toBe(true);
     expect(containsArt9Topic("voted in the election")).toBe(true);
     expect(containsArt9Topic("zdravotní stav")).toBe(true);
+    expect(containsArt9Topic("člen odborů")).toBe(true);
+    expect(containsArt9Topic("odborová organizace")).toBe(true);
+    expect(containsArt9Topic("dlouhodobá nemoc")).toBe(true);
     expect(containsArt9Topic("politické názory")).toBe(true);
     expect(containsArt9Topic("etnický původ")).toBe(true);
     expect(containsArt9Topic("sexuální orientace")).toBe(true);
@@ -34,6 +37,9 @@ describe("containsArt9Topic", () => {
     expect(containsArt9Topic("Which third party audited the accounts?")).toBe(false);
     expect(containsArt9Topic("Can you trace the ownership and embrace the deal?")).toBe(false);
     expect(containsArt9Topic("Is the account disabled?")).toBe(true);
+    expect(containsArt9Topic("odborné zkušenosti v logistice, odborník na SAP")).toBe(false);
+    expect(containsArt9Topic("pracuje v Nemocnici Motol jako zdravotník")).toBe(false);
+    expect(containsArt9Topic("CTO at a medical device company with strong customer orientation")).toBe(false);
     expect(ART9_PATTERN.flags).toContain("u");
   });
 });
