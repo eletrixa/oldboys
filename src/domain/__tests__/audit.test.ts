@@ -84,7 +84,7 @@ describe("auditRecord", () => {
       role: "Senior backend engineer",
     });
     expect(a.legal).toEqual({ basis: LEGAL_BASIS, purpose: "Pre-employment screening for the role: Senior backend engineer" });
-    expect(a.retention).toEqual({ days: 7, delete_after: "2026-10-15T20:00:00.000Z", note: "Deleted earlier on rejection." });
+    expect(a.retention).toEqual({ days: 7, delete_after: "2026-10-15T20:00:00.000Z", note: "Earlier deletion on request (done by hand; no automatic delete on rejection yet)." });
     expect(a.generated_at).toBe("2026-10-08T21:00:00.000Z");
   });
 

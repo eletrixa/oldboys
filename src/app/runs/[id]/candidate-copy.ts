@@ -99,8 +99,8 @@ export function candidateCopy(state: RunState): string | null {
     "## How long we keep it",
     "",
     deleteOn !== null
-      ? `All research data is deleted on ${deleteOn} (${String(RETENTION_DAYS)} days after the research), or earlier if we do not continue with your application.`
-      : `All research data is deleted ${String(RETENTION_DAYS)} days after the research, or earlier if we do not continue with your application.`,
+      ? `All research data is deleted on ${deleteOn} (${String(RETENTION_DAYS)} days after the research).`
+      : `All research data is deleted ${String(RETENTION_DAYS)} days after the research.`,
     "",
     "## Your rights",
     "",

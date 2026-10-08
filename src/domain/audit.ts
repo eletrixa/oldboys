@@ -25,7 +25,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 export const LEGAL_BASIS =
   "Legitimate interest, Art. 6(1)(f) GDPR: pre-employment screening of public professional data. The candidate is informed about the research.";
-export const RETENTION_NOTE = "Deleted earlier on rejection.";
+export const RETENTION_NOTE = "Earlier deletion on request (done by hand; no automatic delete on rejection yet).";
 
 /** Recipe step kinds that query an outside source; the others are model seams or the lineup. */
 const COLLECTOR_KINDS: ReadonlySet<string> = new Set(["serp", "actor", "ares"]);

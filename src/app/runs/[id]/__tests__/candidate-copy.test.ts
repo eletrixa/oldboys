@@ -93,7 +93,7 @@ describe("candidateCopy", () => {
     expect(md).toContain("- <https://www.linkedin.com/in/jnovak>");
     expect(md).toContain("- <https://x.com/jnovak>");
     expect(md).toContain("deleted on 2026-10-15");
-    expect(md).toContain("if we do not continue with your application");
+    expect(md).not.toContain("if we do not continue with your application");
     expect(md).toContain("Reply to this email");
     const order = [
       "## Why",
