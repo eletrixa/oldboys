@@ -12,7 +12,8 @@
  * - Brief top line: "Confirmed profile: <headline>" next to "Hiring for: <role>" (both quoted, no model needed),
  *   with the location note (confirmed profile names another city than the anchor) under the profile line
  * - Gap list reads "Searched, nothing confirmed" when any searched gap is a namesake-only one
- * - Confirmed evidence grouped by the URL's platform (evidenceGroup), not by the actor that fetched it
+ * - Confirmed evidence grouped by the URL's platform (evidenceGroup), not by the actor that fetched it; the pasted CV
+ *   is plain text, not a link (SourceLink)
  * - Interview kit buttons (KitActions) under the top line; gap labels come from state.ts (GAP_LABEL, gapLine)
  * - Findings as sections by confidence (SectionList); briefs stored before sections render per question
  *
@@ -22,7 +23,7 @@
 import type { Brief, Candidate, CandidateDecision } from "@/domain/claim";
 import { formatDuration, type RunCost } from "@/domain/run-cost";
 import { KitActions } from "./kit-actions";
-import { ClaimList, SectionList } from "./sections";
+import { ClaimList, SectionList, SourceLink } from "./sections";
 import { SummaryCard } from "./summary-card";
 import { PLATFORM_LABEL, type RowState, type RunState, briefSections, evidenceGroup, gapLine, host, roleCriteria, searchedEmpty, searchedTitle } from "./state";
 
@@ -277,9 +278,7 @@ function EvidenceGroups({ items }: { items: Evidence[] }): React.JSX.Element {
             {rows.map((e) => (
               <li key={`${e.url}${e.excerpt}`} className="text-sm text-zinc-300">
                 {e.excerpt}
-                <a href={e.url} target="_blank" rel="noreferrer" className="ml-2 text-teal-400 underline">
-                  {host(e.url)}
-                </a>
+                <SourceLink url={e.url} />
               </li>
             ))}
           </ul>
