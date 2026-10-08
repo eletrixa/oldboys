@@ -11,7 +11,7 @@
  * - FACT keeps its kind only if the normalised quote is inside one cited excerpt (after unknown ids are dropped)
  * - FACT with hedged wording ("likely", "may", "pravděpodobně", ...) becomes INFERENCE, note "hedged wording"
  * - screenClaims (shared with synthesize): drops self-declared noise ("unrelated content", "misattributed") and
- *   contradiction claims naming two aliases of one organisation ("A | B", "A (formerly B)", "A, formerly B" in a source)
+ *   contradiction claims that call themselves compatible / not a contradiction (saysCompatible), contradiction claims naming two aliases of one organisation ("A | B", "A (formerly B)", "A, formerly B" in a source)
  * - Residue (FACTs that passed) goes to the verify model; "not supported" downgrades to INFERENCE
  *
  * Design constraints:
@@ -50,6 +50,14 @@ const HEDGE_MAY = /(?<!\p{L})may(?!\p{L})/u;
 
 export function hedged(text: string): boolean {
   return HEDGE.test(text) || HEDGE_MAY.test(text);
+}
+
+/** Wording of a "contradiction" that says it is none: "over 13 years" vs "15 years" agrees within the rounding. */
+const COMPATIBLE = /compatible|not a contradiction|no contradiction|not incompatible|consistent with/i;
+
+/** True when a text (claim or model summary) states the sources agree, so it is no contradiction. */
+export function saysCompatible(text: string): boolean {
+  return COMPATIBLE.test(text);
 }
 
 const fold = (text: string): string => text.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
@@ -101,6 +109,10 @@ export function screenClaims(claims: readonly Claim[], sources: readonly Source[
   const kept = claims.filter((c) => {
     if (NOISE.test(c.text)) {
       notes.push(`dropped (unrelated or misattributed content): ${c.id}`);
+      return false;
+    }
+    if (c.question_id === "contradictions" && saysCompatible(c.text)) {
+      notes.push(`dropped contradiction (compatible statements): ${c.id}`);
       return false;
     }
     const alias = c.question_id === "contradictions" ? aliases.find(([a, b]) => names(c.text, a) && names(c.text, b)) : undefined;
