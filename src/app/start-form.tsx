@@ -1,5 +1,5 @@
 /**
- * Candidate Brief start form: collects name, anchor and role, then POSTs /api/runs.
+ * Candidate Brief start form: collects name, anchor and role, then POSTs /api/start.
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/start-form.tsx
@@ -11,7 +11,7 @@
  * - Inline humane error on 4xx/5xx or network failure
  *
  * Design constraints:
- * - Client component; posts same-origin, so no bearer token is shipped to the browser
+ * - Client component; posts to /api/start, which adds RUN_TOKEN server-side, so no token ships to the browser
  * - Copy stays short and calm; no emoji
  */
 "use client";
@@ -52,7 +52,7 @@ export function StartForm(): React.JSX.Element {
     setBusy(true);
     setError(null);
     try {
-      const res = await fetch("/api/runs", {
+      const res = await fetch("/api/start", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ subject: text("name"), anchor: text("anchor"), goal: "hiring", role: text("role") }),
@@ -65,7 +65,11 @@ export function StartForm(): React.JSX.Element {
       setError(
         res.status === 429
           ? "Too many briefs started just now. Please try again in a little while."
-          : "We could not start the brief. Please check the details and try again.",
+          : res.status === 503
+            ? "The service is not fully configured yet. Please tell the team."
+            : res.status === 400
+              ? "Please check the name, city and role and try again."
+              : "We could not start the brief. Please try again.",
       );
     } catch {
       setError("We could not reach the service. Please try again.");

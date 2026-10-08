@@ -7,13 +7,21 @@
  * Tested:  n/a (this is the test)
  */
 import { describe, expect, it } from "vitest";
-import type { Claim, Source } from "@/domain/claim";
+import type { Candidate, Claim, Source } from "@/domain/claim";
 import { extractClaims } from "@/recipe/seams/extract";
-import { canonicalProfile, decisionFor, fallbackScores, resolveCandidates } from "@/recipe/seams/resolve";
-import { coverageOf, synthesizeBrief } from "@/recipe/seams/synthesize";
+import { canonicalProfile, decisionFor, fallbackScores, profileKey, resolveCandidates, sourceIdentityUpdates } from "@/recipe/seams/resolve";
+import { askCandidate, coverageOf, synthesizeBrief } from "@/recipe/seams/synthesize";
 import { baseContext, fakeLlm, fakePorts } from "@/recipe/__tests__/fakes";
 
 const s = (id: string, url: string, excerpt: string): Source => ({ id, run_id: "run-1", url, actor: "apify/google-search-scraper", fetched_at: "t", excerpt, r2_key: "k", expires_at: "e", identity: "unverified" });
+const cand = (id: string, url: string, decision: Candidate["decision"], platform = "linkedin", handle: string | null = null): Candidate => ({
+  id, run_id: "run-1", name: "x", profile_urls: [url], anchor_match: null, score: 0.5, decision, platform, handle, snippet: "", reasons: [],
+});
+/** What the Workflow does after the lineup: re-mark source identity by profile key. */
+const applyIdentity = (srcs: readonly Source[], cands: readonly Candidate[]): Source[] => {
+  const next = new Map(sourceIdentityUpdates(cands, srcs).map((u) => [u.id, u.identity]));
+  return srcs.map((x) => ({ ...x, identity: next.get(x.id) ?? x.identity }));
+};
 const sources = [
   s("s1", "https://cz.linkedin.com/in/jana-dvorakova-data", "Jana Dvořáková - Data Engineer - Kiwi.com | LinkedIn\nData Engineer at Kiwi.com · Brno"),
   s("s2", "https://github.com/jdvorakova", "jdvorakova (Jana Dvořáková) · GitHub\nData pipelines, dbt, Airflow. Brno."),
@@ -60,6 +68,7 @@ describe("resolve fallback (no model)", () => {
       "Praha",
     );
     expect(scores.map((x) => x.score)).toEqual([0.6, 0.5]);
+    expect(scores.map((x) => x.reasons[0])).toEqual(["Same name, mentions Praha", "Same name only"]);
     expect(scores.map((x) => decisionFor(x.score))).toEqual(["possibly-same-as", "possibly-same-as"]);
   });
 
@@ -75,9 +84,24 @@ describe("resolve fallback (no model)", () => {
       "Brno",
     );
     expect(cross.map((x) => decisionFor(x.score))).toEqual(["merge", "merge", "possibly-same-as"]);
+    expect(byAnchorUrl[0]?.reasons).toEqual(["Profile link you supplied"]);
+    expect(cross.flatMap((x) => x.reasons).join()).not.toContain("fallback");
   });
 
-  it("dedupes by host + path keeping the best score and drops PDF and genealogy noise", async () => {
+  it("ranks profile platforms before web and dedupes before the cap: LinkedIn as the 15th source still becomes a candidate", async () => {
+    const web = Array.from({ length: 14 }, (_, i) => s(`w${String(i)}`, `https://news${String(i)}.cz/clanek`, "Lukáš Pokorný, Liberec"));
+    const ctx = baseContext({
+      subject: "Lukáš Pokorný",
+      anchor: "Liberec",
+      sources: [...web, s("li", "https://cz.linkedin.com/in/lukas-pokorny-data", "Lukáš Pokorný - Senior Data Engineer | LinkedIn")],
+    });
+    const out = await resolveCandidates(ctx, fakePorts());
+    expect(out.candidates.map((c) => c.platform)).toContain("linkedin");
+    expect(out.candidates[0]?.platform).toBe("linkedin");
+    expect(out.candidates.filter((c) => c.platform === "web")).toHaveLength(6);
+  });
+
+  it("dedupes by host + path, pooling excerpts so the anchor mention counts, and drops PDF and genealogy noise", async () => {
     const out = await resolveCandidates(
       baseContext({
         sources: [
@@ -96,7 +120,7 @@ describe("resolve fallback (no model)", () => {
 
 describe("extract", () => {
   it("returns an empty outcome with a note when the model fails, never throws", async () => {
-    const out = await extractClaims(baseContext({ sources }), fakePorts());
+    const out = await extractClaims(baseContext({ sources: sources.map((x) => ({ ...x, identity: "merged" as const })) }), fakePorts());
     expect(out.empty).toBe(true);
     expect(out.claims).toHaveLength(0);
     expect(out.notes.join()).toContain("extract model failed");
@@ -114,12 +138,52 @@ describe("extract", () => {
       }),
     });
     const ctx = baseContext({
-      sources,
-      candidates: [{ id: "c3", run_id: "run-1", name: "Jana", profile_urls: [sources[2]?.url ?? ""], anchor_match: null, score: 0.1, decision: "rejected", platform: "linkedin", handle: null, snippet: "", reasons: [] }],
+      // the nurse profile is marked merged on purpose: the rejected decision must still keep it out
+      sources: sources.map((x) => ({ ...x, identity: "merged" as const })),
+      candidates: [cand("c3", sources[2]?.url ?? "", "rejected")],
     });
     const out = await extractClaims(ctx, ports);
     expect(out.claims).toHaveLength(1);
     expect(out.notes.join()).toContain("dropped invalid claim");
+  });
+});
+
+describe("identity after the lineup (namesake SERP hits never reach the model)", () => {
+  const li = "https://cz.linkedin.com/in/lukas-pokorny-436438295";
+  const serp = [
+    s("li", `${li}/cs`, "Lukáš Pokorný - Senior Data Engineer - Liberec | LinkedIn"),
+    s("post", "https://www.linkedin.com/posts/lukas-pokorny-436438295_dbt-activity-1", "Lukáš Pokorný on dbt"),
+    s("foot", "https://www.fcslovanliberec.cz/hrac/lukas-pokorny", "Lukáš Pokorný, obránce FC Slovan Liberec"),
+    s("ten", "https://www.linkedin.com/in/lukas-pokorny-tennis/?trk=x", "Lukáš Pokorný - tennis coach"),
+  ];
+  const cands = [cand("c1", li, "merge"), cand("c2", "https://cz.linkedin.com/in/lukas-pokorny-tennis", "rejected")];
+
+  it("marks only SERP hits on the merged profile (post and locale variants included) as merged", () => {
+    expect(sourceIdentityUpdates(cands, serp)).toEqual([
+      { id: "li", identity: "merged" },
+      { id: "post", identity: "merged" },
+    ]);
+    expect(profileKey("https://www.linkedin.com/posts/lukas-pokorny-436438295_x-activity-2")).toBe(profileKey(`${li}/cs`));
+  });
+
+  it("keeps the footballer out of the extract prompt and the evidence; the merged LinkedIn hit is in both", async () => {
+    const ctx = baseContext({ subject: "Lukáš Pokorný", anchor: "Liberec", sources: applyIdentity(serp, cands), candidates: cands });
+    let prompt = "";
+    await extractClaims(ctx, fakePorts({ llm: fakeLlm((p) => ((prompt = p), [])) }));
+    expect(prompt).toContain("lukas-pokorny-436438295");
+    expect(prompt).not.toContain("fcslovanliberec");
+    expect(prompt).not.toContain("tennis");
+    const brief = (await synthesizeBrief(ctx, fakePorts())).brief;
+    expect(brief?.evidence.map((e) => e.url)).toEqual([serp[0]?.url, serp[1]?.url]);
+    expect(brief?.also_found.map((e) => e.url)).toEqual([serp[2]?.url]);
+  });
+
+  it("excludes a rejected profile by profile key even when a query-string variant was marked merged", async () => {
+    const tennis = { ...s("t2", "https://linkedin.com/in/lukas-pokorny-tennis?trk=1", "tennis"), identity: "merged" as const };
+    const ctx = baseContext({ sources: [tennis], candidates: cands });
+    const out = await extractClaims(ctx, fakePorts({ llm: fakeLlm(() => []) }));
+    expect(out.notes).toContain("no usable sources");
+    expect((await synthesizeBrief(ctx, fakePorts())).brief?.evidence).toEqual([]);
   });
 });
 
@@ -143,7 +207,8 @@ describe("synthesize", () => {
     expect(out.brief?.per_question.find((p) => p.question_id === "current-role")?.coverage).toBe("evidenced");
     expect(out.brief?.per_question.find((p) => p.question_id === "public-code")?.coverage).toBe("none");
     expect(out.brief?.interview_questions.join()).toContain("Public code");
-    expect(out.brief?.not_searched[0]?.reason).toContain("GitHub");
+    expect(out.brief?.searched_empty).toEqual([{ source: "public-code", reason: "no public GitHub profile found" }]);
+    expect(out.brief?.not_searched).toEqual([]);
     expect(out.brief?.degraded).toContain("summary model failed");
   });
 
@@ -152,8 +217,9 @@ describe("synthesize", () => {
     const ctx = baseContext({
       sources: [...sources, s("g1", "https://api.github.com/users/someone", "someone"), s("m1", "https://github.com/jdvorakova/repo", "repo")],
       candidates: [
-        { id: "c2", run_id: "run-1", name: "Jana", profile_urls: ["https://github.com/jdvorakova"], anchor_match: null, score: 0.9, decision: "merge", platform: "github", handle: null, snippet: "", reasons: [] },
-        { id: "c3", run_id: "run-1", name: "Jana", profile_urls: [sources[2]?.url ?? ""], anchor_match: null, score: 0.1, decision: "rejected", platform: "linkedin", handle: null, snippet: "", reasons: [] },
+        cand("c2", "https://github.com/jdvorakova", "merge", "github"),
+        cand("c3", sources[2]?.url ?? "", "rejected"),
+        cand("c4", "https://x.com/jdvorakova", "possibly-same-as", "x", "jdvorakova"),
       ],
       gaps: [
         { run_id: "run-1", question_id: "github_profile", reason: "no public GitHub profile found" },
@@ -165,16 +231,43 @@ describe("synthesize", () => {
     const nonSerp = ctx.sources.map((x) =>
       x.id === "g1" || x.id === "m1" ? { ...x, actor: "rest/github", identity: x.id === "m1" ? ("merged" as const) : ("unverified" as const) } : x,
     );
-    const out = await synthesizeBrief({ ...ctx, sources: nonSerp }, ports);
+    const out = await synthesizeBrief({ ...ctx, sources: applyIdentity(nonSerp, ctx.candidates) }, ports);
     const brief = out.brief;
     expect(ports.calls.llm).toHaveLength(0);
     expect(brief?.degraded).toContain("no verified claims");
     expect(brief?.per_question.every((p) => p.coverage === "none" && p.summary.startsWith("AI summary unavailable"))).toBe(true);
-    expect(brief?.evidence.map((e) => e.url)).toEqual([sources[0]?.url, sources[1]?.url, "https://github.com/jdvorakova/repo"]);
-    expect(brief?.also_found.map((e) => e.url)).toEqual(["https://api.github.com/users/someone"]);
-    expect(brief?.not_searched[0]?.reason).toMatch(/^not searched:/);
-    expect(brief?.interview_questions.join()).toContain("no public GitHub profile found");
-    expect(brief?.interview_questions.join()).not.toContain("not searched");
+    // the unmerged LinkedIn SERP hit is "also found", never evidence
+    expect(brief?.evidence.map((e) => e.url)).toEqual([sources[1]?.url, "https://github.com/jdvorakova/repo"]);
+    expect(brief?.also_found.map((e) => e.url)).toEqual([sources[0]?.url, "https://api.github.com/users/someone"]);
+    expect(brief?.not_searched).toEqual([{ source: "tiktok_profile", reason: "no confirmed handle or id to look up" }]);
+    expect(brief?.searched_empty).toEqual([{ source: "github_profile", reason: "no public GitHub profile found" }]);
+    expect(brief?.interview_questions).toEqual(["Is the X account jdvorakova yours?", "Current role and employer?", "Public code?"]);
+  });
+
+  it("templates degraded interview questions in the second person, never research prompts or step ids, capped at 6", async () => {
+    const ctx = baseContext({
+      questions: [
+        { id: "current-role", text: "What is the subject's current role and employer?" },
+        { id: "public-talks", text: "What public talks, posts or writing show how they think?" },
+        { id: "location-match", text: "Does their stated location match the anchor?" },
+        { id: "contradictions", text: "Which sources disagree with each other?" },
+        { id: "mh-title-experience", text: "Has held a Senior Data Engineer position or equivalent (job history, profile)" },
+      ],
+      candidates: [
+        cand("w", "https://www.firma.cz/tym", "possibly-same-as", "web"),
+        cand("l", "https://www.linkedin.com/in/josef-buryan/", "possibly-same-as", "linkedin", "josef-buryan"),
+        ...["a", "b", "c"].map((h) => cand(h, `https://x.com/${h}`, "possibly-same-as", "x", h)),
+      ],
+      gaps: [{ run_id: "run-1", question_id: "huggingface_profile", reason: "no Hugging Face models or datasets found" }],
+    });
+    const qs = (await synthesizeBrief(ctx, fakePorts())).brief?.interview_questions ?? [];
+    expect(qs).toHaveLength(6);
+    expect(qs[0]).toBe("Is the LinkedIn account josef-buryan yours?");
+    expect(qs.slice(4)).toEqual(["Is the page on firma.cz about you?", "Have you held a Senior Data Engineer position or equivalent?"]);
+    expect(qs.join(" ")).not.toMatch(/Ask about|Confirm with|huggingface_profile/);
+    expect(askCandidate("What is the subject's current role and employer?")).toBe("What is your current role and employer?");
+    expect(askCandidate("What public talks, posts or writing show how they think?")).toBe("What public talks, posts or writing show how you think?");
+    expect(askCandidate("Which sources disagree with each other?")).toBeNull();
   });
 });
 

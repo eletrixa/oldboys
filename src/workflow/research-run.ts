@@ -11,7 +11,10 @@
  * - `onEmpty`: run the declared fallback step once, or record a Gap (ledger decision with ref.gap)
  * - resolve: persist candidates; pause with `step.waitForEvent('lineup-answer')` when any candidate is
  *   possibly-same-as or none merged; apply the manager's decisions on resume
- * - Budget (RUN_BUDGET_USD / RUN_BUDGET_CALLS) enforced here for collector steps, never by the LLM
+ * - Budget (RUN_BUDGET_USD / RUN_BUDGET_CALLS) enforced here for collector steps, never by the LLM; parallel
+ *   batches run at most (budget - spent) paid actor steps at once (planBatch), free REST steps always run
+ * - Source identity re-marked after the lineup and before extract (applySourceIdentity), so only SERP hits on
+ *   a merged profile count as confirmed
  * - Truthful gaps: a collector that made no request records "not searched: <why>", not its onEmpty text
  * - Model failures degrade (evidence-only brief, ledger `{degraded}`) and the run still ends `done`;
  *   `failed` is only for unexpected throws
@@ -22,11 +25,12 @@
  */
 import { WorkflowEntrypoint, type WorkflowEvent, type WorkflowStep } from "cloudflare:workers";
 import { makeActorCall } from "@/adapters/apify";
-import { loadContext, makeLedgerAppend, makeSourceStore, persistOutcome, setCandidateDecisions } from "@/adapters/d1";
+import { applySourceIdentity, loadContext, makeLedgerAppend, makeSourceStore, persistOutcome, setCandidateDecisions } from "@/adapters/d1";
 import { fetchJson } from "@/adapters/fetch";
 import { makeLlmCall } from "@/adapters/llm";
 import type { Candidate, GoalId } from "@/domain/claim";
 import type { Ports } from "@/domain/ports";
+import { planBatch } from "@/recipe/batch";
 import { recipeFor } from "@/recipe/goals";
 import { executeStep } from "@/recipe/runner";
 import { roleQuestions } from "@/recipe/seams/role";
@@ -120,11 +124,20 @@ export class ResearchRunWorkflow extends WorkflowEntrypoint<CloudflareEnv, Resea
 
     // Before the lineup every step feeds the next (SERP -> candidates), so they run in order. After it the
     // collectors are independent: run them in batches of PARALLEL so a full recipe stays inside the 2-4 minute promise.
+    // Each batch reads the spent calls once and starts no more paid steps than the budget has left.
     let afterResolve = false;
     let batch: Step[] = [];
+    let batchNo = 0;
     const flush = async (): Promise<void> => {
-      if (batch.length > 0) await Promise.all(batch.map(runOne));
-      batch = [];
+      while (batch.length > 0) {
+        const remaining = await step.do(`batch-${String(++batchNo)}`, async () => {
+          const ctx = await loadContext(this.env.DB, runId, recipe.questions);
+          return ctx.budget.calls - ctx.spent.calls;
+        });
+        const { now, later } = planBatch(batch, remaining, PARALLEL);
+        await Promise.all(now.map(runOne));
+        batch = later;
+      }
     };
     for (const recipeStep of recipe.steps) {
       if (recipeStep.kind === "resolve") {
@@ -134,7 +147,6 @@ export class ResearchRunWorkflow extends WorkflowEntrypoint<CloudflareEnv, Resea
       }
       if (afterResolve && COLLECTOR_KINDS.has(recipeStep.kind)) {
         batch.push(recipeStep);
-        if (batch.length >= PARALLEL) await flush();
         continue;
       }
       await flush();
@@ -152,6 +164,7 @@ export class ResearchRunWorkflow extends WorkflowEntrypoint<CloudflareEnv, Resea
   private async doStep(runId: string, recipeStep: Step, questions: ReturnType<typeof recipeFor>["questions"], step: WorkflowStep): Promise<{ empty: boolean; skipped: string | null }> {
     return step.do(recipeStep.id, { retries: { limit: 1, delay: "5 seconds" } }, async () => {
       const started = Date.now();
+      if (recipeStep.kind === "extract") await applySourceIdentity(this.env.DB, runId);
       const ctx = await loadContext(this.env.DB, runId, questions);
       if (COLLECTOR_KINDS.has(recipeStep.kind) && (ctx.spent.calls >= ctx.budget.calls || ctx.spent.usd >= ctx.budget.usd)) {
         await this.ledger(runId, recipeStep.id, "decision", 0, 0, { skipped: "run budget reached", spent: ctx.spent });

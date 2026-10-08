@@ -34,6 +34,12 @@ describe("runCost", () => {
     expect(cost).toEqual({ usd: 0.12, source_calls: 0, llm_calls: 2, duration_ms: 60_000 });
   });
 
+  it("counts model calls from ref.calls, so a failed model adds none", () => {
+    const llm = (ts: string, ref: string | null): CostRow => ({ ...row("llm", ts), ref_json: ref });
+    const cost = runCost([llm("20:00:10", '{"calls":0}'), llm("20:00:20", '{"calls":3}'), llm("20:00:30", null), llm("20:00:40", "{oops")], START);
+    expect(cost.llm_calls).toBe(5);
+  });
+
   it("sums and rounds mixed call, llm and decision rows", () => {
     const cost = runCost(
       [

@@ -143,6 +143,7 @@ describe("Brief degraded + evidence", () => {
     const b = Brief.parse(base);
     expect(b.degraded).toBeNull();
     expect(b.evidence).toEqual([]);
+    expect(b.searched_empty).toEqual([]);
   });
   it("caps evidence excerpts at 300 chars", () => {
     expect(Brief.safeParse({ ...base, degraded: "x", evidence: [{ step: "s", url: "u", excerpt: "a".repeat(301) }] }).success).toBe(false);

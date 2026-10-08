@@ -45,6 +45,8 @@
   ],
   // CALL_PROVIDER is "mock" or "elevenlabs". The two ElevenLabs ids are non-secret dashboard ids.
   // Non-secret config only. Secrets: `wrangler secret put` / .dev.vars (see .dev.vars.example).
+  // Nightly purge of expired raw sources (src/workflow/purge.ts)
+  "triggers": { "crons": ["0 3 * * *"] },
   "vars": {
     "LLM_MODEL_PRIMARY": "claude-opus-5-5",
     "LLM_MODEL_VERIFY": "claude-sonnet-5-5",

@@ -19,7 +19,7 @@ What is live, what is not:
 - Role questions and identity scoring: model calls with a deterministic fallback. Without a model the lineup never merges on its own, it only asks.
 - Extract, verify, brief: model calls only. Without `ANTHROPIC_API_KEY` the run stops after the lineup and Screen 2 shows the failing step.
 - Verification phone calls (plans/005): `CALL_PROVIDER=mock` unless ElevenLabs keys are set; mock output is labeled MOCK.
-- Limits: no reverse image search, ISIR and Companies House are "not searched" with a reason; LinkedIn needs a public `/in/` URL from search or the form; raw payloads expire after 7 days and are purged after judging.
+- Limits: no reverse image search, ISIR and Companies House are "not searched" with a reason; LinkedIn needs a public `/in/` URL from search or the form; raw payloads expire after 7 days and a nightly cron (`src/workflow/purge.ts`, 03:00 UTC) deletes them from R2 and D1.
 
 ## Quickstart
 ```sh
@@ -31,7 +31,7 @@ pnpm dev                      # UI + API on :3141 (Workflows are NOT available h
 pnpm preview                  # full stack incl. the research Workflow on :8787 (use this for a real run)
 ```
 
-Put `APIFY_TOKEN`, `ANTHROPIC_API_KEY` and `RUN_TOKEN` into `.dev.vars`. The start form calls `POST /api/runs` same-origin without a token; every other client sends `Authorization: Bearer <RUN_TOKEN>`.
+Put `APIFY_TOKEN`, `ANTHROPIC_API_KEY` and `RUN_TOKEN` into `.dev.vars`. The start form posts to `/api/start`, which adds the bearer server-side; every other client calls `POST /api/runs` with `Authorization: Bearer <RUN_TOKEN>`.
 
 Live checks (spend real Apify money, never in CI):
 ```sh

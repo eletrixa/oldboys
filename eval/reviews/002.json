@@ -1,0 +1,29 @@
+{
+  "iteration": 2,
+  "stars": 3.1,
+  "weighted_mean": 3.075,
+  "weights": {"screen1": 0.10, "screen2": 0.20, "breadth": 0.15, "identity": 0.20, "honesty": 0.15, "judge_value": 0.20},
+  "scores": {"screen1": 4.0, "screen2": 3.5, "breadth": 3.5, "identity": 2.5, "honesty": 3.0, "judge_value": 2.5},
+  "previous": {"iteration": 1, "stars": 2.3, "scores": {"screen1": 4.0, "screen2": 2.5, "breadth": 3.0, "identity": 1.5, "honesty": 2.5, "judge_value": 1.5}},
+  "fixes": [
+    {"rank": 1, "file": "src/recipe/seams/synthesize.ts, src/recipe/seams/extract.ts, src/workflow/research-run.ts", "change": "Drop '|| s.actor === SERP_ACTOR' from confirmed()/extract filter; a SERP source counts only when its pageKey equals a merged candidate's profile pageKey (set identity=merged after the lineup answer). Test: footballer SERP hit for Pokorny is in neither evidence nor the extract prompt."},
+    {"rank": 2, "file": "src/recipe/seams/extract.ts, src/recipe/seams/synthesize.ts", "change": "Build the rejected set and test sources by pageKey(canonicalProfile(url).url), not raw URL equality, so post/query-string variants of a rejected profile stay out."},
+    {"rank": 3, "file": "src/recipe/seams/resolve.ts", "change": "Sort sources by profile platform value before slice(0, 12) (or cap per platform); Pokorny's LinkedIn hits never became candidates, so the LinkedIn collector was 'not searched'. Test with LinkedIn as source 15."},
+    {"rank": 4, "file": "src/app/runs/[id]/parts.tsx", "change": "Degraded brief: one notice, hide the 9 identical per-question cards, merged-profile evidence first, rename 'everything we confirmed' to 'From profiles you confirmed', SERP hits under 'Mentions of the name, not confirmed', 10 rows then show more."},
+    {"rank": 5, "file": "src/app/runs/[id]/state.ts, src/domain/run-cost.ts", "change": "Rows 3-4 shown as skipped (not ticked) when degraded; AI call count from ref.calls (actual model calls), so a keyless run shows 0 AI calls."},
+    {"rank": 6, "file": "src/recipe/seams/synthesize.ts, src/app/runs/[id]/parts.tsx", "change": "not_searched holds only 'not searched:' gaps; add searched_empty; render 'Searched, nothing found' and 'Not searched, and why' separately with human labels instead of step ids."},
+    {"rank": 7, "file": "src/recipe/seams/synthesize.ts", "change": "Degraded interview questions: remove 'Ask about: <research question>' and 'Confirm with the candidate (<step id>)'; template real questions from possibly-same-as profiles and unevidenced role criteria."},
+    {"rank": 8, "file": "src/recipe/seams/resolve.ts, src/app/runs/[id]/parts.tsx", "change": "Replace 'fallback: ...' reasons with plain words ('Same name, mentions Liberec', 'Same name only', 'Links to a profile you confirmed')."},
+    {"rank": 9, "file": "src/app/api/runs/route.ts, src/app/start-form.tsx, src/worker.ts, src/app/runs/[id]/run-view.tsx, src/app/runs/[id]/lineup-form.tsx, src/app/runs/[id]/report/page.tsx", "change": "Sec-Fetch-Site bypass is spoofable by curl: attach RUN_TOKEN server-side or Turnstile, lower anon cap; distinct 400/401/503 messages; '30 days' copy backed by scheduled purge; CACHED/MOCK labels; delete legacy lineup-form and report page."},
+    {"rank": 10, "file": "src/workflow/research-run.ts", "change": "Parallel batch steps read the same ctx.spent and can overshoot the 16-call / $0.50 cap by up to 4 paid calls: allocate remaining paid calls per batch or keep paid actor steps sequential; add a test."}
+  ],
+  "to_reach_4_5_with_key": [
+    "Fixes 1-3 landed with tests; keyed Pokorny run shows LinkedIn candidate, footballer only in also-found, zero claims citing namesake pages",
+    "FACT claims with verbatim quotes from identity-merged sources only; at least one contradiction shown by rank",
+    "Top of brief answers the hiring question in 10 seconds; evidence wall collapsed below",
+    "E3 goal delta >= 50% between hiring and due-diligence shown live",
+    "End-to-end <= 4 min with Opus on both demo subjects",
+    "Truthful ticks, AI call counts and gap headings (fixes 5-6)",
+    "Purge job, CACHED/MOCK labels, non-spoofable start gate (fix 9)"
+  ]
+}

@@ -10,14 +10,16 @@
  * - `loadContext` rebuilds StepContext from D1 before every step (Workflow steps are stateless)
  * - `persistOutcome` writes sources/candidates/claims/gaps/brief; claims_mode=replace rewrites the run's claims
  * - Raw payloads go to R2 under `<run>/<source>.json`; D1 keeps only the excerpt
+ * - `applySourceIdentity` re-marks sources after the lineup (merged / unverified by profile key, rule in resolve.ts)
  *
  * Design constraints:
  * - Column names mirror migrations 0001–0004; no ORM
  * - Source and claim writes are INSERT OR REPLACE so a retried Workflow step stays idempotent
  * - Gaps are also mirrored as ledger `decision` rows with `ref.gap = true` for the SSE stream
  */
-import { Brief, Candidate, Claim, Gap, LedgerEntry, Source } from "@/domain/claim";
+import { Brief, Candidate, CandidateDecision, Claim, Gap, LedgerEntry, Source } from "@/domain/claim";
 import type { LedgerAppend, SourceStore } from "@/domain/ports";
+import { sourceIdentityUpdates } from "@/recipe/seams/resolve";
 import type { StepContext, StepOutcome } from "@/recipe/sources/types";
 import type { Question } from "@/recipe/step";
 
@@ -154,4 +156,21 @@ export async function setCandidateDecisions(db: D1Database, runId: string, decis
   await db.batch(
     decisions.map((d) => db.prepare("UPDATE candidates SET decision = ? WHERE id = ? AND run_id = ?").bind(d.decision, d.id, runId)),
   );
+  await applySourceIdentity(db, runId);
+}
+
+/** Sources on a merged candidate's profile become "merged", on a rejected one "unverified"; idempotent. */
+export async function applySourceIdentity(db: D1Database, runId: string): Promise<number> {
+  const [cands, srcs] = await Promise.all([
+    db.prepare("SELECT decision, profile_urls_json FROM candidates WHERE run_id = ?").bind(runId).all<Row>(),
+    db.prepare("SELECT id, url, identity FROM sources WHERE run_id = ?").bind(runId).all<Row>(),
+  ]);
+  const updates = sourceIdentityUpdates(
+    cands.results.map((r) => ({ decision: CandidateDecision.parse(r.decision), profile_urls: json<string[]>(r.profile_urls_json, []) })),
+    srcs.results.map((r) => ({ id: String(r.id), url: String(r.url), identity: r.identity === "merged" ? ("merged" as const) : ("unverified" as const) })),
+  );
+  if (updates.length > 0) {
+    await db.batch(updates.map((u) => db.prepare("UPDATE sources SET identity = ? WHERE id = ? AND run_id = ?").bind(u.identity, u.id, runId)));
+  }
+  return updates.length;
 }

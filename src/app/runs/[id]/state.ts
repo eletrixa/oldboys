@@ -22,6 +22,8 @@ export type RunStatus = "queued" | "running" | "paused" | "done" | "failed";
 export type RunState = {
   id: string;
   subject: string;
+  /** ISO timestamp the run was created; drives the CACHED label. */
+  created_at: string;
   status: RunStatus;
   step: string | null;
   mentions: number;
@@ -40,7 +42,7 @@ export type RunState = {
   cost: RunCost;
 };
 
-export type RowState = "done" | "active" | "todo" | "failed";
+export type RowState = "done" | "active" | "todo" | "failed" | "skipped";
 
 export const PLATFORM_RANK: Record<string, number> = { linkedin: 0, github: 1, x: 2, instagram: 3, tiktok: 4, youtube: 5, bluesky: 6 };
 const DECISION_RANK: Record<Candidate["decision"], number> = { merge: 0, "possibly-same-as": 1, rejected: 2 };
@@ -78,8 +80,9 @@ export function questionsToAsk(candidates: readonly Candidate[], max: number): C
   return (profiles.length < max ? [...profiles, ...web] : profiles).slice(0, max);
 }
 
-export function stepRows(state: Pick<RunState, "status" | "step" | "mentions" | "failed_step">): RowState[] {
-  if (state.status === "done") return Array.from({ length: 5 }, () => "done");
+export function stepRows(state: Pick<RunState, "status" | "step" | "mentions" | "failed_step"> & { degraded?: boolean }): RowState[] {
+  // Degraded brief: nothing was read or double-checked by a model, so those two rows are skipped, not ticked.
+  if (state.status === "done") return Array.from({ length: 5 }, (_, i) => (state.degraded === true && (i === 2 || i === 3) ? "skipped" : "done"));
   if (state.status === "failed") {
     const at = rowOf(state.failed_step ?? state.step ?? "");
     return Array.from({ length: 5 }, (_, i) => (i < at ? "done" : i === at ? "failed" : "todo"));

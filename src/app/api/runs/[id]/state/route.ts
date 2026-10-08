@@ -89,6 +89,7 @@ export async function GET(
   const state: RunState = {
     id: head.id,
     subject: head.subject,
+    created_at: head.created_at,
     status: head.status,
     step: last?.step ?? null,
     mentions: sources.results.length,

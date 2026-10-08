@@ -145,14 +145,17 @@ export const Brief = z.object({
   ),
   interview_questions: z.array(z.string()),
   to_verify: z.array(z.string()),
+  /** Steps that made no request (budget, nothing to look up); `source` = step id, reason without the "not searched:" prefix. */
   not_searched: z.array(z.object({ source: z.string().min(1), reason: z.string().min(1) })),
+  /** Steps that searched and found nothing; `source` = step id. Defaulted for briefs stored before the field existed. */
+  searched_empty: z.array(z.object({ source: z.string().min(1), reason: z.string().min(1) })).default([]),
   /** Count of claims dropped by the protected-category filter (GDPR Art. 9); content never stored in the brief. */
   removed_protected: z.number().int().nonnegative(),
   /** Why the model layer was unavailable (evidence-only brief); null when the AI summary ran. Defaulted for briefs stored before the field existed. */
   degraded: z.string().nullable().default(null),
-  /** Confirmed sources (search hits and merged profiles, cap 40) so a degraded brief still links its evidence. */
+  /** Confirmed sources (identity merged, cap 40) so a degraded brief still links its evidence. */
   evidence: z.array(z.object({ step: z.string(), url: z.string(), excerpt: z.string().max(300) })).default([]),
-  /** Name-search hits whose identity was never confirmed: shown as "also found, not confirmed", never claimed. */
+  /** SERP and name-search hits whose identity was never confirmed: shown as "also found, not confirmed", never claimed. */
   also_found: z.array(z.object({ step: z.string(), url: z.string(), excerpt: z.string().max(300) })).default([]),
 });
 export type Brief = z.infer<typeof Brief>;

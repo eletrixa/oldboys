@@ -13,13 +13,16 @@
  * Design constraints:
  * - Never scores or ranks the person; summaries restate evidence per question
  * - Always returns a Brief: model failure or zero claims gives an evidence-only brief with `degraded` set,
- *   confirmed source links (`evidence`), gaps as interview questions; "not searched:" gaps listed first
+ *   confirmed source links (`evidence`) and templated interview questions (open profiles, unevidenced questions)
+ * - Gaps split: `not_searched` (no request made, prefix stripped) vs `searched_empty`; `source` is the step id
+ * - Confirmed = identity "merged" only; SERP hits on namesakes stay in `also_found`
  */
 import { z } from "zod";
 import { containsArt9Topic } from "@/domain/art9";
-import type { Brief, Claim, Coverage, Source } from "@/domain/claim";
+import type { Brief, Candidate, Claim, Coverage, Source } from "@/domain/claim";
 import type { Ports } from "@/domain/ports";
 import { emptyOutcome } from "@/recipe/runner";
+import { profileKey } from "@/recipe/seams/resolve";
 import type { StepContext, StepOutcome } from "@/recipe/sources/types";
 
 const Protected = z.array(z.object({ id: z.string(), protected: z.boolean() }));
@@ -49,17 +52,53 @@ async function dropProtected(claims: readonly Claim[], ports: Ports, out: StepOu
   return claims.filter((c) => !flagged.has(c.id));
 }
 
-const SERP_ACTOR = "apify/google-search-scraper";
 const EVIDENCE_MAX = 40;
+const INTERVIEW_MAX = 6;
 const NOT_SEARCHED = "not searched:";
 
 function message(error: unknown): string {
   return (error instanceof Error ? error.message : String(error)).slice(0, 120);
 }
 
-/** Search hits plus sources under a merged profile URL; rejected profiles never count as evidence. */
-function confirmed(ctx: StepContext, s: Source): boolean {
-  return s.identity === "merged" || s.actor === SERP_ACTOR;
+/** Merged identity only (set by collectors or by the Workflow after the lineup); rejected profiles never count. */
+function confirmed(s: Source): boolean {
+  return s.identity === "merged";
+}
+
+function notRejected(ctx: StepContext): (s: Source) => boolean {
+  const rejected = new Set(ctx.candidates.filter((c) => c.decision === "rejected").flatMap((c) => c.profile_urls.map(profileKey)));
+  return (s) => !rejected.has(profileKey(s.url));
+}
+
+const PLATFORM_LABEL: Record<string, string> = { linkedin: "LinkedIn", github: "GitHub", x: "X", instagram: "Instagram", tiktok: "TikTok", youtube: "YouTube", bluesky: "Bluesky" };
+
+function host(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return url;
+  }
+}
+
+/** "Is the LinkedIn account josef-buryan yours?" for a profile the manager left open. */
+export function profileQuestion(c: Pick<Candidate, "platform" | "handle" | "profile_urls">): string {
+  const url = c.profile_urls[0] ?? "";
+  const label = PLATFORM_LABEL[c.platform];
+  if (label === undefined) return `Is the page on ${host(url)} about you?`;
+  return `Is the ${label} account ${c.handle ?? host(url)} yours?`;
+}
+
+/**
+ * A research question rephrased for the candidate, or null when it is about our sources (anchor, contradictions).
+ * ponytail: word swaps, not grammar; good for "the subject's / their / Has ..." phrasing the recipes and role seam use.
+ */
+export function askCandidate(text: string): string | null {
+  if (/\b(anchor|sources?)\b/i.test(text)) return null;
+  let q = text.replace(/\s*\([^)]*\)\s*$/, "").trim();
+  q = q.replace(/\bthe subject's\b/gi, "your").replace(/\btheir\b/gi, "your").replace(/\bthey\b/gi, "you");
+  q = q.replace(/^Has held\b/, "Have you held").replace(/^Has\b/, "Do you have").replace(/^Is\b/, "Are you");
+  if (q.length === 0) return null;
+  return q.endsWith("?") ? q : `${q}?`;
 }
 
 function row(s: Source): Brief["evidence"][number] {
@@ -67,14 +106,23 @@ function row(s: Source): Brief["evidence"][number] {
 }
 
 export function evidenceOf(ctx: StepContext): Brief["evidence"] {
-  const rejected = new Set(ctx.candidates.filter((c) => c.decision === "rejected").flatMap((c) => c.profile_urls));
-  return ctx.sources.filter((s) => !rejected.has(s.url) && confirmed(ctx, s)).slice(0, EVIDENCE_MAX).map(row);
+  return ctx.sources.filter(notRejected(ctx)).filter(confirmed).slice(0, EVIDENCE_MAX).map(row);
 }
 
 /** Unverified name-search hits: surfaced for the reader, never fed to the model. */
 export function alsoFoundOf(ctx: StepContext): Brief["also_found"] {
-  const rejected = new Set(ctx.candidates.filter((c) => c.decision === "rejected").flatMap((c) => c.profile_urls));
-  return ctx.sources.filter((s) => !rejected.has(s.url) && !confirmed(ctx, s)).slice(0, EVIDENCE_MAX).map(row);
+  return ctx.sources.filter(notRejected(ctx)).filter((s) => !confirmed(s)).slice(0, EVIDENCE_MAX).map(row);
+}
+
+/** Degraded mode: ask about profiles still open, then mh- role questions, then recipe questions, with no evidence. */
+function templatedQuestions(ctx: StepContext, byQ: ReadonlyMap<string, readonly Claim[]>): string[] {
+  const open = ctx.candidates.filter((c) => c.decision === "possibly-same-as").sort((a, b) => Number(a.platform === "web") - Number(b.platform === "web"));
+  const unevidenced = ctx.questions
+    .filter((q) => coverageOf(byQ.get(q.id) ?? []) === "none")
+    .sort((a, b) => Number(b.id.startsWith("mh-")) - Number(a.id.startsWith("mh-")))
+    .map((q) => askCandidate(q.text))
+    .filter((x): x is string => x !== null);
+  return [...new Set([...open.map(profileQuestion), ...unevidenced])].slice(0, INTERVIEW_MAX);
 }
 
 export async function synthesizeBrief(ctx: StepContext, ports: Ports): Promise<StepOutcome> {
@@ -114,7 +162,6 @@ export async function synthesizeBrief(ctx: StepContext, ports: Ports): Promise<S
 
   const fallbackSummary = (cs: readonly Claim[]): string =>
     [`AI summary unavailable: ${degraded ?? "no summary returned"}.`, ...cs.map((c) => c.text)].join(" ");
-  const gaps = [...ctx.gaps].sort((a, b) => Number(b.reason.startsWith(NOT_SEARCHED)) - Number(a.reason.startsWith(NOT_SEARCHED)));
 
   const brief: Brief = {
     run_id: ctx.runId,
@@ -122,15 +169,15 @@ export async function synthesizeBrief(ctx: StepContext, ports: Ports): Promise<S
       const cs = byQ.get(q.id) ?? [];
       return { question_id: q.id, coverage: coverageOf(cs), claim_ids: cs.map((c) => c.id), summary: summaries.get(q.id)?.summary ?? fallbackSummary(cs) };
     }),
-    interview_questions: [
-      ...ctx.questions
-        .map((q) => summaries.get(q.id)?.interview_question ?? (coverageOf(byQ.get(q.id) ?? []) === "evidenced" ? null : `Ask about: ${q.text}`))
-        .filter((x): x is string => x !== null),
-      // Degraded: every searched-but-empty source becomes a direct question to the candidate
-      ...(degraded === null ? [] : gaps.filter((g) => !g.reason.startsWith(NOT_SEARCHED)).map((g) => `Confirm with the candidate (${g.question_id}): ${g.reason}`)),
-    ],
+    interview_questions:
+      degraded === null
+        ? ctx.questions.map((q) => summaries.get(q.id)?.interview_question ?? null).filter((x): x is string => x !== null)
+        : templatedQuestions(ctx, byQ),
     to_verify: kept.filter((c) => c.kind === "INFERENCE").slice(0, 8).map((c) => c.text),
-    not_searched: gaps.map((g) => ({ source: g.question_id, reason: g.reason })),
+    not_searched: ctx.gaps
+      .filter((g) => g.reason.startsWith(NOT_SEARCHED))
+      .map((g) => ({ source: g.question_id, reason: g.reason.slice(NOT_SEARCHED.length).trim() || "no reason recorded" })),
+    searched_empty: ctx.gaps.filter((g) => !g.reason.startsWith(NOT_SEARCHED)).map((g) => ({ source: g.question_id, reason: g.reason })),
     removed_protected: removed,
     degraded,
     evidence: evidenceOf(ctx),

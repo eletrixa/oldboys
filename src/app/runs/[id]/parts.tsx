@@ -41,12 +41,15 @@ function Mark({ state }: { state: RowState }): React.JSX.Element {
   if (state === "active") {
     return <span className="size-5 animate-spin rounded-full border-2 border-teal-400 border-t-transparent" />;
   }
+  if (state === "skipped") {
+    return <span className="flex size-5 items-center justify-center rounded-full bg-zinc-700 text-xs text-zinc-300">–</span>;
+  }
   return <span className="size-5 rounded-full border-2 border-zinc-700" />;
 }
 
 /** Percent of the recipe already in the ledger; never fully empty so the bar reads as alive. */
 function percent(rows: RowState[], stepIndex: number, stepCount: number): number {
-  if (rows.every((r) => r === "done")) return 100;
+  if (rows.every((r) => r === "done" || r === "skipped")) return 100;
   if (stepCount === 0) return rows.filter((r) => r === "done").length * 20;
   return Math.max(4, Math.min(95, Math.round((stepIndex / stepCount) * 100)));
 }
@@ -71,7 +74,7 @@ export function ProgressSteps({
       </div>
       <ul className="flex flex-col gap-3">
         {labels.map((label, i) => (
-          <li key={label} className={`flex items-center gap-3 ${rows[i] === "todo" ? "text-zinc-500" : rows[i] === "failed" ? "text-red-300" : ""}`}>
+          <li key={label} className={`flex items-center gap-3 ${rows[i] === "todo" || rows[i] === "skipped" ? "text-zinc-500" : rows[i] === "failed" ? "text-red-300" : ""}`}>
             <Mark state={rows[i] ?? "todo"} />
             {label}
           </li>
@@ -129,7 +132,7 @@ const WEB_VISIBLE = 5;
 
 function ProfileRow({ c, decision }: { c: Candidate; decision: CandidateDecision }): React.JSX.Element {
   const badge = BADGE[decision];
-  const reason = c.reasons[0];
+  const reason = c.reasons[0]?.replace(/^fallback:\s*/i, "");
   return (
     <li className="flex items-center gap-3">
       <PlatformMark c={c} />
@@ -240,7 +243,30 @@ function List({ title, items }: { title: string; items: string[] }): React.JSX.E
 
 type Evidence = Brief["evidence"][number];
 
-function EvidenceList({ items }: { items: Evidence[] }): React.JSX.Element {
+/** Plain words for the actor id a source came from. */
+const STEP_LABEL: Record<string, string> = {
+  "apify/google-search-scraper": "Web search",
+  "harvestapi/linkedin-profile-scraper": "LinkedIn",
+  "apimaestro/linkedin-profile-detail": "LinkedIn",
+  "harvestapi/linkedin-company": "LinkedIn company",
+  "rest/github": "GitHub",
+  "rest/stackexchange": "Stack Exchange",
+  "rest/huggingface": "Hugging Face",
+  "rest/orcid": "ORCID",
+  "rest/openalex": "OpenAlex",
+  "apidojo/tweet-scraper": "X",
+  "apify/instagram-profile-scraper": "Instagram",
+  "clockworks/tiktok-profile-scraper": "TikTok",
+  "streamers/youtube-scraper": "YouTube",
+  "rest/bluesky": "Bluesky",
+  "apify/website-content-crawler": "Website",
+  "ares/ekonomicke-subjekty/vyhledat": "ARES registry",
+  "ares/ekonomicke-subjekty-vr": "ARES public register",
+};
+
+const EVIDENCE_VISIBLE = 10;
+
+function EvidenceGroups({ items }: { items: Evidence[] }): React.JSX.Element {
   const byStep = Map.groupBy(items, (e) => e.step);
   return (
     <>
@@ -263,57 +289,102 @@ function EvidenceList({ items }: { items: Evidence[] }): React.JSX.Element {
   );
 }
 
-/** Plain words for the actor id a source came from. */
-const STEP_LABEL: Record<string, string> = {
-  "apify/google-search-scraper": "Web search",
-  "harvestapi/linkedin-profile-scraper": "LinkedIn",
-  "apimaestro/linkedin-profile-detail": "LinkedIn",
-  "harvestapi/linkedin-company": "LinkedIn company",
-  "rest/github": "GitHub",
-  "rest/stackexchange": "Stack Exchange",
-  "rest/huggingface": "Hugging Face",
-  "rest/orcid": "ORCID",
-  "rest/openalex": "OpenAlex",
-  "apidojo/tweet-scraper": "X",
-  "apify/instagram-profile-scraper": "Instagram",
-  "clockworks/tiktok-profile-scraper": "TikTok",
-  "streamers/youtube-scraper": "YouTube",
-  "rest/bluesky": "Bluesky",
-  "apify/website-content-crawler": "Website",
-  "ares/ekonomicke-subjekty/vyhledat": "ARES registry",
-  "ares/ekonomicke-subjekty-vr": "ARES public register",
-};
+/** First 10 rows, the rest behind "Show N more". */
+function EvidenceList({ items }: { items: Evidence[] }): React.JSX.Element {
+  const rest = items.slice(EVIDENCE_VISIBLE);
+  return (
+    <>
+      <EvidenceGroups items={items.slice(0, EVIDENCE_VISIBLE)} />
+      {rest.length > 0 && (
+        <details className="mt-3">
+          <summary className="cursor-pointer text-sm text-zinc-400 hover:text-zinc-200">Show {String(rest.length)} more</summary>
+          <EvidenceGroups items={rest} />
+        </details>
+      )}
+    </>
+  );
+}
 
 function AlsoFound({ items }: { items: Evidence[] }): React.JSX.Element | null {
   if (items.length === 0) return null;
   return (
     <details className={CARD}>
       <summary className="cursor-pointer text-sm font-semibold">
-        Also found, not confirmed ({String(items.length)}) — same name, identity not verified, not used in the brief
+        Mentions of the name, not confirmed ({String(items.length)}) — identity not verified, not used in the brief
       </summary>
       <EvidenceList items={items} />
     </details>
   );
 }
 
-function DegradedNotice({ reason, evidence }: { reason: string; evidence: Evidence[] }): React.JSX.Element {
+function DegradedNotice({ reason }: { reason: string }): React.JSX.Element {
   return (
     <section className="rounded-2xl border border-amber-700/50 bg-amber-950/30 p-5">
-      <p className="text-sm text-amber-200">AI summary unavailable: {reason}. Below is everything we confirmed, with sources.</p>
-      <EvidenceList items={evidence} />
+      <p className="text-sm text-amber-200">AI summary unavailable: {reason.replace(/\.$/, "")}.</p>
     </section>
   );
 }
+
+function ConfirmedEvidence({ items }: { items: Evidence[] }): React.JSX.Element | null {
+  if (items.length === 0) return null;
+  return (
+    <section className={CARD}>
+      <h2 className="font-semibold">From profiles you confirmed</h2>
+      <EvidenceList items={items} />
+    </section>
+  );
+}
+
+/** Human labels for recipe step ids that appear in the gap lists. */
+const GAP_LABEL: Record<string, string> = {
+  serp_person: "Web search",
+  social_serp: "Social profile search",
+  linkedin_profile: "LinkedIn",
+  github_profile: "GitHub",
+  stackexchange_profile: "Stack Exchange",
+  huggingface_profile: "Hugging Face",
+  orcid_search: "ORCID",
+  openalex_author: "OpenAlex",
+  x_profile: "X",
+  instagram_profile: "Instagram",
+  tiktok_profile: "TikTok",
+  youtube_channel: "YouTube",
+  bluesky_profile: "Bluesky",
+  personal_site_crawl: "Personal website",
+  talks_serp: "Talks and posts",
+};
+
+type Gap = Brief["not_searched"][number];
+
+/** `searched_empty` is added to Brief by another change; read it without depending on the type having it. */
+function searchedEmpty(brief: Brief): Gap[] {
+  const b: unknown = brief;
+  return typeof b === "object" && b !== null && "searched_empty" in b && Array.isArray(b.searched_empty) ? (b.searched_empty as Gap[]) : [];
+}
+
+const gapLine = (g: Gap): string => `${GAP_LABEL[g.source] ?? g.source}: ${g.reason}`;
 
 export function BriefView({ state }: { state: RunState }): React.JSX.Element | null {
   const { brief } = state;
   if (!brief) return null;
   const urlOf = new Map(state.sources.map((s) => [s.id, s.url]));
   const textOf = new Map(state.questions.map((q) => [q.id, q.text]));
+  const allUnavailable = brief.per_question.length > 0 && brief.per_question.every((q) => q.summary.startsWith("AI summary unavailable"));
   return (
     <div id="brief" className="flex scroll-mt-6 flex-col gap-4">
-      {brief.degraded !== null && <DegradedNotice reason={brief.degraded} evidence={brief.evidence} />}
-      {brief.per_question.map((q) => (
+      {brief.degraded !== null && <DegradedNotice reason={brief.degraded} />}
+      {brief.degraded !== null && <ConfirmedEvidence items={brief.evidence} />}
+      {allUnavailable ? (
+        <section className={CARD}>
+          <h3 className="font-semibold">Role criteria: no verified evidence yet</h3>
+          <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-zinc-300">
+            {brief.per_question.map((q) => (
+              <li key={q.question_id}>{textOf.get(q.question_id) ?? q.question_id}</li>
+            ))}
+          </ul>
+        </section>
+      ) : (
+        brief.per_question.map((q) => (
         <section key={q.question_id} className={CARD}>
           <div className="flex items-start justify-between gap-3">
             <h3 className="font-semibold">{textOf.get(q.question_id) ?? q.question_id}</h3>
@@ -341,10 +412,12 @@ export function BriefView({ state }: { state: RunState }): React.JSX.Element | n
               ))}
           </ul>
         </section>
-      ))}
+      ))
+      )}
       <List title="Interview questions" items={brief.interview_questions} />
       <List title="To verify" items={brief.to_verify} />
-      <List title="Not searched (and why)" items={brief.not_searched.map((n) => `${n.source}: ${n.reason}`)} />
+      <List title="Searched, nothing found" items={searchedEmpty(brief).map(gapLine)} />
+      <List title="Not searched, and why" items={brief.not_searched.map(gapLine)} />
       <AlsoFound items={brief.also_found} />
       {brief.removed_protected > 0 ? (
         <p className="text-xs text-zinc-500">{String(brief.removed_protected)} items removed (protected categories)</p>

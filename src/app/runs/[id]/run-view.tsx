@@ -26,6 +26,8 @@ import { type RunState, questionsToAsk, sortLineup, stepRows } from "./state";
 const POLL_MS = 2000;
 /** Wireframe: one easy question at a time, and never more than a few; the rest keep the server's decision. */
 const MAX_QUESTIONS = 3;
+/** A finished run older than this is shown as a replay of an earlier run. */
+const CACHED_AFTER_MS = 30 * 60_000;
 
 type Decisions = { id: string; decision: Answer }[];
 
@@ -56,6 +58,7 @@ export function RunView({ id }: { id: string }): React.JSX.Element {
   const [unsure, setUnsure] = useState<Record<string, true>>({});
   const autoSent = useRef(false);
   const lastDecisions = useRef<Decisions>([]);
+  const [openedAt] = useState(() => Date.now());
   const [sent, setSent] = useState(false);
   const [sendFailed, setSendFailed] = useState(false);
 
@@ -134,11 +137,14 @@ export function RunView({ id }: { id: string }): React.JSX.Element {
   if (!state) return <main className="mx-auto max-w-2xl px-4 py-10 text-zinc-400">Loading...</main>;
 
   const first = state.subject.split(/\s+/)[0] ?? state.subject;
+  const created = Date.parse(state.created_at);
+  const cached = state.status === "done" && !Number.isNaN(created) && openedAt - created > CACHED_AFTER_MS;
+  const degraded = state.brief !== null && state.brief.degraded !== null;
   const labels = [
     state.mentions === 0 ? "Searching public sources" : `Found ${String(state.mentions)} public ${state.mentions === 1 ? "mention" : "mentions"}`,
     `Making sure we have the right ${first}`,
-    "Reading their work history and projects",
-    "Double-checking facts against each other",
+    degraded ? "Reading their work history and projects (skipped: AI unavailable)" : "Reading their work history and projects",
+    degraded ? "Double-checking facts against each other (skipped: AI unavailable)" : "Double-checking facts against each other",
     "Writing your brief",
   ];
 
@@ -151,9 +157,10 @@ export function RunView({ id }: { id: string }): React.JSX.Element {
         {state.status !== "done" && (
           <p className="text-zinc-400">This usually takes 2 to 4 minutes. Keep this tab open.</p>
         )}
+        {cached && <p className="w-fit rounded-full bg-zinc-800 px-3 py-1 text-xs text-zinc-300">CACHED · run from {new Date(state.created_at).toLocaleString()}</p>}
         <CostLine cost={state.cost} />
       </header>
-      <ProgressSteps rows={stepRows(state)} labels={labels} stepIndex={state.step_index} stepCount={state.step_count} />
+      <ProgressSteps rows={stepRows({ ...state, degraded })} labels={labels} stepIndex={state.step_index} stepCount={state.step_count} />
       {state.status === "failed" && (
         <div role="alert" className="flex flex-col gap-2 rounded-xl border border-red-900 bg-red-950/40 p-4 text-sm text-red-200">
           <p>{failureText(state)}</p>

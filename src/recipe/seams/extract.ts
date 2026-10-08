@@ -7,7 +7,8 @@
  * Tested:  src/recipe/__tests__/seams.test.ts
  *
  * Key responsibilities:
- * - Feed only SERP hits and identity-merged sources; never rejected profiles or unverified name-search hits
+ * - Feed only identity-merged sources (fetched for, or SERP hits on, a merged profile); never rejected profiles,
+ *   namesake SERP hits or unverified name-search hits. Rejected profiles compare by profile key, not raw URL
  * - Validate every returned claim with the Claim schema; drop invalid ones with a note
  * - LLM failure returns an empty outcome with a note (never throws), so the run degrades instead of failing
  *
@@ -18,9 +19,8 @@
 import { z } from "zod";
 import { Claim } from "@/domain/claim";
 import type { Ports } from "@/domain/ports";
-
-const SERP_ACTOR = "apify/google-search-scraper";
 import { emptyOutcome } from "@/recipe/runner";
+import { profileKey } from "@/recipe/seams/resolve";
 import type { StepContext, StepOutcome } from "@/recipe/sources/types";
 
 const PROMPT_CHARS = 60_000;
@@ -38,10 +38,10 @@ const Extracted = z.array(
 
 export async function extractClaims(ctx: StepContext, ports: Ports): Promise<StepOutcome> {
   const out = emptyOutcome();
-  const rejectedUrls = new Set(ctx.candidates.filter((c) => c.decision === "rejected").flatMap((c) => c.profile_urls));
-  // Only confirmed material reaches the model: discovery SERP hits (anchored by name + city) and sources fetched
-  // for a merged profile. Name-search hits stay identity "unverified" and are listed as "also found", never claimed.
-  const sources = ctx.sources.filter((s) => !rejectedUrls.has(s.url) && (s.identity === "merged" || s.actor === SERP_ACTOR));
+  const rejected = new Set(ctx.candidates.filter((c) => c.decision === "rejected").flatMap((c) => c.profile_urls.map(profileKey)));
+  // Only confirmed material reaches the model. A name + city SERP returns every namesake, so a SERP hit counts only
+  // once the Workflow marked it "merged" (its profile key equals a merged candidate's); the rest is "also found".
+  const sources = ctx.sources.filter((s) => s.identity === "merged" && !rejected.has(profileKey(s.url)));
   if (sources.length === 0) {
     out.notes.push("no usable sources");
     return out;

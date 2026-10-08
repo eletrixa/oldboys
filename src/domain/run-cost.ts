@@ -7,7 +7,7 @@
  * Tested:  src/domain/__tests__/run-cost.test.ts
  *
  * Key responsibilities:
- * - runCost: sum cost_usd (2 decimals), count source calls and LLM calls, measure research time
+ * - runCost: sum cost_usd (2 decimals), count source calls and model calls (llm rows' ref.calls, 1 when absent), measure research time
  * - Duration = created_at → latest ledger ts, minus pauses (a 'pause' row until the next non-pause row)
  * - formatDuration: "Xs", "M min S s" or "H h M min"
  *
@@ -18,7 +18,18 @@
 
 export type RunCost = { usd: number; source_calls: number; llm_calls: number; duration_ms: number };
 
-export type CostRow = { ts: string; kind: string; cost_usd: number; ms: number };
+export type CostRow = { ts: string; kind: string; cost_usd: number; ms: number; ref_json?: string | null };
+
+/** Model calls behind one llm row: `ref.calls` when the Workflow wrote it (0 when the model failed), else 1. */
+function modelCalls(refJson: string | null | undefined): number {
+  if (refJson === null || refJson === undefined) return 1;
+  try {
+    const ref: unknown = JSON.parse(refJson);
+    return typeof ref === "object" && ref !== null && "calls" in ref && typeof ref.calls === "number" ? positive(ref.calls) : 1;
+  } catch {
+    return 1;
+  }
+}
 
 function positive(n: number): number {
   return Number.isFinite(n) && n > 0 ? n : 0;
@@ -36,7 +47,7 @@ export function runCost(rows: readonly CostRow[], createdAt: string): RunCost {
   for (const row of rows) {
     usd += positive(row.cost_usd);
     if (row.kind === "call") source_calls += 1;
-    if (row.kind === "llm") llm_calls += 1;
+    if (row.kind === "llm") llm_calls += modelCalls(row.ref_json);
 
     const t = Date.parse(row.ts);
     if (Number.isNaN(t)) continue;

@@ -13,7 +13,7 @@
  * Design constraints:
  * - Documented OpenNext "custom worker" pattern (opennext.js.org/cloudflare/howtos/custom-worker);
  *   wrangler.jsonc `main` points here, not at .open-next/worker.js
- * - Add other handlers (scheduled, queue) here, never inside the Next.js app
+ * - Other handlers (scheduled purge) live here, never inside the Next.js app
  */
 // @ts-ignore: .open-next/worker.js exists only after `opennextjs-cloudflare build`
 import { default as generated } from "../.open-next/worker.js";
@@ -23,7 +23,12 @@ const nextHandler = generated as { fetch: NonNullable<ExportedHandler<Cloudflare
 
 export { ResearchRunWorkflow } from "@/workflow/research-run";
 export { VerificationCallWorkflow } from "@/workflow/verification-call";
+import { purgeExpired } from "@/workflow/purge";
 
 export default {
   fetch: nextHandler.fetch,
+  // Cron in wrangler.jsonc: raw payloads past their 7-day TTL are purged (hackathon rule, and the privacy line on Screen 1)
+  scheduled: async (_event, env) => {
+    await purgeExpired(env.DB, env.SOURCES, new Date());
+  },
 } satisfies ExportedHandler<CloudflareEnv>;
