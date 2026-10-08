@@ -3,12 +3,11 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/domain/position-links.ts
- * Deps:    src/domain/position, src/app/api/positions/handler (types only)
+ * Deps:    src/domain/position, src/domain/corroborate (fold)
  * Tested:  src/domain/__tests__/position-links.test.ts
  *
  * Key responsibilities:
  * - groupByFamily / filterPositions for the list, linkedinPeopleSearchUrl / researchHref for the detail actions
- * - isFallbackMustHaves detects the generic set used when the AI was off
  * - ingestLabel for the ingest method chip
  * - buildCreateBody for /positions/new, addMustHave / removeMustHave for the inline editor
  *
@@ -16,10 +15,8 @@
  * - Pure, no I/O, no React
  * - Must-have ids start with mh- and stay unique; the list stays within 1..5 items
  */
-import { FAMILIES, type Family, type MustHave } from "@/domain/position";
-import type { PositionListItem } from "@/app/api/positions/handler";
-
-const MAX_MUST_HAVES = 5;
+import { fold } from "@/domain/corroborate";
+import { FAMILIES, type Family, kebab, MAX_MUST_HAVES, type MustHave, type PositionListItem } from "@/domain/position";
 
 const INGEST_LABELS: Readonly<Record<string, string>> = {
   pasted: "Pasted",
@@ -43,10 +40,6 @@ export function groupByFamily(items: readonly PositionListItem[]): FamilyGroup[]
     family,
     items: items.filter((i) => i.family === family).sort((a, b) => b.created_at.localeCompare(a.created_at)),
   })).filter((g) => g.items.length > 0);
-}
-
-function fold(s: string): string {
-  return s.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
 }
 
 export function filterPositions(items: readonly PositionListItem[], query: string): PositionListItem[] {
@@ -76,7 +69,7 @@ export function buildCreateBody(input: CreateInput): Record<string, string> | nu
 }
 
 function slug(s: string): string {
-  return fold(s).replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 32) || "item";
+  return kebab(fold(s)).slice(0, 32) || "item";
 }
 
 /** Appends a must-have with a unique mh- id from the title (or text); no-op at 5 items. */
@@ -93,11 +86,4 @@ export function addMustHave(list: readonly MustHave[], title: string, text: stri
 /** Removes one item but never the last. */
 export function removeMustHave(list: readonly MustHave[], id: string): MustHave[] {
   return list.length <= 1 ? [...list] : list.filter((m) => m.id !== id);
-}
-
-const FALLBACK_IDS = ["mh-title-experience", "mh-public-work", "mh-location-fit"];
-
-/** True when the must-haves are exactly the three generic ones used when the AI extraction was unavailable. */
-export function isFallbackMustHaves(list: readonly MustHave[]): boolean {
-  return list.length === FALLBACK_IDS.length && FALLBACK_IDS.every((id, i) => list[i]?.id === id);
 }

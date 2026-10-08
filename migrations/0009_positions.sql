@@ -21,6 +21,7 @@ CREATE TABLE positions (
   excerpt TEXT,
   r2_key TEXT,
   ingest_method TEXT NOT NULL,
+  extraction TEXT NOT NULL DEFAULT 'model' CHECK (extraction IN ('model','fallback','edited')),
   ingest_cost_usd REAL NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL,
   expires_at TEXT NOT NULL

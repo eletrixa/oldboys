@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/recipe/seams/position-extract.ts
- * Deps:    zod, src/domain/position (FAMILIES, Family, MustHave)
+ * Deps:    zod, src/domain/position (FAMILIES, Family, MustHave, shapeMustHaves, fallbackMustHaves)
  * Tested:  src/recipe/__tests__/position-extract.test.ts
  *
  * Key responsibilities:
@@ -17,19 +17,14 @@
  */
 import { z } from "zod";
 import type { Ports } from "@/domain/ports";
-
-import { FAMILIES, type Family, type MustHave } from "@/domain/position";
-
-const BASE_IDS = new Set(["current-role", "career-history", "public-code", "public-talks", "location-match", "contradictions"]);
-const MAX_MUST_HAVES = 5;
-const MAX_TITLE = 48;
+import { errorMessage, FAMILIES, type Family, fallbackMustHaves, MustHave, shapeMustHaves } from "@/domain/position";
 
 const Extract = z.object({
   title: z.string(),
   company: z.string().optional(),
   location: z.string().optional(),
   family: z.string(),
-  must_haves: z.array(z.object({ id: z.string(), text: z.string().min(1), title: z.string().optional(), accepted_evidence: z.array(z.string()) })),
+  must_haves: z.array(MustHave.extend({ id: z.string() })),
 });
 
 const SYSTEM =
@@ -57,26 +52,21 @@ export function familyOf(title: string): Family {
 
 const isFamily = (v: string): v is Family => (FAMILIES as readonly string[]).includes(v);
 
-function kebab(s: string): string {
-  return s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
-}
-
-/** The three generic must-haves of the `roleQuestions` fallback, as `MustHave`. */
-function fallback(title: string, location?: string): MustHave[] {
-  const label = title === "" ? "this role" : title;
-  return [
-    { id: "mh-title-experience", title: "Role experience", text: `Has held a ${label} position or equivalent`, accepted_evidence: ["job history", "profile"] },
-    { id: "mh-public-work", title: "Public work", text: `Has public work showing ${label} skills`, accepted_evidence: ["repo", "talk", "article", "portfolio"] },
-    { id: "mh-location-fit", title: "Location fit", text: `Location compatible with ${location ?? "the role"}`, accepted_evidence: ["profile location"] },
-  ];
-}
-
 const clean = (s: string | undefined): string | undefined => {
   const t = s?.trim();
   return t === undefined || t === "" ? undefined : t;
 };
 
-export type ExtractedPosition = { title: string; company?: string; location?: string; family: Family; must_haves: MustHave[]; cost_usd: number; notes: string[] };
+export type ExtractedPosition = {
+  title: string;
+  company?: string;
+  location?: string;
+  family: Family;
+  must_haves: MustHave[];
+  extraction: "model" | "fallback";
+  cost_usd: number;
+  notes: string[];
+};
 
 export async function extractPosition(
   text: string,
@@ -88,39 +78,31 @@ export async function extractPosition(
     ...(company !== undefined ? { company } : {}),
     ...(location !== undefined ? { location } : {}),
   });
+  const hinted = { title: clean(hint.title), company: clean(hint.company), location: clean(hint.location) };
   try {
     const r = await ports.llm({ model: "primary", system: SYSTEM, prompt: `Posting:\n${text}`, schema: Extract });
-    const title = clean(hint.title) ?? clean(r.value.title) ?? "";
-    const company = clean(hint.company) ?? clean(r.value.company);
-    const location = clean(hint.location) ?? clean(r.value.location);
-    const family = isFamily(r.value.family) ? r.value.family : familyOf(title);
-    const seen = new Set<string>();
-    const must_haves: MustHave[] = [];
-    for (const m of r.value.must_haves) {
-      const id = kebab(m.id);
-      if (!id.startsWith("mh-") || BASE_IDS.has(id) || seen.has(id)) continue;
-      seen.add(id);
-      const label = m.title?.trim().slice(0, MAX_TITLE).trim();
-      must_haves.push({ id, text: m.text, accepted_evidence: m.accepted_evidence, ...(label !== undefined && label !== "" ? { title: label } : {}) });
-      if (must_haves.length === MAX_MUST_HAVES) break;
-    }
+    const title = hinted.title ?? clean(r.value.title) ?? "";
+    const company = hinted.company ?? clean(r.value.company);
+    const location = hinted.location ?? clean(r.value.location);
+    const must_haves = shapeMustHaves(r.value.must_haves);
     const usable = must_haves.length > 0;
     return {
       ...withOptional(title, company, location),
-      family,
-      must_haves: usable ? must_haves : fallback(title, location),
+      family: isFamily(r.value.family) ? r.value.family : familyOf(title),
+      must_haves: usable ? must_haves : fallbackMustHaves(title, location ?? null),
+      extraction: usable ? "model" : "fallback",
       cost_usd: r.cost_usd,
       notes: usable ? [] : ["position extract: no usable LLM output, used generic fallback"],
     };
   } catch (e) {
-    const title = clean(hint.title) ?? "";
-    const why = e instanceof Error ? e.message : "unknown error";
+    const title = hinted.title ?? "";
     return {
-      ...withOptional(title, clean(hint.company), clean(hint.location)),
+      ...withOptional(title, hinted.company, hinted.location),
       family: familyOf(title),
-      must_haves: fallback(title, clean(hint.location)),
+      must_haves: fallbackMustHaves(title, hinted.location ?? null),
+      extraction: "fallback",
       cost_usd: 0,
-      notes: [`position extract: LLM failed (${why}), used generic fallback`],
+      notes: [`position extract: LLM failed (${errorMessage(e)}), used generic fallback`],
     };
   }
 }

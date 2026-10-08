@@ -18,7 +18,6 @@ import {
   buildCreateBody,
   filterPositions,
   groupByFamily,
-  isFallbackMustHaves,
   ingestLabel,
   linkedinPeopleSearchUrl,
   removeMustHave,
@@ -110,14 +109,5 @@ describe("ingestLabel", () => {
     expect(ingestLabel("jsonld")).toBe("Posting page");
     expect(ingestLabel("pasted")).toBe("Pasted");
     expect(ingestLabel("zzz")).toBe("zzz");
-  });
-});
-
-describe("isFallbackMustHaves", () => {
-  const mh = (id: string): MustHave => ({ id, text: id, accepted_evidence: [] });
-  it("recognises exactly the three generic ids in order", () => {
-    expect(isFallbackMustHaves(["mh-title-experience", "mh-public-work", "mh-location-fit"].map(mh))).toBe(true);
-    expect(isFallbackMustHaves([mh("mh-title-experience")])).toBe(false);
-    expect(isFallbackMustHaves([mh("mh-a"), mh("mh-b"), mh("mh-c")])).toBe(false);
   });
 });

@@ -49,6 +49,7 @@ describe("extractPosition", () => {
     expect(r.must_haves.every((m) => m.accepted_evidence.length > 0)).toBe(true);
     expect(r.must_haves[2]?.text).toContain("Brno");
     expect(r.family).toBe("sales");
+    expect(r.extraction).toBe("fallback");
     expect(r.cost_usd).toBe(0);
     expect(r.notes[0]).toMatch(/^position extract: LLM failed \(no fake llm configured\)/);
   });
@@ -56,6 +57,7 @@ describe("extractPosition", () => {
   it("X6: only unusable must-haves give the fallbacks and a no-usable-output note", async () => {
     const r = await run(out({ must_haves: [mh("current-role")] }));
     expect(r.must_haves).toHaveLength(3);
+    expect(r.extraction).toBe("fallback");
     expect(r.notes).toEqual(["position extract: no usable LLM output, used generic fallback"]);
     expect(r.cost_usd).toBe(0.001);
   });

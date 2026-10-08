@@ -20,7 +20,7 @@
 import Link from "next/link";
 import { RoleTable } from "@/app/_components/role-table";
 import type { PositionDetail } from "@/app/api/positions/handler";
-import { ingestLabel, isFallbackMustHaves, linkedinPeopleSearchUrl, researchHref } from "@/domain/position-links";
+import { ingestLabel, linkedinPeopleSearchUrl, researchHref } from "@/domain/position-links";
 import { AuthStates } from "./auth-states";
 import { MustHaveEditor } from "./must-have-editor";
 import { PositionBasics } from "./position-basics";
@@ -52,7 +52,7 @@ function Body({ detail, onChange }: { detail: PositionDetail; onChange: (d: Posi
         </div>
       </header>
       <PositionBasics key={position.title + position.family} position={position} onSaved={saved} />
-      {isFallbackMustHaves(position.must_haves) && (
+      {position.extraction === "fallback" && (
         <p className="rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-zinc-300">
           Fallback must-haves (AI was off). Edit them below so the research asks about this role.
         </p>

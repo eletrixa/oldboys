@@ -13,7 +13,9 @@
  * - Pure and never throws; an unparsable or non-http(s) string is treated as no URL (`pasted`)
  * - Only the hosts in the plan table are rewritten; every other host is fetched as the user's own URL (`jsonld`)
  */
-export type PostingMethod = "pasted" | "jobs-cz" | "greenhouse" | "lever" | "ashby" | "jsonld";
+import type { IngestMethod } from "@/domain/position";
+
+export type PostingMethod = IngestMethod;
 
 export type PostingPlan = {
   method: PostingMethod;

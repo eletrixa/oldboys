@@ -1,5 +1,5 @@
 /**
- * Tests for the Position aggregate: schemas, must-have projection to questions, dedupe key.
+ * Tests for the Position aggregate: schemas, must-have projection to questions, shaping helpers.
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/domain/__tests__/position.test.ts
@@ -7,13 +7,13 @@
  * Tested:  n/a (this is the test)
  *
  * Key responsibilities:
- * - One case per acceptance item A1..A12 of specs/positions-domain.md (A13 is the unchanged role.test.ts)
+ * - One case per acceptance item A1..A11 of specs/positions-domain.md (A13 is the unchanged role.test.ts)
  *
  * Design constraints:
  * - Fixtures stay inline; A10 uses the recipe fakes to compare against roleQuestions
  */
 import { describe, expect, it } from "vitest";
-import { FAMILIES, Family, MustHave, mustHavesToQuestions, Position, positionDedupKey } from "@/domain/position";
+import { fallbackMustHaves, FAMILIES, Family, MustHave, mustHavesToQuestions, parseMustHaves, Position, POSITION_ID, shapeMustHaves } from "@/domain/position";
 import { roleQuestions } from "@/recipe/seams/role";
 import { fakeLlm, fakePorts } from "@/recipe/__tests__/fakes";
 
@@ -26,6 +26,7 @@ const minimal = {
   must_haves: [],
   excerpt: "We hire.",
   ingest_method: "pasted",
+  extraction: "model",
   ingest_cost_usd: 0,
   created_at: "2026-10-08T10:00:00.000Z",
   expires_at: "2026-10-15T10:00:00.000Z",
@@ -116,14 +117,54 @@ describe("mustHavesToQuestions", () => {
   });
 });
 
-describe("positionDedupKey", () => {
-  it("A11: ignores case and surrounding or repeated whitespace", () => {
-    expect(positionDedupKey("Acme  s.r.o.", "Senior Data Engineer", "Prague")).toBe(
-      positionDedupKey(" acme s.r.o.", "senior data engineer", "PRAGUE"),
-    );
+describe("Position.extraction", () => {
+  it("A11: accepts model, fallback and edited and rejects anything else", () => {
+    for (const extraction of ["model", "fallback", "edited"]) expect(Position.safeParse({ ...minimal, extraction }).success).toBe(true);
+    expect(Position.safeParse({ ...minimal, extraction: "guess" }).success).toBe(false);
   });
+});
 
-  it("A12: missing company and location give empty segments", () => {
-    expect(positionDedupKey(undefined, "x", undefined)).toBe("|x|");
+describe("shapeMustHaves", () => {
+  it("keeps kebab mh- ids, drops base ids and duplicates, cuts titles, caps at 5", () => {
+    const raw = [
+      mh("MH Alpha", { title: "t".repeat(60) }),
+      mh("mh-alpha"),
+      mh("public-code"),
+      mh("mh-b"),
+      mh("mh-c"),
+      mh("mh-d"),
+      mh("mh-e"),
+      mh("mh-f"),
+    ].map((m, i) => (i === 0 ? { ...m, id: "mh-Alpha!" } : m));
+    const out = shapeMustHaves(raw);
+    expect(out.map((m) => m.id)).toEqual(["mh-alpha", "mh-b", "mh-c", "mh-d", "mh-e"]);
+    expect(out[0]?.title).toBe("t".repeat(48));
+  });
+});
+
+describe("parseMustHaves", () => {
+  it("returns the list for valid JSON and null otherwise", () => {
+    expect(parseMustHaves(JSON.stringify([mh("mh-a")]))).toEqual([mh("mh-a")]);
+    expect(parseMustHaves("not json")).toBeNull();
+    expect(parseMustHaves(JSON.stringify([{ id: "x" }]))).toBeNull();
+  });
+});
+
+describe("fallbackMustHaves", () => {
+  it("gives the three generic must-haves with the label and place", () => {
+    const f = fallbackMustHaves("Chef", "Brno");
+    expect(f.map((m) => m.id)).toEqual(["mh-title-experience", "mh-public-work", "mh-location-fit"]);
+    expect(f[0]?.text).toContain("Chef");
+    expect(f[2]?.text).toContain("Brno");
+    expect(fallbackMustHaves("", null)[0]?.text).toContain("this role");
+  });
+});
+
+describe("POSITION_ID", () => {
+  it("accepts safe ids and rejects spaces, slashes and long ids", () => {
+    expect(POSITION_ID.safeParse("abc_DEF-1").success).toBe(true);
+    expect(POSITION_ID.safeParse("a b").success).toBe(false);
+    expect(POSITION_ID.safeParse("a/b").success).toBe(false);
+    expect(POSITION_ID.safeParse("a".repeat(65)).success).toBe(false);
   });
 });

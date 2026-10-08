@@ -48,7 +48,7 @@ const MAX_ID = 64;
 const MAX_LIST = 500;
 const MAX_RUNS = 200;
 const COLUMNS =
-  "id, title, family, company, location, board, posting_url, external_id, must_haves_json, excerpt, ingest_method, ingest_cost_usd, created_at, expires_at";
+  "id, title, family, company, location, board, posting_url, external_id, must_haves_json, excerpt, ingest_method, ingest_cost_usd, created_at, expires_at, extraction";
 
 type PositionRow = Record<string, string | number | null>;
 
@@ -78,6 +78,7 @@ function toPosition(row: PositionRow): Position {
     ingest_cost_usd: Number(row.ingest_cost_usd),
     created_at: String(row.created_at),
     expires_at: String(row.expires_at),
+    extraction: row.extraction as Position["extraction"],
   };
 }
 

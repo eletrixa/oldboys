@@ -133,8 +133,8 @@ export async function ingestPosition(deps: IngestDeps, body: IngestBody): Promis
   try {
     await db
       .prepare(
-        `INSERT INTO positions (id, title, family, company, location, board, posting_url, external_id, must_haves_json, excerpt, r2_key, ingest_method, ingest_cost_usd, created_at, expires_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO positions (id, title, family, company, location, board, posting_url, external_id, must_haves_json, excerpt, r2_key, ingest_method, ingest_cost_usd, created_at, expires_at, extraction)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .bind(
         id,
@@ -152,6 +152,7 @@ export async function ingestPosition(deps: IngestDeps, body: IngestBody): Promis
         extracted.cost_usd,
         fetchedAt,
         new Date(now.getTime() + RETENTION_DAYS * DAY_MS).toISOString(),
+        extracted.extraction,
       )
       .run();
   } catch (e) {
