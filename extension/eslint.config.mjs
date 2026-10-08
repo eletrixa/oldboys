@@ -16,7 +16,7 @@ import { defineConfig, globalIgnores } from "eslint/config";
 import tseslint from "typescript-eslint";
 
 export default defineConfig([
-  globalIgnores([".output/**", ".wxt/**", "node_modules/**"]),
+  globalIgnores([".output/**", ".wxt/**", "node_modules/**", "e2e/**", "playwright.config.ts"]),
   ...tseslint.configs.strictTypeChecked,
   ...tseslint.configs.stylisticTypeChecked,
   {

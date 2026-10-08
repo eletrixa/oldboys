@@ -28,13 +28,14 @@ Bindings in `wrangler.jsonc`: `DB` (D1), `SOURCES` (R2), `RESEARCH_RUN` and `VER
 Worker entry `src/worker.ts` re-exports the OpenNext `fetch` and exports `ResearchRunWorkflow` and `VerificationCallWorkflow`. The Workflow imports only `src/domain/*` and `src/recipe/*`, never Next.js.
 
 ## Scripts (pnpm)
-`dev`, `build`, `preview`, `deploy`, `cf-typegen`, `typecheck`, `lint`, `test`, `test:watch`, `db:migrate:local`, `db:migrate:remote`, `check` (= typecheck && lint && test). Do not rename.
+`dev`, `build`, `preview`, `deploy`, `cf-typegen`, `typecheck`, `lint`, `test`, `test:watch`, `db:migrate:local`, `db:migrate:remote`, `check` (= typecheck && lint && test, app and extension), `ext:build`. Do not rename.
 
 ## Directory map
 - `src/domain/` pure: claim schemas today; `verify.ts` and `resolve.ts` are TODO (001 TDD steps 2–3). No I/O, ports are plain function parameters.
 - `src/recipe/` per-goal questions and steps (`goals/*.ts`).
 - `src/workflow/` Workflow class and runner adapters.
-- `src/app/` Next.js routes and UI.
+- `src/app/` Next.js routes and UI; `/runs/[id]` is the report page the extension opens.
+- `extension/` WXT browser extension (Chrome, Edge, Firefox from one codebase; plans/004). Own `pnpm check`, included in the root one; `pnpm --filter oldboys-extension e2e` for the Playwright Chromium smoke.
 - `migrations/` D1 SQL.
 - `rules/` repo coding rules.
 - `plans/` decision dossiers (001, 002).

@@ -21,6 +21,8 @@ Open the popup once, paste the run token (`RUN_TOKEN`), pick the goal. API base 
 ## Check
 `pnpm --filter oldboys-extension check` (typecheck, lint, Vitest with WXT's fake browser). The root `pnpm check` includes it.
 
+`pnpm --filter oldboys-extension e2e` builds chrome-mv3 and runs a Playwright smoke test in headless Chromium: loads the extension, serves a LinkedIn profile fixture, asserts the button mounts, clicks it, and checks the POST body, the stored run and the poll alarm. Needs `pnpm exec playwright install chromium` once. Firefox has no automated equivalent; load it as a temporary add-on by hand.
+
 ## Known limits
 - Polling is 60 s; a notification can be up to a minute late. Opening the popup and pressing Refresh reconciles immediately.
 - Firefox notifications have no buttons; the badge count is the always-on signal.
