@@ -3,11 +3,12 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/runs/[id]/kit-actions.tsx
- * Deps:    react, ./interview-kit, ./candidate-copy
- * Tested:  n/a (the Markdown is tested in __tests__/interview-kit.test.ts and __tests__/candidate-copy.test.ts)
+ * Deps:    react, ./interview-kit, ./candidate-copy, ./ats-note
+ * Tested:  n/a (the texts are tested in __tests__/interview-kit.test.ts, __tests__/candidate-copy.test.ts and __tests__/ats-note.test.ts)
  *
  * Key responsibilities:
  * - KitActions: build the kit (generatedAt = now) or the candidate notice at click time, copy it or download it as .md
+ * - Copy for ATS: a short plain-text note (atsNote) with the link to this brief, for pasting into any ATS card
  * - Short "Copied" / "Copy failed" label on each copy button
  *
  * Design constraints:
@@ -20,6 +21,7 @@ import { useState } from "react";
 import type { RunState } from "./state";
 import { interviewKit, kitFileName } from "./interview-kit";
 import { candidateCopy, noticeFileName } from "./candidate-copy";
+import { atsNote } from "./ats-note";
 
 const BTN = "rounded-xl border border-zinc-700 px-4 py-2 text-sm hover:bg-zinc-800";
 
@@ -59,10 +61,12 @@ function downloadText(text: string | null, fileName: string): void {
 export function KitActions({ state }: { state: RunState }): React.JSX.Element | null {
   const [kitCopy, setKitCopy] = useState<CopyStatus>("idle");
   const [noticeCopy, setNoticeCopy] = useState<CopyStatus>("idle");
+  const [atsCopy, setAtsCopy] = useState<CopyStatus>("idle");
   if (state.brief === null) return null;
 
   const kit = (): string | null => interviewKit(state, new Date().toISOString());
   const notice = (): string | null => candidateCopy(state);
+  const ats = (): string | null => atsNote(state, `${window.location.origin}/runs/${state.id}`);
 
   return (
     <div className="flex flex-wrap gap-2">
@@ -77,6 +81,9 @@ export function KitActions({ state }: { state: RunState }): React.JSX.Element | 
       </button>
       <button type="button" className={BTN} onClick={() => { downloadText(notice(), noticeFileName(state)); }}>
         Download candidate notice (.md)
+      </button>
+      <button type="button" className={BTN} onClick={() => void copyText(ats(), setAtsCopy)} aria-live="polite">
+        {atsCopy === "idle" ? "Copy for ATS" : STATUS_LABEL[atsCopy]}
       </button>
     </div>
   );

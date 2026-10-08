@@ -102,3 +102,8 @@ Each agent appends: what it starts, progress, what it finishes. Newest at the bo
 - Shell and home: Echo r mark + "radar" wordmark, Roles / New brief, honesty footer (`layout.tsx`); editorial home with three steps and the start form in a card (`page.tsx`). Supported states (evidenced, This is them, strong, audit ok, identity-map merge) now use the green `ok` tokens instead of rust.
 - Fonts: Public Sans and Newsreader variable TTFs self-hosted in `public/fonts` with their OFL notices (no network fetch).
 - Not touched: start-form logic, run-view logic, API, extension UI. `pnpm check` and `pnpm build` green.
+
+## 2026-10-08 · ats-note agent (Minas)
+- Started: 23:59. Idea #20 (copy-paste door): "Copy for ATS" button next to the interview kit and candidate notice buttons; pure `atsNote` builds a short plain-text note for any ATS card (subject + role, the three 30-second summary lines, up to 5 confirmed profile links, link to the full brief, "rates the research, not the candidate" + deletion date).
+- Finished: 00:01. Merged candidates only, never also_found; no Markdown. No schema change, no new endpoint; pnpm check green, wrangler dry-run bundles.
+- Files: src/app/runs/[id]/{ats-note.ts,__tests__/ats-note.test.ts} (new), src/app/runs/[id]/kit-actions.tsx, PROGRESS.md.
