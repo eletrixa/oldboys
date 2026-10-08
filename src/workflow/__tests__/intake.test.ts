@@ -8,7 +8,7 @@
  *
  * Key responsibilities:
  * - Cover specs/intake/funnel.md: happy path, CV-only PDF, duplicate and insert race, unknown tag, sender not
- *   allowed, incomplete, capped, R2 failure leaving the row at 'received'
+ *   allowed, incomplete, capped (and the capped retry), R2 failure leaving the row at 'received'
  *
  * Design constraints:
  * - No module mocks; fakes match on SQL prefixes and keep state in plain maps
@@ -31,7 +31,7 @@ function makeEnv(opts: { intakeRunsLastHour?: number; cap?: string; r2Error?: Er
   const countArgs: unknown[][] = [];
 
   const exec = (sql: string, args: unknown[]): { rows: Row[]; changes: number } => {
-    if (sql.startsWith("SELECT id, status, run_id, note FROM applications")) {
+    if (sql.startsWith("SELECT id, status, run_id, note, tag, linkedin_url, cv_text FROM applications")) {
       const hit = [...apps.values()].find((a) => a.source === args[0] && a.external_id === args[1]);
       return { rows: hit ? [hit] : [], changes: 0 };
     }
@@ -196,6 +196,25 @@ describe("ingestApplication", () => {
     expect(res.status).toBe("incomplete");
     expect(res.note).toContain("unsupported CV format application/vnd.openxmlformats");
     expect(puts).toHaveLength(1);
+  });
+
+  it("a capped application re-decides on the next delivery and starts the run once the hour has room", async () => {
+    const opts = { intakeRunsLastHour: 10 };
+    const { env, apps, investigations, create } = makeEnv(opts);
+    const first = await ingestApplication({ ...base, linkedinUrl: PROFILE }, env, NOW);
+    expect(first.status).toBe("capped");
+    expect(create).not.toHaveBeenCalled();
+
+    const stillFull = await ingestApplication({ ...base, linkedinUrl: PROFILE }, env, NOW);
+    expect(stillFull).toMatchObject({ applicationId: first.applicationId, status: "capped", duplicate: true });
+
+    opts.intakeRunsLastHour = 0;
+    const retried = await ingestApplication({ ...base, linkedinUrl: "https://linkedin.com/in/someone-else" }, env, NOW);
+    expect(retried).toMatchObject({ applicationId: first.applicationId, status: "run-started", duplicate: true, note: null });
+    expect(retried.runId).not.toBeNull();
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(investigations[0]).toMatchObject({ profile_url: PROFILE, via: "intake", application_id: first.applicationId });
+    expect(apps.get(first.applicationId)).toMatchObject({ status: "run-started", run_id: retried.runId, note: null });
   });
 
   it("capped when the intake runs of the last hour reach INTAKE_PER_HOUR_CAP", async () => {

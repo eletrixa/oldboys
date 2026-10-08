@@ -34,7 +34,15 @@ export type IntakeResult = {
   note: string | null;
 };
 
-type ExistingRow = { id: string; status: ApplicationStatus; run_id: string | null; note: string | null };
+type ExistingRow = {
+  id: string;
+  status: ApplicationStatus;
+  run_id: string | null;
+  note: string | null;
+  tag: string | null;
+  linkedin_url: string | null;
+  cv_text: string | null;
+};
 
 const NOTE_MAX = 1000;
 const HOUR_MS = 60 * 60 * 1000;
@@ -48,7 +56,7 @@ export async function ingestApplication(
   const input = IntakeInput.parse(raw);
 
   const existing = await findExisting(env.DB, input.source, input.externalId);
-  if (existing) return existing;
+  if (existing) return existing.status === "capped" ? retryCapped(existing, env, now) : toResult(existing);
 
   const id = crypto.randomUUID();
   try {
@@ -71,7 +79,7 @@ export async function ingestApplication(
   } catch (err) {
     // Two deliveries of the same message raced past the SELECT; the loser reports the winner's row.
     const winner = isUniqueViolation(err) ? await findExisting(env.DB, input.source, input.externalId) : null;
-    if (winner) return winner;
+    if (winner) return toResult(winner);
     throw err;
   }
 
@@ -126,12 +134,37 @@ export async function ingestApplication(
   return { applicationId: id, status: decision.status, runId, duplicate: false, note };
 }
 
-async function findExisting(db: D1Database, source: string, externalId: string): Promise<IntakeResult | null> {
-  const row = await db
-    .prepare("SELECT id, status, run_id, note FROM applications WHERE source = ? AND external_id = ?")
+async function findExisting(db: D1Database, source: string, externalId: string): Promise<ExistingRow | null> {
+  return db
+    .prepare("SELECT id, status, run_id, note, tag, linkedin_url, cv_text FROM applications WHERE source = ? AND external_id = ?")
     .bind(source, externalId)
     .first<ExistingRow>();
-  return row ? { applicationId: row.id, status: row.status, runId: row.run_id, duplicate: true, note: row.note } : null;
+}
+
+function toResult(row: ExistingRow): IntakeResult {
+  return { applicationId: row.id, status: row.status, runId: row.run_id, duplicate: true, note: row.note };
+}
+
+/**
+ * A delivery that was capped is the one duplicate worth re-deciding: the stored candidate input is re-checked against
+ * the cap now, and the run starts if there is room. The new payload is ignored; the row keeps what it had.
+ */
+async function retryCapped(row: ExistingRow, env: IntakeEnv, now: Date): Promise<IntakeResult> {
+  const tag = IntakeTag.safeParse(row.tag);
+  const position = tag.success
+    ? await env.DB.prepare("SELECT role, goal FROM intake_tags WHERE tag = ?").bind(tag.data).first<{ role: string; goal: GoalId }>()
+    : null;
+  const candidate = { profileUrl: row.linkedin_url ?? undefined, cvText: row.cv_text ?? undefined };
+  if (position === null || (candidate.profileUrl === undefined && candidate.cvText === undefined)) return toResult(row);
+  const stillCapped =
+    (await runsStartedSince(env.DB, new Date(now.getTime() - HOUR_MS), "intake")) >= intakeCap(env.INTAKE_PER_HOUR_CAP);
+  if (stillCapped) return toResult(row);
+
+  const run = await startRun(env, { ...candidate, goal: position.goal, role: position.role, via: "intake", applicationId: row.id }, now);
+  await env.DB.prepare("UPDATE applications SET status = ?, run_id = ?, note = ? WHERE id = ?")
+    .bind("run-started", run.id, null, row.id)
+    .run();
+  return { applicationId: row.id, status: "run-started", runId: run.id, duplicate: true, note: null };
 }
 
 function isUniqueViolation(err: unknown): boolean {
