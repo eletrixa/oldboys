@@ -1,0 +1,267 @@
+{
+  "schema_version": 1,
+  "diagram_type": "sequence",
+  "meta": {
+    "title": "Oldboys: jeden běh",
+    "viewBox": [
+      1080,
+      880
+    ],
+    "column_fit": "spread",
+    "quality_profile": "showcase",
+    "views": [
+      {
+        "id": "resolve",
+        "label": "Jmenovci",
+        "focus": [
+          "ui",
+          "runner",
+          "apify",
+          "llm",
+          "ledger"
+        ],
+        "note": "SERP najde kandidáty, LLM je oskóruje proti kotvě, pod prahem se běh zastaví a zeptá uživatele."
+      },
+      {
+        "id": "collect",
+        "label": "Sběr a onEmpty",
+        "focus": [
+          "runner",
+          "apify",
+          "ares",
+          "ledger"
+        ],
+        "note": "Prázdný LinkedIn nespadne potichu: fallback na SERP snippet a štítek PARTIAL."
+      },
+      {
+        "id": "verify",
+        "label": "Ověření a report",
+        "focus": [
+          "runner",
+          "llm",
+          "ledger",
+          "ui"
+        ],
+        "note": "Citace musí ležet v excerptu, URL musí být v ledgeru, zbytek posoudí druhý model."
+      }
+    ]
+  },
+  "participants": [
+    {
+      "id": "ui",
+      "type": "frontend",
+      "label": "UI",
+      "sublabel": "Next.js"
+    },
+    {
+      "id": "runner",
+      "type": "backend",
+      "label": "Runner",
+      "sublabel": "recipe"
+    },
+    {
+      "id": "apify",
+      "type": "external",
+      "label": "Apify",
+      "sublabel": "actors"
+    },
+    {
+      "id": "ares",
+      "type": "external",
+      "label": "ARES",
+      "sublabel": "registr"
+    },
+    {
+      "id": "llm",
+      "type": "external",
+      "label": "LLM",
+      "sublabel": "Anthropic"
+    },
+    {
+      "id": "ledger",
+      "type": "messagebus",
+      "label": "Ledger",
+      "sublabel": "jsonl + SSE"
+    }
+  ],
+  "segments": [
+    {
+      "from": 150,
+      "to": 418,
+      "label": "Jmenovci"
+    },
+    {
+      "from": 422,
+      "to": 608,
+      "label": "Sběr"
+    },
+    {
+      "from": 612,
+      "to": 802,
+      "label": "Ověření a report"
+    }
+  ],
+  "messages": [
+    {
+      "from": "ui",
+      "to": "runner",
+      "y": 176,
+      "label": "POST /runs {subject, anchor, goal}",
+      "variant": "emphasis"
+    },
+    {
+      "from": "runner",
+      "to": "apify",
+      "y": 214,
+      "label": "SERP(subject + anchor)"
+    },
+    {
+      "from": "runner",
+      "to": "llm",
+      "y": 252,
+      "label": "score candidates vs anchor"
+    },
+    {
+      "from": "llm",
+      "to": "runner",
+      "y": 290,
+      "label": "c1 0.91 merge · c2 0.55 maybe",
+      "variant": "return"
+    },
+    {
+      "from": "runner",
+      "to": "ledger",
+      "y": 328,
+      "label": "decision: lineup, pause",
+      "variant": "dashed"
+    },
+    {
+      "from": "ledger",
+      "to": "ui",
+      "y": 366,
+      "label": "data-lineup (SSE)",
+      "variant": "dashed"
+    },
+    {
+      "from": "ui",
+      "to": "runner",
+      "y": 404,
+      "label": "POST /answer {pick: c1}",
+      "variant": "emphasis"
+    },
+    {
+      "from": "runner",
+      "to": "apify",
+      "y": 442,
+      "label": "linkedin(c1), timeout 45s"
+    },
+    {
+      "from": "apify",
+      "to": "runner",
+      "y": 480,
+      "label": "[] empty",
+      "variant": "return"
+    },
+    {
+      "from": "runner",
+      "to": "ledger",
+      "y": 518,
+      "label": "onEmpty: snippet, PARTIAL",
+      "variant": "dashed"
+    },
+    {
+      "from": "runner",
+      "to": "apify",
+      "y": 556,
+      "label": "instagram · x · website"
+    },
+    {
+      "from": "runner",
+      "to": "ares",
+      "y": 594,
+      "label": "vyhledat + vr/{ico}"
+    },
+    {
+      "from": "runner",
+      "to": "llm",
+      "y": 632,
+      "label": "extract claims, quote required"
+    },
+    {
+      "from": "runner",
+      "to": "ledger",
+      "y": 670,
+      "label": "verified claims.json + gaps",
+      "variant": "emphasis"
+    },
+    {
+      "from": "ledger",
+      "to": "ui",
+      "y": 708,
+      "label": "data-claim · data-gap",
+      "variant": "dashed"
+    },
+    {
+      "from": "runner",
+      "to": "llm",
+      "y": 746,
+      "label": "synthesize per question"
+    },
+    {
+      "from": "ledger",
+      "to": "ui",
+      "y": 784,
+      "label": "data-report",
+      "variant": "dashed"
+    }
+  ],
+  "activations": [
+    {
+      "participant": "runner",
+      "from": 170,
+      "to": 790,
+      "type": "backend"
+    },
+    {
+      "participant": "llm",
+      "from": 246,
+      "to": 296,
+      "type": "external"
+    },
+    {
+      "participant": "apify",
+      "from": 436,
+      "to": 486,
+      "type": "external"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Pauza na lineup",
+      "items": [
+        "Pod prahem shody se běh zeptá",
+        "possibly-same-as zůstává oddělený kandidát",
+        "Tvrzení nesou id kandidáta"
+      ]
+    },
+    {
+      "dot": "orange",
+      "title": "onEmpty",
+      "items": [
+        "Každý krok má deklarovaný fallback",
+        "Prázdný zdroj = Gap s důvodem",
+        "UI ukáže štítek PARTIAL"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Ověření",
+      "items": [
+        "Nejdřív deterministická kontrola citace",
+        "LLM jen na zbytek",
+        "Neověřený FACT klesne na INFERENCE"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Oldboys: deep-research agent",
+    "quality_profile": "showcase",
+    "views": [
+      { "id": "run-path", "label": "Hlavní běh", "focus": ["ui", "routes", "runner", "seams", "anthropic"], "note": "Od formuláře v UI přes runner receptu k LLM švům." },
+      { "id": "sources", "label": "Zdroje", "focus": ["runner", "apify", "ares"], "note": "Veřejná data: Apify actory a registr ARES, každé volání s timeoutem a stropem ceny." },
+      { "id": "ledger", "label": "Ledger a stream", "focus": ["runner", "ledger", "fs", "routes", "ui"], "note": "Každá akce jde do append-only ledgeru, SSE ho čte a posílá do UI." }
+    ]
+  },
+  "components": [
+    { "id": "ui", "type": "frontend", "label": "Next.js UI", "sublabel": "lineup · claims · diff", "pos": [40, 300], "size": [140, 64] },
+    { "id": "routes", "type": "backend", "label": "API routes", "sublabel": "/api/runs · answer · events", "pos": [260, 300], "size": [150, 64] },
+    { "id": "runner", "type": "backend", "label": "Recipe runner", "sublabel": "steps · onEmpty · pause", "pos": [490, 300], "size": [150, 64], "tag": "budget $0.50 / 12 calls" },
+    { "id": "seams", "type": "backend", "label": "LLM seams", "sublabel": "score · extract · verify · synth", "pos": [720, 300], "size": [160, 64] },
+    { "id": "anthropic", "type": "external", "label": "Anthropic", "sublabel": "Claude API", "pos": [960, 300], "size": [130, 64] },
+    { "id": "apify", "type": "external", "label": "Apify actors", "sublabel": "SERP · IG · X · LinkedIn · web", "pos": [400, 110], "size": [170, 64] },
+    { "id": "ares", "type": "external", "label": "ARES v3", "sublabel": "IČO · statutáři", "pos": [620, 110], "size": [140, 64] },
+    { "id": "ledger", "type": "messagebus", "label": "Ledger", "sublabel": "append-only jsonl", "pos": [490, 490], "size": [150, 64] },
+    { "id": "fs", "type": "database", "label": "runs/<id>/", "sublabel": "ledger · sources · claims.json", "pos": [720, 490], "size": [170, 64] }
+  ],
+  "boundaries": [
+    { "kind": "region", "label": "Next.js proces · localhost", "wraps": ["routes", "runner", "seams", "ledger", "fs"] }
+  ],
+  "connections": [
+    { "id": "ui-routes", "from": "ui", "to": "routes", "label": "fetch", "variant": "emphasis" },
+    { "id": "routes-runner", "from": "routes", "to": "runner", "label": "start · answer", "variant": "emphasis" },
+    { "id": "runner-seams", "from": "runner", "to": "seams", "variant": "emphasis" },
+    { "id": "seams-anthropic", "from": "seams", "to": "anthropic", "label": "AI SDK" },
+    { "id": "runner-apify", "from": "runner", "to": "apify", "label": "apify-client", "fromSide": "top", "toSide": "bottom" },
+    { "id": "runner-ares", "from": "runner", "to": "ares", "label": "HTTPS", "fromSide": "top", "toSide": "bottom" },
+    { "id": "runner-ledger", "from": "runner", "to": "ledger", "label": "append", "fromSide": "bottom", "toSide": "top", "labelDy": 24 },
+    { "id": "ledger-fs", "from": "ledger", "to": "fs", "label": "project" },
+    { "id": "ledger-sse", "from": "ledger", "to": "routes", "label": "SSE tail", "variant": "dashed", "fromSide": "left", "toSide": "bottom" }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "Plánovač", "items": ["Pevný recept pro každý cíl", "Větve jen onEmpty a pauza na lineup", "LLM pouze ve 4 švech"] },
+    { "dot": "emerald", "title": "Ověření", "items": ["FACT jen s citací uvnitř excerptu", "URL musí být v ledgeru", "Zbytek posoudí druhý model"] },
+    { "dot": "amber", "title": "Stav a replay", "items": ["Ledger je zdroj pravdy", "claims.json přes atomic rename", "Starý běh = replay označený CACHED"] }
+  ]
+}
