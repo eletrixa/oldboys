@@ -8,7 +8,7 @@
  *
  * Key responsibilities:
  * - Re-use the generated Next.js fetch handler unchanged
- * - Export ResearchRunWorkflow so wrangler can bind it (workflows[].class_name)
+ * - Export ResearchRunWorkflow and VerificationCallWorkflow so wrangler can bind it (workflows[].class_name)
  *
  * Design constraints:
  * - Documented OpenNext "custom worker" pattern (opennext.js.org/cloudflare/howtos/custom-worker);
@@ -22,6 +22,7 @@ import { default as generated } from "../.open-next/worker.js";
 const nextHandler = generated as { fetch: NonNullable<ExportedHandler<CloudflareEnv>["fetch"]> };
 
 export { ResearchRunWorkflow } from "@/workflow/research-run";
+export { VerificationCallWorkflow } from "@/workflow/verification-call";
 
 export default {
   fetch: nextHandler.fetch,

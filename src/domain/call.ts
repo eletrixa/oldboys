@@ -7,12 +7,12 @@
  * Tested:  src/domain/__tests__/call.test.ts
  *
  * Key responsibilities:
- * - Single source of truth for the call shapes (plans/003-call-verification); routes, Workflow and
+ * - Single source of truth for the call shapes (plans/005-call-verification); routes, Workflow and
  *   providers import from here
  * - `transitionCall` is the only place that knows which status changes are legal
  *
  * Design constraints:
- * - Field names are snake_case and mirror migrations/0002_calls.sql one to one; booleans are
+ * - Field names are snake_case and mirror migrations/0004_calls.sql one to one; booleans are
  *   INTEGER 0/1 in SQL and `boolean` here (the only type mapping, done at the D1 boundary)
  * - A call is dialed once, in a request handler, after `consent_ack` is true (never in a Workflow step)
  * - Pure: no I/O, no Workers types; must run under plain Node in Vitest

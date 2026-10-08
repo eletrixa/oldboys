@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/workflow/research-run.ts
- * Deps:    cloudflare:workers (WorkflowEntrypoint), bindings DB, SOURCES; src/adapters/*, src/recipe/*
+ * Deps:    cloudflare:workers (WorkflowEntrypoint), bindings DB, SOURCES; src/adapters/*, src/recipe/*, src/workflow/ledger
  * Tested:  runner and seams via src/recipe/__tests__ with fake ports; this class n/a (Workers runtime)
  *
  * Key responsibilities:
@@ -20,6 +20,7 @@
 import { WorkflowEntrypoint, type WorkflowEvent, type WorkflowStep } from "cloudflare:workers";
 import { makeActorCall } from "@/adapters/apify";
 import { loadContext, makeLedgerAppend, makeSourceStore, persistOutcome, setCandidateDecisions } from "@/adapters/d1";
+import { appendLedger } from "@/workflow/ledger";
 import { fetchJson } from "@/adapters/fetch";
 import { makeLlmCall } from "@/adapters/llm";
 import type { Candidate, GoalId } from "@/domain/claim";
@@ -185,6 +186,6 @@ export class ResearchRunWorkflow extends WorkflowEntrypoint<CloudflareEnv, Resea
   }
 
   private async ledger(runId: string, stepId: string, kind: "call" | "llm" | "decision" | "pause", cost_usd: number, ms: number, ref: unknown): Promise<void> {
-    await makeLedgerAppend(this.env.DB)({ run_id: runId, step: stepId, kind, cost_usd, ms, ref });
+    await appendLedger(this.env.DB, runId, { step: stepId, kind, cost_usd, ms, ref });
   }
 }

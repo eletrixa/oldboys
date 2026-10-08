@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/api/runs/route.ts
- * Deps:    @opennextjs/cloudflare (getCloudflareContext), zod, bindings DB + RESEARCH_RUN, secret RUN_TOKEN
+ * Deps:    @opennextjs/cloudflare (getCloudflareContext), zod, src/app/api/_lib/auth, bindings DB + RESEARCH_RUN, secret RUN_TOKEN
  * Tested:  n/a
  *
  * Key responsibilities:
@@ -19,6 +19,7 @@
  */
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { z } from "zod";
+import { requireBearer } from "@/app/api/_lib/auth";
 import { GoalId } from "@/domain/claim";
 import { dedupeSince, RUNS_PER_HOUR_CAP } from "@/domain/run-status";
 
@@ -31,24 +32,10 @@ const StartRunBody = z.object({
   role: z.string().trim().min(1).max(300).optional(),
 });
 
-function isAuthorized(request: Request, token: string): boolean {
-  const header = request.headers.get("Authorization") ?? "";
-  const presented = header.startsWith("Bearer ") ? header.slice(7).trim() : "";
-  if (presented.length === 0 || presented.length !== token.length) return false;
-  let diff = 0;
-  for (let i = 0; i < token.length; i++) diff |= presented.charCodeAt(i) ^ token.charCodeAt(i);
-  return diff === 0;
-}
-
 export async function POST(request: Request): Promise<Response> {
   const { env } = getCloudflareContext();
-  const runToken = env.RUN_TOKEN;
-  if (!runToken) {
-    return Response.json({ error: "RUN_TOKEN secret is not configured" }, { status: 503 });
-  }
-  if (!isAuthorized(request, runToken)) {
-    return Response.json({ error: "unauthorized" }, { status: 401 });
-  }
+  const denied = requireBearer(request, env.RUN_TOKEN);
+  if (denied) return denied;
 
   let raw: unknown;
   try {

@@ -4,3 +4,5 @@ APIFY_TOKEN=
 ELEVENLABS_API_KEY=
 # Bearer token clients must send to POST /api/runs (openssl rand -hex 24)
 RUN_TOKEN=
+# HMAC secret shown when the post-call webhook is created in the ElevenLabs workspace settings
+ELEVENLABS_WEBHOOK_SECRET=

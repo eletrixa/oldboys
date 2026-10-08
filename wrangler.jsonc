@@ -36,13 +36,24 @@
       "binding": "RESEARCH_RUN",
       "name": "oldboys-research-run",
       "class_name": "ResearchRunWorkflow"
+    },
+    {
+      "binding": "VERIFY_CALL",
+      "name": "oldboys-verification-call",
+      "class_name": "VerificationCallWorkflow"
     }
   ],
+  // CALL_PROVIDER is "mock" or "elevenlabs". The two ElevenLabs ids are non-secret dashboard ids.
   // Non-secret config only. Secrets: `wrangler secret put` / .dev.vars (see .dev.vars.example).
   "vars": {
     "LLM_MODEL_PRIMARY": "claude-opus-5-5",
     "LLM_MODEL_VERIFY": "claude-sonnet-5-5",
     "RUN_BUDGET_USD": "0.50",
-    "RUN_BUDGET_CALLS": "12"
+    "RUN_BUDGET_CALLS": "12",
+    "CALL_PROVIDER": "mock",
+    "CALL_BUDGET_USD": "0.50",
+    "RUN_CALL_MAX": "2",
+    "ELEVENLABS_AGENT_ID": "",
+    "ELEVENLABS_PHONE_NUMBER_ID": ""
   }
 }
