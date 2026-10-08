@@ -7,7 +7,7 @@
  * Tested:  n/a (this is the test)
  *
  * Key responsibilities:
- * - W1-W6: inline credentials, script discovery, meta refresh, script config, reply parsing, the chain with a fake fetch
+ * - W1-W7: inline credentials, script discovery (same-origin only, CDN scripts of the same name skipped), meta refresh, script config, reply parsing, the chain with a fake fetch, failures
  *
  * Design constraints:
  * - No network; the fake fetch answers by URL and records every request
@@ -53,6 +53,8 @@ describe("posting-jobscz-widget", () => {
     expect(widgetScript(fixture("jobscz-widget-page.html"), PAGE_URL)).toEqual({ url: SCRIPT_URL, name: "main" });
     expect(widgetScript('<script src="/assets/js/script.min.js"></script>', PAGE_URL)).toEqual({ url: "https://jablotron.jobs.cz/assets/js/script.min.js", name: "main" });
     expect(widgetScript('<script src="https://evil.example/script.min.js"></script><div data-widget="main"></div>', PAGE_URL)).toBeUndefined();
+    const alma = '<script src="https://cdn.capybara.lmc.cz/libs/fms/4.x.x/script.min.js?v=1"></script><script src="/assets/js/script.min.js?av=0b12"></script><div data-widget="main-en"></div>';
+    expect(widgetScript(alma, "https://almacareer.jobs.cz/vacancy-detail?r=detail&id=2001356281")).toEqual({ url: "https://almacareer.jobs.cz/assets/js/script.min.js?av=0b12", name: "main-en" });
     expect(widgetScript("<html></html>", PAGE_URL)).toBeUndefined();
   });
 

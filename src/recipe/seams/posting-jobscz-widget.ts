@@ -9,7 +9,7 @@
  * Key responsibilities:
  * - `widgetFromInline`: credentials from the inline `__LMC_CAREER_WIDGET__.push({apiKey, widgetId})` call
  * - `widgetScript` + `metaRefreshUrl` + `widgetFromScript`: sites without the inline call keep the `widgets` config in their own
- *   `script.min.js` (served behind a meta-refresh page); the `data-widget` attribute names the entry to use
+ *   `script.min.js` (the same-origin one; CDN scripts of the same name are skipped; served behind a meta-refresh page); the `data-widget` attribute names the entry to use
  * - `widgetQuery` / `parseWidgetReply`: the detail query and the reply to title, company, location and text
  * - `fetchJobsCzWidget`: the whole chain with an injected fetch, at most three requests; throws with a plain reason
  *
@@ -67,15 +67,16 @@ export function widgetFromInline(html: string): WidgetCreds | undefined {
 
 /** Same-origin `script.min.js` of the career site and the `data-widget` name (default `main`). */
 export function widgetScript(html: string, pageUrl: string): { url: string; name: string } | undefined {
-  const src = /<script\b[^>]*\bsrc=["']([^"']*\/script\.min\.js[^"']*)["']/i.exec(html)?.[1];
-  if (src === undefined) return undefined;
-  try {
-    const url = new URL(src, pageUrl);
-    if (url.origin !== new URL(pageUrl).origin) return undefined;
-    return { url: url.href, name: /\bdata-widget=["']([^"']+)["']/i.exec(html)?.[1] ?? "main" };
-  } catch {
-    return undefined;
+  const name = /\bdata-widget=["']([^"']+)["']/i.exec(html)?.[1] ?? "main";
+  for (const [, src] of html.matchAll(/<script\b[^>]*\bsrc=["']([^"']*\/script\.min\.js[^"']*)["']/gi)) {
+    try {
+      const url = new URL(src ?? "", pageUrl);
+      if (url.origin === new URL(pageUrl).origin) return { url: url.href, name };
+    } catch {
+      // not a URL; try the next script tag
+    }
   }
+  return undefined;
 }
 
 /** Target of `<meta http-equiv="refresh" content="0;url='...'">`, when the body is such a page. */

@@ -40,6 +40,7 @@ describe("extractPosition", () => {
     expect(familyOf("Senior Data Engineer")).toBe("data");
     expect(familyOf("Obchodní zástupce")).toBe("sales");
     expect(familyOf("Zookeeper")).toBe("other");
+    expect(familyOf("Head of Growth")).toBe("marketing");
     expect(familyOf("Backend Developer")).toBe("engineering");
   });
 

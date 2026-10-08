@@ -35,7 +35,7 @@ const SYSTEM =
 // Order matters: the first matching family wins ("data engineer" is data, not engineering).
 const FAMILY_RULES: readonly [Family, RegExp][] = [
   ["data", /data|analyst|analytik|\bml\b|machine learning|\bbi\b/],
-  ["marketing", /marketing|\bseo\b|content|\bpr\b|brand/],
+  ["marketing", /marketing|growth|\bseo\b|content|\bpr\b|brand|\bcmo\b/],
   ["product", /product|produkt/],
   ["design", /design|\bux\b|\bui\b/],
   ["finance", /financ|účetn|accountant|accounting|controller/],
