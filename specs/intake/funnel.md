@@ -39,21 +39,21 @@ export type IntakeEnv = StartRunEnv & { SOURCES: R2Bucket; INTAKE_PER_HOUR_CAP?:
 export type IntakeResult = { applicationId: string; status: ApplicationStatus; runId: string | null; duplicate: boolean; note: string | null };
 export async function ingestApplication(raw: IntakeInput, env: IntakeEnv, now: Date, opts?: { senderAllowed?: boolean }): Promise<IntakeResult>
 ```
-Sequence (each step one D1/R2 call, no transaction):
+Sequence (no transaction):
 1. `IntakeInput.parse(raw)` (throws ZodError to the caller; routes turn it into 400).
-2. `SELECT id, status, run_id, note FROM applications WHERE source = ? AND external_id = ?` → hit: return `{duplicate: true, ...}` with the stored status, run id and note; no second run, nothing written. A row stuck at `received` after an error stays that way on redelivery.
+2. `SELECT id, status, run_id, note, tag, linkedin_url FROM applications WHERE source = ? AND external_id = ?` → hit: return `{duplicate: true, ...}` with the stored status, run id and note; no second run, nothing written. A row stuck at `received` after an error stays that way on redelivery. A `capped` hit is the one exception: see "Capped retry".
 3. `id = crypto.randomUUID()`; `INSERT INTO applications (id, source, external_id, tag, name, email, phone, cover_letter, received_at, status 'received')`. A UNIQUE failure here (race) re-runs step 2 and returns the duplicate; any other error propagates.
-4. If `cv` present: `extractCvText` only when no `cvText` was sent (its note joins the parser notes); then `SOURCES.put(cvR2Key(id, filename), bytes, { httpMetadata: { contentType } })`; `cvText = input.cvText ?? extracted`.
-5. Tag: `IntakeTag.safeParse(input.tag)` ok and `SELECT role, goal FROM intake_tags WHERE tag = ?` hit → known.
-6. `candidateInput({linkedinUrl, cvText})`.
-7. `capped = runsStartedSince(DB, now-1h, "intake") >= cap` (evaluated only when the earlier checks pass); `cap` is `INTAKE_PER_HOUR_CAP` as a number, and unset, blank, negative or non-numeric means `INTAKE_PER_HOUR_CAP_DEFAULT` (10), never "no cap". `"0"` pauses intake runs.
-8. `decideStatus({...})`. If `run-started`: `startRun(env, { goal, role, profileUrl, cvText, via: "intake", applicationId: id }, now)`.
-9. `UPDATE applications SET status, run_id, note, linkedin_url, cv_key, cv_text WHERE id = ?` (note = decideStatus note + joined parser notes + `input.note`, "; "-separated, ≤ 1000 chars).
-10. Return.
-Errors in steps 4–8 (R2, D1, Workflow create) propagate after the row exists with status `received`; the `/intake` page shows such rows and the note stays null. Never swallow.
+4. In parallel (`Promise.all`), since none depends on another: `extractCvText(cv)` when a `cv` came without `cvText` (its note joins the notes); `SOURCES.put(cvR2Key(id, filename), bytes, { httpMetadata: { contentType } })` when a `cv` came; the tag lookup (`IntakeTag.safeParse(input.tag)` ok and `SELECT role, goal FROM intake_tags WHERE tag = ?` hit → known). unpdf reads its own copy of the bytes, the put the original. `cvText = input.cvText ?? extracted`.
+5. `candidateInput({linkedinUrl, cvText})`.
+6. `decideAndStart` (the one decision tail, shared with the capped retry): `capped = runsStartedSince(DB, now - HOUR_MS, "intake") >= cap`, queried only when the tag is known, the sender allowed and the candidate complete; `cap` is `INTAKE_PER_HOUR_CAP` as a number, and unset, blank, negative or non-numeric means `INTAKE_PER_HOUR_CAP_DEFAULT` (10), never "no cap". `"0"` pauses intake runs. Then `decideStatus({...})`; if `run-started`: `startRun(env, { goal, role, profileUrl, cvText, via: "intake", applicationId: id }, now)`.
+7. `UPDATE applications SET status, run_id, note, linkedin_url, cv_key, cv_text WHERE id = ?` (note = `joinNotes(decideStatus note, extract note, candidate notes, input.note)`: "; "-separated, ≤ `NOTE_MAX` 1000 chars).
+8. Return.
+Errors in steps 4–6 (R2, D1, Workflow create) propagate after the row exists with status `received`; the `/intake` page shows such rows and the note stays null. Never swallow.
+
+Capped retry: a duplicate whose stored status is `capped` re-reads `SELECT cv_text FROM applications WHERE id = ?`, looks up its stored tag, and runs the stored candidate (`linkedin_url`, `cv_text`) through the same `decideAndStart` (sender treated as allowed: the row passed that check when it was capped). The new payload is ignored. When the run starts, `UPDATE applications SET status, run_id, note WHERE id = ?` (`run-started`, the run id, null) and return it with `duplicate: true`; otherwise return the stored row unchanged, nothing written.
 
 ## Tests
 - `start-run.test.ts`: inserts the expected columns and binds in order (fake D1 records SQL + args); `RESEARCH_RUN.create` called with `{id, params:{runId:id}}`; `applicationId` lands in `application_id`; `runsStartedSince` with and without `via`.
 - `cv-text.test.ts`: real small PDF → text contains a known word; `%PDF`-less bytes with pdf contentType → note; txt passthrough; cap at CV_MAX.
-- `intake.test.ts` (fakes like `elevenlabs.test.ts`, no module mocks): happy path LinkedIn-only → `run-started`, run inserted with via `intake`, role from the tag; CV-only PDF → cv_key written to the R2 fake and cv_text extracted; duplicate returns the first id and never calls create; unknown tag → `unmatched` + no run; sender not allowed → `unmatched`; no candidate → `incomplete`; cap reached → `capped`; R2 failure propagates and leaves the row at `received`.
+- `intake.test.ts` (fakes like `elevenlabs.test.ts`, no module mocks): happy path LinkedIn-only → `run-started`, run inserted with via `intake`, role from the tag; CV-only PDF → cv_key written to the R2 fake and cv_text extracted; duplicate returns the first id and never calls create; unknown tag → `unmatched` + no run; sender not allowed → `unmatched`; no candidate → `incomplete`; cap reached → `capped`; a capped duplicate re-decides and starts the run once the hour has room; R2 failure propagates and leaves the row at `received`.
 - Existing `run-body.test.ts` and any route test unchanged and green.

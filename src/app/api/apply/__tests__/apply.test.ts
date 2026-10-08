@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/api/apply/__tests__/apply.test.ts
- * Deps:    vitest
+ * Deps:    vitest, src/workflow/__tests__/fixtures/intake-fakes
  * Tested:  n/a (this is the test file)
  *
  * Key responsibilities:
@@ -13,86 +13,19 @@
  *
  * Design constraints:
  * - No module mocks; multipart Requests are built with FormData + File under Node
- * - The D1 fake matches on SQL prefixes and keeps state in plain maps
+ * - The shared D1 fake matches on SQL prefixes and keeps state in plain maps
  */
 import { describe, expect, it, vi } from "vitest";
 import { tinyPdf } from "@/domain/__tests__/fixtures/tiny-pdf";
-import type { IntakeEnv } from "@/workflow/intake";
+import { makeIntakeFakes } from "@/workflow/__tests__/fixtures/intake-fakes";
 import { handleApply } from "../handler";
 
 const NOW = new Date("2026-10-09T12:00:00.000Z");
 const URL_ = "https://oldboys.test/api/apply";
 const SAME_ORIGIN = { Origin: "https://oldboys.test", Host: "oldboys.test", "Sec-Fetch-Site": "same-origin" };
 
-type Row = Record<string, unknown>;
-
 function makeEnv(opts: { intakeRunsLastHour?: number; cap?: string; r2Error?: Error } = {}) {
-  const tags = new Map<string, Row>([["senior-be", { role: "Senior backend engineer", goal: "hiring" }]]);
-  const apps = new Map<string, Row>();
-  const investigations: Row[] = [];
-  const puts: { key: string; size: number; contentType: string | undefined }[] = [];
-  const writes: string[] = [];
-  const create = vi.fn((_: unknown) => Promise.resolve({ id: "wf" }));
-
-  const exec = (sql: string, args: unknown[]): { rows: Row[]; changes: number } => {
-    if (sql.startsWith("SELECT id, status, run_id, note, tag, linkedin_url, cv_text FROM applications")) {
-      const hit = [...apps.values()].find((a) => a.source === args[0] && a.external_id === args[1]);
-      return { rows: hit ? [hit] : [], changes: 0 };
-    }
-    if (sql.startsWith("INSERT INTO applications")) {
-      writes.push(sql);
-      const cols = /\(([^)]*)\)/.exec(sql)?.[1]?.split(", ") ?? [];
-      const row: Row = Object.fromEntries(cols.map((c, i) => [c, args[i]]));
-      row.status = "received";
-      apps.set(row.id as string, row);
-      return { rows: [], changes: 1 };
-    }
-    if (sql.startsWith("SELECT role, goal FROM intake_tags WHERE tag = ?")) {
-      const t = tags.get(args[0] as string);
-      return { rows: t ? [t] : [], changes: 0 };
-    }
-    if (sql.startsWith("SELECT COUNT(*) AS n FROM investigations")) {
-      return { rows: [{ n: opts.intakeRunsLastHour ?? 0 }], changes: 0 };
-    }
-    if (sql.startsWith("INSERT INTO investigations")) {
-      const cols = /\(([^)]*)\)/.exec(sql)?.[1]?.split(", ") ?? [];
-      const values = [...args.slice(0, 4), "queued", ...args.slice(4)];
-      investigations.push(Object.fromEntries(cols.map((c, i) => [c, values[i]])));
-      return { rows: [], changes: 1 };
-    }
-    const update = /^UPDATE applications SET (.*) WHERE id = \?$/.exec(sql);
-    if (update) {
-      writes.push(sql);
-      const cols = (update[1] ?? "").split(", ").map((c) => c.split(" = ")[0] ?? "");
-      const row = apps.get(args[cols.length] as string);
-      cols.forEach((c, i) => {
-        if (row) row[c] = args[i];
-      });
-      return { rows: [], changes: 1 };
-    }
-    throw new Error(`unexpected SQL: ${sql}`);
-  };
-
-  const stmt = (sql: string, args: unknown[] = []) => ({
-    bind: (...a: unknown[]) => stmt(sql, a),
-    first: () => Promise.resolve().then(() => exec(sql, args).rows[0] ?? null),
-    run: () => Promise.resolve().then(() => ({ meta: { changes: exec(sql, args).changes } })),
-  });
-  const env = {
-    DB: { prepare: (sql: string) => stmt(sql) },
-    RESEARCH_RUN: { create },
-    RUN_BUDGET_USD: "0.50",
-    RUN_BUDGET_CALLS: "16",
-    INTAKE_PER_HOUR_CAP: opts.cap,
-    SOURCES: {
-      put: (key: string, bytes: ArrayBuffer, o?: { httpMetadata?: { contentType?: string } }) => {
-        if (opts.r2Error) return Promise.reject(opts.r2Error);
-        puts.push({ key, size: bytes.byteLength, contentType: o?.httpMetadata?.contentType });
-        return Promise.resolve(null);
-      },
-    },
-  } as unknown as IntakeEnv;
-  return { env, apps, investigations, puts, writes, create };
+  return makeIntakeFakes(opts);
 }
 
 const FIELDS: Record<string, string | File> = {
@@ -155,7 +88,7 @@ describe("handleApply", () => {
     ["neither LinkedIn nor CV", { linkedinUrl: "" }],
     ["not a LinkedIn link", { linkedinUrl: "https://example.com/in/x" }],
     ["non-PDF CV", { linkedinUrl: "", cv: pdfFile("cv.docx", "application/msword") }],
-    ["CV over 5 MiB", { cv: new File([new Uint8Array(5 * 1024 * 1024 + 1)], "cv.pdf", { type: "application/pdf" }) }],
+    ["CV over 10 MiB", { cv: new File([new Uint8Array(10 * 1024 * 1024 + 1)], "cv.pdf", { type: "application/pdf" }) }],
     ["message over 10000 characters", { coverLetter: "x".repeat(10_001) }],
   ])("answers 400 with an error and stores nothing: %s", async (_label, fields) => {
     const { env, writes } = makeEnv();
@@ -167,7 +100,7 @@ describe("handleApply", () => {
 
   it("answers 400 before parsing when Content-Length is far over the CV limit", async () => {
     const { env } = makeEnv();
-    const res = await handleApply(post({}, { ...SAME_ORIGIN, "Content-Length": String(6 * 1024 * 1024) }), env, NOW);
+    const res = await handleApply(post({}, { ...SAME_ORIGIN, "Content-Length": String(11 * 1024 * 1024) }), env, NOW);
     expect(res.status).toBe(400);
   });
 

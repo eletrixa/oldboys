@@ -8,7 +8,7 @@
  *
  * Key responsibilities:
  * - Bearer auth against RUN_TOKEN (401/503 like GET /api/roles)
- * - One D1 read of the queue columns; never cached
+ * - One D1 read of the rendered queue columns only (no external_id, linkedin_url or cv_key); never cached
  *
  * Design constraints:
  * - No runtime = "edge"
@@ -27,7 +27,7 @@ export async function GET(request: Request): Promise<Response> {
   if (denied) return denied;
 
   const rows = await env.DB.prepare(
-    `SELECT id, source, external_id, tag, name, email, linkedin_url, cv_key, status, run_id, note, received_at
+    `SELECT id, source, tag, name, email, status, run_id, note, received_at
      FROM applications ORDER BY received_at DESC, id DESC LIMIT ?`,
   )
     .bind(MAX_ROWS)

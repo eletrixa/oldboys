@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/api/apply/handler.ts
- * Deps:    zod, src/workflow/intake, src/domain/application, src/app/apply/[tag]/apply-fields, src/app/api/_lib/origin
+ * Deps:    src/workflow/intake, src/domain (application, digest), src/app/apply/[tag]/apply-fields, src/app/_lib/form-text, src/app/api/_lib/origin
  * Tested:  src/app/api/apply/__tests__/apply.test.ts
  *
  * Key responsibilities:
@@ -17,13 +17,12 @@
  * - The candidate never learns an application id, status or run id: the body is `{received: true}` or `{error}`
  * - An unknown tag is stored as `unmatched` and answered like a success (no tag oracle through the API)
  */
-import { z } from "zod";
-import { checkApply, CV_MAX_BYTES, MESSAGES } from "@/app/apply/[tag]/apply-fields";
+import { checkApply, MESSAGES } from "@/app/apply/[tag]/apply-fields";
+import { formText } from "@/app/_lib/form-text";
 import { fromOurPage } from "@/app/api/_lib/origin";
-import { IntakeTag, type CvFile } from "@/domain/application";
+import { CV_MAX_BYTES, IntakeTag, toCvFile } from "@/domain/application";
+import { sha256Hex } from "@/domain/digest";
 import { ingestApplication, type IntakeEnv } from "@/workflow/intake";
-
-export type ApplyEnv = IntakeEnv;
 
 /** CV limit plus room for the other multipart fields; a larger declared body is refused before it is buffered. */
 const BODY_MAX_BYTES = CV_MAX_BYTES + 256 * 1024;
@@ -31,7 +30,7 @@ const BODY_MAX_BYTES = CV_MAX_BYTES + 256 * 1024;
 const bad = (error: string): Response => Response.json({ error }, { status: 400 });
 const received = (status: 200 | 201): Response => Response.json({ received: true }, { status });
 
-export async function handleApply(request: Request, env: ApplyEnv, now: Date): Promise<Response> {
+export async function handleApply(request: Request, env: IntakeEnv, now: Date): Promise<Response> {
   if (!fromOurPage(request)) return Response.json({ error: "apply page only" }, { status: 403 });
 
   const declared = Number(request.headers.get("Content-Length") ?? 0);
@@ -45,34 +44,35 @@ export async function handleApply(request: Request, env: ApplyEnv, now: Date): P
   }
 
   // Bots fill every field: pretend it worked and store nothing.
-  if (text(form, "website") !== "") return received(200);
+  if (formText(form, "website") !== "") return received(200);
 
-  const tag = IntakeTag.safeParse(text(form, "tag"));
+  const tag = IntakeTag.safeParse(formText(form, "tag"));
   if (!tag.success) return bad("This position link is not valid.");
 
   const file = form.get("cv");
   const cv = file instanceof File && (file.size > 0 || file.name !== "") ? file : null;
   const draft = {
-    name: text(form, "name"),
-    email: text(form, "email"),
-    linkedinUrl: text(form, "linkedinUrl"),
+    name: formText(form, "name"),
+    email: formText(form, "email"),
+    linkedinUrl: formText(form, "linkedinUrl"),
     cv,
-    message: text(form, "coverLetter"),
+    message: formText(form, "coverLetter"),
   };
-  const problem = checkApply(draft) ?? (z.email().safeParse(draft.email.trim()).success ? null : MESSAGES.email);
+  const problem = checkApply(draft);
   if (problem !== null) return bad(problem);
+  const email = draft.email.trim();
 
   try {
     const result = await ingestApplication(
       {
         source: "apply-page",
-        externalId: await sha256Hex(`${tag.data}|${draft.email.trim().toLowerCase()}`),
+        externalId: await sha256Hex(`${tag.data}|${email.toLowerCase()}`),
         tag: tag.data,
         name: draft.name,
-        email: draft.email.trim(),
+        email,
         ...(draft.linkedinUrl.trim() === "" ? {} : { linkedinUrl: draft.linkedinUrl.trim() }),
         ...(draft.message.trim() === "" ? {} : { coverLetter: draft.message }),
-        ...(cv === null ? {} : { cv: await toCvFile(cv) }),
+        ...(cv === null ? {} : { cv: toCvFile({ bytes: await cv.arrayBuffer(), filename: cv.name, contentType: cv.type }) }),
       },
       env,
       now,
@@ -84,18 +84,4 @@ export async function handleApply(request: Request, env: ApplyEnv, now: Date): P
     console.error("apply: intake failed", err);
     return Response.json({ error: "We could not save your application. Please try again in a few minutes." }, { status: 500 });
   }
-}
-
-function text(form: FormData, key: string): string {
-  const value = form.get(key);
-  return typeof value === "string" ? value : "";
-}
-
-async function toCvFile(file: File): Promise<CvFile> {
-  return { bytes: await file.arrayBuffer(), filename: file.name === "" ? "cv.pdf" : file.name, contentType: file.type === "" ? "application/pdf" : file.type };
-}
-
-async function sha256Hex(input: string): Promise<string> {
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(input));
-  return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, "0")).join("");
 }

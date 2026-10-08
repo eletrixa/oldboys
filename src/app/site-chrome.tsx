@@ -1,5 +1,5 @@
 /**
- * Radar header and footer, hidden on candidate-facing routes (/apply) so applicants never see operator navigation.
+ * Radar header and footer, hidden on candidate-facing routes (/apply/<tag>) so applicants never see operator navigation.
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/site-chrome.tsx
@@ -7,9 +7,9 @@
  * Tested:  n/a (QA in the browser; see docs/ops/intake.md)
  *
  * Key responsibilities:
- * - SiteHeader: Echo r mark + wordmark, Roles, Applications, New brief
+ * - SiteHeader: Echo r mark + wordmark, the NAV links (Roles, Applications, New brief)
  * - SiteFooter: the short honesty line
- * - Both render nothing under /apply (plans/008: the candidate sees "received", never the research product)
+ * - Both render nothing under /apply/<tag> (plans/008: the candidate sees "received", never the research product)
  *
  * Design constraints:
  * - Client component only because usePathname needs it; no state, no fetches
@@ -20,7 +20,13 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-const CANDIDATE_PREFIX = "/apply";
+const NAV = [
+  { href: "/roles", label: "Roles" },
+  { href: "/intake", label: "Applications" },
+  { href: "/", label: "New brief", primary: true },
+] as const;
+
+const NAV_LINK = "flex min-h-11 items-center rounded-lg text-sm";
 
 function EchoMark({ size }: Readonly<{ size: number }>): React.JSX.Element {
   return (
@@ -31,9 +37,8 @@ function EchoMark({ size }: Readonly<{ size: number }>): React.JSX.Element {
   );
 }
 
-function isCandidateRoute(pathname: string | null): boolean {
-  return pathname !== null && (pathname === CANDIDATE_PREFIX || pathname.startsWith(`${CANDIDATE_PREFIX}/`));
-}
+// Candidate pages live at /apply/<tag>; bare /apply has no page.
+const isCandidateRoute = (pathname: string | null): boolean => pathname?.startsWith("/apply/") ?? false;
 
 export function SiteHeader(): React.JSX.Element | null {
   if (isCandidateRoute(usePathname())) return null;
@@ -45,15 +50,19 @@ export function SiteHeader(): React.JSX.Element | null {
           <span className="font-serif text-[26px] leading-none font-semibold tracking-tight">radar</span>
         </Link>
         <nav aria-label="Main" className="flex items-center gap-1">
-          <Link href="/roles" className="flex min-h-11 items-center rounded-lg px-3 text-sm font-medium text-muted hover:bg-sage hover:text-ink">
-            Roles
-          </Link>
-          <Link href="/intake" className="flex min-h-11 items-center rounded-lg px-3 text-sm font-medium text-muted hover:bg-sage hover:text-ink">
-            Applications
-          </Link>
-          <Link href="/" className="flex min-h-11 items-center rounded-lg bg-action px-4 text-sm font-semibold text-white hover:bg-action-hover">
-            New brief
-          </Link>
+          {NAV.map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={
+                "primary" in item
+                  ? `${NAV_LINK} bg-action px-4 font-semibold text-white hover:bg-action-hover`
+                  : `${NAV_LINK} px-3 font-medium text-muted hover:bg-sage hover:text-ink`
+              }
+            >
+              {item.label}
+            </Link>
+          ))}
         </nav>
       </div>
     </header>

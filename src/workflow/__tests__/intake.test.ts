@@ -31,8 +31,12 @@ function makeEnv(opts: { intakeRunsLastHour?: number; cap?: string; r2Error?: Er
   const countArgs: unknown[][] = [];
 
   const exec = (sql: string, args: unknown[]): { rows: Row[]; changes: number } => {
-    if (sql.startsWith("SELECT id, status, run_id, note, tag, linkedin_url, cv_text FROM applications")) {
+    if (sql.startsWith("SELECT id, status, run_id, note, tag, linkedin_url FROM applications")) {
       const hit = [...apps.values()].find((a) => a.source === args[0] && a.external_id === args[1]);
+      return { rows: hit ? [hit] : [], changes: 0 };
+    }
+    if (sql.startsWith("SELECT cv_text FROM applications WHERE id = ?")) {
+      const hit = apps.get(args[0] as string);
       return { rows: hit ? [hit] : [], changes: 0 };
     }
     if (sql.startsWith("INSERT INTO applications")) {

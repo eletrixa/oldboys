@@ -8,7 +8,8 @@
  *
  * Key responsibilities:
  * - `StartupJobsWebhook`: the documented payload (specs/intake/startupjobs.md), tolerant of null fields and string ids
- * - `toIntakeInput`: payload (+ tag, + downloaded CV) to an IntakeInput that always passes the funnel's own parse
+ * - `toIntakeInput`: payload (+ tag, + downloaded CV) to one IntakeInput literal (undefined for absent fields) that always passes
+ *   the funnel's own parse; limits come from src/domain/application
  * - `tagFor`: offer id mapping wins, else the internal position name when it is a valid tag
  *
  * Design constraints:
@@ -16,7 +17,17 @@
  * - A test payload gets its own external id (`test:` prefix) so it can never shadow a real application
  */
 import { z } from "zod";
-import { IntakeTag, type CvFile, type IntakeInput } from "./application";
+import {
+  COVER_LETTER_MAX,
+  EMAIL_MAX,
+  IntakeTag,
+  joinNotes,
+  LINKEDIN_MAX,
+  NAME_MAX,
+  PHONE_MAX,
+  type CvFile,
+  type IntakeInput,
+} from "./application";
 import { htmlToText } from "./html-text";
 
 const optionalText = z.string().nullish();
@@ -36,15 +47,8 @@ export const StartupJobsWebhook = z.looseObject({
     .nullish()
     .transform((files) => files ?? []),
   test: z.boolean().nullish(),
-  date: optionalText,
 });
 export type StartupJobsWebhook = z.infer<typeof StartupJobsWebhook>;
-
-const NAME_MAX = 200;
-const PHONE_MAX = 40;
-const LINKEDIN_MAX = 500;
-const COVER_LETTER_MAX = 10_000;
-const NOTE_MAX = 1000;
 
 /** Trimmed text cut to `max`, or undefined when absent or blank. */
 function text(value: string | null | undefined, max: number): string | undefined {
@@ -53,35 +57,31 @@ function text(value: string | null | undefined, max: number): string | undefined
 }
 
 export function toIntakeInput(p: StartupJobsWebhook, tag: string | undefined, cv?: CvFile): IntakeInput {
-  const notes: string[] = [];
-  const email = text(p.email, 200);
+  const email = text(p.email, EMAIL_MAX);
   const emailOk = email !== undefined && z.email().safeParse(email).success;
-  if (email !== undefined && !emailOk) notes.push("invalid email");
-
   const position = text(p.position, 200);
-  const note = p.test === true ? "StartupJobs test payload" : [`startupjobs offer ${String(p.offerID)}${position !== undefined ? ` ${position}` : ""}`, ...notes].join("; ");
-
   const phone = text(p.phone, PHONE_MAX);
-  const input: IntakeInput = {
+
+  return {
     source: "startupjobs",
     externalId: `${p.test === true ? "test:" : ""}${String(p.offerID)}:${String(p.candidateID)}`,
-    note: note.slice(0, NOTE_MAX),
+    tag,
+    name: text(p.name, NAME_MAX),
+    email: emailOk ? email : undefined,
+    phone: phone !== undefined && phone.length >= 3 ? phone : undefined,
+    linkedinUrl: text(p.linkedin, LINKEDIN_MAX),
+    coverLetter: text(htmlToText(p.why ?? ""), COVER_LETTER_MAX),
+    cv,
+    note:
+      joinNotes(
+        p.test === true ? "StartupJobs test payload" : `startupjobs offer ${String(p.offerID)}${position !== undefined ? ` ${position}` : ""}`,
+        p.test !== true && email !== undefined && !emailOk ? "invalid email" : null,
+      ) ?? undefined,
   };
-  if (tag !== undefined) input.tag = tag;
-  const name = text(p.name, NAME_MAX);
-  if (name !== undefined) input.name = name;
-  if (emailOk) input.email = email;
-  if (phone !== undefined && phone.length >= 3) input.phone = phone;
-  const linkedinUrl = text(p.linkedin, LINKEDIN_MAX);
-  if (linkedinUrl !== undefined) input.linkedinUrl = linkedinUrl;
-  const coverLetter = text(htmlToText(p.why ?? ""), COVER_LETTER_MAX);
-  if (coverLetter !== undefined) input.coverLetter = coverLetter;
-  if (cv !== undefined) input.cv = cv;
-  return input;
 }
 
-export function tagFor(p: StartupJobsWebhook, lookup: { byOfferId?: string }): string | undefined {
-  if (lookup.byOfferId !== undefined) return lookup.byOfferId;
+export function tagFor(p: StartupJobsWebhook, byOfferId?: string): string | undefined {
+  if (byOfferId !== undefined) return byOfferId;
   const candidate = p.internalPositionName?.trim().toLowerCase();
   const parsed = IntakeTag.safeParse(candidate);
   return parsed.success ? parsed.data : undefined;

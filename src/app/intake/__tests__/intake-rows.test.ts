@@ -7,7 +7,7 @@
  * Tested:  n/a (test file)
  *
  * Key responsibilities:
- * - statusLabel / statusTone cover every ApplicationStatus; sourceLabel every ApplicationSource
+ * - STATUS_LABEL / STATUS_TONE cover every ApplicationStatus; SOURCE_LABEL every ApplicationSource
  * - formatReceived: UTC "YYYY-MM-DD HH:MM", the raw string when unparseable
  * - shapeRow: run link only with a run id, name/email fallbacks, truncated note with the full text kept
  * - intakeLine: "From <source> · <tag> · <date>", tag omitted when absent
@@ -17,17 +17,17 @@
  */
 import { describe, expect, it } from "vitest";
 import { ApplicationSource, ApplicationStatus } from "@/domain/application";
-import { type ApplicationListRow, formatReceived, intakeLine, NOTE_MAX, shapeRow, sourceLabel, statusLabel, statusTone } from "../intake-rows";
+import { type ApplicationListRow, formatReceived, intakeLine, shapeRow, SOURCE_LABEL, STATUS_LABEL, STATUS_TONE } from "../intake-rows";
+
+// Mirrors the 80-character cut in intake-rows.ts; the test pins the visible behaviour.
+const NOTE_MAX = 80;
 
 const row = (over: Partial<ApplicationListRow> = {}): ApplicationListRow => ({
   id: "a1",
   source: "email",
-  external_id: "<m1@x>",
   tag: "senior-be",
   name: "Eva Nováková",
   email: "eva@example.cz",
-  linkedin_url: "https://www.linkedin.com/in/eva",
-  cv_key: "intake/a1/cv.pdf",
   status: "run-started",
   run_id: "r1",
   note: null,
@@ -35,9 +35,9 @@ const row = (over: Partial<ApplicationListRow> = {}): ApplicationListRow => ({
   ...over,
 });
 
-describe("statusLabel / statusTone", () => {
+describe("STATUS_LABEL / STATUS_TONE", () => {
   it("labels every status in plain words", () => {
-    expect(ApplicationStatus.options.map(statusLabel)).toEqual([
+    expect(ApplicationStatus.options.map((s) => STATUS_LABEL[s])).toEqual([
       "Received",
       "Run started",
       "Unmatched",
@@ -46,13 +46,13 @@ describe("statusLabel / statusTone", () => {
     ]);
   });
   it("gives every status a tone; only run-started is ok", () => {
-    expect(ApplicationStatus.options.map(statusTone)).toEqual(["neutral", "ok", "conflict", "unsure", "unsure"]);
+    expect(ApplicationStatus.options.map((s) => STATUS_TONE[s])).toEqual(["neutral", "ok", "conflict", "unsure", "unsure"]);
   });
 });
 
-describe("sourceLabel", () => {
+describe("SOURCE_LABEL", () => {
   it("labels every source", () => {
-    expect(ApplicationSource.options.map(sourceLabel)).toEqual(["Email", "Google Form", "Apply page", "StartupJobs"]);
+    expect(ApplicationSource.options.map((s) => SOURCE_LABEL[s])).toEqual(["Email", "Google Form", "Apply page", "StartupJobs"]);
   });
 });
 

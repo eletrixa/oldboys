@@ -13,7 +13,7 @@
  * - role = investigations.role (the brief's "Hiring for" line); subject is "" until the seed step derived it;
  *   headline = what the seed_profile ledger row recorded (plans/006); sources carry identity_reason (migration 0008)
  * - cost = runCost over the ledger rows (seq order) from investigations.created_at
- * - intake = the applications row joined on investigations.application_id ({source, tag, receivedAt}), null for runs started by hand; never cv_text or cover_letter
+ * - intake = the applications row LEFT JOINed into the head query on investigations.application_id ({source, tag, receivedAt}), null for runs started by hand; never cv_text or cover_letter
  *
  * Design constraints:
  * - No runtime = "edge"; never cached; no auth (the id is an unguessable UUID, like GET /api/runs/:id)
@@ -26,7 +26,6 @@ import { recipeFor } from "@/recipe/goals";
 import type { RunIntake } from "@/app/intake/intake-rows";
 import { type RunState, type RunStatus, seedHeadline } from "@/app/runs/[id]/state";
 
-type IntakeRow = { source: RunIntake["source"]; tag: string | null; received_at: string };
 type HeadRow = {
   id: string;
   subject: string;
@@ -35,6 +34,9 @@ type HeadRow = {
   status: RunStatus;
   questions_json: string | null;
   created_at: string;
+  intake_source: RunIntake["source"] | null;
+  intake_tag: string | null;
+  intake_received_at: string | null;
 };
 type CandidateRow = Omit<Candidate, "profile_urls" | "reasons"> & { profile_urls_json: string; reasons_json: string };
 type ClaimRow = Omit<Claim, "supports" | "contradicts"> & { supports_json: string; contradicts_json: string };
@@ -57,13 +59,17 @@ export async function GET(
   const { env } = getCloudflareContext();
 
   const head = await env.DB.prepare(
-    "SELECT id, subject, goal, role, status, questions_json, created_at FROM investigations WHERE id = ?",
+    `SELECT investigations.id, investigations.subject, investigations.goal, investigations.role, investigations.status,
+            investigations.questions_json, investigations.created_at,
+            a.source AS intake_source, a.tag AS intake_tag, a.received_at AS intake_received_at
+     FROM investigations LEFT JOIN applications a ON a.id = investigations.application_id
+     WHERE investigations.id = ?`,
   )
     .bind(id)
     .first<HeadRow>();
   if (!head) return Response.json({ error: "run not found" }, { status: 404 });
 
-  const [cands, claims, sources, brief, ledger, intake] = await Promise.all([
+  const [cands, claims, sources, brief, ledger] = await Promise.all([
     env.DB.prepare("SELECT * FROM candidates WHERE run_id = ? ORDER BY score DESC").bind(id).all<CandidateRow>(),
     env.DB.prepare("SELECT * FROM claims WHERE run_id = ? ORDER BY rank").bind(id).all<ClaimRow>(),
     env.DB.prepare("SELECT id, url, identity_reason FROM sources WHERE run_id = ?").bind(id).all<{ id: string; url: string; identity_reason: string | null }>(),
@@ -71,9 +77,6 @@ export async function GET(
     env.DB.prepare("SELECT step, ts, kind, cost_usd, ms, ref_json FROM ledger_entries WHERE run_id = ? ORDER BY seq")
       .bind(id)
       .all<CostRow & { step: string; ref_json: string | null }>(),
-    env.DB.prepare("SELECT a.source, a.tag, a.received_at FROM applications a JOIN investigations i ON i.application_id = a.id WHERE i.id = ?")
-      .bind(id)
-      .first<IntakeRow>(),
   ]);
   // The failure row is written under step "run"; the step that broke is the first recipe step with no row yet.
   const last = ledger.results.findLast((row) => row.step !== "run");
@@ -122,7 +125,10 @@ export async function GET(
     failed_step: head.status === "failed" ? (recipeSteps[stepIndex]?.id ?? last?.step ?? null) : null,
     step_index: stepIndex,
     step_count: recipeSteps.length,
-    intake: intake === null ? null : { source: intake.source, tag: intake.tag, receivedAt: intake.received_at },
+    intake:
+      head.intake_source === null || head.intake_received_at === null
+        ? null
+        : { source: head.intake_source, tag: head.intake_tag, receivedAt: head.intake_received_at },
   };
   return Response.json(state, { headers: { "Cache-Control": "no-store" } });
 }

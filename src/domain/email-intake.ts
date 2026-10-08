@@ -3,20 +3,22 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/domain/email-intake.ts
- * Deps:    src/domain/application, src/domain/profile-url, src/domain/html-text
+ * Deps:    src/domain/application, src/domain/cv-text (isPdf), src/domain/profile-url, src/domain/html-text
  * Tested:  src/domain/__tests__/email-intake.test.ts
  *
  * Key responsibilities:
  * - `splitRecipient`: "Jobs+Senior-BE@asajj.cz" -> { local: "jobs", tag: "senior-be" } (recipient gate + routing)
  * - `firstLinkedinUrl`, `pickCv`, `senderAllowed`: the per-mail decisions (specs/intake/email.md)
- * - `parseIntakeMail`: fields cut or dropped so IntakeInput.parse never throws on a real mail
+ * - `parseIntakeMail`: fields cut or dropped so IntakeInput.parse never throws on a real mail; the raw-message
+ *   digest is a thunk, only called when the mail has no usable Message-ID
  *
  * Design constraints:
  * - Pure: takes postal-mime's parsed shape (structural subset), no MIME parsing or I/O here
  * - Never decides status; the funnel (src/workflow/intake.ts) does
  * - Regexes stay linear in the body size (a mail reaches 10 MiB)
  */
-import { IntakeInput, type CvFile } from "./application";
+import { COVER_LETTER_MAX, IntakeInput, NAME_MAX, NOTE_MAX, toCvFile, type CvFile } from "./application";
+import { isPdf } from "./cv-text";
 import { htmlToText } from "./html-text";
 import { normalizeLinkedinProfile } from "./profile-url";
 
@@ -32,12 +34,7 @@ export type ParsedMail = {
   attachments: readonly MailAttachment[];
 };
 
-const COVER_LETTER_MAX = 10_000;
-const NOTE_MAX = 1000;
-const NAME_MAX = 200;
 const EXTERNAL_ID_MAX = 300;
-const FILENAME_MAX = 200;
-const CONTENT_TYPE_MAX = 100;
 const TAG_MAX = 60;
 
 /** Local part before "+" and the lowercased plus tag; accepts a bare address or "Name <addr>". */
@@ -54,8 +51,11 @@ export function splitRecipient(rcpt: string): { local: string; tag: string | nul
 // Bounded repeats keep the scan linear on hostile bodies (a long "a.a.a." run would otherwise be quadratic).
 const LINKEDIN_IN = /(?:https?:\/\/)?(?:[a-z0-9-]{1,63}\.){0,4}linkedin\.com\/in\/[^\s"'<>()[\]{}]{1,300}/gi;
 
+const LINKEDIN_HINT = /linkedin\.com\/in\//i;
+
 /** First linkedin.com/in/<handle> in the text that normalises, trailing punctuation ignored. */
 export function firstLinkedinUrl(text: string): string | null {
+  if (!LINKEDIN_HINT.test(text)) return null;
   for (const match of text.matchAll(LINKEDIN_IN)) {
     const url = normalizeLinkedinProfile(match[0].replace(/[.,;:!?]+$/, ""));
     if (url !== null) return url;
@@ -63,20 +63,19 @@ export function firstLinkedinUrl(text: string): string | null {
   return null;
 }
 
-const isPdf = (a: MailAttachment): boolean =>
-  a.mimeType.toLowerCase() === "application/pdf" || (a.filename?.toLowerCase().endsWith(".pdf") ?? false);
+const isPdfAttachment = (a: MailAttachment): boolean => isPdf({ filename: a.filename ?? "", contentType: a.mimeType });
 const isText = (a: MailAttachment): boolean => a.mimeType.toLowerCase() === "text/plain";
 
 /** First PDF (by MIME type or .pdf name), else first text/plain attachment; everything else is ignored. */
 export function pickCv(attachments: readonly MailAttachment[]): CvFile | null {
-  const hit = attachments.find(isPdf) ?? attachments.find(isText);
+  const hit = attachments.find(isPdfAttachment) ?? attachments.find(isText);
   if (!hit) return null;
-  const filename = hit.filename?.trim() ?? "";
-  return {
+  const named = hit.filename?.trim() ?? "";
+  return toCvFile({
     bytes: toArrayBuffer(hit.content),
-    filename: (filename !== "" ? filename : isPdf(hit) ? "cv.pdf" : "cv.txt").slice(0, FILENAME_MAX),
-    contentType: hit.mimeType.slice(0, CONTENT_TYPE_MAX),
-  };
+    filename: named !== "" ? named : isPdfAttachment(hit) ? "cv.pdf" : "cv.txt",
+    contentType: hit.mimeType,
+  });
 }
 
 function toArrayBuffer(content: MailAttachment["content"]): ArrayBuffer {
@@ -94,29 +93,28 @@ export function senderAllowed(from: string | undefined, allowList: string): bool
   if (entries.length === 0) return true;
   const sender = from?.trim().toLowerCase() ?? "";
   const domain = sender.slice(sender.lastIndexOf("@") + 1);
-  if (sender === "" || !sender.includes("@")) return false;
+  if (!sender.includes("@")) return false;
   return entries.some((e) => (e.includes("@") ? sender === e : domain === e || domain.endsWith(`.${e}`)));
 }
 
-/** rawFallbackId: sha256 hex of the raw message, used when Message-ID is missing or too long. */
-export function parseIntakeMail(mail: ParsedMail, rcptTo: string, rawFallbackId: string): IntakeInput {
+/** rawFallbackId: called only when Message-ID is missing or too long; returns the sha256 hex of the raw message. */
+export async function parseIntakeMail(mail: ParsedMail, rcptTo: string, rawFallbackId: () => Promise<string> | string): Promise<IntakeInput> {
   const messageId = mail.messageId?.trim() ?? "";
   const text = mail.text?.trim() ?? "";
   const body = text !== "" ? text : htmlToText(mail.html ?? "");
   const name = mail.from?.name?.trim().slice(0, NAME_MAX) ?? "";
   const email = IntakeInput.shape.email.safeParse(mail.from?.address?.trim());
-  const cv = pickCv(mail.attachments);
   const tag = splitRecipient(rcptTo).tag;
   const subject = mail.subject?.trim() ?? "";
 
   return {
     source: "email",
-    externalId: messageId !== "" && messageId.length <= EXTERNAL_ID_MAX ? messageId : rawFallbackId,
+    externalId: messageId !== "" && messageId.length <= EXTERNAL_ID_MAX ? messageId : await rawFallbackId(),
     tag: tag === null ? undefined : tag.slice(0, TAG_MAX),
     name: name === "" ? undefined : name,
     email: email.success ? email.data : undefined,
-    linkedinUrl: firstLinkedinUrl(`${mail.text ?? ""}\n${mail.html ?? ""}`) ?? undefined,
-    cv: cv ?? undefined,
+    linkedinUrl: firstLinkedinUrl(mail.text ?? "") ?? firstLinkedinUrl(mail.html ?? "") ?? undefined,
+    cv: pickCv(mail.attachments) ?? undefined,
     coverLetter: body === "" ? undefined : body.slice(0, COVER_LETTER_MAX).trim(),
     note: subject === "" ? undefined : `subject: ${subject}`.slice(0, NOTE_MAX),
   };

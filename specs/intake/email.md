@@ -13,12 +13,12 @@
 export type ParsedMail = { messageId?: string; from?: { address?: string; name?: string }; subject?: string; text?: string; html?: string; attachments: readonly { filename: string | null; mimeType: string; content: ArrayBuffer | Uint8Array | string }[] };  // structural subset of postal-mime's Email (a parsed Email is assignable)
 export function splitRecipient(rcpt: string): { local: string; tag: string | null }   // "Jobs+Senior-BE@asajj.cz" → { local: "jobs", tag: "senior-be" }; no plus part (or "jobs+@") → tag null; lowercased; display-name form "X <jobs+a@b>" handled
 export function firstLinkedinUrl(text: string): string | null       // first linkedin.com/in/… that normalizeLinkedinProfile accepts; trailing .,;:!? ignored; company pages skipped
-export function pickCv(attachments): CvFile | null   // first application/pdf (or .pdf name) else first text/plain; images and others ignored; null filename → cv.pdf / cv.txt
+export function pickCv(attachments): CvFile | null   // first application/pdf (or .pdf name) else first text/plain; images and others ignored; null filename → cv.pdf / cv.txt (built with `toCvFile`; PDF detection is `isPdf` from src/domain/cv-text.ts)
 export function senderAllowed(from: string | undefined, allowList: string): boolean   // blank allowList → true; entries are addresses or domains ("@d" ok), a domain covers its subdomains, case-insensitive; missing sender with a list → false
-export function parseIntakeMail(mail: ParsedMail, rcptTo: string, rawFallbackId: string): IntakeInput
-  // source "email"; externalId = messageId (when 1..300 chars) ?? rawFallbackId (sha256 hex of raw, computed by the caller); tag from rcptTo;
+export async function parseIntakeMail(mail: ParsedMail, rcptTo: string, rawFallbackId: () => Promise<string> | string): Promise<IntakeInput>
+  // source "email"; externalId = messageId (when 1..300 chars), else await rawFallbackId() (a thunk: the sha256 hex of raw is computed only when there is no usable Message-ID); tag from rcptTo;
   // name = from.name (blank → undefined, ≤ 200); email = from.address when it is a valid address, else dropped;
-  // linkedinUrl = firstLinkedinUrl(text + "\n" + raw html)  — raw html, not htmlToText, so a profile only in an href is found;
+  // linkedinUrl = firstLinkedinUrl(text) ?? firstLinkedinUrl(raw html)  — html is scanned only on a miss, and raw (not htmlToText) so a profile only in an href is found; firstLinkedinUrl returns at once when the text has no `linkedin.com/in/` (case-insensitive);
   // cv = pickCv; coverLetter = text, or htmlToText(html) when there is no text, trimmed, first 10000 chars; note = "subject: <subject>" (≤ 1000)
   // Every field is cut or dropped so IntakeInput.parse never throws on a real mail.
 ```
@@ -32,10 +32,10 @@ export async function handleIntakeEmail(message: ForwardableEmailMessage, env: I
 ```
 0. Recipient gate (the zone has a catch-all to this Worker): `splitRecipient(message.to).local` must be `jobs` (covers `jobs@` and `jobs+<tag>@`), else `message.setReject("no such address")`, return, nothing stored and nothing forwarded.
 1. `message.rawSize > 10 * 1024 * 1024` → `message.setReject("message too large")`, return.
-2. `raw = await new Response(message.raw).arrayBuffer()`; `parsed = await PostalMime.parse(raw)`; `rawId = sha256hex(raw)` (WebCrypto).
-3. `input = parseIntakeMail(parsed, message.to, rawId)`; `allowed = senderAllowed(message.from, env.INTAKE_FROM_ALLOW ?? "")`.
-4. `result = await ingestApplication(input, env, now, { senderAllowed: allowed })`; `log(`intake email ${result.applicationId} ${result.status}`)`. Any error in steps 2–4 (MIME parse included) is logged as `intake email failed: <message>` and rethrown after the forward attempt.
-5. If `env.INTAKE_FORWARD_TO` is non-empty: `await message.forward(env.INTAKE_FORWARD_TO)`; a forward failure is logged as `intake email forward failed: <message>`, never thrown (the application is already stored).
+2. `raw = await new Response(message.raw).arrayBuffer()`; `parsed = await PostalMime.parse(raw)`; the raw digest is `() => sha256Hex(raw)` (src/domain/digest.ts), passed as a thunk.
+3. `input = await parseIntakeMail(parsed, message.to, () => sha256Hex(raw))`; `allowed = senderAllowed(message.from, env.INTAKE_FROM_ALLOW ?? "")`.
+4. `result = await ingestApplication(input, env, now, { senderAllowed: allowed })`; `log(`intake email ${result.applicationId} ${result.status}`)`. Any error in steps 2–4 (MIME parse included) is logged as `intake email failed: <message>` (`errorText`) and rethrown after the forward attempt (try/catch/finally: the forward runs in `finally`).
+5. In `finally`, if `env.INTAKE_FORWARD_TO` is non-empty: `await message.forward(env.INTAKE_FORWARD_TO)`; a forward failure is logged as `intake email forward failed: <message>`, never thrown (the application is already stored).
 
 `src/worker.ts`:
 ```ts
@@ -51,5 +51,5 @@ email: async (message, env) => { await handleIntakeEmail(message, env, new Date(
 
 ## Tests
 - `email-intake.test.ts`: each helper plus `parseIntakeMail` over the four fixtures parsed with postal-mime (real library in Node).
-- `intake-email.test.ts`: fake `ForwardableEmailMessage` (`raw` as ReadableStream from the fixture, `rawSize`, `setReject`/`forward` spies) + the funnel fakes: wrong recipient (`info@asajj.cz`) → reject and nothing stored; oversize → reject and nothing stored; happy → application stored and forwarded; forward failure → logged, no throw; `INTAKE_FROM_ALLOW` excluding the sender → `unmatched`.
+- `intake-email.test.ts`: fake `ForwardableEmailMessage` (`raw` as ReadableStream from the fixture, `rawSize`, `setReject`/`forward` spies) + the shared funnel fakes (`src/workflow/__tests__/fixtures/intake-fakes.ts`): wrong recipient (`info@asajj.cz`) → reject and nothing stored; oversize → reject and nothing stored; happy → application stored and forwarded; forward failure → logged, no throw; `INTAKE_FROM_ALLOW` excluding the sender → `unmatched`.
 - `pnpm exec wrangler deploy --dry-run --outdir <scratch>` still bundles (`email` export present).

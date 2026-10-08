@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/intake/tag-form.tsx
- * Deps:    react, src/app/_lib/operator-token
+ * Deps:    react, src/app/_lib/operator-token, src/app/_lib/form-text
  * Tested:  n/a (the body rules are tested in src/app/api/intake/tags/__tests__/tag-body.test.ts)
  *
  * Key responsibilities:
@@ -17,6 +17,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { formText } from "@/app/_lib/form-text";
 import { authHeaders, readToken } from "@/app/_lib/operator-token";
 
 const FIELD =
@@ -50,16 +51,12 @@ export function TagForm({ onCreated }: { onCreated: () => void }): React.JSX.Ele
   const [notice, setNotice] = useState<Notice | null>(null);
 
   async function submit(data: FormData): Promise<void> {
-    const text = (key: string): string => {
-      const raw = data.get(key);
-      return typeof raw === "string" ? raw.trim() : "";
-    };
-    const offer = text("startupjobsOfferId");
+    const offer = formText(data, "startupjobsOfferId").trim();
     setBusy(true);
     setNotice(null);
     const result = await createTag({
-      tag: text("tag"),
-      role: text("role"),
+      tag: formText(data, "tag").trim(),
+      role: formText(data, "role").trim(),
       ...(offer === "" ? {} : { startupjobsOfferId: offer }),
     });
     setBusy(false);

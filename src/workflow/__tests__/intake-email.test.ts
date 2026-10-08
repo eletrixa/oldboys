@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/workflow/__tests__/intake-email.test.ts
- * Deps:    vitest, src/domain/__tests__/fixtures/*.eml
+ * Deps:    vitest, src/domain/__tests__/fixtures/*.eml, ./fixtures/intake-fakes
  * Tested:  n/a (this is the test file)
  *
  * Key responsibilities:
@@ -11,15 +11,14 @@
  *   no-tag mail, duplicate delivery, funnel error still forwarded and rethrown
  *
  * Design constraints:
- * - No module mocks: a fake ForwardableEmailMessage and hand-written D1/R2/Workflow fakes keyed on SQL prefixes
+ * - No module mocks: a fake ForwardableEmailMessage and the shared D1/R2/Workflow fakes keyed on SQL prefixes
  */
 import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
 import { handleIntakeEmail, type IntakeEmailEnv } from "../intake-email";
+import { makeIntakeFakes } from "./fixtures/intake-fakes";
 
 const NOW = new Date("2026-10-08T12:00:00.000Z");
-
-type Row = Record<string, unknown>;
 
 function fakeMessage(fixture: string, opts: { to?: string; from?: string; rawSize?: number; forwardError?: Error } = {}) {
   const bytes = readFileSync(new URL(`../../domain/__tests__/fixtures/${fixture}`, import.meta.url));
@@ -38,58 +37,9 @@ function fakeMessage(fixture: string, opts: { to?: string; from?: string; rawSiz
 }
 
 function makeEnv(vars: { forwardTo?: string; allow?: string; dbError?: Error } = {}) {
-  const apps = new Map<string, Row>();
-  const investigations: Row[] = [];
-  const puts: string[] = [];
-  const exec = (sql: string, args: unknown[]): { rows: Row[]; changes: number } => {
-    if (vars.dbError) throw vars.dbError;
-    if (sql.startsWith("SELECT id, status, run_id, note, tag, linkedin_url, cv_text FROM applications")) {
-      const hit = [...apps.values()].find((a) => a.source === args[0] && a.external_id === args[1]);
-      return { rows: hit ? [hit] : [], changes: 0 };
-    }
-    if (sql.startsWith("INSERT INTO applications")) {
-      const cols = /\(([^)]*)\)/.exec(sql)?.[1]?.split(", ") ?? [];
-      const row: Row = Object.fromEntries(cols.map((c, i) => [c, args[i]]));
-      apps.set(row.id as string, { ...row, status: "received" });
-      return { rows: [], changes: 1 };
-    }
-    if (sql.startsWith("SELECT role, goal FROM intake_tags WHERE tag = ?")) {
-      return { rows: args[0] === "senior-be" ? [{ role: "Senior backend engineer", goal: "hiring" }] : [], changes: 0 };
-    }
-    if (sql.startsWith("SELECT COUNT(*) AS n FROM investigations")) return { rows: [{ n: 0 }], changes: 0 };
-    if (sql.startsWith("INSERT INTO investigations")) {
-      investigations.push({ id: args[0] });
-      return { rows: [], changes: 1 };
-    }
-    const update = /^UPDATE applications SET (.*) WHERE id = \?$/.exec(sql);
-    if (update) {
-      const cols = (update[1] ?? "").split(", ").map((c) => c.split(" = ")[0] ?? "");
-      const row = apps.get(args[cols.length] as string);
-      cols.forEach((c, i) => row && (row[c] = args[i]));
-      return { rows: [], changes: row ? 1 : 0 };
-    }
-    throw new Error(`unexpected SQL: ${sql}`);
-  };
-  const stmt = (sql: string, args: unknown[] = []) => ({
-    bind: (...a: unknown[]) => stmt(sql, a),
-    first: () => Promise.resolve().then(() => exec(sql, args).rows[0] ?? null),
-    run: () => Promise.resolve().then(() => ({ meta: { changes: exec(sql, args).changes } })),
-  });
-  const env = {
-    DB: { prepare: (sql: string) => stmt(sql) },
-    RESEARCH_RUN: { create: () => Promise.resolve({ id: "wf" }) },
-    RUN_BUDGET_USD: "0.50",
-    RUN_BUDGET_CALLS: "16",
-    SOURCES: {
-      put: (key: string) => {
-        puts.push(key);
-        return Promise.resolve(null);
-      },
-    },
-    INTAKE_FORWARD_TO: vars.forwardTo ?? "robert@example.cz",
-    INTAKE_FROM_ALLOW: vars.allow ?? "",
-  } as unknown as IntakeEmailEnv;
-  return { env, apps, investigations, puts };
+  const fakes = makeIntakeFakes({ dbError: vars.dbError });
+  const env = { ...fakes.env, INTAKE_FORWARD_TO: vars.forwardTo ?? "robert@example.cz", INTAKE_FROM_ALLOW: vars.allow ?? "" } as IntakeEmailEnv;
+  return { ...fakes, env };
 }
 
 describe("handleIntakeEmail", () => {
@@ -131,7 +81,7 @@ describe("handleIntakeEmail", () => {
       linkedin_url: "https://www.linkedin.com/in/marek-lindner-test",
     });
     expect(investigations).toHaveLength(1);
-    expect(puts).toEqual([`intake/${String(app?.id)}/Marek_Lindner_CV.pdf`]);
+    expect(puts.map((p) => p.key)).toEqual([`intake/${String(app?.id)}/Marek_Lindner_CV.pdf`]);
     expect(forward).toHaveBeenCalledWith("robert@example.cz");
     expect(log).toHaveBeenCalledWith(`intake email ${String(app?.id)} run-started`);
   });

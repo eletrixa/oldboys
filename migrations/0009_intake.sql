@@ -36,6 +36,6 @@ CREATE TABLE applications (
   received_at  TEXT NOT NULL
 );
 CREATE UNIQUE INDEX idx_applications_external ON applications(source, external_id);
-CREATE INDEX idx_applications_received ON applications(received_at);
+CREATE INDEX idx_applications_received ON applications(received_at, id);   -- matches ORDER BY received_at DESC, id DESC
 
 ALTER TABLE investigations ADD COLUMN application_id TEXT;   -- set by startRun when via = 'intake'

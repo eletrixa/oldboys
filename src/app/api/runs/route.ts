@@ -3,8 +3,8 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/api/runs/route.ts
- * Deps:    @opennextjs/cloudflare (getCloudflareContext), src/app/api/_lib/{auth,body,run-body}, src/workflow/start-run,
- *          bindings DB + RESEARCH_RUN, secret RUN_TOKEN
+ * Deps:    @opennextjs/cloudflare (getCloudflareContext), src/app/api/_lib/{auth,body,run-body}, src/domain/run-status,
+ *          src/workflow/start-run, bindings DB + RESEARCH_RUN, secret RUN_TOKEN
  * Tested:  body contract in src/app/api/_lib/__tests__/run-body.test.ts; insert + caps in src/workflow/__tests__/start-run.test.ts
  *
  * Key responsibilities:
@@ -23,7 +23,7 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { requireBearer } from "@/app/api/_lib/auth";
 import { parseJsonBody } from "@/app/api/_lib/body";
 import { StartRunBody } from "@/app/api/_lib/run-body";
-import { dedupeSince, RUNS_PER_HOUR_CAP, START_PER_HOUR_CAP } from "@/domain/run-status";
+import { dedupeSince, HOUR_MS, RUNS_PER_HOUR_CAP, START_PER_HOUR_CAP } from "@/domain/run-status";
 import { runsStartedSince, startRun } from "@/workflow/start-run";
 
 export async function POST(request: Request): Promise<Response> {
@@ -45,7 +45,7 @@ export async function POST(request: Request): Promise<Response> {
     if (earlier) return Response.json({ id: earlier.id, reused: true }, { status: 200 });
   }
 
-  const hourAgo = new Date(now.getTime() - 60 * 60 * 1000);
+  const hourAgo = new Date(now.getTime() - HOUR_MS);
   if ((await runsStartedSince(env.DB, hourAgo)) >= RUNS_PER_HOUR_CAP) {
     return Response.json({ error: "run cap reached, try again later" }, { status: 429 });
   }

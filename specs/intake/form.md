@@ -2,7 +2,7 @@
 
 ## Files
 - `src/app/api/intake/form/route.ts` (thin) + `src/app/api/intake/form/handler.ts` + `src/app/api/intake/__tests__/form.test.ts`
-- `src/app/api/_lib/intake-body.ts` (Zod body, shared with /api/apply) + `src/app/api/_lib/__tests__/intake-body.test.ts`
+- `src/app/api/_lib/intake-body.ts` (Zod body derived from `IntakeInput`, shared with /api/apply) + `src/app/api/_lib/__tests__/intake-body.test.ts`
 - `src/app/api/_lib/auth.ts` (modified: `requireBearer(request, token, name = "RUN_TOKEN")` so the 503 message names the right secret) + `src/app/api/_lib/__tests__/auth.test.ts`
 
 ## Body (`IntakeFormBody`)
@@ -12,7 +12,7 @@
 ```
 At least one of `linkedinUrl`, `cvText`, `cvBase64`; otherwise 400 "send linkedinUrl, cvText or cvBase64". `cvBase64` decodes (standard or url-safe) to `cv.bytes`; a decode failure is 400. Default `cvFilename` "cv.pdf", `cvContentType` "application/pdf".
 
-`IntakeFormBody` is the validating schema; its output replaces the three `cv*` upload fields with `cv?: CvFile` (`{bytes, filename, contentType}`) and has no `source`, so a connector spreads it into `IntakeInput` after adding its own source. Field limits match `IntakeInput`, so the funnel's own parse cannot fail on a validated body.
+`IntakeFormBody` is the validating schema; its output replaces the three `cv*` upload fields with `cv?: CvFile` (`{bytes, filename, contentType}`) and has no `source`, so a connector spreads it into `IntakeInput` after adding its own source. The schema is `IntakeInput.omit({ source, note, cv, tag }).extend({ tag, cvBase64, cvFilename, cvContentType })`, so field limits are the funnel's own and cannot drift (a `note` sent by the caller is ignored). The CV is built with `toCvFile`; `decodeBase64` tests the raw string once against standard base64 and only normalises (whitespace, url-safe alphabet, padding) when that fails.
 
 ## Handler
 ```ts

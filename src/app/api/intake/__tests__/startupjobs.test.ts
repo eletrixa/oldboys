@@ -3,93 +3,33 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/api/intake/__tests__/startupjobs.test.ts
- * Deps:    vitest
+ * Deps:    vitest, src/workflow/__tests__/fixtures/intake-fakes
  * Tested:  n/a (this is the test file)
  *
  * Key responsibilities:
- * - Cover specs/intake/startupjobs.md: 503, 404, 422, test payload, happy path with a PDF, bearer retry,
- *   download failures, duplicate, unexpected throw answering 202
+ * - Cover specs/intake/startupjobs.md: 503, 404, 422, test payload, happy path with a PDF, bearer on the first request
+ *   (startupjobs.cz only), download failures, duplicate, unexpected throw answering 202
  *
  * Design constraints:
- * - No module mocks; fakes match on SQL prefixes and keep state in plain maps
+ * - No module mocks; the shared fakes match on SQL prefixes and keep state in plain maps
  */
 import { describe, expect, it, vi } from "vitest";
 import { tinyPdf } from "@/domain/__tests__/fixtures/tiny-pdf";
+import { makeIntakeFakes } from "@/workflow/__tests__/fixtures/intake-fakes";
 import { handleStartupJobsWebhook, type StartupJobsEnv } from "../startupjobs/handler";
 
 const NOW = new Date("2026-10-09T10:00:00.000Z");
 const TOKEN = "whtoken-123";
 const PDF_URL = "https://www.startupjobs.cz/download/cv.pdf";
 
-type Row = Record<string, unknown>;
-
 function makeEnv(opts: { secret?: string | null; bearer?: string; r2Error?: Error } = {}) {
-  const tags = new Map<string, Row>([["senior-be", { role: "Senior backend engineer", goal: "hiring" }]]);
-  const offerTags = new Map<string, string>([["1234", "senior-be"]]);
-  const apps = new Map<string, Row>();
-  const investigations: Row[] = [];
-  const puts: { key: string; size: number }[] = [];
-  const create = vi.fn((_: unknown) => Promise.resolve({ id: "wf" }));
-
-  const exec = (sql: string, args: unknown[]): { rows: Row[]; changes: number } => {
-    if (sql.startsWith("SELECT tag FROM intake_tags WHERE startupjobs_offer_id = ?")) {
-      const tag = offerTags.get(args[0] as string);
-      return { rows: tag !== undefined ? [{ tag }] : [], changes: 0 };
-    }
-    if (sql.startsWith("SELECT id, status, run_id, note, tag, linkedin_url, cv_text FROM applications")) {
-      const hit = [...apps.values()].find((a) => a.source === args[0] && a.external_id === args[1]);
-      return { rows: hit ? [hit] : [], changes: 0 };
-    }
-    if (sql.startsWith("INSERT INTO applications")) {
-      const cols = /\(([^)]*)\)/.exec(sql)?.[1]?.split(", ") ?? [];
-      const row: Row = Object.fromEntries(cols.map((c, i) => [c, args[i]]));
-      row.status = "received";
-      apps.set(row.id as string, row);
-      return { rows: [], changes: 1 };
-    }
-    if (sql.startsWith("SELECT role, goal FROM intake_tags WHERE tag = ?")) {
-      const t = tags.get(args[0] as string);
-      return { rows: t ? [t] : [], changes: 0 };
-    }
-    if (sql.startsWith("SELECT COUNT(*) AS n FROM investigations")) return { rows: [{ n: 0 }], changes: 0 };
-    if (sql.startsWith("INSERT INTO investigations")) {
-      const cols = /\(([^)]*)\)/.exec(sql)?.[1]?.split(", ") ?? [];
-      const values = [...args.slice(0, 4), "queued", ...args.slice(4)];
-      investigations.push(Object.fromEntries(cols.map((c, i) => [c, values[i]])));
-      return { rows: [], changes: 1 };
-    }
-    const update = /^UPDATE applications SET (.*) WHERE id = \?$/.exec(sql);
-    if (update) {
-      const cols = (update[1] ?? "").split(", ").map((c) => c.split(" = ")[0] ?? "");
-      const row = apps.get(args[cols.length] as string);
-      if (!row) return { rows: [], changes: 0 };
-      cols.forEach((c, i) => (row[c] = args[i]));
-      return { rows: [], changes: 1 };
-    }
-    throw new Error(`unexpected SQL: ${sql}`);
-  };
-
-  const stmt = (sql: string, args: unknown[] = []) => ({
-    bind: (...a: unknown[]) => stmt(sql, a),
-    first: () => Promise.resolve().then(() => exec(sql, args).rows[0] ?? null),
-    run: () => Promise.resolve().then(() => ({ meta: { changes: exec(sql, args).changes } })),
-  });
+  const fakes = makeIntakeFakes({ offerTags: { "1234": "senior-be" }, r2Error: opts.r2Error });
   const env = {
-    DB: { prepare: (sql: string) => stmt(sql) },
-    RESEARCH_RUN: { create },
-    RUN_BUDGET_USD: "0.50",
-    RUN_BUDGET_CALLS: "16",
+    ...fakes.env,
     STARTUPJOBS_WEBHOOK_TOKEN: opts.secret === null ? undefined : (opts.secret ?? TOKEN),
     STARTUPJOBS_TOKEN: opts.bearer,
-    SOURCES: {
-      put: (key: string, bytes: ArrayBuffer) => {
-        if (opts.r2Error) return Promise.reject(opts.r2Error);
-        puts.push({ key, size: bytes.byteLength });
-        return Promise.resolve(null);
-      },
-    },
-  } as unknown as StartupJobsEnv;
-  return { env, apps, investigations, puts, create };
+  } as StartupJobsEnv;
+  return { ...fakes, env };
 }
 
 const payload = {
@@ -212,19 +152,19 @@ describe("handleStartupJobsWebhook: ingest", () => {
 });
 
 describe("handleStartupJobsWebhook: CV download", () => {
-  it("retries once with the StartupJobs bearer after 401/403", async () => {
+  it("sends the StartupJobs bearer on the first request to a startupjobs.cz host, with no retry", async () => {
     const { env, apps } = makeEnv({ bearer: "sj-secret" });
-    const fetchImpl = fetchOf(new Response("no", { status: 403 }), pdfResponse());
+    const fetchImpl = fetchOf(pdfResponse());
     const res = await handleStartupJobsWebhook(post(payload), TOKEN, env, NOW, fetchImpl);
 
     expect(res.status).toBe(200);
-    expect(fetchImpl).toHaveBeenCalledTimes(2);
-    expect(new Headers(fetchImpl.mock.calls[1]?.[1]?.headers).get("authorization")).toBe("Bearer sj-secret");
+    expect(fetchImpl).toHaveBeenCalledOnce();
+    expect(new Headers(fetchImpl.mock.calls[0]?.[1]?.headers).get("authorization")).toBe("Bearer sj-secret");
     expect([...apps.values()][0]).toMatchObject({ status: "run-started", cv_text: "Pan Zralok Kubernetes" });
   });
 
-  it("does not retry without a configured bearer and records the status", async () => {
-    const { env, apps } = makeEnv();
+  it("does not retry after a 403 and records the status", async () => {
+    const { env, apps } = makeEnv({ bearer: "sj-secret" });
     const fetchImpl = fetchOf(new Response("no", { status: 403 }));
     const res = await handleStartupJobsWebhook(post(payload), TOKEN, env, NOW, fetchImpl);
 
@@ -239,6 +179,7 @@ describe("handleStartupJobsWebhook: CV download", () => {
     const fetchImpl = fetchOf(new Response("no", { status: 401 }));
     await handleStartupJobsWebhook(post({ ...payload, files: ["https://evil.test/cv.pdf"] }), TOKEN, env, NOW, fetchImpl);
     expect(fetchImpl).toHaveBeenCalledOnce();
+    expect(new Headers(fetchImpl.mock.calls[0]?.[1]?.headers).has("authorization")).toBe(false);
   });
 
   it("keeps the application when the download fails: incomplete, or run-started with a LinkedIn URL", async () => {

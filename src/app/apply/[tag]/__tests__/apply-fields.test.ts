@@ -7,24 +7,17 @@
  * Tested:  n/a (this is the test file)
  *
  * Key responsibilities:
- * - Cover required fields, LinkedIn URL shape, CV type and size, the "LinkedIn or CV" rule and length caps
+ * - Cover required fields, LinkedIn URL shape, CV type (media type or .pdf name) and the 10 MiB size, the "LinkedIn or CV" rule and length caps
  *
  * Design constraints:
  * - Pure Node tests: File objects only, no DOM
  */
 import { describe, expect, it } from "vitest";
-import { checkApply, CV_MAX_BYTES, isPdf, MESSAGES, type ApplyDraft } from "../apply-fields";
+import { CV_MAX_BYTES } from "@/domain/application";
+import { checkApply, MESSAGES, type ApplyDraft } from "../apply-fields";
 
 const pdf = (size = 1000, name = "cv.pdf", type = "application/pdf"): File => new File([new Uint8Array(size)], name, { type });
 const ok: ApplyDraft = { name: "Josef Buryan", email: "josef@mail.test", linkedinUrl: "linkedin.com/in/josef-buryan", cv: null, message: "" };
-
-describe("isPdf", () => {
-  it("accepts the PDF media type or a .pdf name, rejects the rest", () => {
-    expect(isPdf({ name: "cv.bin", type: "application/pdf" })).toBe(true);
-    expect(isPdf({ name: "My CV.PDF", type: "" })).toBe(true);
-    expect(isPdf({ name: "cv.docx", type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" })).toBe(false);
-  });
-});
 
 describe("checkApply", () => {
   it("passes with LinkedIn only, with a CV only, and with both", () => {
@@ -51,8 +44,10 @@ describe("checkApply", () => {
     expect(checkApply({ ...ok, linkedinUrl: `https://www.linkedin.com/in/${"a".repeat(500)}` })).toBe(MESSAGES.linkedin);
   });
 
-  it("rejects a non-PDF CV and a CV over 5 MiB, accepts exactly 5 MiB", () => {
+  it("rejects a non-PDF CV and a CV over 10 MiB, accepts exactly 10 MiB", () => {
     expect(checkApply({ ...ok, cv: pdf(10, "cv.docx", "application/msword") })).toBe(MESSAGES.cvType);
+    expect(checkApply({ ...ok, cv: pdf(10, "My CV.PDF", "") })).toBeNull();
+    expect(checkApply({ ...ok, cv: pdf(10, "cv.bin", "application/pdf") })).toBeNull();
     expect(checkApply({ ...ok, cv: pdf(CV_MAX_BYTES + 1) })).toBe(MESSAGES.cvSize);
     expect(checkApply({ ...ok, cv: pdf(CV_MAX_BYTES) })).toBeNull();
   });

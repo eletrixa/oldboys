@@ -8,13 +8,13 @@
  *
  * Key responsibilities:
  * - readToken / writeToken: the RUN_TOKEN in sessionStorage under one key, tolerant of blocked storage
- * - TokenForm: the "Team access token" prompt, with the page's own helper line and button label
- * - fetchGated: GET a bearer-protected JSON route; a 401 clears the stored token and asks again, success stores it
+ * - TokenForm: the "Team access token" prompt, with the page's own helper line and button label; stores the typed token on submit (a 401 on the follow-up fetch clears it)
+ * - fetchGated: GET a bearer-protected JSON route; a 401 clears the stored token and asks again
  * - authHeaders: the Authorization header for follow-up writes on the same page
  *
  * Design constraints:
  * - Client-side only; the token never leaves sessionStorage except as the Authorization header
- * - Without a token the request still goes out and its 401 shows the form, so one code path serves both cases
+ * - Without a stored token no request goes out: the token form is returned straight away
  */
 "use client";
 
@@ -60,7 +60,6 @@ export async function fetchGated<T>(path: string, token: string | null, what: st
     }
     if (!res.ok) return { kind: "error", message: `We could not load ${what}. Please try again.` };
     const data = await res.json<T>();
-    writeToken(token);
     return { kind: "ready", data };
   } catch {
     return { kind: "error", message: "We could not reach the service. Please try again." };
@@ -76,7 +75,9 @@ export function TokenForm({ error, helper, button, onSubmit }: TokenFormProps): 
       onSubmit={(e) => {
         e.preventDefault();
         const raw = new FormData(e.currentTarget).get("token");
-        if (typeof raw === "string" && raw.trim() !== "") onSubmit(raw.trim());
+        if (typeof raw !== "string" || raw.trim() === "") return;
+        writeToken(raw.trim());
+        onSubmit(raw.trim());
       }}
     >
       <label className="flex flex-col gap-1.5 text-sm font-medium">

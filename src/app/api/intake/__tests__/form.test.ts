@@ -3,86 +3,27 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/api/intake/__tests__/form.test.ts
- * Deps:    vitest
+ * Deps:    vitest, src/workflow/__tests__/fixtures/intake-fakes
  * Tested:  n/a (this is the test file)
  *
  * Key responsibilities:
  * - Cover specs/intake/form.md: 503/401/400 rejections, LinkedIn-only and CV application, duplicate, no runId leak
  *
  * Design constraints:
- * - No module mocks; fakes match on SQL prefixes and keep state in plain maps
+ * - No module mocks; the shared fakes match on SQL prefixes and keep state in plain maps
  */
 import { describe, expect, it, vi } from "vitest";
 import { tinyPdf } from "@/domain/__tests__/fixtures/tiny-pdf";
+import { makeIntakeFakes } from "@/workflow/__tests__/fixtures/intake-fakes";
 import { handleFormIntake, type FormIntakeEnv } from "../form/handler";
 
 const NOW = new Date("2026-10-08T12:00:00.000Z");
 const TOKEN = "intake-secret";
 const PROFILE = "https://www.linkedin.com/in/josef-buryan";
 
-type Row = Record<string, unknown>;
-
 function makeEnv(opts: { token?: string; r2Error?: Error } = {}) {
-  const tags = new Map<string, Row>([["senior-be", { role: "Senior backend engineer", goal: "hiring" }]]);
-  const apps = new Map<string, Row>();
-  const investigations: Row[] = [];
-  const puts: { key: string; bytes: number[]; contentType: string | undefined }[] = [];
-  const create = vi.fn((_: unknown) => Promise.resolve({ id: "wf" }));
-
-  const exec = (sql: string, args: unknown[]): { rows: Row[]; changes: number } => {
-    if (sql.startsWith("SELECT id, status, run_id, note, tag, linkedin_url, cv_text FROM applications")) {
-      const hit = [...apps.values()].find((a) => a.source === args[0] && a.external_id === args[1]);
-      return { rows: hit ? [hit] : [], changes: 0 };
-    }
-    if (sql.startsWith("INSERT INTO applications")) {
-      const cols = /\(([^)]*)\)/.exec(sql)?.[1]?.split(", ") ?? [];
-      const row: Row = Object.fromEntries(cols.map((c, i) => [c, args[i]]));
-      row.status = "received";
-      apps.set(row.id as string, row);
-      return { rows: [], changes: 1 };
-    }
-    if (sql.startsWith("SELECT role, goal FROM intake_tags WHERE tag = ?")) {
-      const t = tags.get(args[0] as string);
-      return { rows: t ? [t] : [], changes: 0 };
-    }
-    if (sql.startsWith("SELECT COUNT(*) AS n FROM investigations")) return { rows: [{ n: 0 }], changes: 0 };
-    if (sql.startsWith("INSERT INTO investigations")) {
-      const cols = /\(([^)]*)\)/.exec(sql)?.[1]?.split(", ") ?? [];
-      const values = [...args.slice(0, 4), "queued", ...args.slice(4)];
-      investigations.push(Object.fromEntries(cols.map((c, i) => [c, values[i]])));
-      return { rows: [], changes: 1 };
-    }
-    const update = /^UPDATE applications SET (.*) WHERE id = \?$/.exec(sql);
-    if (update) {
-      const cols = (update[1] ?? "").split(", ").map((c) => c.split(" = ")[0] ?? "");
-      const row = apps.get(args[cols.length] as string);
-      if (!row) return { rows: [], changes: 0 };
-      cols.forEach((c, i) => (row[c] = args[i]));
-      return { rows: [], changes: 1 };
-    }
-    throw new Error(`unexpected SQL: ${sql}`);
-  };
-
-  const stmt = (sql: string, args: unknown[] = []) => ({
-    bind: (...a: unknown[]) => stmt(sql, a),
-    first: () => Promise.resolve().then(() => exec(sql, args).rows[0] ?? null),
-    run: () => Promise.resolve().then(() => ({ meta: { changes: exec(sql, args).changes } })),
-  });
-  const env = {
-    DB: { prepare: (sql: string) => stmt(sql) },
-    RESEARCH_RUN: { create },
-    RUN_BUDGET_USD: "0.50",
-    RUN_BUDGET_CALLS: "16",
-    SOURCES: {
-      put: (key: string, bytes: ArrayBuffer, o?: { httpMetadata?: { contentType?: string } }) => {
-        if (opts.r2Error) return Promise.reject(opts.r2Error);
-        puts.push({ key, bytes: [...new Uint8Array(bytes)], contentType: o?.httpMetadata?.contentType });
-        return Promise.resolve(null);
-      },
-    },
-    INTAKE_TOKEN: "token" in opts ? opts.token : TOKEN,
-  } as unknown as FormIntakeEnv;
-  return { env, apps, investigations, puts, create };
+  const fakes = makeIntakeFakes({ r2Error: opts.r2Error });
+  return { ...fakes, env: { ...fakes.env, INTAKE_TOKEN: "token" in opts ? opts.token : TOKEN } as FormIntakeEnv };
 }
 
 function post(body: unknown, token: string | null = TOKEN): Request {
@@ -165,9 +106,7 @@ describe("handleFormIntake", () => {
 
     expect(res.status).toBe(201);
     const json = await res.json<{ applicationId: string }>();
-    expect(puts).toEqual([
-      { key: `intake/${json.applicationId}/Josef_CV.pdf`, bytes: [...new Uint8Array(pdf)], contentType: "application/pdf" },
-    ]);
+    expect(puts).toEqual([{ key: `intake/${json.applicationId}/Josef_CV.pdf`, bytes: pdf, contentType: "application/pdf" }]);
     expect(investigations[0]).toMatchObject({ cv_text: "Josef Buryan Kubernetes", profile_url: null });
   });
 

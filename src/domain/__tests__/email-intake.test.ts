@@ -14,13 +14,14 @@
  */
 import { readFileSync } from "node:fs";
 import PostalMime from "postal-mime";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { IntakeInput } from "../application";
 import { firstLinkedinUrl, parseIntakeMail, pickCv, senderAllowed, splitRecipient, type ParsedMail } from "../email-intake";
 
 const fixture = (name: string): Buffer => readFileSync(new URL(`./fixtures/${name}`, import.meta.url));
 const parse = (name: string) => PostalMime.parse(fixture(name));
 const RAW_ID = "f".repeat(64);
+const RAW_ID_THUNK = (): string => RAW_ID;
 
 describe("splitRecipient", () => {
   it("lowercases and splits the plus tag", () => {
@@ -125,7 +126,7 @@ describe("senderAllowed", () => {
 
 describe("parseIntakeMail over fixtures", () => {
   it("gmail-forward: tag, sender, LinkedIn URL from the text body and the PDF attachment", async () => {
-    const input = parseIntakeMail(await parse("gmail-forward.eml"), "jobs+senior-be@asajj.cz", RAW_ID);
+    const input = await parseIntakeMail(await parse("gmail-forward.eml"), "jobs+senior-be@asajj.cz", RAW_ID_THUNK);
     expect(input).toMatchObject({
       source: "email",
       externalId: "<CAF0xGmailFwd0001@mail.example.net>",
@@ -142,7 +143,7 @@ describe("parseIntakeMail over fixtures", () => {
   });
 
   it("seznam-copy: quoted-printable Czech text decoded, profile from the signature, no CV", async () => {
-    const input = parseIntakeMail(await parse("seznam-copy.eml"), "jobs+senior-be@asajj.cz", RAW_ID);
+    const input = await parseIntakeMail(await parse("seznam-copy.eml"), "jobs+senior-be@asajj.cz", RAW_ID_THUNK);
     expect(input).toMatchObject({
       tag: "senior-be",
       name: "Jana Dvořáková",
@@ -155,7 +156,7 @@ describe("parseIntakeMail over fixtures", () => {
   });
 
   it("jobs-cz-notification: HTML-only body becomes the cover letter, no profile, no CV", async () => {
-    const input = parseIntakeMail(await parse("jobs-cz-notification.eml"), "jobs+senior-be@asajj.cz", RAW_ID);
+    const input = await parseIntakeMail(await parse("jobs-cz-notification.eml"), "jobs+senior-be@asajj.cz", RAW_ID_THUNK);
     expect(input.linkedinUrl).toBeUndefined();
     expect(input.cv).toBeUndefined();
     expect(input.email).toBe("noreply@jobs.example");
@@ -165,7 +166,7 @@ describe("parseIntakeMail over fixtures", () => {
   });
 
   it("no-tag: no tag, and the raw hash is the externalId when there is no Message-ID", async () => {
-    const input = parseIntakeMail(await parse("no-tag.eml"), "jobs@asajj.cz", RAW_ID);
+    const input = await parseIntakeMail(await parse("no-tag.eml"), "jobs@asajj.cz", RAW_ID_THUNK);
     expect(input).toMatchObject({ tag: undefined, externalId: RAW_ID, linkedinUrl: "https://www.linkedin.com/in/ondrej-svoboda-dev" });
   });
 
@@ -179,11 +180,11 @@ describe("parseIntakeMail over fixtures", () => {
 describe("parseIntakeMail field limits", () => {
   const mail = (over: Partial<ParsedMail>): ParsedMail => ({ attachments: [], ...over });
 
-  it("drops what IntakeInput would reject instead of throwing", () => {
-    const input = parseIntakeMail(
+  it("drops what IntakeInput would reject instead of throwing", async () => {
+    const input = await parseIntakeMail(
       mail({ messageId: `<${"x".repeat(400)}@a>`, from: { name: "  ", address: "not an address" }, text: "   ", subject: "s".repeat(2000) }),
       "jobs+senior-be@asajj.cz",
-      RAW_ID,
+      RAW_ID_THUNK,
     );
     expect(input.externalId).toBe(RAW_ID);
     expect(input.name).toBeUndefined();
@@ -193,15 +194,24 @@ describe("parseIntakeMail field limits", () => {
     expect(() => IntakeInput.parse(input)).not.toThrow();
   });
 
-  it("caps the cover letter at 10000 characters and the name at 200", () => {
-    const input = parseIntakeMail(mail({ text: "a".repeat(12_000), from: { name: "N".repeat(300), address: "n@x.cz" } }), "jobs@asajj.cz", RAW_ID);
+  it("caps the cover letter at 10000 characters and the name at 200", async () => {
+    const input = await parseIntakeMail(mail({ text: "a".repeat(12_000), from: { name: "N".repeat(300), address: "n@x.cz" } }), "jobs@asajj.cz", RAW_ID_THUNK);
     expect(input.coverLetter).toHaveLength(10_000);
     expect(input.name).toHaveLength(200);
     expect(() => IntakeInput.parse(input)).not.toThrow();
   });
 
-  it("a profile only in the HTML href is found", () => {
-    const input = parseIntakeMail(mail({ text: "see my profile", html: '<a href="https://linkedin.com/in/jan-k">profile</a>' }), "jobs@asajj.cz", RAW_ID);
+  it("a profile only in the HTML href is found", async () => {
+    const input = await parseIntakeMail(mail({ text: "see my profile", html: '<a href="https://linkedin.com/in/jan-k">profile</a>' }), "jobs@asajj.cz", RAW_ID_THUNK);
     expect(input.linkedinUrl).toBe("https://www.linkedin.com/in/jan-k");
+  });
+
+  it("hashes the raw message only when Message-ID is missing or too long", async () => {
+    const thunk = vi.fn(RAW_ID_THUNK);
+    const withId = await parseIntakeMail(mail({ messageId: "<a@b>" }), "jobs@asajj.cz", thunk);
+    expect(withId.externalId).toBe("<a@b>");
+    expect(thunk).not.toHaveBeenCalled();
+    expect((await parseIntakeMail(mail({}), "jobs@asajj.cz", thunk)).externalId).toBe(RAW_ID);
+    expect(thunk).toHaveBeenCalledOnce();
   });
 });

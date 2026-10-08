@@ -7,8 +7,8 @@
  * Tested:  src/app/intake/__tests__/intake-rows.test.ts
  *
  * Key responsibilities:
- * - ApplicationListRow: the GET /api/intake/applications row (snake_case, no cv_text, no cover_letter); TagRow: the GET /api/intake/tags row
- * - statusLabel / statusTone / sourceLabel: plain words and a colour tone per enum value (exhaustive records)
+ * - ApplicationListRow: the GET /api/intake/applications row (snake_case, only the rendered columns); TagRow: the GET /api/intake/tags row
+ * - STATUS_LABEL / STATUS_TONE / SOURCE_LABEL: plain words and a colour tone per enum value (exhaustive records, exported)
  * - formatReceived: UTC "YYYY-MM-DD HH:MM", identical on server and client (no hydration drift)
  * - shapeRow: the display row (run link only with a run id, truncated note plus the full text for the title)
  * - intakeLine: "From <source> · <tag> · <date>" shown under the run heading
@@ -21,17 +21,14 @@ import type { ApplicationSource, ApplicationStatus } from "@/domain/application"
 import type { GoalId } from "@/domain/claim";
 
 /** Longest note shown in the table cell; the full note sits in the cell's title. */
-export const NOTE_MAX = 80;
+const NOTE_MAX = 80;
 
 export type ApplicationListRow = {
   id: string;
   source: ApplicationSource;
-  external_id: string;
   tag: string | null;
   name: string | null;
   email: string | null;
-  linkedin_url: string | null;
-  cv_key: string | null;
   status: ApplicationStatus;
   run_id: string | null;
   note: string | null;
@@ -43,7 +40,7 @@ export type TagRow = { tag: string; role: string; goal: GoalId; startupjobs_offe
 
 export type StatusTone = "ok" | "unsure" | "conflict" | "neutral";
 
-const STATUS_LABEL: Readonly<Record<ApplicationStatus, string>> = {
+export const STATUS_LABEL: Readonly<Record<ApplicationStatus, string>> = {
   received: "Received",
   "run-started": "Run started",
   unmatched: "Unmatched",
@@ -51,7 +48,7 @@ const STATUS_LABEL: Readonly<Record<ApplicationStatus, string>> = {
   capped: "Held back (hourly cap)",
 };
 
-const STATUS_TONE: Readonly<Record<ApplicationStatus, StatusTone>> = {
+export const STATUS_TONE: Readonly<Record<ApplicationStatus, StatusTone>> = {
   received: "neutral",
   "run-started": "ok",
   unmatched: "conflict",
@@ -59,16 +56,12 @@ const STATUS_TONE: Readonly<Record<ApplicationStatus, StatusTone>> = {
   capped: "unsure",
 };
 
-const SOURCE_LABEL: Readonly<Record<ApplicationSource, string>> = {
+export const SOURCE_LABEL: Readonly<Record<ApplicationSource, string>> = {
   email: "Email",
   form: "Google Form",
   "apply-page": "Apply page",
   startupjobs: "StartupJobs",
 };
-
-export const statusLabel = (status: ApplicationStatus): string => STATUS_LABEL[status];
-export const statusTone = (status: ApplicationStatus): StatusTone => STATUS_TONE[status];
-export const sourceLabel = (source: ApplicationSource): string => SOURCE_LABEL[source];
 
 /** "2026-10-09 14:05" in UTC; the raw string when it does not parse. */
 export function formatReceived(iso: string): string {
@@ -96,11 +89,11 @@ export function shapeRow(row: ApplicationListRow): IntakeRow {
     id: row.id,
     received: formatReceived(row.received_at),
     tag: row.tag,
-    source: sourceLabel(row.source),
+    source: SOURCE_LABEL[row.source],
     name: row.name ?? "(no name)",
     email: row.email,
-    status: statusLabel(row.status),
-    tone: statusTone(row.status),
+    status: STATUS_LABEL[row.status],
+    tone: STATUS_TONE[row.status],
     runHref: row.run_id === null ? null : `/runs/${row.run_id}`,
     note: note !== null && note.length > NOTE_MAX ? `${note.slice(0, NOTE_MAX)}…` : note,
     noteFull: note,
@@ -113,5 +106,5 @@ export type RunIntake = { source: ApplicationSource; tag: string | null; receive
 /** "From Email · senior-be · 2026-10-09"; the tag is left out when the application had none. */
 export function intakeLine(intake: RunIntake): string {
   const date = formatReceived(intake.receivedAt).slice(0, 10);
-  return ["From " + sourceLabel(intake.source), ...(intake.tag === null ? [] : [intake.tag]), date].join(" · ");
+  return [`From ${SOURCE_LABEL[intake.source]}`, ...(intake.tag === null ? [] : [intake.tag]), date].join(" · ");
 }

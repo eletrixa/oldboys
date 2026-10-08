@@ -8,7 +8,7 @@
  *
  * Key responsibilities:
  * - Ask once for the operator token (RUN_TOKEN) via the shared module; GET /api/intake/applications and /api/intake/tags with it
- * - Applications table and tags table (./intake-tables) plus TagForm; a created tag refreshes both lists
+ * - Applications table and tags table (./intake-tables) plus TagForm; a created tag refetches only the tags list
  *
  * Design constraints:
  * - Client component; the token never leaves sessionStorage except as the Authorization header
@@ -16,7 +16,7 @@
  */
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { fetchGated, type Gated, readToken, TokenForm } from "@/app/_lib/operator-token";
 import { type ApplicationListRow, shapeRow, type TagRow } from "./intake-rows";
 import { ApplicationsTable, TagsTable } from "./intake-tables";
@@ -24,10 +24,12 @@ import { TagForm } from "./tag-form";
 
 type Data = { applications: ApplicationListRow[]; tags: TagRow[] };
 
+const fetchTags = (token: string | null) => fetchGated<{ tags: TagRow[] }>("/api/intake/tags", token, "the tags");
+
 async function loadIntake(token: string | null): Promise<Gated<Data>> {
   const [apps, tags] = await Promise.all([
     fetchGated<{ applications: ApplicationListRow[] }>("/api/intake/applications", token, "the applications"),
-    fetchGated<{ tags: TagRow[] }>("/api/intake/tags", token, "the tags"),
+    fetchTags(token),
   ]);
   if (apps.kind !== "ready") return apps;
   if (tags.kind !== "ready") return tags;
@@ -52,9 +54,11 @@ export function IntakeView(): React.JSX.Element {
     void loadIntake(token).then(setLoad);
   }
 
-  const refresh = useCallback(() => {
-    void loadIntake(readToken()).then(setLoad);
-  }, []);
+  function refreshTags(): void {
+    void fetchTags(readToken()).then((next) => {
+      setLoad((prev) => (next.kind !== "ready" ? next : prev.kind === "ready" ? { kind: "ready", data: { ...prev.data, tags: next.data.tags } } : prev));
+    });
+  }
 
   return (
     <main className="mx-auto flex max-w-5xl flex-col gap-6 px-4 py-10">
@@ -76,7 +80,7 @@ export function IntakeView(): React.JSX.Element {
             <h2 id="tags-heading" className="text-2xl">Position tags</h2>
             <p className="text-sm text-muted">A tag routes an application to a role: jobs+&lt;tag&gt;@asajj.cz, /apply/&lt;tag&gt;, the form&apos;s hidden field or a StartupJobs offer.</p>
             <TagsTable tags={load.data.tags} />
-            <TagForm onCreated={refresh} />
+            <TagForm onCreated={refreshTags} />
           </section>
         </>
       )}

@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/start-form.tsx
- * Deps:    react, next/navigation
+ * Deps:    react, next/navigation, src/app/_lib/form-text
  * Tested:  n/a
  *
  * Key responsibilities:
@@ -19,6 +19,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { formText } from "@/app/_lib/form-text";
 
 const FIELD =
   "w-full rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-zinc-100 placeholder:text-zinc-500 focus:border-teal-400 focus:outline-none";
@@ -52,12 +53,8 @@ export function StartForm(): React.JSX.Element {
 
   async function submit(form: HTMLFormElement): Promise<void> {
     const data = new FormData(form);
-    const text = (key: string): string => {
-      const raw = data.get(key);
-      return typeof raw === "string" ? raw.trim() : "";
-    };
-    const profileUrl = text("profileUrl");
-    const cvText = text("cvText");
+    const profileUrl = formText(data, "profileUrl").trim();
+    const cvText = formText(data, "cvText").trim();
     if (profileUrl === "" && cvText === "") {
       setError("Please add their LinkedIn profile or paste their CV.");
       return;
@@ -70,7 +67,7 @@ export function StartForm(): React.JSX.Element {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           goal: "hiring",
-          role: text("role"),
+          role: formText(data, "role").trim(),
           ...(profileUrl === "" ? {} : { profileUrl }),
           ...(cvText === "" ? {} : { cvText }),
         }),

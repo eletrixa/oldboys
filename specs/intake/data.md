@@ -34,12 +34,14 @@ CREATE TABLE applications (
   received_at  TEXT NOT NULL
 );
 CREATE UNIQUE INDEX idx_applications_external ON applications(source, external_id);
-CREATE INDEX idx_applications_received ON applications(received_at);
+CREATE INDEX idx_applications_received ON applications(received_at, id);   -- matches ORDER BY received_at DESC, id DESC
 
 ALTER TABLE investigations ADD COLUMN application_id TEXT;   -- set by startRun when via = 'intake'
 ```
 
 `via` (0006) has no CHECK; the new value is `'intake'`.
+
+`idx_applications_received` covers `(received_at, id)` so the `/intake` list query (`ORDER BY received_at DESC, id DESC`) reads the index in order. 0009 is not applied remotely yet, so the migration is edited in place rather than followed by a new one.
 
 ## `src/domain/application.ts` (pure, Zod 4)
 

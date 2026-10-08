@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/apply/[tag]/apply-form.tsx
- * Deps:    react, ./apply-fields
+ * Deps:    react, src/app/_lib/form-text, src/domain/application (CV_MAX_BYTES), ./apply-fields
  * Tested:  src/app/apply/[tag]/__tests__/apply-fields.test.ts (validation); submit path via src/app/api/apply/__tests__/apply.test.ts
  *
  * Key responsibilities:
@@ -18,10 +18,14 @@
 "use client";
 
 import { useState } from "react";
+import { formText } from "@/app/_lib/form-text";
+import { CV_MAX_BYTES } from "@/domain/application";
 import { checkApply, MESSAGE_MAX } from "./apply-fields";
 
 const FIELD =
   "w-full min-h-11 rounded-xl border border-line bg-surface px-4 py-3 text-ink placeholder:text-muted focus:border-focus focus:outline-none";
+
+const CV_MB = String(CV_MAX_BYTES / (1024 * 1024));
 
 type Phase = "editing" | "sending" | "done";
 
@@ -54,13 +58,9 @@ export function ApplyForm({ tag }: Readonly<{ tag: string }>): React.JSX.Element
 
   async function submit(form: HTMLFormElement): Promise<void> {
     const data = new FormData(form);
-    const text = (key: string): string => {
-      const raw = data.get(key);
-      return typeof raw === "string" ? raw : "";
-    };
     const picked = data.get("cv");
     const cv = picked instanceof File && picked.size > 0 ? picked : null;
-    const problem = checkApply({ name: text("name"), email: text("email"), linkedinUrl: text("linkedinUrl"), cv, message: text("coverLetter") });
+    const problem = checkApply({ name: formText(data, "name"), email: formText(data, "email"), linkedinUrl: formText(data, "linkedinUrl"), cv, message: formText(data, "coverLetter") });
     if (problem !== null) {
       setError(problem);
       return;
@@ -114,7 +114,7 @@ export function ApplyForm({ tag }: Readonly<{ tag: string }>): React.JSX.Element
         <input name="linkedinUrl" type="text" inputMode="url" maxLength={500} placeholder="https://www.linkedin.com/in/..." className={FIELD} />
         <span className="text-xs font-normal text-muted">Add your LinkedIn profile or attach a CV below. One of the two is enough.</span>
       </Label>
-      <Label text="CV (PDF, up to 5 MB)" optional>
+      <Label text={`CV (PDF, up to ${CV_MB} MB)`} optional>
         <input
           name="cv"
           type="file"

@@ -121,15 +121,15 @@ describe("tagFor", () => {
   const p = StartupJobsWebhook.parse(DOCUMENTED);
 
   it("prefers the offer id mapping", () => {
-    expect(tagFor(p, { byOfferId: "senior-be" })).toBe("senior-be");
+    expect(tagFor(p, "senior-be")).toBe("senior-be");
   });
 
   it("falls back to the internal position name, lower-cased", () => {
-    expect(tagFor(p, {})).toBe("job1");
+    expect(tagFor(p)).toBe("job1");
   });
 
   it("ignores an internal position name that is not a tag", () => {
-    expect(tagFor({ ...p, internalPositionName: "Senior Dev!" }, {})).toBeUndefined();
-    expect(tagFor({ ...p, internalPositionName: undefined }, {})).toBeUndefined();
+    expect(tagFor({ ...p, internalPositionName: "Senior Dev!" })).toBeUndefined();
+    expect(tagFor({ ...p, internalPositionName: undefined })).toBeUndefined();
   });
 });
