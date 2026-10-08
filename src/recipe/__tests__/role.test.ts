@@ -7,7 +7,7 @@
  * Tested:  n/a (this is the test)
  */
 import { describe, expect, it } from "vitest";
-import { profileFor, roleLocation, roleQuestions } from "@/recipe/seams/role";
+import { profileFor, roleLocation, roleQuestions, roleQuestionsFor } from "@/recipe/seams/role";
 import { fakeLlm, fakePorts } from "@/recipe/__tests__/fakes";
 
 const m = (id: string, text: string) => ({ id, text, accepted_evidence: ["repo", "talk"] });
@@ -91,5 +91,40 @@ describe("profileFor", () => {
     ["Data Protection Lawyer", "credentialed"],
   ] as const)("%s -> %s", (role, expected) => {
     expect(profileFor(role)).toBe(expected);
+  });
+});
+
+describe("roleQuestionsFor", () => {
+  const template = {
+    key: "data-engineer",
+    title: "Data Engineer",
+    family: "data" as const,
+    aliases: ["datový inženýr"],
+    profile: "makers" as const,
+    must_haves: [
+      { id: "mh-pipelines", title: "Production pipelines", text: "Has built production data pipelines", accepted_evidence: ["repo", "talk"] },
+      { id: "mh-warehouse", title: "Warehouse modelling", text: "Has modelled a warehouse (dbt, BigQuery)", accepted_evidence: ["repo"] },
+      { id: "mh-orchestration", title: "Orchestration", text: "Has run Airflow or Dagster in production", accepted_evidence: ["repo", "blog post"] },
+    ],
+    sources: { steps: ["github_profile" as const, "linkedin_profile" as const, "talks_serp" as const], sites: ["github.com"] },
+  };
+
+  it("uses the matching template without a model call", async () => {
+    const ports = fakePorts();
+    const r = await roleQuestionsFor("Senior Data Engineer, Prague, hybrid", [template], ports);
+    expect(r.template).toBe("data-engineer");
+    expect(r.calls).toBe(0);
+    expect(r.cost_usd).toBe(0);
+    expect(ports.calls.llm).toHaveLength(0);
+    expect(r.questions.map((q) => q.id)).toEqual(["mh-pipelines", "mh-warehouse", "mh-orchestration"]);
+    expect(r.questions[0]?.text).toBe("Has built production data pipelines (repo, talk)");
+  });
+
+  it("falls through to the model when no template names the role", async () => {
+    const ports = fakePorts({ llm: fakeLlm(() => [m("mh-x", "Has done x?")]) });
+    const r = await roleQuestionsFor("Chief Happiness Wizard", [template], ports);
+    expect(r.template).toBeNull();
+    expect(r.calls).toBe(1);
+    expect(ports.calls.llm).toHaveLength(1);
   });
 });

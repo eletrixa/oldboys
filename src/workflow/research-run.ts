@@ -31,7 +31,7 @@
  */
 import { WorkflowEntrypoint, type WorkflowEvent, type WorkflowStep } from "cloudflare:workers";
 import { makeActorCall } from "@/adapters/apify";
-import { applySourceIdentity, loadContext, makeLedgerAppend, makeSourceStore, persistOutcome, setCandidateDecisions } from "@/adapters/d1";
+import { applySourceIdentity, loadContext, loadRoleTemplates, makeLedgerAppend, makeSourceStore, persistOutcome, setCandidateDecisions } from "@/adapters/d1";
 import { makeFetchJson } from "@/adapters/fetch";
 import { makeLlmCall } from "@/adapters/llm";
 import type { Candidate, GoalId } from "@/domain/claim";
@@ -41,7 +41,7 @@ import { planBatch } from "@/recipe/batch";
 import { recipeFor } from "@/recipe/goals";
 import { executeStep } from "@/recipe/runner";
 import { lineupNeedsAnswer, noneConfirmed, UNCONFIRMED_GAP } from "@/recipe/seams/resolve";
-import { roleQuestions } from "@/recipe/seams/role";
+import { roleQuestionsFor } from "@/recipe/seams/role";
 import { CV_ACTOR, seedProfile } from "@/recipe/seams/seed";
 import { HARVEST_ACTOR } from "@/recipe/sources/linkedin";
 import type { StepOutcome } from "@/recipe/sources/types";
@@ -120,11 +120,11 @@ export class ResearchRunWorkflow extends WorkflowEntrypoint<CloudflareEnv, Resea
     if (head.role !== null && head.role.length > 0 && head.questions_json === null) {
       await step.do("role_questions", async () => {
         const started = Date.now();
-        const r = await roleQuestions(head.role ?? "", this.ports(), head.anchor);
-        await this.env.DB.prepare("UPDATE investigations SET questions_json = ? WHERE id = ?")
-          .bind(JSON.stringify(r.questions), runId)
+        const r = await roleQuestionsFor(head.role ?? "", await loadRoleTemplates(this.env.DB), this.ports(), head.anchor);
+        await this.env.DB.prepare("UPDATE investigations SET questions_json = ?, role_template = ? WHERE id = ?")
+          .bind(JSON.stringify(r.questions), r.template, runId)
           .run();
-        await this.ledger(runId, "role_questions", "llm", r.cost_usd, Date.now() - started, { questions: r.questions.length, calls: r.calls, notes: r.notes });
+        await this.ledger(runId, "role_questions", "llm", r.cost_usd, Date.now() - started, { questions: r.questions.length, calls: r.calls, notes: r.notes, template: r.template });
         return r.questions.length;
       });
     }

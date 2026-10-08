@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/adapters/d1.ts
- * Deps:    D1Database, R2Bucket (bindings), zod, src/domain/cv-check
+ * Deps:    D1Database, R2Bucket (bindings), zod, src/domain/cv-check, src/domain/role-catalog (role_templates rows)
  * Tested:  n/a (Workers bindings; exercised by `pnpm preview` runs)
  *
  * Key responsibilities:
@@ -20,6 +20,7 @@
  * - Source and claim writes are INSERT OR REPLACE so a retried Workflow step stays idempotent
  * - Gaps are also mirrored as ledger `decision` rows with `ref.gap = true` for the SSE stream
  */
+import { type RoleTemplate, type RoleTemplateRow, templateFromRow } from "@/domain/role-catalog";
 import { Brief, Candidate, CandidateDecision, Claim, Gap, LedgerEntry, Source } from "@/domain/claim";
 import type { LedgerAppend, SourceStore } from "@/domain/ports";
 import { headlineOrgs } from "@/domain/corroborate";
@@ -94,9 +95,19 @@ function json<T>(v: unknown, fallback: T): T {
   }
 }
 
+const stringList = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []);
+
+/** Every seeded role template (migrations/0013); rows with unreadable JSON are dropped. */
+export async function loadRoleTemplates(db: D1Database): Promise<RoleTemplate[]> {
+  const { results } = await db.prepare("SELECT key, title, family, aliases_json, profile, must_haves_json, sources_json FROM role_templates").all<RoleTemplateRow>();
+  return results.flatMap((r) => templateFromRow(r) ?? []);
+}
+
 export async function loadContext(db: D1Database, runId: string, baseQuestions: readonly Question[]): Promise<StepContext> {
   const inv = await db
-    .prepare("SELECT subject, anchor, goal, role, questions_json, budget_usd, budget_calls FROM investigations WHERE id = ?")
+    .prepare(
+      "SELECT i.subject, i.anchor, i.goal, i.role, i.questions_json, i.budget_usd, i.budget_calls, t.sources_json FROM investigations i LEFT JOIN role_templates t ON t.key = i.role_template WHERE i.id = ?",
+    )
     .bind(runId)
     .first<Row>();
   if (!inv) throw new Error(`investigation ${runId} not found`);
@@ -116,6 +127,7 @@ export async function loadContext(db: D1Database, runId: string, baseQuestions: 
     anchor: String(inv.anchor),
     goal: inv.goal as StepContext["goal"],
     role: typeof inv.role === "string" ? inv.role : null,
+    roleSites: stringList(json<{ sites?: unknown }>(inv.sources_json, {}).sites),
     questions: withCvQuestion(String(inv.goal), [...baseQuestions, ...extra], sources),
     candidates: cands.results.map((r) =>
       Candidate.parse({ ...r, profile_urls: json(r.profile_urls_json, []), reasons: json(r.reasons_json, []) }),

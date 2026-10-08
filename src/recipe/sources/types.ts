@@ -27,6 +27,8 @@ export type StepContext = {
   anchor: string;
   goal: GoalId;
   role: string | null;
+  /** Evidence sites of the matched role template (bare domains); empty without a template. */
+  roleSites: readonly string[];
   questions: readonly Question[];
   candidates: readonly Candidate[];
   sources: readonly Source[];
@@ -116,8 +118,12 @@ export function clip(text: string, max = EXCERPT_MAX): string {
   return text.length <= max ? text : `${text.slice(0, max - 1)}…`;
 }
 
+/** `{subject}`, `{anchor}` and `{role_sites}` (a `site:a OR site:b` clause) substituted. */
 export function fillQuery(template: string, ctx: StepContext): string {
-  return template.replaceAll("{subject}", ctx.subject).replaceAll("{anchor}", ctx.anchor);
+  return template
+    .replaceAll("{subject}", ctx.subject)
+    .replaceAll("{anchor}", ctx.anchor)
+    .replaceAll("{role_sites}", ctx.roleSites.map((s) => `site:${s}`).join(" OR "));
 }
 
 /** Platform key of a URL; the pasted CV's pseudo-URL "cv:<runId>" is "cv", anything unparsable "web". */

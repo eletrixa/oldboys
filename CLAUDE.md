@@ -16,11 +16,12 @@ Hackathon Case 01 (Apify): social media deep research. Input (hiring, plans/006)
 | Claims | claim + references + rank; contradictions via rank, never delete |
 | Budget | enforced in runner, never by the LLM: $0.50 and 16 paid actor runs per run (free REST fetches and LLM calls count USD only) |
 | Runner | Cloudflare Workflow `ResearchRunWorkflow` (binding `RESEARCH_RUN`), one `step.do` per recipe step, `step.waitForEvent` for lineup |
-| Ledger | D1 `DB`: `ledger_entries` (append-only, `seq`), `claims`, `gaps`, `candidates`, `investigations`, `calls`, `webhook_events`, `organizations`, `accounts`, `sessions`, `auth_attempts`, `ares_cache` |
+| Ledger | D1 `DB`: `ledger_entries` (append-only, `seq`), `claims`, `gaps`, `candidates`, `investigations`, `calls`, `webhook_events`, `organizations`, `accounts`, `sessions`, `auth_attempts`, `ares_cache`, `role_templates` |
 | Raw payloads | R2 `SOURCES` (`oldboys-sources/<run>/<source>.json`), only `{sourceId, excerpt}` returned from steps (1 MiB cap) |
 | Streaming | SSE route polls D1 `seq > last` every 1s, replays whole ledger on connect, events idempotent by `seq` |
 | Replay | serve old ledger, labeled CACHED |
 | Verification calls (005) | Operator-approved, operator-entered numbers with recorded consent only; dialed once in `POST /api/calls/:id/approve`, never in a Workflow step; `VerificationCallWorkflow` (binding `VERIFY_CALL`) waits for the ElevenLabs webhook, ingests the transcript as a Source and writes `STATEMENT` claims (never FACT); `CALL_PROVIDER=mock` is labeled MOCK; max `RUN_CALL_MAX` calls per run |
+| Role catalog | `src/domain/role-catalog/` (one file per family, `types.ts` contract) is the source of truth for 100+ preselected roles; D1 `role_templates` is seeded from it (`pnpm roles:sql` output pasted into a migration, never hand-edited); `matchRoleTemplate` is whole-phrase on title or alias, never fuzzy; a hit skips the `role_questions` model call and feeds `role_sites_serp` via `StepContext.roleSites` |
 | Intake (008) | Every channel (email `jobs+<tag>@asajj.cz` via Email Routing and `worker.email()`, `POST /api/intake/form` with bearer `INTAKE_TOKEN`, hosted `/apply/<tag>` + `POST /api/apply`, `POST /api/intake/startupjobs/<token>`) normalises into `IntakeInput` and calls `ingestApplication`, the only writer of `applications` and the only intake path to `startRun` (`via='intake'`); a run starts only for a known `intake_tags` tag with a LinkedIn URL or readable CV, capped by `INTAKE_PER_HOUR_CAP`; the candidate never sees a run |
 
 ## Stack and bindings
@@ -30,7 +31,7 @@ Worker entry `src/worker.ts` re-exports the OpenNext `fetch` and exports `Resear
 Recruiter auth: cookie sessions (`src/domain/session.ts`, D1 `sessions`), PBKDF2 passwords (`src/domain/password.ts`); the web UI never asks for RUN_TOKEN; the bearer stays for `POST /api/runs` (only) and as the machine-client alternative to a session on the call routes and `/api/roles`.
 
 ## Scripts (pnpm)
-`dev`, `build`, `preview`, `deploy`, `cf-typegen`, `typecheck`, `lint`, `test`, `test:watch`, `db:migrate:local`, `db:migrate:remote`, `check` (= typecheck && lint && test, app and extension), `ext:build`. Do not rename.
+`dev`, `build`, `preview`, `deploy`, `cf-typegen`, `typecheck`, `lint`, `test`, `test:watch`, `db:migrate:local`, `db:migrate:remote`, `roles:sql`, `check` (= typecheck && lint && test, app and extension), `ext:build`. Do not rename.
 
 ## Directory map
 - `src/domain/` pure: claim schemas today; `verify.ts` and `resolve.ts` are TODO (001 TDD steps 2–3). No I/O, ports are plain function parameters.
@@ -83,7 +84,7 @@ Every change to `src/`, `migrations/`, `scripts/` or any root config must pass `
 - Every user-visible change adds a line to `CHANGELOG.md` under Unreleased in the same commit.
 
 ## Known gotchas
-- `migrations/0010_accounts.sql` must be applied with `pnpm db:migrate:remote` before merging/deploying the accounts PR.
+- `migrations/0013_role_templates.sql` (role catalog) must be applied with `pnpm db:migrate:remote` before deploying this change; `migrations/0010_accounts.sql` before the accounts PR.
 - `extension/` is a second pnpm workspace package; after pulling, run `pnpm install --frozen-lockfile` once or `pnpm check` fails with `wxt: command not found`.
 - CI deploys on push to main but cannot migrate D1 (token has no D1 scope). A PR that adds a file under `migrations/` must say so; Robert runs `pnpm db:migrate:remote` before merging.
 - `next` 16.4 runs on Workers only with `patches/@opennextjs__cloudflare@1.20.9.patch` (adds `preview-props.json` to the manifest glob, upstream PR #1356). Drop the patch when an OpenNext release includes it; bump `@opennextjs/cloudflare` and re-check `pnpm exec opennextjs-cloudflare build`.

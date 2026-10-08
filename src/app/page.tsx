@@ -20,6 +20,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { currentUser } from "./api/_lib/current-user";
 import { loginHref } from "./login/next-path";
+import { ROLE_TITLES } from "@/domain/role-catalog";
 import { StartForm } from "./start-form";
 import { CARD, Eyebrow, LINK } from "./ui";
 
@@ -64,7 +65,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
         <div className={`${CARD} md:p-8`}>
           <h2 className="mb-1 text-2xl">Start a brief</h2>
           <p className="mb-5 text-sm text-muted">Hiring at {user.organizationName}</p>
-          <StartForm />
+          <StartForm roleOptions={ROLE_TITLES} />
         </div>
         <p className="px-1 text-sm text-muted">
           Hiring for a position?{" "}
