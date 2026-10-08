@@ -7,7 +7,7 @@
  * Tested:  n/a (test file)
  *
  * Key responsibilities:
- * - TagBody: tag normalised then checked against IntakeTag, role 1..300, goal default hiring, offer id optional and capped
+ * - TagBody: tag normalised then checked against IntakeTag, role 1..300, goal hiring only (default), offer id optional and capped
  * - duplicateField: names the colliding column from a D1 UNIQUE error, null for any other error
  *
  * Design constraints:
@@ -36,8 +36,9 @@ describe("TagBody", () => {
     expect(TagBody.safeParse({ tag: "ok-tag", role: "x", startupjobsOfferId: "9".repeat(41) }).success).toBe(false);
   });
   it("accepts due-diligence and an offer id", () => {
-    expect(TagBody.parse({ tag: "ok-tag", role: "x".repeat(300), goal: "due-diligence", startupjobsOfferId: "8123" })).toMatchObject({
-      goal: "due-diligence",
+    expect(TagBody.safeParse({ tag: "ok-tag", role: "x", goal: "due-diligence" }).success).toBe(false);
+    expect(TagBody.parse({ tag: "ok-tag", role: "x".repeat(300), goal: "hiring", startupjobsOfferId: "8123" })).toMatchObject({
+      goal: "hiring",
       startupjobsOfferId: "8123",
     });
   });

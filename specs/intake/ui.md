@@ -11,7 +11,7 @@ Last 200 rows: `id, source, external_id, tag, name, email, linkedin_url, cv_key,
 
 ## `/api/intake/tags`
 - `GET` -> `{ tags: [{tag, role, goal, startupjobs_offer_id, created_at}] }`, newest first.
-- `POST {tag, role, goal?, startupjobsOfferId?}`: the tag is trimmed and lowercased, then checked against `IntakeTag`; role 1..300; goal `hiring` (default) or `due-diligence`; `startupjobsOfferId` optional, <= 40. `201` with the stored row, `400` invalid body (`parseJsonBody`), `409` when the tag exists or the StartupJobs offer id is already mapped (decided by the D1 UNIQUE constraint, not a pre-check). Both methods need the `RUN_TOKEN` bearer.
+- `POST {tag, role, goal?, startupjobsOfferId?}`: the tag is trimmed and lowercased, then checked against `IntakeTag`; role 1..300; goal `hiring` only (default; `due-diligence` is a 400 because the funnel has no subject + anchor); `startupjobsOfferId` optional, <= 40. `201` with the stored row, `400` invalid body (`parseJsonBody`), `409` when the tag exists or the StartupJobs offer id is already mapped (decided by the D1 UNIQUE constraint, not a pre-check). Both methods need the `RUN_TOKEN` bearer.
 
 ## `/intake` page
 Columns: received (UTC `YYYY-MM-DD HH:MM`), tag, source, name (email under it), status badge, run link (`/runs/<id>`) when present, note (truncated at 80 characters, full on title). Empty state: "No applications yet. Point a job posting at /apply/<tag> or jobs+<tag>@asajj.cz." Tags section: table + create form. No ranking, no scores.

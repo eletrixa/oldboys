@@ -3,11 +3,11 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/api/intake/tags/tag-body.ts
- * Deps:    zod, src/domain/application (IntakeTag), src/domain/claim (GoalId)
+ * Deps:    zod, src/domain/application (IntakeTag)
  * Tested:  src/app/api/intake/tags/__tests__/tag-body.test.ts
  *
  * Key responsibilities:
- * - TagBody: {tag, role 1..300, goal default hiring, startupjobsOfferId? <= 40}; the tag is trimmed and lowercased, then checked against IntakeTag
+ * - TagBody: {tag, role 1..300, goal hiring only (default), startupjobsOfferId? <= 40}; the tag is trimmed and lowercased, then checked against IntakeTag
  * - duplicateField: which unique column (tag primary key or startupjobs_offer_id index) a D1 error names, else null
  *
  * Design constraints:
@@ -15,12 +15,14 @@
  */
 import { z } from "zod";
 import { IntakeTag } from "@/domain/application";
-import { GoalId } from "@/domain/claim";
 
 export const TagBody = z.object({
   tag: z.string().trim().toLowerCase().pipe(IntakeTag),
   role: z.string().trim().min(1).max(300),
-  goal: GoalId.default("hiring"),
+  /** Hiring only: the funnel starts runs from a profile URL or CV, and a due-diligence run needs subject + anchor. */
+  goal: z
+    .literal("hiring", { error: "intake tags are hiring-only: a due-diligence run needs subject and anchor, which an application does not carry" })
+    .default("hiring"),
   startupjobsOfferId: z.string().trim().min(1).max(40).optional(),
 });
 export type TagBody = z.infer<typeof TagBody>;

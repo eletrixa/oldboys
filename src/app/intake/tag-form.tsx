@@ -7,7 +7,7 @@
  * Tested:  n/a (the body rules are tested in src/app/api/intake/tags/__tests__/tag-body.test.ts)
  *
  * Key responsibilities:
- * - Fields: tag, role, goal (hiring or due-diligence), optional StartupJobs offer id
+ * - Fields: tag, role, optional StartupJobs offer id (goal is always hiring; the route rejects anything else)
  * - POST with the stored operator token; on 201 reset the form, confirm in plain words and call onCreated
  * - Humane inline errors: duplicate (the server's 409 text), invalid, expired token, network
  *
@@ -60,7 +60,6 @@ export function TagForm({ onCreated }: { onCreated: () => void }): React.JSX.Ele
     const result = await createTag({
       tag: text("tag"),
       role: text("role"),
-      goal: text("goal"),
       ...(offer === "" ? {} : { startupjobsOfferId: offer }),
     });
     setBusy(false);
@@ -90,13 +89,6 @@ export function TagForm({ onCreated }: { onCreated: () => void }): React.JSX.Ele
         Role
         <input name="role" required maxLength={300} placeholder="Senior Backend Engineer" autoComplete="off" className={FIELD} />
         <span className="text-xs font-normal text-muted">What the brief checks the candidate against.</span>
-      </label>
-      <label className="flex flex-col gap-1 text-sm font-medium">
-        Goal
-        <select name="goal" defaultValue="hiring" className={FIELD}>
-          <option value="hiring">hiring</option>
-          <option value="due-diligence">due-diligence</option>
-        </select>
       </label>
       <label className="flex flex-col gap-1 text-sm font-medium">
         StartupJobs offer id (optional)
