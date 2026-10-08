@@ -26,7 +26,8 @@ export const hiringRecipe: Recipe = {
     { id: "contradictions", text: "Which sources disagree with each other?" },
   ],
   steps: [
-    { id: "serp_person", kind: "serp", actor: "apify/google-search-scraper", query: '"{subject}" {anchor}', onEmpty: { gap: "no search hits for subject + anchor" } },
+    { id: "serp_person", kind: "serp", actor: "apify/google-search-scraper", query: '"{subject}" {anchor}\n{subject}', onEmpty: { gap: "no search hits for subject + anchor" } },
+    { id: "social_serp", kind: "serp", actor: "apify/google-search-scraper", query: '{subject} linkedin\n{subject} instagram OR twitter OR tiktok OR github', onEmpty: { gap: "no social profiles indexed by Google" } },
     { id: "resolve_lineup", kind: "resolve" },
     { id: "linkedin_profile", kind: "actor", actor: "harvestapi/linkedin-profile-scraper", onEmpty: { gap: "no LinkedIn profile URL known or profile not scrapable" } },
     { id: "github_profile", kind: "actor", actor: "rest/github", onEmpty: { gap: "no public GitHub profile found" } },
@@ -40,7 +41,7 @@ export const hiringRecipe: Recipe = {
     { id: "youtube_channel", kind: "actor", actor: "streamers/youtube-scraper", onEmpty: { gap: "no YouTube videos or channel found" } },
     { id: "bluesky_profile", kind: "actor", actor: "rest/bluesky", onEmpty: { gap: "no Bluesky account found" } },
     { id: "personal_site_crawl", kind: "actor", actor: "apify/website-content-crawler", onEmpty: { gap: "no personal site found" } },
-    { id: "talks_serp", kind: "serp", actor: "apify/google-search-scraper", query: '"{subject}" {anchor} talk OR podcast OR conference OR blog OR interview', onEmpty: { gap: "no talks or posts indexed" } },
+    { id: "talks_serp", kind: "serp", actor: "apify/google-search-scraper", query: '{subject} talk OR podcast OR conference OR blog OR interview', onEmpty: { gap: "no talks or posts indexed" } },
     { id: "extract_claims", kind: "extract" },
     { id: "verify_claims", kind: "verify" },
     { id: "synthesize_report", kind: "synthesize" },

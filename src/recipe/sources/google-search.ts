@@ -30,7 +30,7 @@ export const googleSearch: Collector = {
       actor: "apify/google-search-scraper",
       input: { queries: fillQuery(step.query ?? '"{subject}" {anchor}', ctx), maxPagesPerQuery: 1, resultsPerPage: 10 },
       maxTotalChargeUsd: 0.02,
-      timeoutSecs: 45,
+      timeoutSecs: 90,
     },
   ],
   parse: (payload) => {

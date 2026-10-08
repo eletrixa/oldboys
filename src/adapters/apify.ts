@@ -30,12 +30,15 @@ const RunResponse = z.object({
 
 const MAX_ITEMS = 50;
 
+/** Apify rejects run caps below $0.50 (max-total-charge-usd-below-minimum); real spend is still read from usageTotalUsd. */
+const APIFY_MIN_CHARGE_USD = 0.5;
+
 export function makeActorCall(token: string): ActorCall {
   return async ({ actor, input, timeoutSecs, maxTotalChargeUsd }) => {
     const id = actor.replace("/", "~");
     const q = new URLSearchParams({
       timeout: String(timeoutSecs),
-      maxTotalChargeUsd: maxTotalChargeUsd.toFixed(2),
+      maxTotalChargeUsd: Math.max(APIFY_MIN_CHARGE_USD, maxTotalChargeUsd).toFixed(2),
       waitForFinish: String(Math.min(timeoutSecs, 60)),
     });
     const runRes = await fetch(`https://api.apify.com/v2/acts/${id}/runs?${q.toString()}`, {
@@ -44,8 +47,16 @@ export function makeActorCall(token: string): ActorCall {
       body: JSON.stringify(input),
     });
     if (!runRes.ok) throw new Error(`apify ${actor}: HTTP ${String(runRes.status)} ${(await runRes.text()).slice(0, 200)}`);
-    const run = RunResponse.parse(await runRes.json()).data;
-    // The runs endpoint answers when waitForFinish elapses; a run still going or ended badly has no usable dataset.
+    let run = RunResponse.parse(await runRes.json()).data;
+    // waitForFinish caps at 60 s per request; keep polling until the run is terminal or timeoutSecs has passed
+    const deadline = Date.now() + (timeoutSecs + 15) * 1000;
+    while ((run.status === "RUNNING" || run.status === "READY") && Date.now() < deadline) {
+      const again = await fetch(`https://api.apify.com/v2/actor-runs/${run.id}?waitForFinish=30`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!again.ok) break;
+      run = RunResponse.parse(await again.json()).data;
+    }
     if (run.status !== "SUCCEEDED") throw new Error(`apify ${actor}: run ${run.id} ${run.status}`);
     const itemsRes = await fetch(
       `https://api.apify.com/v2/datasets/${run.defaultDatasetId}/items?clean=true&limit=${String(MAX_ITEMS)}`,

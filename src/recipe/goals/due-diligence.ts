@@ -27,7 +27,7 @@ export const dueDiligenceRecipe: Recipe = {
     { id: "contradictions", text: "Which sources disagree with each other?" },
   ],
   steps: [
-    { id: "serp_org", kind: "serp", actor: "apify/google-search-scraper", query: '"{subject}" {anchor}', onEmpty: { gap: "no search hits for subject + anchor" } },
+    { id: "serp_org", kind: "serp", actor: "apify/google-search-scraper", query: '"{subject}" {anchor}\n{subject}', onEmpty: { gap: "no search hits for subject + anchor" } },
     { id: "resolve_lineup", kind: "resolve" },
     { id: "ares_subjekty", kind: "ares", actor: "ares/ekonomicke-subjekty/vyhledat", onEmpty: { gap: "no ARES entity matched" } },
     { id: "ares_vr", kind: "ares", actor: "ares/ekonomicke-subjekty-vr", onEmpty: { gap: "no public register record for IČO" } },

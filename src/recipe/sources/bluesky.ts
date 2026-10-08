@@ -23,6 +23,10 @@ const Result = z.object({
     .default([]),
 });
 
+function fold(text: string): string {
+  return text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+}
+
 export const bluesky: Collector = {
   id: "rest/bluesky",
   requests: (ctx) => [
@@ -31,10 +35,12 @@ export const bluesky: Collector = {
       url: `https://public.api.bsky.app/xrpc/app.bsky.actor.searchActors?q=${encodeURIComponent(ctx.subject)}&limit=5`,
     },
   ],
-  parse: (payload) => {
+  parse: (payload, ctx) => {
     const r = Result.safeParse(payload);
     if (!r.success) return [];
-    return r.data.actors.map((a) => ({
+    // searchActors is fuzzy: drop actors whose name or handle does not carry the subject's surname
+    const surname = fold(ctx.subject.trim().split(/\s+/).at(-1) ?? "");
+    return r.data.actors.filter((a) => surname.length === 0 || fold(`${a.displayName ?? ""} ${a.handle}`).includes(surname)).map((a) => ({
       url: `https://bsky.app/profile/${a.handle}`,
       excerpt: clip(`${a.displayName ?? ""} (@${a.handle})\n${a.description ?? ""}`.trim()),
       raw: a,
