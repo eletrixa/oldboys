@@ -3,24 +3,26 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/runs/[id]/interview-kit.ts
- * Deps:    src/domain/run-cost (formatDuration), ./state (RunState, gap helpers, roleCriteria)
+ * Deps:    src/domain/run-cost (formatDuration), ./state (RunState, gap helpers, roleCriteria, briefSections, confidenceBand)
  * Tested:  src/app/runs/[id]/__tests__/interview-kit.test.ts
  *
  * Key responsibilities:
  * - interviewKit: header (role, confirmed profile, date, research cost), coverage per question with sourced claims,
  *   interview questions as a checklist with room for notes, to-verify list, gap lists, footer
- * - Degraded brief: the "AI summary unavailable" note, role criteria and confirmed evidence links instead of coverage
+ * - Findings by section (confidence descending, with the reason) replace per-question coverage; briefs stored
+ *   before sections fall back to coverage
+ * - Degraded brief: the "AI summary unavailable" note, role criteria and confirmed evidence links, then the sections
  * - kitFileName: interview-kit-<run id prefix>.md, never the candidate's name
  *
  * Design constraints:
  * - Pure; only data already in RunState goes in, never brief.also_found (unconfirmed namesake hits)
- * - The kit rates the research, never the candidate: no scores, no verdicts
+ * - The kit rates the research, never the candidate: no candidate scores, no verdicts; confidence is about the sources
  * - Every model or source text is Markdown-escaped; links only for http(s) URLs that parse
  * - Empty lists produce no heading
  */
 import { formatDuration } from "@/domain/run-cost";
-import type { Brief } from "@/domain/claim";
-import { type RunState, gapLine, roleCriteria, searchedEmpty, searchedTitle } from "./state";
+import type { Brief, BriefSection, Claim } from "@/domain/claim";
+import { type RunState, briefSections, confidenceBand, gapLine, roleCriteria, searchedEmpty, searchedTitle } from "./state";
 
 const FOOTER = "This kit rates the research, never the candidate. Public sources only; run data is deleted after 7 days.";
 
@@ -70,19 +72,20 @@ function header(state: RunState, brief: Brief, generatedAt: string): string[] {
   return ["# Interview kit", "", ...lines.map((l, i) => (i < lines.length - 1 ? `${l}  ` : l)), ""];
 }
 
+/** "- FACT: text (<link>, <link>)" with only parseable http(s) links. */
+function claimLine(c: Claim, urlOf: ReadonlyMap<string, string>): string {
+  const links = c.supports.flatMap((sid) => {
+    const link = mdLink(urlOf.get(sid) ?? "");
+    return link === null ? [] : [link];
+  });
+  return `- ${c.kind}: ${escapeMd(c.text)}${links.length > 0 ? ` (${links.join(", ")})` : ""}`;
+}
+
 function coverage(state: RunState, brief: Brief): string[] {
   const urlOf = new Map(state.sources.map((s) => [s.id, s.url]));
   const textOf = new Map(state.questions.map((q) => [q.id, q.text]));
   const lines = brief.per_question.flatMap((q) => {
-    const claims = state.claims
-      .filter((c) => q.claim_ids.includes(c.id))
-      .map((c) => {
-        const links = c.supports.flatMap((sid) => {
-          const link = mdLink(urlOf.get(sid) ?? "");
-          return link === null ? [] : [link];
-        });
-        return `- ${c.kind}: ${escapeMd(c.text)}${links.length > 0 ? ` (${links.join(", ")})` : ""}`;
-      });
+    const claims = state.claims.filter((c) => q.claim_ids.includes(c.id)).map((c) => claimLine(c, urlOf));
     const summary = escapeMd(q.summary);
     return [
       `### ${escapeMd(textOf.get(q.question_id) ?? q.question_id)}`,
@@ -94,6 +97,26 @@ function coverage(state: RunState, brief: Brief): string[] {
     ];
   });
   return lines.length === 0 ? [] : ["## What the research covered", "", ...lines];
+}
+
+/** Sections by confidence: how well the research backs each finding, facts before inferences, links for source-only sections. */
+function findings(state: RunState, sections: readonly BriefSection[]): string[] {
+  const urlOf = new Map(state.sources.map((s) => [s.id, s.url]));
+  const lines = sections.flatMap((sec) => {
+    const claims = state.claims.filter((c) => sec.claim_ids.includes(c.id));
+    const ordered = [...claims.filter((c) => c.kind !== "INFERENCE"), ...claims.filter((c) => c.kind === "INFERENCE")].map((c) => claimLine(c, urlOf));
+    const links = claims.length === 0 ? [...new Set(sec.source_ids.flatMap((sid) => mdLink(urlOf.get(sid) ?? "") ?? []))].map((l) => `- ${l}`) : [];
+    const summary = escapeMd(sec.summary);
+    return [
+      `### ${escapeMd(sec.title)}`,
+      "",
+      `Research confidence: ${String(Math.round(sec.confidence * 100))}% (${confidenceBand(sec.confidence)}), ${escapeMd(sec.confidence_reason)}`,
+      ...(summary === "" ? [] : ["", summary]),
+      ...(ordered.length + links.length > 0 ? ["", ...ordered, ...links] : []),
+      "",
+    ];
+  });
+  return ["## What the research found", "", ...lines];
 }
 
 function degradedCoverage(state: RunState, brief: Brief, reason: string): string[] {
@@ -117,11 +140,13 @@ export function interviewKit(state: RunState, generatedAt: string): string | nul
   const { brief } = state;
   if (brief === null) return null;
   const empty = searchedEmpty(brief);
+  const sections = briefSections(brief);
   const footer = [`_${FOOTER}_`];
   if (brief.removed_protected > 0) footer.push(`_${String(brief.removed_protected)} items removed (protected categories)_`);
   const lines = [
     ...header(state, brief, generatedAt),
-    ...(brief.degraded !== null ? degradedCoverage(state, brief, brief.degraded) : coverage(state, brief)),
+    ...(brief.degraded !== null ? degradedCoverage(state, brief, brief.degraded) : []),
+    ...(sections !== null ? findings(state, sections) : brief.degraded === null ? coverage(state, brief) : []),
     ...section(
       "Questions for the interview",
       brief.interview_questions.flatMap((q) => [`- [ ] ${escapeMd(q)}`, "  Notes:"]),

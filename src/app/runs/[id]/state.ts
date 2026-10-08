@@ -14,11 +14,12 @@
   * - evidenceGroup: the heading a confirmed source sits under, from its URL's platform (LinkedIn, X), not the actor
  * - searchedTitle: "Searched, nothing confirmed" when a gap is namesake-only, else "nothing found"
  * - GAP_LABEL, gapLine, searchedEmpty: human gap lines, shared by BriefView and the interview kit
+ * - briefSections (confidence descending, null for briefs stored before sections), confidenceBand, host
  *
  * Design constraints:
  * - Pure (types plus the pure platformOf), so both the route handler and client code can use it
  */
-import type { Brief, Candidate, Claim } from "@/domain/claim";
+import type { Brief, BriefSection, Candidate, Claim } from "@/domain/claim";
 import type { RunCost } from "@/domain/run-cost";
 import { platformOf } from "@/recipe/sources/types";
 
@@ -159,3 +160,27 @@ export function searchedEmpty(brief: Brief): Gap[] {
 
 /** "LinkedIn: no public profile" — step id replaced by its human label. */
 export const gapLine = (g: Gap): string => `${GAP_LABEL[g.source] ?? g.source}: ${g.reason}`;
+
+/** Sections by confidence, highest first; null when the stored brief predates sections (render per question instead). */
+export function briefSections(brief: Brief): BriefSection[] | null {
+  const b: unknown = brief;
+  if (typeof b !== "object" || b === null || !("sections" in b) || !Array.isArray(b.sections) || b.sections.length === 0) return null;
+  return (b.sections as BriefSection[]).toSorted((x, y) => y.confidence - x.confidence);
+}
+
+export type ConfidenceBand = "strong" | "fair" | "weak";
+
+/** >= 0.75 strong, 0.5 to 0.74 fair, below 0.5 weak. */
+export function confidenceBand(confidence: number): ConfidenceBand {
+  if (confidence >= 0.75) return "strong";
+  return confidence >= 0.5 ? "fair" : "weak";
+}
+
+/** "linkedin.com" for a link label; the raw string when it does not parse. */
+export function host(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return url;
+  }
+}

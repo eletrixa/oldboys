@@ -144,6 +144,12 @@ describe("Brief degraded + evidence", () => {
     expect(b.degraded).toBeNull();
     expect(b.evidence).toEqual([]);
     expect(b.searched_empty).toEqual([]);
+    expect(b.sections).toEqual([]);
+  });
+  it("rejects a section confidence outside 0..1", () => {
+    const section = { id: "current-role", title: "Current role", confidence: 1.2, confidence_reason: "r", claim_ids: [], source_ids: [], summary: "" };
+    expect(Brief.safeParse({ ...base, sections: [section] }).success).toBe(false);
+    expect(Brief.safeParse({ ...base, sections: [{ ...section, confidence: 0.8 }] }).success).toBe(true);
   });
   it("caps evidence excerpts at 300 chars", () => {
     expect(Brief.safeParse({ ...base, degraded: "x", evidence: [{ step: "s", url: "u", excerpt: "a".repeat(301) }] }).success).toBe(false);

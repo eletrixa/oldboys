@@ -11,13 +11,14 @@
  * - roleCriteria: mh- questions only
  * - evidenceGroup: platform label from the URL, step label or "Web search" for plain pages
  * - searchedTitle: "nothing confirmed" once a namesake-only gap is present
+ * - briefSections: confidence descending, null for briefs stored without sections; confidenceBand thresholds
  *
  * Design constraints:
  * - Pure: no React, no fetch
  */
 import { describe, expect, it } from "vitest";
-import type { Candidate } from "@/domain/claim";
-import { evidenceGroup, questionsToAsk, roleCriteria, searchedTitle } from "../state";
+import type { Brief, Candidate } from "@/domain/claim";
+import { briefSections, confidenceBand, evidenceGroup, questionsToAsk, roleCriteria, searchedTitle } from "../state";
 
 const cand = (id: string, platform: string, score: number, decision: Candidate["decision"] = "possibly-same-as"): Candidate => ({
   id, run_id: "r", name: "x", profile_urls: [`https://${id}`], anchor_match: null, score, decision, platform, handle: id, snippet: "", reasons: [],
@@ -71,5 +72,24 @@ describe("searchedTitle", () => {
   it("reads 'nothing confirmed' once any gap is namesake-only, else 'nothing found'", () => {
     expect(searchedTitle([{ reason: "no ORCID record found" }])).toBe("Searched, nothing found");
     expect(searchedTitle([{ reason: "no ORCID record found" }, { reason: "hits found, none confirmed (same name, identity not verified)" }])).toBe("Searched, nothing confirmed");
+  });
+});
+
+describe("briefSections", () => {
+  const sec = (id: string, confidence: number): Brief["sections"][number] => ({ id, title: id, confidence, confidence_reason: "", claim_ids: [], source_ids: [], summary: "" });
+  it("orders by confidence, highest first, without touching the stored order", () => {
+    const sections = [sec("a", 0.4), sec("b", 0.9), sec("c", 0.6)];
+    expect(briefSections({ sections } as Brief)?.map((s) => s.id)).toEqual(["b", "c", "a"]);
+    expect(sections.map((s) => s.id)).toEqual(["a", "b", "c"]);
+  });
+  it("is null for a brief stored before sections existed, or with none", () => {
+    expect(briefSections({ run_id: "r" } as unknown as Brief)).toBeNull();
+    expect(briefSections({ sections: [] } as unknown as Brief)).toBeNull();
+  });
+});
+
+describe("confidenceBand", () => {
+  it("splits at 0.75 and 0.5", () => {
+    expect([0.75, 0.74, 0.5, 0.49].map(confidenceBand)).toEqual(["strong", "fair", "fair", "weak"]);
   });
 });

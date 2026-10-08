@@ -102,6 +102,8 @@ flowchart TB
 ```
 Invariants: `Claim.kind = FACT` ⇒ `quote ⊂ Source.excerpt` for ≥1 `supports` and `verify` passed. `Gap` exists iff a `Question` has zero claims after recipe end. `Investigation.budget` (calls, USD, wall-clock) enforced in runner, never in LLM.
 
+The finished `Brief` carries `sections`, cut by what the run found: one per question with claims, one "Social presence" for confirmed profiles no claim cites, one per other platform with confirmed but uncited sources; questions with nothing found stay in the gaps. Each section's `confidence` (0..1) and one-line `confidence_reason` are computed deterministically in the synthesize seam (`src/domain/confidence.ts`: fact share, distinct sources with a 0.6 cap for one, merged identity required above 0.5, inference-only capped at 0.4, minus 0.2 on any contradiction), never by the LLM, and rate the research, not the person.
+
 ### Critical sequence: one run with a namesake pause and an empty source
 ```mermaid
 sequenceDiagram
