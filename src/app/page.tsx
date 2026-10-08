@@ -3,15 +3,17 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/page.tsx
- * Deps:    next, ./start-form
+ * Deps:    next, next/link, ./start-form
  * Tested:  n/a
  *
  * Key responsibilities:
  * - Heading, sub copy and the client start form (Screen 1)
+ * - Small link to /roles (candidates overview per role, idea #16)
  *
  * Design constraints:
  * - Server component; interactivity lives in start-form.tsx
  */
+import Link from "next/link";
 import { StartForm } from "./start-form";
 
 export default function HomePage(): React.JSX.Element {
@@ -24,6 +26,12 @@ export default function HomePage(): React.JSX.Element {
         </p>
       </header>
       <StartForm />
+      <p className="text-sm text-zinc-400">
+        Several people for one role?{" "}
+        <Link href="/roles" className="text-teal-300 underline-offset-2 hover:underline">
+          Roles
+        </Link>
+      </p>
     </main>
   );
 }
