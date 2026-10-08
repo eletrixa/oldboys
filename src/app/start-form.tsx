@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/start-form.tsx
- * Deps:    react, next/navigation, next/link
+ * Deps:    react, next/navigation, ./ui (Radar tokens)
  * Tested:  n/a
  *
  * Key responsibilities:
@@ -21,9 +21,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-
-export const FIELD =
-  "w-full rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-zinc-100 placeholder:text-zinc-500 focus:border-teal-400 focus:outline-none";
+import { BTN_PRIMARY, CARD_SAGE, FIELD } from "./ui";
 
 const CV_MAX = 20_000;
 
@@ -40,11 +38,11 @@ type FieldProps = {
 
 function Field({ name, label, helper, type = "text", placeholder, required = false, defaultValue, autoFocus = false }: FieldProps): React.JSX.Element {
   return (
-    <label className="flex flex-col gap-1.5 text-sm font-medium">
+    <label className="flex flex-col gap-1.5 text-sm font-semibold">
       {label}
       {/* type="text" with a url keyboard: the browser would reject "linkedin.com/in/..." without https, the server accepts it */}
       <input name={name} type="text" inputMode={type === "url" ? "url" : "text"} required={required} maxLength={type === "url" ? 500 : 300} placeholder={placeholder} defaultValue={defaultValue} autoFocus={autoFocus} className={FIELD} />
-      {helper !== undefined && <span className="text-xs font-normal text-zinc-400">{helper}</span>}
+      {helper !== undefined && <span className="text-xs font-normal text-muted">{helper}</span>}
     </label>
   );
 }
@@ -124,8 +122,8 @@ export function StartForm({ initialRole, autoFocusRole = false }: StartFormProps
         placeholder="https://www.linkedin.com/in/..."
         helper="We read their name, location and employer from it, so we know exactly who they are."
       />
-      <details className="group rounded-xl border border-zinc-800 p-4">
-        <summary className="cursor-pointer text-sm font-medium text-zinc-300">or paste their CV</summary>
+      <details className="group rounded-lg border border-divider p-4">
+        <summary className="cursor-pointer text-sm font-semibold text-muted hover:text-ink">or paste their CV</summary>
         <textarea
           name="cvText"
           rows={8}
@@ -135,12 +133,12 @@ export function StartForm({ initialRole, autoFocusRole = false }: StartFormProps
         />
       </details>
       <Field name="role" label="Role you are hiring for" required defaultValue={initialRole} autoFocus={autoFocusRole} helper="The brief focuses on what matters for this role." />
-      <p className="rounded-xl border border-emerald-900 bg-emerald-950/50 p-4 text-sm text-emerald-100">
+      <p className={`${CARD_SAGE} text-sm text-ink`}>
         <strong>Privacy:</strong> Public information only. We never look at private accounts, and we do not judge
         personality, health, religion or politics. Everything we collect is deleted after 7 days.
       </p>
       {error !== null && (
-        <p role="alert" className="text-sm text-red-300">
+        <p role="alert" className="text-sm text-conflict">
           {error}
         </p>
       )}
@@ -157,11 +155,11 @@ export function StartForm({ initialRole, autoFocusRole = false }: StartFormProps
         <button
           type="submit"
           disabled={busy}
-          className="rounded-xl bg-teal-500 px-5 py-3 font-semibold text-zinc-950 hover:bg-teal-400 disabled:opacity-60"
+          className={BTN_PRIMARY}
         >
           {busy ? "Creating..." : "Create brief"}
         </button>
-        <span className="text-sm text-zinc-400">Usually takes 2 to 4 minutes</span>
+        <span className="text-sm text-muted">Usually takes 2 to 4 minutes</span>
       </div>
     </form>
   );

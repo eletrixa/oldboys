@@ -25,6 +25,22 @@ describe("executeStep collection", () => {
     expect(ports.stored).toHaveLength(3);
   });
 
+  it("stores one source per page: locale and trailing-slash variants of a URL are not stored again", async () => {
+    const items = [
+      {
+        organicResults: [
+          { title: "A", url: "https://podcasts.apple.com/us/podcast/ep?i=1&l=ru", description: "Episode" },
+          { title: "A", url: "https://podcasts.apple.com/us/podcast/ep?i=1", description: "Episode" },
+          { title: "B", url: "https://www.linkedin.com/in/jana-dvorakova-data/", description: "Jana" },
+        ],
+      },
+    ];
+    const ctx = baseContext();
+    const earlier = { ...ctx, sources: [{ id: "s0", run_id: ctx.runId, url: "https://www.linkedin.com/in/jana-dvorakova-data", actor: "x", fetched_at: "t", excerpt: "e", r2_key: "k", expires_at: "t", identity: "merged" as const }] };
+    const out = await executeStep(serp, earlier, fakePorts({ callActor: () => Promise.resolve({ items, cost_usd: 0 }) }));
+    expect(out.sources.map((s) => s.url)).toEqual(["https://podcasts.apple.com/us/podcast/ep?i=1&l=ru"]);
+  });
+
   it("reports empty when the actor returns nothing", async () => {
     const out = await executeStep(serp, baseContext(), fakePorts());
     expect(out.empty).toBe(true);

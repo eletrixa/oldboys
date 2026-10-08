@@ -17,7 +17,7 @@
 import { useState } from "react";
 import { normalizeIco } from "@/domain/ico";
 import type { CompanyDraft, OrganizationInput } from "@/domain/organization";
-import { FIELD } from "../start-form";
+import { BTN_SECONDARY, FIELD, LINK } from "../ui";
 
 type Lookup =
   | { kind: "idle" }
@@ -97,12 +97,12 @@ export function CompanyFields({ value, onChange }: Props): React.JSX.Element {
 
   return (
     <div className="flex flex-col gap-4">
-      <label className="flex items-center gap-2 text-sm text-zinc-300">
-        <input type="checkbox" checked={foreign} onChange={(e) => { toggleForeign(e.target.checked); }} />
+      <label className="flex items-center gap-2 text-sm text-ink">
+        <input type="checkbox" className="accent-action" checked={foreign} onChange={(e) => { toggleForeign(e.target.checked); }} />
         Company outside the Czech Republic (no IČO)
       </label>
       {foreign ? (
-        <label className="flex flex-col gap-1.5 text-sm font-medium">
+        <label className="flex flex-col gap-1.5 text-sm font-semibold">
           Country (2 letters)
           <input
             value={value.country}
@@ -116,7 +116,7 @@ export function CompanyFields({ value, onChange }: Props): React.JSX.Element {
         </label>
       ) : (
         <div className="flex flex-col gap-1.5">
-          <label htmlFor="ico" className="text-sm font-medium">IČO</label>
+          <label htmlFor="ico" className="text-sm font-semibold">IČO</label>
           <div className="flex gap-2">
             <input
               id="ico"
@@ -131,7 +131,7 @@ export function CompanyFields({ value, onChange }: Props): React.JSX.Element {
               type="button"
               disabled={lookup.kind === "looking"}
               onClick={() => void look()}
-              className="shrink-0 rounded-xl border border-zinc-700 px-4 py-3 text-sm font-medium hover:bg-zinc-900 disabled:opacity-60"
+              className={`${BTN_SECONDARY} shrink-0 disabled:opacity-60`}
             >
               {lookup.kind === "looking" ? "Looking..." : "Look up in ARES"}
             </button>
@@ -140,37 +140,37 @@ export function CompanyFields({ value, onChange }: Props): React.JSX.Element {
             href="https://ares.gov.cz/ekonomicke-subjekty"
             target="_blank"
             rel="noreferrer"
-            className="text-xs text-zinc-400 underline-offset-2 hover:underline"
+            className={`${LINK} text-xs`}
           >
             Find your IČO
           </a>
           {icoInvalid && lookup.kind === "idle" && (
-            <p className="text-sm text-amber-300">An IČO has 8 digits with a valid check digit; leave it empty if you do not know it.</p>
+            <p className="text-sm text-unsure">An IČO has 8 digits with a valid check digit; leave it empty if you do not know it.</p>
           )}
           {message !== undefined && (
-            <p role="alert" className="text-sm text-amber-300">{message}</p>
+            <p role="alert" className="text-sm text-unsure">{message}</p>
           )}
-          {lookup.kind === "found" && <p role="status" className="text-sm text-teal-300">Found in the company register. Check the details below.</p>}
+          {lookup.kind === "found" && <p role="status" className="text-sm text-ok">Found in the company register. Check the details below.</p>}
         </div>
       )}
-      <label className="flex flex-col gap-1.5 text-sm font-medium">
+      <label className="flex flex-col gap-1.5 text-sm font-semibold">
         Company name
         <input value={value.name} onChange={(e) => { patch({ name: e.target.value }); }} required minLength={2} maxLength={200} autoComplete="organization" className={FIELD} />
       </label>
       <div className="grid gap-4 sm:grid-cols-2">
-        <label className="flex flex-col gap-1.5 text-sm font-medium">
+        <label className="flex flex-col gap-1.5 text-sm font-semibold">
           DIČ (optional)
           <input value={value.dic ?? ""} onChange={(e) => { patch({ dic: orNull(e.target.value) }); }} maxLength={20} className={FIELD} />
         </label>
-        <label className="flex flex-col gap-1.5 text-sm font-medium">
+        <label className="flex flex-col gap-1.5 text-sm font-semibold">
           Legal form (optional)
           <input value={value.legal_form ?? ""} onChange={(e) => { patch({ legal_form: orNull(e.target.value) }); }} maxLength={10} className={FIELD} />
           {lookup.kind === "found" && lookup.legalFormLabel !== null && (
-            <span className="text-xs font-normal text-zinc-400">{lookup.legalFormLabel}</span>
+            <span className="text-xs font-normal text-muted">{lookup.legalFormLabel}</span>
           )}
         </label>
       </div>
-      <label className="flex flex-col gap-1.5 text-sm font-medium">
+      <label className="flex flex-col gap-1.5 text-sm font-semibold">
         Address (optional)
         <input value={value.address ?? ""} onChange={(e) => { patch({ address: orNull(e.target.value) }); }} maxLength={300} autoComplete="street-address" className={FIELD} />
       </label>

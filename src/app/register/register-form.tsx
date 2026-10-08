@@ -18,7 +18,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import type { OrganizationInput } from "@/domain/organization";
-import { FIELD } from "../start-form";
+import { BTN_PRIMARY, BTN_QUIET, CARD, FIELD, LINK } from "../ui";
 import { CompanyFields } from "./company-fields";
 
 type Step = "account" | "company";
@@ -92,10 +92,10 @@ export function RegisterForm(): React.JSX.Element {
   }
 
   const error = failure !== null && (
-    <p role="alert" className="text-sm text-red-300">
+    <p role="alert" className="text-sm text-conflict">
       {failure.message}{" "}
       {failure.login === true && (
-        <Link href="/login" className="text-teal-300 underline-offset-2 hover:underline">Log in</Link>
+        <Link href="/login" className={LINK}>Log in</Link>
       )}
     </p>
   );
@@ -103,33 +103,33 @@ export function RegisterForm(): React.JSX.Element {
   if (step === "account") {
     return (
       <form
-        className="flex flex-col gap-5"
+        className={`${CARD} flex flex-col gap-5`}
         aria-label="Your details"
         onSubmit={(e) => {
           e.preventDefault();
           setStep("company");
         }}
       >
-        <label className="flex flex-col gap-1.5 text-sm font-medium">
+        <label className="flex flex-col gap-1.5 text-sm font-semibold">
           Your name
           <input value={account.name} onChange={set("name")} required maxLength={120} autoComplete="name" className={FIELD} />
         </label>
-        <label className="flex flex-col gap-1.5 text-sm font-medium">
+        <label className="flex flex-col gap-1.5 text-sm font-semibold">
           Work email
           <input type="email" value={account.email} onChange={set("email")} required maxLength={254} autoComplete="email" className={FIELD} />
         </label>
-        <label className="flex flex-col gap-1.5 text-sm font-medium">
+        <label className="flex flex-col gap-1.5 text-sm font-semibold">
           Password
           <input type="password" value={account.password} onChange={set("password")} required minLength={8} maxLength={200} autoComplete="new-password" className={FIELD} />
-          <span className="text-xs font-normal text-zinc-400">At least 8 characters.</span>
+          <span className="text-xs font-normal text-muted">At least 8 characters.</span>
         </label>
         {error}
-        <button type="submit" className="self-start rounded-xl bg-teal-500 px-5 py-3 font-semibold text-zinc-950 hover:bg-teal-400">
+        <button type="submit" className={`${BTN_PRIMARY} self-start`}>
           Next
         </button>
-        <p className="text-sm text-zinc-400">
+        <p className="text-sm text-muted">
           Already registered?{" "}
-          <Link href="/login" className="text-teal-300 underline-offset-2 hover:underline">Log in</Link>
+          <Link href="/login" className={LINK}>Log in</Link>
         </p>
       </form>
     );
@@ -137,7 +137,7 @@ export function RegisterForm(): React.JSX.Element {
 
   return (
     <form
-      className="flex flex-col gap-5"
+      className={`${CARD} flex flex-col gap-5`}
       aria-label="Your company"
       onSubmit={(e) => {
         e.preventDefault();
@@ -150,11 +150,11 @@ export function RegisterForm(): React.JSX.Element {
         <button
           type="submit"
           disabled={busy}
-          className="rounded-xl bg-teal-500 px-5 py-3 font-semibold text-zinc-950 hover:bg-teal-400 disabled:opacity-60"
+          className={BTN_PRIMARY}
         >
           {busy ? "Creating..." : "Create account"}
         </button>
-        <button type="button" onClick={() => { setStep("account"); }} className="text-sm text-zinc-400 hover:text-zinc-200">
+        <button type="button" onClick={() => { setStep("account"); }} className={BTN_QUIET}>
           Back
         </button>
       </div>

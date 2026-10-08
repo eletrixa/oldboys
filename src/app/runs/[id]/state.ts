@@ -44,7 +44,8 @@ export type RunState = {
   mentions: number;
   candidates: Candidate[];
   claims: Claim[];
-  sources: { id: string; url: string }[];
+  /** identity_reason: why a source was confirmed beyond its profile link ("name and employer match (Groupon)"); null otherwise. */
+  sources: { id: string; url: string; identity_reason?: string | null }[];
   questions: { id: string; text: string; title?: string }[];
   brief: Brief | null;
   /** Reason recorded by the Workflow when status is failed; null otherwise. */

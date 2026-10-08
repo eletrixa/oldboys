@@ -8,10 +8,11 @@
  */
 import { describe, expect, it } from "vitest";
 import type { Candidate, Claim, Source } from "@/domain/claim";
-import { extractClaims } from "@/recipe/seams/extract";
+import type { Ports } from "@/domain/ports";
+import { extractClaims, NO_QUOTE_MAX } from "@/recipe/seams/extract";
 import { canonicalProfile, decisionFor, fallbackScores, isNoise, namesSubject, noneConfirmed, pickDrafts, profileKey, resolveCandidates, sourceIdentityUpdates, UNCONFIRMED_GAP } from "@/recipe/seams/resolve";
 import { verifyClaims } from "@/recipe/seams/verify";
-import { askCandidate, coverageOf, excerptKey, headlineOf, locationNoteOf, profileQuestion, synthesizeBrief } from "@/recipe/seams/synthesize";
+import { alsoFoundOf, askCandidate, coverageOf, excerptKey, headlineOf, interviewAllowed, locationNoteOf, profileQuestion, synthesizeBrief } from "@/recipe/seams/synthesize";
 import { baseContext, fakeLlm, fakePorts } from "@/recipe/__tests__/fakes";
 
 const s = (id: string, url: string, excerpt: string): Source => ({ id, run_id: "run-1", url, actor: "apify/google-search-scraper", fetched_at: "t", excerpt, r2_key: "k", expires_at: "e", identity: "unverified" });
@@ -161,8 +162,8 @@ describe("identity after the lineup (namesake SERP hits never reach the model)",
 
   it("marks only SERP hits on the merged profile (post and locale variants included) as merged", () => {
     expect(sourceIdentityUpdates(cands, serp)).toEqual([
-      { id: "li", identity: "merged" },
-      { id: "post", identity: "merged" },
+      { id: "li", identity: "merged", reason: null },
+      { id: "post", identity: "merged", reason: null },
     ]);
     expect(profileKey("https://www.linkedin.com/posts/lukas-pokorny-436438295_x-activity-2")).toBe(profileKey(`${li}/cs`));
   });
@@ -217,7 +218,7 @@ describe("synthesize", () => {
   it("builds an evidence-only brief when there are no claims: degraded, sources linked, gaps as questions", async () => {
     const ports = fakePorts();
     const ctx = baseContext({
-      sources: [...sources, s("g1", "https://api.github.com/users/someone", "someone"), s("m1", "https://github.com/jdvorakova/repo", "repo")],
+      sources: [...sources, s("g1", "https://api.github.com/users/someone", "someone (Jana Dvořáková)"), s("m1", "https://github.com/jdvorakova/repo", "repo")],
       candidates: [
         cand("c2", "https://github.com/jdvorakova", "merge", "github"),
         cand("c3", sources[2]?.url ?? "", "rejected"),
@@ -441,7 +442,7 @@ describe("Facebook as a profile platform", () => {
     expect(isNoise("https://fb.com/public/Josef-Buryan")).toBe(true);
     const fb = { ...cand("f", "https://www.facebook.com/josefburyan", "possibly-same-as", "facebook", "josefburyan"), snippet: "Josef Buryan | Facebook" };
     const src = s("fs", "https://www.facebook.com/josefburyan", "Josef Buryan | Facebook");
-    const brief = (await synthesizeBrief(baseContext({ candidates: [fb], sources: [src] }), fakePorts())).brief;
+    const brief = (await synthesizeBrief(baseContext({ subject: "Josef Buryan", candidates: [fb], sources: [src] }), fakePorts())).brief;
     expect(brief?.interview_questions[0]).toBe("Is the Facebook profile 'Josef Buryan | Facebook' yours?");
     expect(brief?.evidence).toEqual([]);
     expect(brief?.also_found.map((e) => e.url)).toEqual([src.url]);
@@ -509,7 +510,92 @@ describe("review 005: unconfirmed gaps, one question per platform, location note
   it("adds a Facebook line under not_searched only when a Facebook candidate exists", async () => {
     const fb = { ...cand("f", "https://www.facebook.com/josefburyan", "possibly-same-as", "facebook", "josefburyan"), snippet: "Josef Buryan | Facebook" };
     const brief = (await synthesizeBrief(baseContext({ candidates: [fb] }), fakePorts())).brief;
-    expect(brief?.not_searched).toContainEqual({ source: "facebook_profile", reason: "not collected: public Facebook pages need a login" });
+    expect(brief?.not_searched).toContainEqual({ source: "facebook_profile", reason: "profile not opened (login needed); only search snippets were read" });
     expect((await synthesizeBrief(baseContext(), fakePorts())).brief?.not_searched).toEqual([]);
+  });
+});
+
+describe("Buryan fact check: extract prompt, interview questions, to_verify, also_found", () => {
+  const claim = (id: string, q: string, kind: Claim["kind"], text: string, supports = ["li"]): Claim => ({ id, run_id: "run-1", question_id: q, candidate_id: null, text, kind, confidence: 0.8, quote: kind === "INFERENCE" ? null : text, supports, contradicts: [], rank: 1 });
+  const li = { ...s("li", "https://www.linkedin.com/in/josef-buryan", "Josef Buryan - CMO, Vilgain | Aktin"), identity: "merged" as const };
+
+  it("caps a no-quote claim at 0.6 confidence and states the FACT, noise and contradiction rules in the extract prompt", async () => {
+    let system = "";
+    const llm = ((input: { system: string }) => {
+      system = input.system;
+      return Promise.resolve({
+        value: [
+          { question_id: "current-role", text: "Probably a senior marketer", kind: "INFERENCE", confidence: 0.9, quote: null, source_ids: ["li"] },
+          { question_id: "current-role", text: "CMO at Vilgain", kind: "FACT", confidence: 0.9, quote: "CMO, Vilgain", source_ids: ["li"] },
+        ],
+        cost_usd: 0.001,
+      });
+    }) as Ports["llm"];
+    const out = await extractClaims(baseContext({ subject: "Josef Buryan", sources: [li] }), fakePorts({ llm }));
+    expect(out.claims.map((c) => c.confidence)).toEqual([NO_QUOTE_MAX, 0.9]);
+    expect(system).toMatch(/states only what its quote states/);
+    expect(system).toMatch(/keep its specific numbers/);
+    expect(system).toMatch(/no claims that a snippet is truncated/);
+    expect(system).toMatch(/no ratings or judgements/);
+    expect(system).toMatch(/unrelated to the subject or misattributed: emit no claim/);
+    expect(system).toMatch(/same metric, same period, same role/);
+    expect(system).toMatch(/aliases of one organisation/);
+  });
+
+  it("asks a CMO only about unevidenced must-haves (max 5), never public-code or a dropped alias contradiction, which also stays out of to_verify", async () => {
+    const mh = ["mh-a", "mh-b", "mh-c", "mh-d", "mh-e", "mh-f", "mh-g"];
+    const ctx = baseContext({
+      subject: "Josef Buryan",
+      role: "Chief Marketing Officer",
+      sources: [li],
+      questions: [
+        { id: "current-role", text: "Current role?" },
+        { id: "public-code", text: "What public code or technical output exists?" },
+        { id: "contradictions", text: "Which sources disagree with each other?" },
+        ...mh.map((id) => ({ id, text: `Must-have ${id}?` })),
+      ],
+      claims: [
+        claim("role", "current-role", "FACT", "CMO, Vilgain"),
+        claim("aktin", "contradictions", "INFERENCE", "A Facebook snippet says he left Aktin in January 2025, whereas LinkedIn names Vilgain."),
+        claim("mha", "mh-a", "FACT", "CMO, Vilgain"),
+        claim("mhb", "mh-b", "INFERENCE", "Led a team, size unknown"),
+      ],
+    });
+    let summaryPrompt = "";
+    const ports = fakePorts({
+      llm: fakeLlm((prompt) => {
+        if (!prompt.startsWith("Role:")) return [];
+        summaryPrompt = prompt;
+        return ctx.questions.map((q) => ({ question_id: q.id, summary: "s", interview_question: `ask ${q.id}` }));
+      }),
+    });
+    const out = await synthesizeBrief(ctx, ports);
+    expect(out.brief?.interview_questions).toEqual(["ask mh-b", "ask mh-c", "ask mh-d", "ask mh-e", "ask mh-f"]);
+    expect(out.brief?.to_verify).toEqual(["Led a team, size unknown"]);
+    expect(summaryPrompt).not.toContain("Aktin");
+    expect(summaryPrompt).toContain("## public-code: What public code or technical output exists?\ncoverage=none interview_question_allowed=no");
+    expect(out.notes.join()).toContain("aliases of one organisation");
+  });
+
+  it("asks about public code only for a technical role when there are no must-haves", () => {
+    const questions = [{ id: "public-code", text: "Public code?" }, { id: "contradictions", text: "Which sources disagree?" }];
+    const none = new Map<string, Claim[]>();
+    expect(interviewAllowed({ questions, role: "Senior Data Engineer" }, none)("public-code")).toBe(true);
+    expect(interviewAllowed({ questions, role: "Chief Marketing Officer" }, none)("public-code")).toBe(false);
+    expect(interviewAllowed({ questions, role: null }, none)("contradictions")).toBe(false);
+    expect(interviewAllowed({ questions, role: null }, new Map([["contradictions", [claim("c", "contradictions", "INFERENCE", "x")]]]))("contradictions")).toBe(true);
+  });
+
+  it("keeps an also_found hit only when it names the surname (diacritics-insensitive) in excerpt or URL", () => {
+    const hits = [
+      s("login", "https://github.com/login", "Sign in to GitHub"),
+      s("app", "https://apps.apple.com/cz/app/groupon/id352683833", "Groupon: Local Deals Near Me"),
+      s("celeb", "https://en.wikipedia.org/wiki/Josef_Abrham", "Josef Abrham, Czech actor"),
+      s("namesake", "https://cz.linkedin.com/in/petr-buryan", "Petr Buryan - Sales"),
+      s("folded", "https://example.cz/team", "Jiří BURYÁN, účetní"),
+    ];
+    expect(alsoFoundOf(baseContext({ subject: "Josef Buryan", sources: hits })).map((e) => e.url)).toEqual(["https://cz.linkedin.com/in/petr-buryan", "https://example.cz/team"]);
+    // a company subject (due diligence) has no surname: nothing is filtered
+    expect(alsoFoundOf(baseContext({ goal: "due-diligence", subject: "Kiwi.com s.r.o.", sources: hits }))).toHaveLength(5);
   });
 });

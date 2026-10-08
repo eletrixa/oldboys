@@ -12,6 +12,7 @@
  * - A collector whose sources an earlier step already fetched (`alreadyFetched`) and that has nothing new to request
  *   returns those sources, not empty, with the note "already fetched at seed" and no request
  * - Budget: refuse a paid (actor) request once calls or USD are exhausted (note + empty); free REST fetches are not gated
+ * - One source per page: a hit whose canonical URL (no locale / trailing slash) is already in the run is not stored again
  *
  * Design constraints:
  * - Never mutates ctx; the Workflow persists the outcome and rebuilds ctx for the next step
@@ -21,6 +22,7 @@
  */
 import type { Source } from "@/domain/claim";
 import type { Ports } from "@/domain/ports";
+import { canonicalUrl } from "@/domain/url";
 import { extractClaims } from "@/recipe/seams/extract";
 import { resolveCandidates } from "@/recipe/seams/resolve";
 import { synthesizeBrief } from "@/recipe/seams/synthesize";
@@ -89,6 +91,7 @@ async function collect(step: Step, ctx: StepContext, ports: Ports): Promise<Step
     out.notes.push("no confirmed handle or id to look up");
     return out;
   }
+  const seen = new Set(ctx.sources.map((s) => canonicalUrl(s.url)));
   for (const req of requests) {
     if (req.via === "actor" && !budgetLeft(ctx, out.calls, out.cost_usd)) {
       out.notes.push("run budget reached");
@@ -106,6 +109,9 @@ async function collect(step: Step, ctx: StepContext, ports: Ports): Promise<Step
       continue;
     }
     for (const p of parsed) {
+      const key = canonicalUrl(p.url);
+      if (seen.has(key)) continue;
+      seen.add(key);
       const fetched = ports.now();
       const source: Omit<Source, "r2_key"> = {
         id: ports.newId(),

@@ -120,6 +120,38 @@ function global:cheatoldboys {
     Write-Host "Apply 0010_accounts migration (organizations, accounts, sessions, auth_attempts)" -ForegroundColor White
     Write-Host ""
     Write-Host "  ┌─────────────────────────────────────────────────────────────────┐" -ForegroundColor DarkGray
+    Write-Host "  │  INTAKE (plans/008, docs/ops/intake.md)                        │" -ForegroundColor Yellow
+    Write-Host "  └─────────────────────────────────────────────────────────────────┘" -ForegroundColor DarkGray
+    Write-Host "    wrangler secret put INTAKE_TOKEN       " -NoNewline -ForegroundColor Green
+    Write-Host "Bearer for POST /api/intake/form (Apps Script)" -ForegroundColor White
+    Write-Host "    wrangler secret put STARTUPJOBS_WEBHOOK_TOKEN " -NoNewline -ForegroundColor Green
+    Write-Host "Path token in the StartupJobs webhook URL" -ForegroundColor White
+    Write-Host "    wrangler secret put STARTUPJOBS_TOKEN  " -NoNewline -ForegroundColor Green
+    Write-Host "Optional: StartupJobs API bearer for CV downloads" -ForegroundColor White
+    Write-Host "    INTAKE_PER_HOUR_CAP / _FORWARD_TO / _FROM_ALLOW " -NoNewline -ForegroundColor Green
+    Write-Host "wrangler.jsonc vars: hourly run cap, human copy, sender allow-list" -ForegroundColor White
+    Write-Host "    POST /api/intake/form                  " -NoNewline -ForegroundColor Green
+    Write-Host "Google Forms via Apps Script (Bearer INTAKE_TOKEN)" -ForegroundColor White
+    Write-Host "    POST /api/apply                        " -NoNewline -ForegroundColor Green
+    Write-Host "Hosted page /apply/<tag> (same-origin, honeypot)" -ForegroundColor White
+    Write-Host "    POST /api/intake/startupjobs/<token>   " -NoNewline -ForegroundColor Green
+    Write-Host "StartupJobs webhook (test button sends test:true)" -ForegroundColor White
+    Write-Host "    GET /api/intake/applications           " -NoNewline -ForegroundColor Green
+    Write-Host "Queue, last 200 (Bearer RUN_TOKEN); UI at /intake" -ForegroundColor White
+    Write-Host "    GET|POST /api/intake/tags              " -NoNewline -ForegroundColor Green
+    Write-Host "List / create tag -> role (Bearer RUN_TOKEN)" -ForegroundColor White
+    Write-Host "    jobs+<tag>@asajj.cz                    " -NoNewline -ForegroundColor Green
+    Write-Host "Email door: Gmail forward, Seznam copy, Jobs.cz, LinkedIn" -ForegroundColor White
+    Write-Host "    pnpm exec opennextjs-cloudflare build  " -NoNewline -ForegroundColor Green
+    Write-Host "Needed before the local email test below" -ForegroundColor White
+    Write-Host "    pnpm exec wrangler dev                 " -NoNewline -ForegroundColor Green
+    Write-Host "Serves the Worker with email() on :8787" -ForegroundColor White
+    Write-Host "    curl -X POST 'localhost:8787/cdn-cgi/handler/email?from=a@b.cz&to=jobs+senior-be@asajj.cz' --data-binary @x.eml " -NoNewline -ForegroundColor Green
+    Write-Host "Local email test (see docs/ops/intake.md)" -ForegroundColor White
+    Write-Host "    pnpm db:migrate:remote                 " -NoNewline -ForegroundColor Green
+    Write-Host "0009_intake.sql to prod D1 before deploy (Robert runs it)" -ForegroundColor White
+    Write-Host ""
+    Write-Host "  ┌─────────────────────────────────────────────────────────────────┐" -ForegroundColor DarkGray
     Write-Host "  │  NAVIGATION                                                    │" -ForegroundColor Yellow
     Write-Host "  └─────────────────────────────────────────────────────────────────┘" -ForegroundColor DarkGray
     Write-Host "    GoOldboys                              " -NoNewline -ForegroundColor Green

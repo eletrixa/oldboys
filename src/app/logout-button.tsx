@@ -16,6 +16,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { BTN_QUIET } from "./ui";
 
 export function LogoutButton(): React.JSX.Element {
   const router = useRouter();
@@ -37,7 +38,7 @@ export function LogoutButton(): React.JSX.Element {
       type="button"
       disabled={busy}
       onClick={() => void logout()}
-      className="text-sm text-zinc-400 hover:text-zinc-200 disabled:opacity-60"
+      className={`${BTN_QUIET} disabled:opacity-60`}
     >
       Log out
     </button>

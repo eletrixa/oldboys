@@ -10,15 +10,17 @@
  * - `loadContext` rebuilds StepContext from D1 before every step (Workflow steps are stateless)
  * - `persistOutcome` writes sources/candidates/claims/gaps/brief; claims_mode=replace rewrites the run's claims
  * - Raw payloads go to R2 under `<run>/<source>.json`; D1 keeps only the excerpt
- * - `applySourceIdentity` re-marks sources after the lineup (merged / unverified by profile key, rule in resolve.ts)
+ * - `applySourceIdentity` re-marks sources after the lineup (merged / unverified by profile key, then name + employer
+ *   corroboration with identity_reason; subject from investigations, employer/headline from the seed_profile ledger rows)
  *
  * Design constraints:
- * - Column names mirror migrations 0001–0004; no ORM
+ * - Column names mirror migrations 0001–0008; no ORM
  * - Source and claim writes are INSERT OR REPLACE so a retried Workflow step stays idempotent
  * - Gaps are also mirrored as ledger `decision` rows with `ref.gap = true` for the SSE stream
  */
 import { Brief, Candidate, CandidateDecision, Claim, Gap, LedgerEntry, Source } from "@/domain/claim";
 import type { LedgerAppend, SourceStore } from "@/domain/ports";
+import { headlineOrgs } from "@/domain/corroborate";
 import { sourceIdentityUpdates } from "@/recipe/seams/resolve";
 import type { StepContext, StepOutcome } from "@/recipe/sources/types";
 import type { Question } from "@/recipe/step";
@@ -159,18 +161,43 @@ export async function setCandidateDecisions(db: D1Database, runId: string, decis
   await applySourceIdentity(db, runId);
 }
 
-/** Sources on a merged candidate's profile become "merged", on a rejected one "unverified"; idempotent. */
+/** Organisations the seed_profile ledger rows recorded: the employer plus orgs named in the headline ("ex-Meta"). */
+export function seedOrgs(refs: readonly (string | null)[]): string[] {
+  return refs.flatMap((raw) => {
+    const ref = json<Row | null>(raw, null);
+    if (ref === null) return [];
+    const employer = typeof ref.employer === "string" ? [ref.employer] : [];
+    return [...employer, ...(typeof ref.headline === "string" ? headlineOrgs(ref.headline) : [])];
+  });
+}
+
+/**
+ * Sources on a merged candidate's profile become "merged", on a rejected one "unverified"; then still-unverified
+ * sources naming the subject in full with a confirmed employer token become "merged" with identity_reason
+ * (rule in resolve.ts). Idempotent.
+ */
 export async function applySourceIdentity(db: D1Database, runId: string): Promise<number> {
-  const [cands, srcs] = await Promise.all([
+  const [cands, srcs, head, seed] = await Promise.all([
     db.prepare("SELECT decision, profile_urls_json FROM candidates WHERE run_id = ?").bind(runId).all<Row>(),
-    db.prepare("SELECT id, url, identity FROM sources WHERE run_id = ?").bind(runId).all<Row>(),
+    db.prepare("SELECT id, url, identity, excerpt, actor FROM sources WHERE run_id = ?").bind(runId).all<Row>(),
+    db.prepare("SELECT subject FROM investigations WHERE id = ?").bind(runId).first<{ subject: string }>(),
+    db.prepare("SELECT ref_json FROM ledger_entries WHERE run_id = ? AND step = 'seed_profile'").bind(runId).all<{ ref_json: string | null }>(),
   ]);
   const updates = sourceIdentityUpdates(
     cands.results.map((r) => ({ decision: CandidateDecision.parse(r.decision), profile_urls: json<string[]>(r.profile_urls_json, []) })),
-    srcs.results.map((r) => ({ id: String(r.id), url: String(r.url), identity: r.identity === "merged" ? ("merged" as const) : ("unverified" as const) })),
+    srcs.results.map((r) => ({
+      id: String(r.id),
+      url: String(r.url),
+      identity: r.identity === "merged" ? ("merged" as const) : ("unverified" as const),
+      excerpt: typeof r.excerpt === "string" ? r.excerpt : "",
+      actor: typeof r.actor === "string" ? r.actor : "",
+    })),
+    { subject: head?.subject ?? "", orgs: seedOrgs(seed.results.map((r) => r.ref_json)) },
   );
   if (updates.length > 0) {
-    await db.batch(updates.map((u) => db.prepare("UPDATE sources SET identity = ? WHERE id = ? AND run_id = ?").bind(u.identity, u.id, runId)));
+    await db.batch(
+      updates.map((u) => db.prepare("UPDATE sources SET identity = ?, identity_reason = ? WHERE id = ? AND run_id = ?").bind(u.identity, u.reason, u.id, runId)),
+    );
   }
   return updates.length;
 }

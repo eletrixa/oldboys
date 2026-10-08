@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/roles/roles-view.tsx
- * Deps:    react, next/link, src/domain/role-overview
+ * Deps:    react, next/link, src/domain/role-overview, src/app/ui
  * Tested:  builder in src/domain/__tests__/role-overview.test.ts; view n/a
  *
  * Key responsibilities:
@@ -12,6 +12,7 @@
  *
  * Design constraints:
  * - Client component; no token handling, the session cookie travels by default
+ * - Radar design (docs/design/radar-ui.md): semantic tokens and src/app/ui.tsx classes only
  * - Shows the amount of evidence found, never a verdict on the person: no total, no ranking, no coverage sort
  */
 "use client";
@@ -19,14 +20,15 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { CoverageLabel, RoleGroup } from "@/domain/role-overview";
+import { BTN_QUIET, CARD, CARD_SAGE, Eyebrow, LINK } from "../ui";
 
 const DISCLAIMER = "This table shows how much public evidence the research found, not how good a candidate is.";
 
-const CELL_STYLE: Readonly<Record<CoverageLabel, string>> = {
-  documented: "text-teal-300",
-  partial: "text-amber-300",
-  "no evidence": "text-zinc-400",
-  "not checked": "text-zinc-500 italic",
+const CELL_STYLE: Readonly<Record<CoverageLabel, { text: string; dot: string }>> = {
+  documented: { text: "text-ok", dot: "bg-ok" },
+  partial: { text: "text-unsure", dot: "bg-unsure" },
+  "no evidence": { text: "text-muted", dot: "bg-line" },
+  "not checked": { text: "text-muted italic", dot: "bg-divider" },
 };
 
 type Load =
@@ -35,15 +37,16 @@ type Load =
   | { kind: "error"; message: string }
   | { kind: "ready"; groups: RoleGroup[] };
 
+
 function RoleList({ groups }: { groups: RoleGroup[] }): React.JSX.Element {
-  if (groups.length === 0) return <p className="text-zinc-400">No briefs with a role yet.</p>;
+  if (groups.length === 0) return <p className="text-muted">No briefs with a role yet.</p>;
   return (
-    <ul className="flex flex-col divide-y divide-zinc-800 rounded-xl border border-zinc-800">
+    <ul className="divide-y divide-divider">
       {groups.map((g) => (
         <li key={g.key}>
-          <Link href={`/roles/${encodeURIComponent(g.key)}`} className="flex items-center justify-between gap-4 px-4 py-3 hover:bg-zinc-900">
-            <span className="font-medium">{g.role}</span>
-            <span className="shrink-0 text-sm text-zinc-400">
+          <Link href={`/roles/${encodeURIComponent(g.key)}`} className="-mx-2 flex items-center justify-between gap-4 rounded-lg px-2 py-4 hover:bg-sage/40">
+            <span className="font-serif text-xl">{g.role}</span>
+            <span className="shrink-0 text-sm text-muted tabular-nums">
               {g.run_count} {g.run_count === 1 ? "brief" : "briefs"}
             </span>
           </Link>
@@ -55,41 +58,46 @@ function RoleList({ groups }: { groups: RoleGroup[] }): React.JSX.Element {
 
 function RoleTable({ group }: { group: RoleGroup }): React.JSX.Element {
   return (
-    <div className="flex flex-col gap-3">
-      <h2 className="text-xl font-semibold">{group.role}</h2>
-      <p className="rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-zinc-300">{DISCLAIMER}</p>
-      <div className="overflow-x-auto rounded-xl border border-zinc-800">
+    <div className="flex flex-col gap-4">
+      <h2 className="font-serif text-2xl">{group.role}</h2>
+      <p className={`${CARD_SAGE} text-sm`}>{DISCLAIMER}</p>
+      <div className={`${CARD} overflow-hidden p-0 md:p-0`}>
+        <div className="overflow-x-auto">
         <table className="w-full text-left text-sm">
           <caption className="sr-only">Evidence found per must-have for {group.role}, newest brief first</caption>
-          <thead className="bg-zinc-900 text-xs text-zinc-400">
+          <thead className="bg-canvas text-xs font-semibold tracking-[0.08em] text-muted uppercase">
             <tr>
-              <th scope="col" className="px-3 py-2 font-medium">Person</th>
-              <th scope="col" className="px-3 py-2 font-medium">Date</th>
-              <th scope="col" className="px-3 py-2 font-medium">Status</th>
+              <th scope="col" className="px-4 py-3 font-semibold">Person</th>
+              <th scope="col" className="px-4 py-3 font-semibold">Date</th>
+              <th scope="col" className="px-4 py-3 font-semibold">Status</th>
               {group.questions.map((q) => (
-                <th key={q} scope="col" className="min-w-40 px-3 py-2 font-medium">{q}</th>
+                <th key={q} scope="col" className="min-w-40 px-4 py-3 font-semibold">{q}</th>
               ))}
-              <th scope="col" className="px-3 py-2 font-medium">Sources confirmed</th>
+              <th scope="col" className="px-4 py-3 font-semibold">Sources confirmed</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-zinc-800">
+          <tbody className="divide-y divide-divider">
             {group.runs.map((run) => (
               <tr key={run.id}>
-                <th scope="row" className="px-3 py-2 font-medium">
-                  <Link href={`/runs/${run.id}`} className="text-teal-300 underline-offset-2 hover:underline">{run.subject}</Link>
+                <th scope="row" className="px-4 py-3">
+                  <Link href={`/runs/${run.id}`} className={LINK}>{run.subject}</Link>
                 </th>
-                <td className="whitespace-nowrap px-3 py-2 text-zinc-400">{run.created_at.slice(0, 10)}</td>
-                <td className="px-3 py-2 text-zinc-400">{run.status}</td>
+                <td className="whitespace-nowrap px-4 py-3 text-muted tabular-nums">{run.created_at.slice(0, 10)}</td>
+                <td className="px-4 py-3 text-muted tabular-nums">{run.status}</td>
                 {run.cells.map((label, i) => (
-                  <td key={group.questions[i] ?? i} className={`px-3 py-2 ${CELL_STYLE[label]}`}>{label}</td>
+                  <td key={group.questions[i] ?? i} className={`px-4 py-3 ${CELL_STYLE[label].text}`}>
+                    <span aria-hidden="true" className={`mr-2 inline-block size-2 rounded-full ${CELL_STYLE[label].dot}`} />
+                    {label}
+                  </td>
                 ))}
-                <td className="px-3 py-2 text-zinc-300">{run.sources_confirmed}</td>
+                <td className="px-4 py-3 tabular-nums">{run.sources_confirmed}</td>
               </tr>
             ))}
           </tbody>
         </table>
+        </div>
       </div>
-      <p className="text-xs text-zinc-500">
+      <p className="text-xs text-muted">
         &quot;Not checked&quot; means the brief is missing, ran without the AI summary, or did not ask this question. Only sources tied to a confirmed profile are counted.
       </p>
     </div>
@@ -125,23 +133,29 @@ export function RolesView({ roleKey }: { roleKey?: string }): React.JSX.Element 
   const group = load.kind === "ready" && roleKey !== undefined ? load.groups.find((g) => g.key === roleKey) : undefined;
 
   return (
-    <main className="mx-auto flex max-w-5xl flex-col gap-6 px-4 py-10">
-      <header className="flex flex-col gap-2">
-        <h1 className="text-3xl font-semibold tracking-tight">Candidates by role</h1>
-        <p className="text-zinc-400">Compare the briefs your team made for the same role. {DISCLAIMER}</p>
+    <main className="mx-auto flex max-w-5xl flex-col gap-8 px-4 py-10 md:py-14">
+      <header className="flex flex-col items-start gap-3 border-b border-divider pb-8">
+        <Eyebrow>Roles</Eyebrow>
+        <h1 className="font-serif text-4xl leading-[1.05] md:text-5xl">Candidates by role</h1>
+        <p className="text-muted">Compare the briefs made for the same role. {DISCLAIMER}</p>
         {roleKey !== undefined && (
-          <Link href="/roles" className="text-sm text-zinc-400 hover:text-zinc-200">All roles</Link>
+          <Link href="/roles" className={BTN_QUIET}>All roles</Link>
         )}
       </header>
-      {load.kind === "loading" && <p className="text-zinc-400">Loading…</p>}
+      {load.kind === "loading" && (
+        <div role="status" aria-label="Loading" className="flex animate-pulse flex-col gap-3">
+          <div className="h-8 w-1/3 rounded bg-divider" />
+          <div className="h-4 w-1/2 rounded bg-divider" />
+        </div>
+      )}
       {load.kind === "unauthorized" && (
-        <p className="text-zinc-400">
-          <Link href="/login" className="text-teal-300 underline-offset-2 hover:underline">Log in</Link> to see your team&apos;s roles
+        <p className="text-muted">
+          <Link href="/login" className={LINK}>Log in</Link> to see your team&apos;s roles.
         </p>
       )}
-      {load.kind === "error" && <p className="text-red-300">{load.message}</p>}
+      {load.kind === "error" && <p className="text-conflict">{load.message}</p>}
       {load.kind === "ready" && roleKey === undefined && <RoleList groups={load.groups} />}
-      {load.kind === "ready" && roleKey !== undefined && (group === undefined ? <p className="text-zinc-400">No briefs for this role.</p> : <RoleTable group={group} />)}
+      {load.kind === "ready" && roleKey !== undefined && (group === undefined ? <p className="text-muted">No briefs for this role.</p> : <RoleTable group={group} />)}
     </main>
   );
 }

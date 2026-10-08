@@ -23,13 +23,9 @@ import { parseJsonBody } from "@/app/api/_lib/body";
 import { StartRunBody } from "@/app/api/_lib/run-body";
 import { HOUR_MS, since } from "@/domain/auth-limits";
 import { dedupeSince, RUNS_PER_HOUR_CAP, START_PER_HOUR_CAP } from "@/domain/run-status";
+import { startRun, type StartRunEnv } from "@/workflow/start-run";
 
-export type RunsEnv = {
-  DB: D1Database;
-  RESEARCH_RUN: Pick<CloudflareEnv["RESEARCH_RUN"], "create">;
-  RUN_BUDGET_USD: string;
-  RUN_BUDGET_CALLS: string;
-};
+export type RunsEnv = StartRunEnv;
 
 export type RunOrigin = { via: "api" } | { via: "start"; accountId: string; organizationId: string };
 
@@ -67,33 +63,11 @@ export async function createRun(
     return Response.json({ error: "run cap reached, try again later" }, { status: 429 });
   }
 
-  const id = crypto.randomUUID();
-  const budgetUsd = Number(env.RUN_BUDGET_USD);
-  const budgetCalls = Number(env.RUN_BUDGET_CALLS);
-
-  await env.DB.prepare(
-    `INSERT INTO investigations (id, subject, anchor, goal, status, budget_usd, budget_calls, created_at, source_url, role, via, profile_url, cv_text, account_id, organization_id)
-     VALUES (?, ?, ?, ?, 'queued', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-  )
-    .bind(
-      id,
-      parsed.data.subject ?? "",
-      parsed.data.anchor ?? "",
-      parsed.data.goal,
-      budgetUsd,
-      budgetCalls,
-      now.toISOString(),
-      parsed.data.sourceUrl ?? null,
-      parsed.data.role ?? null,
-      origin.via,
-      parsed.data.profileUrl ?? null,
-      parsed.data.cvText ?? null,
-      accountId,
-      organizationId,
-    )
-    .run();
-
-  await env.RESEARCH_RUN.create({ id, params: { runId: id } });
-
+  const { id } = await startRun(env, {
+    ...parsed.data,
+    via: origin.via,
+    accountId: accountId ?? undefined,
+    organizationId: organizationId ?? undefined,
+  }, now);
   return Response.json({ id }, { status: 201 });
 }

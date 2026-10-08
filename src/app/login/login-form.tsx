@@ -16,7 +16,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { FIELD } from "../start-form";
+import { BTN_PRIMARY, CARD, FIELD } from "../ui";
 
 type Status = { kind: "idle" } | { kind: "submitting" } | { kind: "error"; message: string };
 
@@ -53,30 +53,30 @@ export function LoginForm(): React.JSX.Element {
 
   return (
     <form
-      className="flex flex-col gap-5"
+      className={`${CARD} flex flex-col gap-5`}
       aria-label="Log in"
       onSubmit={(e) => {
         e.preventDefault();
         void submit(e.currentTarget);
       }}
     >
-      <label className="flex flex-col gap-1.5 text-sm font-medium">
+      <label className="flex flex-col gap-1.5 text-sm font-semibold">
         Work email
         <input name="email" type="email" autoComplete="email" required maxLength={254} className={FIELD} />
       </label>
-      <label className="flex flex-col gap-1.5 text-sm font-medium">
+      <label className="flex flex-col gap-1.5 text-sm font-semibold">
         Password
         <input name="password" type="password" autoComplete="current-password" required maxLength={200} className={FIELD} />
       </label>
       {status.kind === "error" && (
-        <p role="alert" className="text-sm text-red-300">
+        <p role="alert" className="text-sm text-conflict">
           {status.message}
         </p>
       )}
       <button
         type="submit"
         disabled={status.kind === "submitting"}
-        className="self-start rounded-xl bg-teal-500 px-5 py-3 font-semibold text-zinc-950 hover:bg-teal-400 disabled:opacity-60"
+        className={`${BTN_PRIMARY} self-start`}
       >
         {status.kind === "submitting" ? "Logging in..." : "Log in"}
       </button>

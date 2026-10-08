@@ -1,48 +1,42 @@
 /**
- * Site header: logo plus links for a logged-in or logged-out visitor.
+ * Site navigation for the Radar header: links depend on whether a recruiter is logged in.
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/site-nav.tsx
- * Deps:    next/link, ./logout-button, src/domain/session (type)
+ * Deps:    next/link, @/domain/session (SessionUser type), ./logout-button
  * Tested:  n/a
  *
  * Key responsibilities:
- * - Logged in: New brief, My briefs, Roles, organization name, log out; logged out: Log in, Create account
+ * - Logged out: Log in, Create account. Logged in: Roles, My briefs, organization name, Log out, New brief (primary)
  *
  * Design constraints:
- * - Server component; receives the user from the layout, never reads cookies itself
+ * - Server component; rendered inside the layout's header next to the Radar mark
+ * - Radar tokens only (docs/design/radar-ui.md)
  */
 import Link from "next/link";
 import type { SessionUser } from "@/domain/session";
 import { LogoutButton } from "./logout-button";
 
-const LINK = "text-sm text-zinc-400 hover:text-zinc-200";
+const QUIET = "flex min-h-11 items-center rounded-lg px-3 text-sm font-medium text-muted hover:bg-sage hover:text-ink";
+const PRIMARY = "flex min-h-11 items-center rounded-lg bg-action px-4 text-sm font-semibold text-white hover:bg-action-hover";
 
 export function SiteNav({ user }: { user: SessionUser | null }): React.JSX.Element {
   return (
-    <header className="border-b border-zinc-800">
-      <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-x-6 gap-y-2 px-4 py-3">
-        <Link href="/" className="flex items-center gap-2 font-semibold">
-          <span className="flex size-7 items-center justify-center rounded-md bg-teal-500 text-xs text-zinc-950">CB</span>
-          Candidate Brief
-        </Link>
-        <nav aria-label="Main" className="flex flex-wrap items-center gap-x-5 gap-y-2">
-          {user === null ? (
-            <>
-              <Link href="/login" className={LINK}>Log in</Link>
-              <Link href="/register" className={LINK}>Create account</Link>
-            </>
-          ) : (
-            <>
-              <Link href="/" className={LINK}>New brief</Link>
-              <Link href="/briefs" className={LINK}>My briefs</Link>
-              <Link href="/roles" className={LINK}>Roles</Link>
-              <span className="text-sm text-zinc-500">{user.organizationName}</span>
-              <LogoutButton />
-            </>
-          )}
-        </nav>
-      </div>
-    </header>
+    <nav aria-label="Main" className="flex flex-wrap items-center justify-end gap-1">
+      {user === null ? (
+        <>
+          <Link href="/login" className={QUIET}>Log in</Link>
+          <Link href="/register" className={PRIMARY}>Create account</Link>
+        </>
+      ) : (
+        <>
+          <Link href="/roles" className={QUIET}>Roles</Link>
+          <Link href="/briefs" className={QUIET}>My briefs</Link>
+          <span className="hidden px-2 text-sm text-muted md:inline">{user.organizationName}</span>
+          <LogoutButton />
+          <Link href="/" className={PRIMARY}>New brief</Link>
+        </>
+      )}
+    </nav>
   );
 }
