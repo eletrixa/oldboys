@@ -9,18 +9,20 @@
  * Key responsibilities:
  * - Register (with ARES lookup), onboarding, first brief, briefs list, roles, audit, logout, route guards
  * - Cookie flags, login throttle, duplicate email, bearer routes, ARES validation and cache
- * - Usage: node scripts/auth-flow.mjs <base-url> <screenshot-prefix>; exit 1 on any FAIL
+ * - Usage: node scripts/auth-flow.mjs <base-url> <screenshot-prefix> [screenshot-dir, default tmp/auth-flow-shots]; exit 1 on any FAIL
  *
  * Design constraints:
  * - Writes accounts into the local D1 only; never prints RUN_TOKEN; the 11th-registration cap is unit-tested, not driven here
  */
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { chromium } from "../extension/node_modules/@playwright/test/index.mjs";
 
 const base = (process.argv[2] ?? "http://127.0.0.1:8787").replace(/\/$/, "");
 const prefix = process.argv[3] ?? "smoke";
-const SHOTS = "/tmp/claude-1000/-home-asajj-code-oldboys/de97070c-7a94-4afb-9b0a-33d82421b9a5/scratchpad/shots";
+const SHOTS = resolve(process.argv[4] ?? fileURLToPath(new URL("../tmp/auth-flow-shots", import.meta.url)));
 mkdirSync(SHOTS, { recursive: true });
 const PASSWORD = "correct-horse-9";
 const stamp = Date.now();
@@ -88,7 +90,7 @@ try {
   }
   await shot(2, "register-step2");
   await page.getByRole("button", { name: "Create account" }).click();
-  await page.waitForURL(/\/onboarding/, { timeout: 20000 }).catch(() => {});
+  await page.waitForURL(/\/onboarding/, { timeout: 20000 }).catch(() => undefined);
   check("2 register routes to /onboarding", new URL(page.url()).pathname === "/onboarding", page.url());
   check("2 onboarding says 'Your company is'", (await page.locator("main").innerText()).includes("Your company is"));
   await shot(2, "onboarding");
@@ -103,7 +105,7 @@ try {
   await page.locator('input[name="profileUrl"]').fill("https://www.linkedin.com/in/smoke-test-person");
   await shot(3, "start-filled");
   await page.getByRole("button", { name: "Create brief" }).click();
-  await page.waitForURL(/\/runs\//, { timeout: 30000 }).catch(() => {});
+  await page.waitForURL(/\/runs\//, { timeout: 30000 }).catch(() => undefined);
   const m = /\/runs\/([^/?#]+)/.exec(page.url());
   runId = m?.[1] ?? "";
   check("3 start routes to /runs/<id>", runId !== "", page.url());
@@ -130,7 +132,7 @@ try {
   // 6
   await page.goto(base + "/", { waitUntil: "networkidle" });
   await page.locator('nav[aria-label="Main"]').getByRole("button", { name: "Log out" }).click();
-  await page.waitForURL(/\/login/, { timeout: 15000 }).catch(() => {});
+  await page.waitForURL(/\/login/, { timeout: 15000 }).catch(() => undefined);
   check("6 logout lands on /login", new URL(page.url()).pathname === "/login", page.url());
   await shot(6, "logged-out");
   await page.goto(base + "/briefs", { waitUntil: "networkidle" });
@@ -181,7 +183,7 @@ try {
 } catch (e) {
   failed = true;
   log("FAIL script error:", e instanceof Error ? e.stack : String(e));
-  await shot(0, "error").catch(() => {});
+  await shot(0, "error").catch(() => undefined);
 } finally {
   await browser.close();
 }

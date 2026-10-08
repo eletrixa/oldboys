@@ -7,12 +7,12 @@
  * Tested:  src/app/api/auth/__tests__/auth.test.ts
  *
  * Key responsibilities:
- * - Same-origin check, validation, failure rate limit, equal-timing verify, session cookie
+ * - Same-origin check, validation, failure rate limit per email and IP, equal-timing verify, session cookie
  *
  * Design constraints:
  * - Unknown email and wrong password give the same 401; never log credentials
  */
-import { LOGIN_FAILS_PER_WINDOW, LOGIN_WINDOW_MS, since } from "@/domain/auth-limits";
+import { clientIp, LOGIN_FAILS_PER_WINDOW, LOGIN_WINDOW_MS, since } from "@/domain/auth-limits";
 import { hashPassword, verifyPassword } from "@/domain/password";
 import { hashSessionToken, newSessionToken, sessionCookie, sessionExpiresAt } from "@/domain/session";
 import { LoginBody } from "../../_lib/auth-body";
@@ -27,13 +27,15 @@ export async function handleLogin(request: Request, env: AuthEnv, now = new Date
   if (parsed.error !== null) return parsed.error;
   const { email, password } = parsed.data;
 
-  if ((await countAttempts(env.DB, "login_fail", email, since(now, LOGIN_WINDOW_MS))) >= LOGIN_FAILS_PER_WINDOW) {
+  // Keyed by email and IP so a stranger cannot lock a recruiter out from another address.
+  const subject = `${email}|${clientIp(request.headers)}`;
+  if ((await countAttempts(env.DB, "login_fail", subject, since(now, LOGIN_WINDOW_MS))) >= LOGIN_FAILS_PER_WINDOW) {
     return Response.json({ error: "too many attempts" }, { status: 429 });
   }
   const account = await findAccountByEmail(env.DB, email);
   const ok = account !== null ? await verifyPassword(password, account.password_hash) : (await hashPassword(password), false);
   if (account === null || !ok) {
-    await recordAttempt(env.DB, "login_fail", email, now.toISOString());
+    await recordAttempt(env.DB, "login_fail", subject, now.toISOString());
     return Response.json({ error: "email or password is wrong" }, { status: 401 });
   }
 

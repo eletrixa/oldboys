@@ -7,7 +7,7 @@
  * Tested:  n/a (this is the test file)
  *
  * Key responsibilities:
- * - Cover api vs start origin inserts, sourceUrl reuse, global and start caps, invalid body
+ * - Cover api vs start origin inserts, sourceUrl reuse, org-scoped sourceUrl reuse, global and per-org start caps, invalid body
  *
  * Design constraints:
  * - No module mocks; the fake D1 dispatches on SQL prefixes and keeps counts in plain variables
@@ -18,17 +18,25 @@ import { createRun, type RunOrigin, type RunsEnv } from "../handler";
 
 const NOW = new Date("2026-10-08T12:00:00Z");
 
-function makeEnv(opts: { recent?: number; recentStart?: number; earlier?: string } = {}) {
+type Seed = { id: string; sourceUrl?: string; via: "api" | "start"; org: string | null; goal?: string };
+
+function makeEnv(seed: Seed[] = []) {
   const inserts: unknown[][] = [];
   const create = vi.fn((_: unknown) => Promise.resolve());
+  const rows = seed.map((r) => ({ goal: "hiring", sourceUrl: undefined, ...r, at: NOW.toISOString() }));
   const stmt = (sql: string, args: unknown[] = []) => ({
     bind: (...a: unknown[]) => stmt(sql, a),
     first: () => {
       if (sql.startsWith("SELECT id FROM investigations WHERE source_url")) {
-        return Promise.resolve(opts.earlier === undefined ? null : { id: opts.earlier });
+        const [url, goal, , org] = args;
+        const scoped = sql.includes("organization_id = ?");
+        const hit = rows.find((r) => r.sourceUrl === url && r.goal === goal && (scoped ? r.org === org : r.org === null));
+        return Promise.resolve(hit ? { id: hit.id } : null);
       }
-      if (sql.includes("via = 'start'")) return Promise.resolve({ n: opts.recentStart ?? 0 });
-      if (sql.startsWith("SELECT COUNT(*) AS n FROM investigations")) return Promise.resolve({ n: opts.recent ?? 0 });
+      if (sql.includes("via = 'start'")) {
+        return Promise.resolve({ n: rows.filter((r) => r.via === "start" && r.org === args[0]).length });
+      }
+      if (sql.startsWith("SELECT COUNT(*) AS n FROM investigations")) return Promise.resolve({ n: rows.length });
       throw new Error(`unexpected SQL: ${sql}`);
     },
     run: () => {
@@ -45,6 +53,9 @@ function makeEnv(opts: { recent?: number; recentStart?: number; earlier?: string
   } as unknown as RunsEnv;
   return { env, inserts, create };
 }
+
+const fill = (n: number, via: "api" | "start", org: string | null): Seed[] =>
+  Array.from({ length: n }, (_, i) => ({ id: `${org ?? "api"}_${String(i)}`, via, org }));
 
 const post = (body: unknown): Request =>
   new Request("https://x.test/api/runs", { method: "POST", body: JSON.stringify(body) });
@@ -71,25 +82,47 @@ describe("createRun", () => {
     expect((inserts[0] ?? []).slice(9)).toEqual(["start", null, null, "acc_1", "org_1"]);
   });
 
-  it("reuses an earlier run for the same sourceUrl and goal", async () => {
-    const { env, inserts, create } = makeEnv({ earlier: "run_old" });
-    const res = await createRun(post({ ...hiring, sourceUrl: "https://example.com/p" }), env, api, NOW);
+  const withUrl = { ...hiring, sourceUrl: "https://example.com/p" };
+  const seeded = (via: "api" | "start", org: string | null): Seed[] => [
+    { id: "run_old", sourceUrl: "https://example.com/p", via, org },
+  ];
+
+  it("start origin reuses a run of its own organization", async () => {
+    const { env, inserts, create } = makeEnv(seeded("start", "org_1"));
+    const res = await createRun(post(withUrl), env, start, NOW);
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ id: "run_old", reused: true });
     expect(inserts).toHaveLength(0);
     expect(create).not.toHaveBeenCalled();
   });
 
+  it("start origin does not reuse another organization's or an api run", async () => {
+    for (const seed of [seeded("start", "org_2"), seeded("api", null)]) {
+      const { env, inserts } = makeEnv(seed);
+      expect((await createRun(post(withUrl), env, start, NOW)).status).toBe(201);
+      expect(inserts).toHaveLength(1);
+    }
+  });
+
+  it("api origin reuses an api run but not an organization run", async () => {
+    const hit = makeEnv(seeded("api", null));
+    expect((await createRun(post(withUrl), hit.env, api, NOW)).status).toBe(200);
+    const miss = makeEnv(seeded("start", "org_1"));
+    expect((await createRun(post(withUrl), miss.env, api, NOW)).status).toBe(201);
+  });
+
   it("429 at the global cap", async () => {
-    const { env, inserts } = makeEnv({ recent: RUNS_PER_HOUR_CAP });
+    const { env, inserts } = makeEnv(fill(RUNS_PER_HOUR_CAP, "api", null));
     expect((await createRun(post(hiring), env, api, NOW)).status).toBe(429);
     expect(inserts).toHaveLength(0);
   });
 
-  it("start cap applies to start origin only", async () => {
-    const { env } = makeEnv({ recentStart: START_PER_HOUR_CAP });
+  it("start cap is per organization and applies to start origin only", async () => {
+    const { env } = makeEnv(fill(START_PER_HOUR_CAP, "start", "org_1"));
     expect((await createRun(post(hiring), env, start, NOW)).status).toBe(429);
     expect((await createRun(post(hiring), env, api, NOW)).status).toBe(201);
+    const other = makeEnv(fill(START_PER_HOUR_CAP, "start", "org_2"));
+    expect((await createRun(post(hiring), other.env, start, NOW)).status).toBe(201);
   });
 
   it("400 on an invalid body", async () => {

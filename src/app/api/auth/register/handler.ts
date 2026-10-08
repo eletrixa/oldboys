@@ -7,7 +7,7 @@
  * Tested:  src/app/api/auth/__tests__/auth.test.ts
  *
  * Key responsibilities:
- * - Same-origin check, validation, per-IP rate limit, account creation, session cookie
+ * - Same-origin check, validation, per-IP rate limit (counts every validated attempt, 409 included), account creation, session cookie
  *
  * Design constraints:
  * - Never log credentials; existing email is 409
@@ -38,6 +38,8 @@ export async function handleRegister(request: Request, env: AuthEnv, now = new D
   if ((await countAttempts(env.DB, "register", ip, since(now, HOUR_MS))) >= REGISTER_PER_HOUR_PER_IP) {
     return Response.json({ error: "too many registrations" }, { status: 429 });
   }
+  // Every validated attempt counts, including 409s, so the duplicate check cannot enumerate emails unthrottled.
+  await recordAttempt(env.DB, "register", ip, now.toISOString());
   if ((await findAccountByEmail(env.DB, body.email)) !== null) {
     return Response.json({ error: "account exists" }, { status: 409 });
   }
@@ -59,7 +61,6 @@ export async function handleRegister(request: Request, env: AuthEnv, now = new D
     }
     throw e;
   }
-  await recordAttempt(env.DB, "register", ip, now.toISOString());
 
   const token = newSessionToken();
   await insertSession(env.DB, {

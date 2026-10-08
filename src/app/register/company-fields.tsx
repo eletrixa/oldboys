@@ -15,6 +15,7 @@
 "use client";
 
 import { useState } from "react";
+import { normalizeIco } from "@/domain/ico";
 import type { CompanyDraft, OrganizationInput } from "@/domain/organization";
 import { FIELD } from "../start-form";
 
@@ -39,13 +40,14 @@ type Props = { value: OrganizationInput; onChange: (next: OrganizationInput) => 
 export function CompanyFields({ value, onChange }: Props): React.JSX.Element {
   const [lookup, setLookup] = useState<Lookup>({ kind: "idle" });
   const [foreign, setForeign] = useState(false);
+  const [icoText, setIcoText] = useState(value.ico ?? "");
 
   function patch(next: Partial<OrganizationInput>): void {
     onChange({ ...value, ...next });
   }
 
   async function look(): Promise<void> {
-    const digits = (value.ico ?? "").replace(/\D/g, "");
+    const digits = icoText.replace(/\D/g, "");
     if (digits === "" || digits.length > 8) {
       setLookup({ kind: "invalid" });
       return;
@@ -64,6 +66,7 @@ export function CompanyFields({ value, onChange }: Props): React.JSX.Element {
           country: company.country,
           source: "ares",
         });
+        setIcoText(company.ico);
         setLookup({ kind: "found", legalFormLabel: company.legal_form_label });
         return;
       }
@@ -76,10 +79,17 @@ export function CompanyFields({ value, onChange }: Props): React.JSX.Element {
   function toggleForeign(on: boolean): void {
     setForeign(on);
     setLookup({ kind: "idle" });
+    setIcoText("");
     onChange({ ...value, ico: null, source: "manual", country: on ? "" : "CZ" });
   }
 
+  function typeIco(text: string): void {
+    setIcoText(text);
+    patch({ ico: normalizeIco(text), source: "manual" });
+  }
+
   const message = LOOKUP_MESSAGE[lookup.kind];
+  const icoInvalid = icoText.trim() !== "" && normalizeIco(icoText) === null;
 
   return (
     <div className="flex flex-col gap-4">
@@ -106,8 +116,8 @@ export function CompanyFields({ value, onChange }: Props): React.JSX.Element {
           <div className="flex gap-2">
             <input
               id="ico"
-              value={value.ico ?? ""}
-              onChange={(e) => { patch({ ico: e.target.value, source: "manual" }); }}
+              value={icoText}
+              onChange={(e) => { typeIco(e.target.value); }}
               inputMode="numeric"
               maxLength={8}
               placeholder="27074358"
@@ -130,6 +140,9 @@ export function CompanyFields({ value, onChange }: Props): React.JSX.Element {
           >
             Find your IČO
           </a>
+          {icoInvalid && lookup.kind === "idle" && (
+            <p className="text-sm text-amber-300">An IČO has 8 digits with a valid check digit; leave it empty if you do not know it.</p>
+          )}
           {message !== undefined && (
             <p role="alert" className="text-sm text-amber-300">{message}</p>
           )}

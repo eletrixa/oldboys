@@ -150,6 +150,7 @@ describe("register", () => {
     const res = await handleRegister(browserPost("/api/auth/register", registerBody), e.env, NOW);
     expect(res.status).toBe(409);
     expect(await res.json()).toEqual({ error: "account exists" });
+    expect(e.attempts.filter((a) => a.kind === "register")).toHaveLength(2);
   });
 
   it("answers 429 on the 11th registration from one IP", async () => {
@@ -178,7 +179,7 @@ describe("login", () => {
     const e = await registered();
     const res = await handleLogin(browserPost("/api/auth/login", { ...login, password: "nope" }), e.env, NOW);
     expect(res.status).toBe(401);
-    expect(e.attempts.some((a) => a.kind === "login_fail" && a.subject === "jane@example.com")).toBe(true);
+    expect(e.attempts.some((a) => a.kind === "login_fail" && a.subject === "jane@example.com|1.2.3.4")).toBe(true);
   });
 
   it("gives an identical 401 body for an unknown email", async () => {
@@ -191,10 +192,17 @@ describe("login", () => {
 
   it("answers 429 on the sixth failure without verifying", async () => {
     const e = await registered();
-    for (let i = 0; i < 5; i++) e.attempts.push({ kind: "login_fail", subject: "jane@example.com", at: NOW.toISOString() });
+    for (let i = 0; i < 5; i++) e.attempts.push({ kind: "login_fail", subject: "jane@example.com|1.2.3.4", at: NOW.toISOString() });
     const res = await handleLogin(browserPost("/api/auth/login", login), e.env, NOW);
     expect(res.status).toBe(429);
     expect(e.sessions.size).toBe(1);
+  });
+
+  it("does not lock the owner out after failures from a different IP", async () => {
+    const e = await registered();
+    for (let i = 0; i < 5; i++) e.attempts.push({ kind: "login_fail", subject: "jane@example.com|9.9.9.9", at: NOW.toISOString() });
+    const res = await handleLogin(browserPost("/api/auth/login", login), e.env, NOW);
+    expect(res.status).toBe(200);
   });
 });
 

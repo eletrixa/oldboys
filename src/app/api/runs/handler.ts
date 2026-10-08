@@ -9,8 +9,9 @@
  * Key responsibilities:
  * - Body validation (StartRunBody, plans/006): profileUrl or cvText or subject + anchor; 400 on bad input
  * - Profile-first runs insert subject "" / anchor ""; the Workflow's seed_profile step fills them
- * - Optional sourceUrl (browser extension): same page + goal within 24 h returns the earlier run (200)
- * - Shared cap: more than RUNS_PER_HOUR_CAP runs in the last hour → 429; START_PER_HOUR_CAP more for via = start
+ * - Optional sourceUrl (browser extension): same page + goal within 24 h returns the earlier run (200), scoped to the
+ *   caller's organization (start) or to organization-less runs (api); never another tenant's run id
+ * - Shared cap: more than RUNS_PER_HOUR_CAP runs in the last hour → 429; START_PER_HOUR_CAP per organization for via = start
  * - Session runs (via = start) store account_id and organization_id; bearer runs keep NULL
  * - runId == Workflow instance id == investigations.id
  *
@@ -41,11 +42,18 @@ export async function createRun(
   if (parsed.error) return parsed.error;
 
   if (parsed.data.sourceUrl !== undefined) {
+    // Reuse stays inside one tenant: a session sees only its organization's runs, bearer callers only bearer runs.
+    const scope = origin.via === "start" ? "organization_id = ?" : "organization_id IS NULL";
     const earlier = await env.DB.prepare(
-      `SELECT id FROM investigations WHERE source_url = ? AND goal = ? AND created_at > ?
+      `SELECT id FROM investigations WHERE source_url = ? AND goal = ? AND created_at > ? AND ${scope}
        ORDER BY created_at DESC LIMIT 1`,
     )
-      .bind(parsed.data.sourceUrl, parsed.data.goal, dedupeSince(now))
+      .bind(
+        parsed.data.sourceUrl,
+        parsed.data.goal,
+        dedupeSince(now),
+        ...(origin.via === "start" ? [origin.organizationId] : []),
+      )
       .first<{ id: string }>();
     if (earlier) return Response.json({ id: earlier.id, reused: true }, { status: 200 });
   }
@@ -57,11 +65,13 @@ export async function createRun(
   if ((recent?.n ?? 0) >= RUNS_PER_HOUR_CAP) {
     return Response.json({ error: "run cap reached, try again later" }, { status: 429 });
   }
-  // Session runs (the start form) get a tighter cap on top of the shared one: the brake on spend per hour.
+  // Session runs (the start form) get a tighter per-organization cap on top of the shared spend ceiling.
   const via = origin.via;
-  if (via === "start") {
-    const anon = await env.DB.prepare("SELECT COUNT(*) AS n FROM investigations WHERE via = 'start' AND created_at > ?")
-      .bind(hourAgo)
+  if (origin.via === "start") {
+    const anon = await env.DB.prepare(
+      "SELECT COUNT(*) AS n FROM investigations WHERE via = 'start' AND organization_id = ? AND created_at > ?",
+    )
+      .bind(origin.organizationId, hourAgo)
       .first<{ n: number }>();
     if ((anon?.n ?? 0) >= START_PER_HOUR_CAP) {
       return Response.json({ error: "run cap reached, try again later" }, { status: 429 });

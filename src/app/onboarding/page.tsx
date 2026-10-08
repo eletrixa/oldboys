@@ -22,7 +22,7 @@ export default async function OnboardingPage(): Promise<React.JSX.Element> {
   return (
     <main className="mx-auto flex max-w-2xl flex-col gap-8 px-4 py-10">
       <header className="flex flex-col gap-2">
-        <h1 className="text-3xl font-semibold tracking-tight">Your company is {user.organizationName}.</h1>
+        <h1 className="text-3xl font-semibold tracking-tight">Your company is {user.organizationName}</h1>
         <p className="text-zinc-400">What role are you hiring for first?</p>
       </header>
       <section aria-label="What a brief is" className="rounded-xl border border-zinc-800 bg-zinc-900 p-4 text-sm text-zinc-300">

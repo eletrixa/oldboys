@@ -25,12 +25,31 @@ type Step = "account" | "company" | "submitting";
 type Account = { name: string; email: string; password: string };
 type Failure = { message: string; login: boolean };
 
+const COMPANY_MESSAGE = "Please check the company details.";
+
+function messageForPath(path: unknown): { message: string; step: Step } {
+  const head = Array.isArray(path) ? (path as unknown[])[0] : undefined;
+  if (head === "email") return { message: "Please check your email address.", step: "account" };
+  if (head === "name") return { message: "Please enter your name.", step: "account" };
+  if (head === "password") return { message: "Password needs at least 8 characters.", step: "account" };
+  if (head === "organization") return { message: COMPANY_MESSAGE, step: "company" };
+  return { message: "Please check the form.", step: "account" };
+}
+
+async function badRequest(res: Response): Promise<{ message: string; step: Step }> {
+  try {
+    const body = await res.json<{ issues?: { path?: unknown }[] }>();
+    return messageForPath(body.issues?.[0]?.path);
+  } catch {
+    return messageForPath(undefined);
+  }
+}
+
 const EMPTY_COMPANY: OrganizationInput = { name: "", ico: null, dic: null, legal_form: null, address: null, country: "CZ", source: "manual" };
 
 function failureFor(status: number): Failure {
   if (status === 409) return { message: "This email already has an account. Log in instead.", login: true };
   if (status === 429) return { message: "Too many sign-ups from this network. Try again in an hour.", login: false };
-  if (status === 400) return { message: "Please check the company details.", login: false };
   return { message: "We could not create the account. Please try again.", login: false };
 }
 
@@ -53,6 +72,12 @@ export function RegisterForm(): React.JSX.Element {
       if (res.status === 201) {
         router.push("/onboarding");
         router.refresh();
+        return;
+      }
+      if (res.status === 400) {
+        const bad = await badRequest(res);
+        setFailure({ message: bad.message, login: false });
+        setStep(bad.step);
         return;
       }
       setFailure(failureFor(res.status));
