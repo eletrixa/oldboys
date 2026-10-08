@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/runs/[id]/call-setup.tsx
- * Deps:    react, src/domain/call (types), src/domain/call-brief (limit), ./call-panel
+ * Deps:    react, src/domain/call (types), src/domain/call-brief (limit), src/app/ui (Radar vocabulary), ./call-panel
  * Tested:  n/a (validation in __tests__/call-panel.test.ts)
  *
  * Key responsibilities:
@@ -20,6 +20,7 @@
 import { useRef, useState } from "react";
 import type { CallBrief } from "@/domain/call";
 import { MAX_CALL_QUESTIONS } from "@/domain/call-brief";
+import { BTN_PRIMARY } from "@/app/ui";
 import { type CallForm, type DraftQuestion, draftsFromProposal, formProblems, normalizeNumber } from "./call-panel";
 
 const OPERATOR_KEY = "oldboys.operator";
@@ -192,7 +193,7 @@ export function CallSetup({
       <button
         type="submit"
         disabled={problems.length > 0 || busy}
-        className="self-start rounded-xl bg-action px-4 py-2 font-medium text-white hover:bg-action-hover disabled:cursor-not-allowed disabled:opacity-50"
+        className={`${BTN_PRIMARY} self-start`}
       >
         {busy ? "Placing the call…" : "Call candidate now"}
       </button>

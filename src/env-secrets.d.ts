@@ -17,4 +17,7 @@
 interface CloudflareEnv {
   ELEVENLABS_API_KEY?: string;
   ELEVENLABS_WEBHOOK_SECRET?: string;
+  INTAKE_TOKEN?: string;
+  STARTUPJOBS_WEBHOOK_TOKEN?: string;
+  STARTUPJOBS_TOKEN?: string;
 }

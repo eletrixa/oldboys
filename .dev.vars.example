@@ -12,3 +12,9 @@ GITHUB_TOKEN=
 STACKEXCHANGE_KEY=
 # Optional: OpenAlex free API key (openalex.org/settings/api); anonymous budget is shared and answers 429 from the Worker IP
 OPENALEX_API_KEY=
+# Intake: bearer token the Google Forms Apps Script sends to POST /api/intake/form (openssl rand -hex 24)
+INTAKE_TOKEN=
+# Intake: secret path segment of the StartupJobs webhook URL /api/intake/startupjobs/<token> (openssl rand -hex 24)
+STARTUPJOBS_WEBHOOK_TOKEN=
+# Optional: StartupJobs company API bearer, used only to retry a CV download that answers 401/403
+STARTUPJOBS_TOKEN=

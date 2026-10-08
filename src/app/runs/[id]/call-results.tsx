@@ -40,7 +40,7 @@ function AnswerRow({ answer }: { answer: NonNullable<CallView["answers"]>[number
     <li className="flex flex-col gap-1 border-t border-divider pt-3 first:border-t-0 first:pt-0">
       <div className="flex flex-wrap items-center gap-2">
         <span className={`rounded-full px-3 py-0.5 text-xs ${badge.cls}`}>{badge.label}</span>
-        {answer.status === "answered" && <span className="text-xs font-semibold tracking-wide text-violet-300">STATEMENT</span>}
+        {answer.status === "answered" && <span className="text-xs font-semibold tracking-wide text-inference">STATEMENT</span>}
       </div>
       <p className="text-sm font-medium text-ink">{answer.question}</p>
       {answer.summary !== null && <p className="text-sm text-ink">{answer.summary}</p>}

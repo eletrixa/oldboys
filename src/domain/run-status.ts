@@ -10,6 +10,7 @@
  * - Define the wire schema shared by GET /api/runs/:id and the browser extension (plans/004)
  * - Build it from plain rows (no I/O) so the route stays one query per table
  * - Decide the dedupe window for a repeated mark of the same source URL and goal
+ * - Hourly run caps: shared token, public start form, intake funnel default
  *
  * Design constraints:
  * - Relative imports only: this file is also compiled inside extension/ where "@/" means something else
@@ -85,3 +86,5 @@ export function dedupeSince(now: Date): string {
 export const RUNS_PER_HOUR_CAP = 20;
 /** Runs started from the public start form (no bearer of its own) in any rolling hour. */
 export const START_PER_HOUR_CAP = 6;
+/** Runs started by the intake funnel in any rolling hour when var INTAKE_PER_HOUR_CAP is unset (specs/intake). */
+export const INTAKE_PER_HOUR_CAP_DEFAULT = 10;

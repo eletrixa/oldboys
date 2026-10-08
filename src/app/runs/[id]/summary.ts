@@ -68,7 +68,7 @@ function confirmedPhrase(state: RunState, brief: Brief): string | null {
 }
 
 /** No model ran: the brief is degraded, or every per-question summary is the "unavailable" placeholder. */
-function aiOff(brief: Brief): boolean {
+export function aiOff(brief: Brief): boolean {
   return brief.degraded !== null || (brief.per_question.length > 0 && brief.per_question.every((q) => q.summary.startsWith("AI summary unavailable")));
 }
 

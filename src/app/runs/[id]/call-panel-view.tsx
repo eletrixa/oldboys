@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/runs/[id]/call-panel-view.tsx
- * Deps:    react, src/app/run-token, ./call-panel, ./call-setup, ./call-results, ./state (types)
+ * Deps:    react, src/app/run-token, src/app/ui (Radar vocabulary), ./call-panel, ./call-setup, ./call-results, ./state (types)
  * Tested:  n/a (pure parts in __tests__/call-panel.test.ts)
  *
  * Key responsibilities:
@@ -20,6 +20,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { TokenForm, readToken, writeToken } from "@/app/run-token";
+import { CARD } from "@/app/ui";
 import { type CallForm, type CallView, type RunCalls, callPhase, isSettled, placedCalls, toHrQuestions, usageLine } from "./call-panel";
 import { CallResult, EarlierCalls } from "./call-results";
 import { CallSetup } from "./call-setup";
@@ -189,7 +190,7 @@ export function CallPanel({ state }: { state: RunState }): React.JSX.Element | n
   const earlier = action.kind === "tracking" ? placed : placed.slice(1);
 
   return (
-    <section className="flex flex-col gap-4 rounded-2xl border border-divider bg-surface p-5 text-ink" aria-labelledby="phone-verify">
+    <section className={`${CARD} flex flex-col gap-4 text-ink`} aria-labelledby="phone-verify">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 id="phone-verify" className="text-lg">Verify with the candidate by phone</h2>
         {data?.provider === "mock" && <span className="rounded bg-unsure-bg px-2 py-0.5 text-xs text-unsure">MOCK · No real call. Answers are simulated.</span>}
