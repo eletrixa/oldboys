@@ -79,6 +79,7 @@ Every change to `src/`, `migrations/`, `scripts/` or any root config must pass `
 - `pnpm exec wrangler deploy --dry-run --outdir <scratch>` is the allowed way to prove the Worker still bundles.
 
 ## Known gotchas
+- `extension/` is a second pnpm workspace package; after pulling, run `pnpm install --frozen-lockfile` once or `pnpm check` fails with `wxt: command not found`.
 - CI deploys on push to main but cannot migrate D1 (token has no D1 scope). A PR that adds a file under `migrations/` must say so; Robert runs `pnpm db:migrate:remote` before merging.
 - `next` 16.4 runs on Workers only with `patches/@opennextjs__cloudflare@1.20.9.patch` (adds `preview-props.json` to the manifest glob, upstream PR #1356). Drop the patch when an OpenNext release includes it; bump `@opennextjs/cloudflare` and re-check `pnpm exec opennextjs-cloudflare build`.
 - `typescript` stays on 6.x: typescript-eslint's peer range is `<6.1.0`, and `pnpm lint` (strictTypeChecked) is part of the gate.
