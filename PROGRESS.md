@@ -91,3 +91,24 @@ Each agent appends: what it starts, progress, what it finishes. Newest at the bo
 - Started: 23:32. Idea #9 "Identity map": SVG card above "Profiles we found" with the subject's first name in the center, profiles we link to them on a ring (solid teal = This is them, thicker when the user supplied the link; dashed amber = Not sure yet) and namesakes in a grey "Someone else" column with no line; ✓ ? × marks inside the nodes, platform + @handle labels, tooltip = snippet · first reason, links only for http(s), caps 10 / 6 with "+N more", ring grows and drops the @handle line above 6 nodes. Same `decisionOf` as the profile list, so lineup answers move nodes live; no score or rating; legend + "Lines show which profiles we link to {first}, not how good a candidate is."
 - Finished: 23:37. Pure `identityMapLayout` + `IdentityMapCard` above the profile list (shown from 2 candidates); run-view.tsx got one import + one JSX line. No schema change, no new endpoint; pnpm check green, wrangler dry-run bundles.
 - Files: src/app/runs/[id]/{identity-map.ts,identity-map-card.tsx,__tests__/identity-map.test.ts} (new), src/app/runs/[id]/run-view.tsx, PROGRESS.md.
+
+## 2026-10-08 · audit-privacy agent (Minas)
+- Started: 23:45. Follow-up to idea #17: honest legal basis (no "candidate informed" claim, new "Candidate notice: not recorded" line), free-text reasons scrubbed (URLs → host, e-mails, phone numbers), lineup titles kept only for confirmed profiles; same scrub for "not searched" reasons in the candidate notice.
+- Finished: 23:49. Pure `scrubReason` (src/domain/scrub.ts). No schema change, no new endpoint; pnpm check green.
+- Files: src/domain/{scrub.ts,__tests__/scrub.test.ts} (new), src/domain/audit.ts, src/domain/__tests__/audit.test.ts, src/app/runs/[id]/audit/page.tsx, src/app/runs/[id]/candidate-copy.ts, src/app/runs/[id]/__tests__/candidate-copy.test.ts, PROGRESS.md.
+
+## 2026-10-08 23:55 · Radar UI (Josef's Claude session)
+- Started/finished: Radar brand theme (design kit V2 + visual guideline) over the whole UI without rewriting components: `globals.css` defines semantic tokens (canvas, surface, ink, muted, action, sage, peach, divider, focus, ok/unsure/conflict) and remaps the zinc/teal/amber/red/emerald/violet scales the existing classes use, so the dark theme renders as Radar's warm light theme. New code should use the semantic names (bg-canvas, text-ink, bg-action, text-muted, border-divider, bg-ok-bg text-ok).
+- Shell and home: Echo r mark + "radar" wordmark, Roles / New brief, honesty footer (`layout.tsx`); editorial home with three steps and the start form in a card (`page.tsx`). Supported states (evidenced, This is them, strong, audit ok, identity-map merge) now use the green `ok` tokens instead of rust.
+- Fonts: Public Sans and Newsreader variable TTFs self-hosted in `public/fonts` with their OFL notices (no network fetch).
+- Not touched: start-form logic, run-view logic, API, extension UI. `pnpm check` and `pnpm build` green.
+
+## 2026-10-08 · ats-note agent (Minas)
+- Started: 23:59. Idea #20 (copy-paste door): "Copy for ATS" button next to the interview kit and candidate notice buttons; pure `atsNote` builds a short plain-text note for any ATS card (subject + role, the three 30-second summary lines, up to 5 confirmed profile links, link to the full brief, "rates the research, not the candidate" + deletion date).
+- Finished: 00:01. Merged candidates only, never also_found; no Markdown. No schema change, no new endpoint; pnpm check green, wrangler dry-run bundles.
+- Files: src/app/runs/[id]/{ats-note.ts,__tests__/ats-note.test.ts} (new), src/app/runs/[id]/kit-actions.tsx, PROGRESS.md.
+
+## 2026-10-09 · reference-check agent (Minas)
+- Started: 00:12. Idea #18 "Reference-check questions": "Copy reference questions" turns research gaps (role criteria with no or partial evidence, or unchecked criteria when AI was off, plus to-verify items) into at most 8 plain-text questions for a former manager or colleague, with a consent and private-topics reminder; export buttons grouped by audience (Interview, Candidate, ATS, References).
+- Finished: 00:13. Pure `referenceQuestions`, Art. 9 filter as defense in depth, never also_found or claims. No schema change, no new endpoint; pnpm check green, wrangler dry-run bundles.
+- Files: src/app/runs/[id]/{reference-check.ts,__tests__/reference-check.test.ts} (new), src/app/runs/[id]/kit-actions.tsx, src/app/runs/[id]/summary.ts (export aiOff), PROGRESS.md.

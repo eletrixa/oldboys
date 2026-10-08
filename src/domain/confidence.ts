@@ -8,7 +8,8 @@
  *
  * Key responsibilities:
  * - sourceOrigin: classify a URL as "self" (the subject's own profile or site), "mirror" (aggregator repeating a profile)
- *   or "independent" (press, podcast, employer page, registry)
+ *   or "independent" (press, podcast, employer page, registry); a non-http(s) URL ("cv:<runId>") or actor "cv" is the
+ *   subject's own pasted material, so "self"
  * - sectionConfidence: score 0..1 plus a one-sentence plain-words reason
  * - Effective sources = independent + (self if any, else one if only mirrors): mirrors never add to what self gives
  * - Score = 0.3 + 0.5 × fact share + 0.1 per extra effective source (max +0.2), then caps:
@@ -27,10 +28,10 @@ const SELF_HOSTS = ["instagram.com", "facebook.com", "x.com", "twitter.com"];
 /** Hosts shared by many people: a profile URL there makes only its own first path segment "self". */
 const SHARED_HOSTS = new Set(["linkedin.com", "github.com", "gitlab.com", "medium.com", "youtube.com", "tiktok.com", "bsky.app", "substack.com", ...SELF_HOSTS]);
 
-function parts(url: string): { host: string; path: string } | null {
+function parts(url: string): { protocol: string; host: string; path: string } | null {
   try {
     const u = new URL(url);
-    return { host: u.hostname.toLowerCase().replace(/^www\./, ""), path: u.pathname.toLowerCase() };
+    return { protocol: u.protocol, host: u.hostname.toLowerCase().replace(/^www\./, ""), path: u.pathname.toLowerCase() };
   } catch {
     return null;
   }
@@ -38,10 +39,15 @@ function parts(url: string): { host: string; path: string } | null {
 const onHost = (host: string, base: string): boolean => host === base || host.endsWith(`.${base}`);
 const firstSegment = (path: string): string => path.split("/")[1] ?? "";
 
-/** Where a source comes from relative to the subject; `profileUrls` are the merged candidates' profile URLs. */
-export function sourceOrigin(url: string, profileUrls: readonly string[] = []): SourceOrigin {
+/**
+ * Where a source comes from relative to the subject; `profileUrls` are the merged candidates' profile URLs, `actor`
+ * the source's actor ("cv" = pasted CV).
+ */
+export function sourceOrigin(url: string, profileUrls: readonly string[] = [], actor?: string): SourceOrigin {
+  if (actor === "cv") return "self";
   const u = parts(url);
   if (u === null) return "independent";
+  if (u.protocol !== "http:" && u.protocol !== "https:") return "self";
   const { host, path } = u;
   if (MIRROR_HOSTS.some((m) => onHost(host, m))) return "mirror";
   if ((onHost(host, "bloomberg.com") && path.startsWith("/profile")) || (onHost(host, "crunchbase.com") && path.startsWith("/person"))) return "mirror";

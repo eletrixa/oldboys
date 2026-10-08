@@ -1,0 +1,59 @@
+# Unit: funnel (`startRun` extraction + `ingestApplication`)
+
+## Files
+- `src/workflow/start-run.ts` (new) + `src/workflow/__tests__/start-run.test.ts`
+- `src/workflow/intake.ts` (new) + `src/workflow/__tests__/intake.test.ts`
+- `src/domain/cv-text.ts` (new) + `src/domain/__tests__/cv-text.test.ts` (the 1-page PDF is built at test time by `src/domain/__tests__/fixtures/tiny-pdf.ts`; no binary fixture in git)
+- `src/app/api/runs/route.ts` (modified: calls `startRun`; auth, dedup and caps unchanged)
+- `src/domain/run-status.ts` (modified: add `INTAKE_PER_HOUR_CAP_DEFAULT = 10`)
+- `package.json`: add `unpdf` (dependency)
+
+## `start-run.ts`
+
+```ts
+export type StartRunEnv = { DB: D1Database; RESEARCH_RUN: Workflow<{ runId: string }>; RUN_BUDGET_USD: string; RUN_BUDGET_CALLS: string };
+export type StartRunInput = { goal: GoalId; role?: string; profileUrl?: string; cvText?: string; subject?: string; anchor?: string; sourceUrl?: string; via: "api" | "start" | "intake"; applicationId?: string };
+export async function startRun(env: StartRunEnv, input: StartRunInput, now: Date): Promise<{ id: string }>
+  // exactly the INSERT + RESEARCH_RUN.create from the current route (columns + application_id); id = crypto.randomUUID()
+export async function runsStartedSince(db: D1Database, since: Date, via?: string): Promise<number>
+  // COUNT(*) FROM investigations WHERE created_at > ? [AND via = ?]
+```
+`POST /api/runs` keeps: bearer, body parse, sourceUrl dedup, `RUNS_PER_HOUR_CAP` and `START_PER_HOUR_CAP` (now through `runsStartedSince`), then `startRun(env, {...parsed.data, via}, now)` → 201 `{id}`. Behaviour and responses are byte-identical to today.
+
+## `cv-text.ts`
+
+```ts
+export async function extractCvText(file: { bytes: ArrayBuffer; contentType: string; filename: string }): Promise<{ text: string | null; note: string | null }>
+```
+- PDF (contentType `application/pdf` or filename `.pdf`, and bytes start with `%PDF`): `unpdf` `extractText(..., { mergePages: true })`, whitespace-collapsed, trimmed, cut to `CV_MAX`; empty text → `{ text: null, note: "PDF has no extractable text (scanned?)" }`.
+- `text/plain` or `.txt`: UTF-8 decode, same cap.
+- PDF by type or name but without the `%PDF` header → `{ text: null, note: "not a PDF (no %PDF header)" }`.
+- Empty text file → `{ text: null, note: "CV text file is empty" }`.
+- Anything else → `{ text: null, note: "unsupported CV format <contentType>" }`. Never throws; a library error becomes the note `"PDF could not be read: <message>"`.
+- unpdf gets a copy of the bytes, so the caller's `ArrayBuffer` is still intact for the R2 put.
+
+## `intake.ts`
+
+```ts
+export type IntakeEnv = StartRunEnv & { SOURCES: R2Bucket; INTAKE_PER_HOUR_CAP?: string };
+export type IntakeResult = { applicationId: string; status: ApplicationStatus; runId: string | null; duplicate: boolean; note: string | null };
+export async function ingestApplication(raw: IntakeInput, env: IntakeEnv, now: Date, opts?: { senderAllowed?: boolean }): Promise<IntakeResult>
+```
+Sequence (each step one D1/R2 call, no transaction):
+1. `IntakeInput.parse(raw)` (throws ZodError to the caller; routes turn it into 400).
+2. `SELECT id, status, run_id, note FROM applications WHERE source = ? AND external_id = ?` → hit: return `{duplicate: true, ...}` with the stored status, run id and note; no second run, nothing written. A row stuck at `received` after an error stays that way on redelivery.
+3. `id = crypto.randomUUID()`; `INSERT INTO applications (id, source, external_id, tag, name, email, phone, cover_letter, received_at, status 'received')`. A UNIQUE failure here (race) re-runs step 2 and returns the duplicate; any other error propagates.
+4. If `cv` present: `extractCvText` only when no `cvText` was sent (its note joins the parser notes); then `SOURCES.put(cvR2Key(id, filename), bytes, { httpMetadata: { contentType } })`; `cvText = input.cvText ?? extracted`.
+5. Tag: `IntakeTag.safeParse(input.tag)` ok and `SELECT role, goal FROM intake_tags WHERE tag = ?` hit → known.
+6. `candidateInput({linkedinUrl, cvText})`.
+7. `capped = runsStartedSince(DB, now-1h, "intake") >= cap` (evaluated only when the earlier checks pass); `cap` is `INTAKE_PER_HOUR_CAP` as a number, and unset, blank, negative or non-numeric means `INTAKE_PER_HOUR_CAP_DEFAULT` (10), never "no cap". `"0"` pauses intake runs.
+8. `decideStatus({...})`. If `run-started`: `startRun(env, { goal, role, profileUrl, cvText, via: "intake", applicationId: id }, now)`.
+9. `UPDATE applications SET status, run_id, note, linkedin_url, cv_key, cv_text WHERE id = ?` (note = decideStatus note + joined parser notes + `input.note`, "; "-separated, ≤ 1000 chars).
+10. Return.
+Errors in steps 4–8 (R2, D1, Workflow create) propagate after the row exists with status `received`; the `/intake` page shows such rows and the note stays null. Never swallow.
+
+## Tests
+- `start-run.test.ts`: inserts the expected columns and binds in order (fake D1 records SQL + args); `RESEARCH_RUN.create` called with `{id, params:{runId:id}}`; `applicationId` lands in `application_id`; `runsStartedSince` with and without `via`.
+- `cv-text.test.ts`: real small PDF → text contains a known word; `%PDF`-less bytes with pdf contentType → note; txt passthrough; cap at CV_MAX.
+- `intake.test.ts` (fakes like `elevenlabs.test.ts`, no module mocks): happy path LinkedIn-only → `run-started`, run inserted with via `intake`, role from the tag; CV-only PDF → cv_key written to the R2 fake and cv_text extracted; duplicate returns the first id and never calls create; unknown tag → `unmatched` + no run; sender not allowed → `unmatched`; no candidate → `incomplete`; cap reached → `capped`; R2 failure propagates and leaves the row at `received`.
+- Existing `run-body.test.ts` and any route test unchanged and green.

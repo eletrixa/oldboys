@@ -7,8 +7,8 @@
  * Tested:  n/a (the layout is tested in __tests__/identity-map.test.ts)
  *
  * Key responsibilities:
- * - IdentityMapCard: SVG with the subject in the center, linked profiles on a ring (solid teal = this is them,
- *   dashed amber = not sure yet), namesakes in a grey "Someone else" column without a line; each node links out
+ * - IdentityMapCard: SVG with the subject in the center, linked profiles on a ring (solid green = this is them,
+ *   dashed = not sure yet), namesakes in a grey "Someone else" column without a line; each node links out
  * - Decision mark inside every node (✓ ? ×) so colour is not the only carrier of meaning; HTML legend below
  *
  * Design constraints:
@@ -24,9 +24,9 @@ const DESC_ID = "identity-map-desc";
 const MARK: Record<CandidateDecision, string> = { merge: "✓", "possibly-same-as": "?", rejected: "×" };
 
 const NODE_CLS: Record<CandidateDecision, { circle: string; mark: string }> = {
-  merge: { circle: "fill-teal-500/20 stroke-teal-400", mark: "fill-teal-300" },
-  "possibly-same-as": { circle: "fill-amber-500/15 stroke-amber-400", mark: "fill-amber-300" },
-  rejected: { circle: "fill-zinc-800 stroke-zinc-600", mark: "fill-zinc-400" },
+  merge: { circle: "fill-ok-bg stroke-ok", mark: "fill-ok" },
+  "possibly-same-as": { circle: "fill-unsure-bg stroke-unsure", mark: "fill-unsure" },
+  rejected: { circle: "fill-sage stroke-line", mark: "fill-muted" },
 };
 
 function Node({ node, center }: { node: MapNode; center: { x: number; y: number } }): React.JSX.Element {
@@ -39,7 +39,7 @@ function Node({ node, center }: { node: MapNode; center: { x: number; y: number 
         {MARK[node.decision]}
       </text>
       {labelLines(node, center).map((l) => (
-        <text key={`${l.text}-${String(l.y)}`} x={l.x} y={l.y} textAnchor={l.anchor} fontSize={11} className={l.muted ? "fill-zinc-500" : "fill-zinc-300"}>
+        <text key={`${l.text}-${String(l.y)}`} x={l.x} y={l.y} textAnchor={l.anchor} fontSize={11} className={l.muted ? "fill-muted" : "fill-ink"}>
           {l.text}
         </text>
       ))}
@@ -61,34 +61,34 @@ export function IdentityMapCard({
   const more = moreOf(layout);
   const { center } = layout;
   return (
-    <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-5">
-      <h2 className="font-semibold">Identity map</h2>
-      <p className="mb-3 text-sm text-zinc-400">{layout.summary}</p>
+    <section>
+      <h3 className="text-base font-semibold">Identity map</h3>
+      <p className="mb-3 text-sm text-muted">{layout.summary}</p>
       <svg viewBox={`0 0 ${String(layout.width)} ${String(layout.height)}`} className="h-auto w-full" role="img" aria-labelledby={`${TITLE_ID} ${DESC_ID}`}>
         <title id={TITLE_ID}>Identity map</title>
         <desc id={DESC_ID}>{layout.summary}</desc>
         {layout.linked.map((n) => {
           const e = edgeOf(center, n);
           return n.decision === "merge" ? (
-            <line key={`edge-${n.id}`} {...e} strokeWidth={n.supplied ? 4 : 3} strokeLinecap="round" className="stroke-teal-400" />
+            <line key={`edge-${n.id}`} {...e} strokeWidth={n.supplied ? 4 : 3} strokeLinecap="round" className="stroke-ok" />
           ) : (
-            <line key={`edge-${n.id}`} {...e} strokeWidth={2} strokeDasharray="6 5" className="stroke-amber-400" />
+            <line key={`edge-${n.id}`} {...e} strokeWidth={2} strokeDasharray="6 5" className="stroke-unsure" />
           );
         })}
-        <circle cx={center.x} cy={center.y} r={CENTER_R} strokeWidth={2} className="fill-teal-500/15 stroke-teal-400" />
-        <text x={center.x} y={center.y} textAnchor="middle" dominantBaseline="central" fontSize={11} fontWeight={600} className="fill-zinc-100">
+        <circle cx={center.x} cy={center.y} r={CENTER_R} strokeWidth={2} className="fill-peach stroke-action" />
+        <text x={center.x} y={center.y} textAnchor="middle" dominantBaseline="central" fontSize={11} fontWeight={600} className="fill-ink">
           {clip(first, 10)}
         </text>
         {layout.linked.map((n) => (
           <Node key={n.id} node={n} center={center} />
         ))}
         {layout.hiddenLinked > 0 && (
-          <text x={more.linked.x} y={more.linked.y} fontSize={11} className="fill-zinc-500">
+          <text x={more.linked.x} y={more.linked.y} fontSize={11} className="fill-muted">
             +{String(layout.hiddenLinked)} more
           </text>
         )}
         {layout.others.length > 0 && (
-          <text x={more.others.x} y={COLUMN_HEADING_Y} fontSize={11} fontWeight={600} className="fill-zinc-400">
+          <text x={more.others.x} y={COLUMN_HEADING_Y} fontSize={11} fontWeight={600} className="fill-muted">
             Someone else
           </text>
         )}
@@ -96,26 +96,26 @@ export function IdentityMapCard({
           <Node key={n.id} node={n} center={center} />
         ))}
         {layout.hiddenOthers > 0 && (
-          <text x={more.others.x} y={more.others.y} fontSize={11} className="fill-zinc-500">
+          <text x={more.others.x} y={more.others.y} fontSize={11} className="fill-muted">
             +{String(layout.hiddenOthers)} more
           </text>
         )}
       </svg>
-      <ul className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-zinc-500">
+      <ul className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted">
         <li className="flex items-center gap-2">
-          <span aria-hidden="true" className="inline-block w-5 border-t-[3px] border-teal-400" />
+          <span aria-hidden="true" className="inline-block w-5 border-t-[3px] border-ok" />
           This is them
         </li>
         <li className="flex items-center gap-2">
-          <span aria-hidden="true" className="inline-block w-5 border-t-2 border-dashed border-amber-400" />
+          <span aria-hidden="true" className="inline-block w-5 border-t-2 border-dashed border-unsure" />
           Not sure yet
         </li>
         <li className="flex items-center gap-2">
-          <span aria-hidden="true" className="inline-block size-3 rounded-full border border-zinc-600 bg-zinc-800" />
+          <span aria-hidden="true" className="inline-block size-3 rounded-full border border-line bg-sage" />
           Someone else, not linked
         </li>
       </ul>
-      <p className="mt-2 text-xs text-zinc-500">Lines show which profiles we link to {first}, not how good a candidate is.</p>
+      <p className="mt-2 text-xs text-muted">Lines show which profiles we link to {first}, not how good a candidate is.</p>
     </section>
   );
 }

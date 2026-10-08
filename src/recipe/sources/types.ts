@@ -120,7 +120,9 @@ export function fillQuery(template: string, ctx: StepContext): string {
   return template.replaceAll("{subject}", ctx.subject).replaceAll("{anchor}", ctx.anchor);
 }
 
+/** Platform key of a URL; the pasted CV's pseudo-URL "cv:<runId>" is "cv", anything unparsable "web". */
 export function platformOf(url: string): string {
+  if (url.startsWith("cv:")) return "cv";
   let host = "";
   try {
     host = new URL(url).hostname.replace(/^www\./, "");

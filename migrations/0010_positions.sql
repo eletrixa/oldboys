@@ -1,7 +1,7 @@
--- 0009_positions: a stored job position (pasted or fetched posting) with editable must-haves that runs start from (plans/007).
+-- 0010_positions: a stored job position (pasted or fetched posting) with editable must-haves that runs start from (plans/007).
 --
 -- Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
--- Module:  migrations/0009_positions.sql
+-- Module:  migrations/0010_positions.sql
 -- Deps:    D1 (SQLite)
 -- Tested:  n/a (applied by pnpm db:migrate:local in dev; ingest and purge tests use fakes)
 --

@@ -14,3 +14,9 @@ STACKEXCHANGE_KEY=
 OPENALEX_API_KEY=
 # Budget cap (USD) for the LLM call that extracts a position's must-haves
 POSITION_INGEST_USD=0.05
+# Intake: bearer token the Google Forms Apps Script sends to POST /api/intake/form (openssl rand -hex 24)
+INTAKE_TOKEN=
+# Intake: secret path segment of the StartupJobs webhook URL /api/intake/startupjobs/<token> (openssl rand -hex 24)
+STARTUPJOBS_WEBHOOK_TOKEN=
+# Optional: StartupJobs company API bearer, used only to retry a CV download that answers 401/403
+STARTUPJOBS_TOKEN=

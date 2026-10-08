@@ -3,11 +3,11 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/runs/[id]/candidate-copy.ts
- * Deps:    ./interview-kit (escapeMd, mdLink), ./state (RunState, gap helpers, labels)
+ * Deps:    src/domain/scrub, ./interview-kit (escapeMd, mdLink), ./state (RunState, gap helpers, labels)
  * Tested:  src/app/runs/[id]/__tests__/candidate-copy.test.ts
  *
  * Key responsibilities:
- * - candidateCopy: who researches and why (role), sources searched and not searched (with reasons), links confirmed
+ * - candidateCopy: who researches and why (role), sources searched and not searched (with scrubbed reasons), links confirmed
  *   as the person's, what the research is used for, "rates the evidence, never you", deletion date, how to object
  * - noticeFileName: candidate-notice-<run id prefix>.md, never the candidate's name
  *
@@ -15,8 +15,10 @@
  * - Pure; built from RunState only. Never claims, summaries, interview questions, to-verify items, cost,
  *   brief.also_found (unconfirmed namesake hits) or excerpts: links and source names only
  * - Every model or source text is Markdown-escaped; links only for http(s) URLs that parse
+ * - "Not searched" reasons pass scrubReason first: no request URLs, e-mails or phone numbers reach the candidate
  */
 import type { Brief } from "@/domain/claim";
+import { scrubReason } from "@/domain/scrub";
 import { escapeMd, mdLink } from "./interview-kit";
 import { GAP_LABEL, PLATFORM_LABEL, type RunState, evidenceGroup, gapLine, searchedEmpty } from "./state";
 
@@ -89,7 +91,7 @@ export function candidateCopy(state: RunState): string | null {
     "- No decision is made by the research alone; people in our hiring team make every decision.",
     "",
     ...section("Public sources we searched", searchedLines(state, brief)),
-    ...section("Sources we did not search, and why", brief.not_searched.map((g) => `- ${escapeMd(gapLine(g))}`)),
+    ...section("Sources we did not search, and why", brief.not_searched.map((g) => `- ${escapeMd(gapLine({ ...g, reason: scrubReason(g.reason) }))}`)),
     "## Public profiles and pages we confirmed as yours",
     "",
     ...(links.length > 0 ? links.map((l) => `- ${l}`) : ["We did not confirm any public profile as yours."]),

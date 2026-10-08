@@ -15,6 +15,9 @@ interface __BaseEnv_CloudflareEnv {
 	ELEVENLABS_AGENT_ID: "";
 	ELEVENLABS_PHONE_NUMBER_ID: "";
 	POSITION_INGEST_USD: "0.05";
+	INTAKE_PER_HOUR_CAP: "10";
+	INTAKE_FORWARD_TO: "robert@soulfire.cz";
+	INTAKE_FROM_ALLOW: "";
 	ANTHROPIC_API_KEY: string;
 	APIFY_TOKEN: string;
 	ELEVENLABS_API_KEY: string;
@@ -36,7 +39,7 @@ type StringifyValues<EnvType extends Record<string, unknown>> = {
 	[Binding in keyof EnvType]: EnvType[Binding] extends string ? EnvType[Binding] : string;
 };
 declare namespace NodeJS {
-	interface ProcessEnv extends StringifyValues<Pick<Cloudflare.Env, "LLM_MODEL_PRIMARY" | "LLM_MODEL_VERIFY" | "RUN_BUDGET_USD" | "RUN_BUDGET_CALLS" | "CALL_PROVIDER" | "CALL_BUDGET_USD" | "RUN_CALL_MAX" | "ELEVENLABS_AGENT_ID" | "ELEVENLABS_PHONE_NUMBER_ID" | "POSITION_INGEST_USD" | "ANTHROPIC_API_KEY" | "APIFY_TOKEN" | "ELEVENLABS_API_KEY" | "RUN_TOKEN">> {}
+	interface ProcessEnv extends StringifyValues<Pick<Cloudflare.Env, "LLM_MODEL_PRIMARY" | "LLM_MODEL_VERIFY" | "RUN_BUDGET_USD" | "RUN_BUDGET_CALLS" | "CALL_PROVIDER" | "CALL_BUDGET_USD" | "RUN_CALL_MAX" | "ELEVENLABS_AGENT_ID" | "ELEVENLABS_PHONE_NUMBER_ID" | "POSITION_INGEST_USD" | "INTAKE_PER_HOUR_CAP" | "INTAKE_FORWARD_TO" | "INTAKE_FROM_ALLOW" | "ANTHROPIC_API_KEY" | "APIFY_TOKEN" | "ELEVENLABS_API_KEY" | "RUN_TOKEN">> {}
 }
 declare module "*.txt" {
 	const value: string;

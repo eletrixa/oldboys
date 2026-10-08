@@ -9,7 +9,7 @@
  * Key responsibilities:
  * - questionsToAsk: one question per platform, web hits only as filler
  * - roleCriteria: mh- questions only
- * - evidenceGroup: platform label from the URL, step label or "Web search" for plain pages
+ * - evidenceGroup: platform label from the URL, step label or "Web search" for plain pages, "CV" for the pasted CV
  * - searchedTitle: "nothing confirmed" once a namesake-only gap is present
  * - briefSections: confidence descending, null for briefs stored without sections; confidenceBand thresholds
  * - headerText / firstName / seedHeadline: "the candidate" until the seed derived a name; seed counts as the first row
@@ -19,7 +19,7 @@
  */
 import { describe, expect, it } from "vitest";
 import type { Brief, Candidate } from "@/domain/claim";
-import { briefSections, confidenceBand, evidenceGroup, firstName, gapLine, gapText, headerText, questionsToAsk, roleCriteria, searchedTitle, seedHeadline, stepRows } from "../state";
+import { briefSections, confidenceBand, CV_SOURCE_TEXT, evidenceGroup, isCvSource, firstName, gapLine, gapText, headerText, questionsToAsk, roleCriteria, searchedTitle, seedHeadline, stepRows } from "../state";
 
 const cand = (id: string, platform: string, score: number, decision: Candidate["decision"] = "possibly-same-as"): Candidate => ({
   id, run_id: "r", name: "x", profile_urls: [`https://${id}`], anchor_match: null, score, decision, platform, handle: id, snippet: "", reasons: [],
@@ -58,6 +58,13 @@ describe("evidenceGroup", () => {
     expect(evidenceGroup({ step: serp, url: "https://x.com/jb" }, labels)).toBe("X");
     expect(evidenceGroup({ step: serp, url: "https://www.fiba.basketball/player/1" }, labels)).toBe("Web search");
     expect(evidenceGroup({ step: "ares/ekonomicke-subjekty/vyhledat", url: "https://example.cz/firma" }, labels)).toBe("ARES registry");
+  });
+
+  it("labels the pasted CV 'CV', never a web page, and marks it as text-only", () => {
+    expect(evidenceGroup({ step: "cv", url: "cv:run-1" }, { cv: "Web search" })).toBe("CV");
+    expect(isCvSource("cv:run-1")).toBe(true);
+    expect(isCvSource("https://example.com/cv")).toBe(false);
+    expect(CV_SOURCE_TEXT).toBe("Candidate's CV (pasted)");
   });
 });
 

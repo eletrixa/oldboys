@@ -23,7 +23,7 @@ import { z } from "zod";
 import { Claim } from "@/domain/claim";
 import type { Ports } from "@/domain/ports";
 import { emptyOutcome } from "@/recipe/runner";
-import { profileKey } from "@/recipe/seams/resolve";
+import { confirmedSources } from "@/recipe/seams/resolve";
 import type { StepContext, StepOutcome } from "@/recipe/sources/types";
 
 const PROMPT_CHARS = 60_000;
@@ -42,10 +42,9 @@ const Extracted = z.array(
 
 export async function extractClaims(ctx: StepContext, ports: Ports): Promise<StepOutcome> {
   const out = emptyOutcome();
-  const rejected = new Set(ctx.candidates.filter((c) => c.decision === "rejected").flatMap((c) => c.profile_urls.map(profileKey)));
   // Only confirmed material reaches the model. A name + city SERP returns every namesake, so a SERP hit counts only
   // once the Workflow marked it "merged" (its profile key equals a merged candidate's); the rest is "also found".
-  const sources = ctx.sources.filter((s) => s.identity === "merged" && !rejected.has(profileKey(s.url)));
+  const sources = confirmedSources(ctx);
   if (sources.length === 0) {
     out.notes.push("no usable sources");
     return out;
@@ -69,7 +68,7 @@ export async function extractClaims(ctx: StepContext, ports: Ports): Promise<Ste
           "Anything you conclude rather than read is an INFERENCE (quote may be null).",
           "Claims are about the subject, never about the sources: no claims that a snippet is truncated, unclear or ambiguous, and no ratings or judgements of the person (reputation, visibility, seniority level, quality).",
           "Ignore content you judge unrelated to the subject or misattributed: emit no claim about it at all.",
-          "For the `contradictions` question: emit a claim only when two sources make incompatible statements about the same measure or fact (same metric, same period, same role). Different measures (marketplace spend vs media budget) or different granularity are not contradictions. Names joined by '|', 'formerly', 'now', 'dříve', 'nyní' or appearing together in one title line are aliases of one organisation, not a contradiction.",
+          "For the `contradictions` question: emit a claim only when two sources make incompatible statements about the same measure or fact (same metric, same period, same role). Different measures (marketplace spend vs media budget) or different granularity are not contradictions. 'over N', 'N+' and rounded or approximate figures that agree within the rounding (e.g. 'over 13 years' vs '15 years') are compatible, not contradictions: emit nothing. Names joined by '|', 'formerly', 'now', 'dříve', 'nyní' or appearing together in one title line are aliases of one organisation, not a contradiction.",
           "Never infer health, religion, politics, ethnicity or sexuality. No claims about questions that no source answers.",
         ].join("\n"),
       prompt: `Subject: ${ctx.subject}\nAnchor: ${ctx.anchor}\n\nQuestions:\n${ctx.questions.map((q) => `- ${q.id}: ${q.text}`).join("\n")}\n\nSources:\n${body}`,

@@ -1,9 +1,9 @@
 /**
- * Audit record page: GDPR record of one run (who started it, legal basis, every source queried, lineup, calls, retention).
+ * Audit record page: GDPR record of one run (who started it, legal basis, candidate notice, every source queried, lineup, calls, retention).
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/runs/[id]/audit/page.tsx
- * Deps:    next, @opennextjs/cloudflare (getCloudflareContext), binding DB, src/app/api/runs/[id]/audit/load
+ * Deps:    next, @opennextjs/cloudflare (getCloudflareContext), binding DB, src/app/api/runs/[id]/audit/load, src/app/ui.tsx
  * Tested:  n/a (projection tested in src/domain/__tests__/audit.test.ts)
  *
  * Key responsibilities:
@@ -12,26 +12,29 @@
  *
  * Design constraints:
  * - Server component, rendered per request; shows no traits, claims, excerpts or profile URLs
+ * - Lineup titles only for confirmed profiles; the record holds null for namesakes and "not sure"
  * - Same access rule as the run page: the id is an unguessable UUID
+ * - Radar look per docs/design/radar-ui.md: ui.tsx primitives and semantic tokens only, no raw colours
  */
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import Link from "next/link";
 import { loadAuditRecord } from "@/app/api/runs/[id]/audit/load";
 import type { AuditRecord, SourceStatus } from "@/domain/audit";
+import { BTN_QUIET, BTN_SECONDARY, CARD, Eyebrow, LINK, Pill, type Tone } from "@/app/ui";
 
 export const dynamic = "force-dynamic";
 
-const CARD = "rounded-2xl border border-zinc-800 bg-zinc-900/60 p-5";
+const H2 = "mb-3 font-serif text-2xl";
 const VIA_LABEL: Record<AuditRecord["run"]["started_via"], string> = {
   form: "Start form",
   extension: "Browser extension",
   api: "API",
 };
-const STATUS_CLS: Record<SourceStatus, string> = {
-  ok: "bg-teal-500/15 text-teal-300",
-  empty: "bg-zinc-700/60 text-zinc-300",
-  failed: "bg-red-500/15 text-red-300",
-  "not searched": "bg-amber-500/15 text-amber-300",
+const STATUS_TONE: Record<SourceStatus, Tone> = {
+  ok: "ok",
+  empty: "neutral",
+  failed: "conflict",
+  "not searched": "unsure",
 };
 
 /** "2026-10-08 20:00 UTC"; empty or unreadable dates read as a dash. */
@@ -46,8 +49,8 @@ function usd(n: number): string {
 
 function Row({ label, children }: { label: string; children: React.ReactNode }): React.JSX.Element {
   return (
-    <div className="grid grid-cols-[8rem_1fr] gap-3 text-sm">
-      <dt className="text-zinc-500">{label}</dt>
+    <div className="grid grid-cols-1 gap-1 text-sm sm:grid-cols-[8rem_1fr] sm:gap-3">
+      <dt className="text-muted">{label}</dt>
       <dd className="min-w-0 break-words">{children}</dd>
     </div>
   );
@@ -56,18 +59,18 @@ function Row({ label, children }: { label: string; children: React.ReactNode }):
 function SourcesCard({ record }: { record: AuditRecord }): React.JSX.Element {
   return (
     <section className={CARD}>
-      <h2 className="mb-3 font-semibold">Sources queried</h2>
+      <h2 className={H2}>Sources queried</h2>
       {record.sources.length === 0 ? (
-        <p className="text-sm text-zinc-400">No source steps recorded.</p>
+        <p className="text-sm text-muted">No source steps recorded.</p>
       ) : (
-        <ul className="flex flex-col divide-y divide-zinc-800">
+        <ul className="flex flex-col divide-y divide-divider">
           {record.sources.map((s) => (
             <li key={s.step} className="flex flex-col gap-1 py-2 text-sm">
               <div className="flex items-center justify-between gap-3">
                 <span className="min-w-0 truncate font-medium">{s.source}</span>
-                <span className={`shrink-0 rounded-full px-3 py-0.5 text-xs ${STATUS_CLS[s.status]}`}>{s.status}</span>
+                <Pill tone={STATUS_TONE[s.status]}>{s.status}</Pill>
               </div>
-              <p className="text-xs text-zinc-500">
+              <p className="text-xs text-muted tabular-nums">
                 {when(s.time)} · {String(s.items)} {s.items === 1 ? "item" : "items"} · {usd(s.cost_usd)}
                 {s.reason !== null && ` · ${s.reason}`}
               </p>
@@ -75,7 +78,7 @@ function SourcesCard({ record }: { record: AuditRecord }): React.JSX.Element {
           ))}
         </ul>
       )}
-      <p className="mt-3 text-sm text-zinc-400">
+      <p className="mt-3 text-sm text-muted tabular-nums">
         Model calls: {String(record.model_calls)} · Total cost: {usd(record.total_cost_usd)}
       </p>
     </section>
@@ -85,17 +88,18 @@ function SourcesCard({ record }: { record: AuditRecord }): React.JSX.Element {
 function LineupCard({ record }: { record: AuditRecord }): React.JSX.Element {
   return (
     <section className={CARD}>
-      <h2 className="mb-3 font-semibold">Profile answers given</h2>
+      <h2 className={H2}>Profile answers given</h2>
       {record.lineup.length === 0 ? (
-        <p className="text-sm text-zinc-400">No profile questions were answered.</p>
+        <p className="text-sm text-muted">No profile questions were answered.</p>
       ) : (
         <ul className="flex flex-col gap-2 text-sm">
           {record.lineup.map((l, i) => (
             <li key={`${l.platform}-${String(i)}`} className="flex items-center justify-between gap-3">
               <span className="min-w-0 truncate">
-                <span className="text-zinc-500">{l.platform}</span> · {l.title}
+                <span className="text-muted">{l.platform}</span> ·{" "}
+                {l.title ?? <span className="text-muted">title not kept</span>}
               </span>
-              <span className="shrink-0 text-zinc-300">{l.answer}</span>
+              <span className="shrink-0 text-muted">{l.answer}</span>
             </li>
           ))}
         </ul>
@@ -107,16 +111,16 @@ function LineupCard({ record }: { record: AuditRecord }): React.JSX.Element {
 function CallsCard({ record }: { record: AuditRecord }): React.JSX.Element {
   return (
     <section className={CARD}>
-      <h2 className="mb-3 font-semibold">Verification calls</h2>
+      <h2 className={H2}>Verification calls</h2>
       {record.verification_calls.length === 0 ? (
-        <p className="text-sm text-zinc-400">No verification calls.</p>
+        <p className="text-sm text-muted">No verification calls.</p>
       ) : (
         <ul className="flex flex-col gap-2 text-sm">
           {record.verification_calls.map((c, i) => (
             <li key={String(i)} className="flex items-center gap-3">
               <span>{c.status}</span>
-              {c.mock && <span className="rounded bg-amber-500/15 px-2 py-0.5 text-xs text-amber-300">MOCK</span>}
-              <span className="text-xs text-zinc-500">{when(c.created_at)}</span>
+              {c.mock && <Pill tone="unsure">MOCK</Pill>}
+              <span className="text-xs text-muted tabular-nums">{when(c.created_at)}</span>
             </li>
           ))}
         </ul>
@@ -131,31 +135,33 @@ export default async function AuditPage({ params }: { params: Promise<{ id: stri
   const record = await loadAuditRecord(env.DB, id, new Date());
   if (!record) {
     return (
-      <main className="mx-auto max-w-xl px-4 py-16">
-        <p>We could not find this run. It may have been deleted already.</p>
-        <Link href="/" className="text-teal-400 underline">Back</Link>
+      <main className="mx-auto flex max-w-xl flex-col items-start gap-4 px-4 py-16">
+        <h1 className="font-serif text-4xl leading-[1.05]">We could not find this run</h1>
+        <p className="text-muted">It may have been deleted already.</p>
+        <Link href="/" className={LINK}>Back</Link>
       </main>
     );
   }
   const { run, legal, retention } = record;
 
   return (
-    <main className="mx-auto flex max-w-2xl flex-col gap-6 px-4 py-10">
-      <header className="flex flex-col gap-2">
-        <Link href={`/runs/${id}`} className="text-sm text-zinc-400 hover:text-zinc-200">← Back to the brief</Link>
-        <h1 className="text-3xl font-semibold tracking-tight">Audit record</h1>
-        <p className="text-sm text-zinc-500">Generated {when(record.generated_at)}</p>
+    <main className="mx-auto flex max-w-3xl flex-col gap-8 px-4 py-10 md:py-14">
+      <header className="flex flex-col gap-3 border-b border-divider pb-8">
+        <Link href={`/runs/${id}`} className={`${BTN_QUIET} -ml-3 self-start`}>← Back to the brief</Link>
+        <Eyebrow>Audit</Eyebrow>
+        <h1 className="font-serif text-4xl leading-[1.05] md:text-5xl">Audit record</h1>
+        <p className="text-sm text-muted tabular-nums">Generated {when(record.generated_at)}</p>
         <a
           href={`/api/runs/${id}/audit?download=1`}
           download={`audit-record-${id.slice(0, 8)}.json`}
-          className="self-start rounded-lg bg-teal-500 px-4 py-2 text-sm font-medium text-zinc-950 hover:bg-teal-400"
+          className={`${BTN_SECONDARY} self-start`}
         >
           Download audit record (.json)
         </a>
       </header>
 
       <section className={CARD}>
-        <h2 className="mb-3 font-semibold">Run</h2>
+        <h2 className={H2}>Run</h2>
         <dl className="flex flex-col gap-2">
           <Row label="Started via">{VIA_LABEL[run.started_via]}</Row>
           <Row label="Started at">{when(run.started_at)}</Row>
@@ -168,10 +174,11 @@ export default async function AuditPage({ params }: { params: Promise<{ id: stri
       </section>
 
       <section className={CARD}>
-        <h2 className="mb-3 font-semibold">Legal basis and purpose</h2>
+        <h2 className={H2}>Legal basis and purpose</h2>
         <dl className="flex flex-col gap-2">
           <Row label="Legal basis">{legal.basis}</Row>
           <Row label="Purpose">{legal.purpose}</Row>
+          <Row label="Candidate notice">{legal.notice}</Row>
         </dl>
       </section>
 
@@ -180,7 +187,7 @@ export default async function AuditPage({ params }: { params: Promise<{ id: stri
       <CallsCard record={record} />
 
       <section className={CARD}>
-        <h2 className="mb-3 font-semibold">Retention</h2>
+        <h2 className={H2}>Retention</h2>
         <dl className="flex flex-col gap-2">
           <Row label="Deleted on">{when(retention.delete_after)}</Row>
           <Row label="Rule">

@@ -24,6 +24,7 @@ created: 2026-10-08
 ## Index
 | Spec | Slice | Main files |
 |---|---|---|
+| [intake/](intake/) | Candidate intake connectors: email, Google Forms, hosted apply page, StartupJobs (`plans/008-intake-connectors/`; read `intake/00-overview.md` first) | `src/app/api/intake/**` |
 | [positions-domain](positions-domain.md) | Zod `Position`, `Family`, questions projection, dedupe key | `src/domain/position.ts` |
 | [positions-ingest](positions-ingest.md) | fetch plan, parse, strip, extract, orchestration | `src/recipe/seams/posting-*.ts`, `position-extract.ts`, `src/workflow/ingest-position.ts` |
 | [positions-api](positions-api.md) | `/api/positions` routes | `src/app/api/positions/**` |
@@ -32,4 +33,4 @@ created: 2026-10-08
 | [positions-purge](positions-purge.md) | expiry sweep of positions and R2 objects | `src/workflow/purge.ts` |
 | [positions-e2e](positions-e2e.md) | Playwright happy path | `e2e/positions.spec.ts` |
 
-Migration `0009_positions.sql` is defined in `plans/007-position-selector/00-SYNTHESIS.md` (Contracts) and is not repeated here.
+Migration `0010_positions.sql` is defined in `plans/007-position-selector/00-SYNTHESIS.md` (Contracts) and is not repeated here.

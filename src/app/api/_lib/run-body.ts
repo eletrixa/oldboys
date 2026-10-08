@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/api/_lib/run-body.ts
- * Deps:    zod, src/domain/claim (GoalId), src/domain/profile-url
+ * Deps:    zod, src/domain/claim (GoalId), src/domain/profile-url, src/domain/application (CV_MAX)
  * Tested:  src/app/api/_lib/__tests__/run-body.test.ts
  *
  * Key responsibilities:
@@ -17,10 +17,11 @@
  * - Lives outside route.ts because Next.js route modules may only export handlers
  */
 import { z } from "zod";
+import { CV_MAX } from "@/domain/application";
 import { GoalId } from "@/domain/claim";
 import { normalizeLinkedinProfile } from "@/domain/profile-url";
 
-export const CV_MAX = 20_000;
+export { CV_MAX };
 
 const ProfileUrl = z
   .string()

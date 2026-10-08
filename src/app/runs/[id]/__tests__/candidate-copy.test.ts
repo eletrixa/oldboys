@@ -154,6 +154,21 @@ describe("candidateCopy", () => {
     expect(md).not.toMatch(/[^\\]\]\(javascript:/);
   });
 
+  it("scrubs URLs and e-mails out of not-searched reasons", () => {
+    const md = notice({
+      brief: brief({
+        not_searched: [
+          {
+            source: "openalex_author",
+            reason: "lookup at https://api.openalex.org/authors?search=Jan%20Novak&mailto=ops@example.org timed out, ask hr@example.com",
+          },
+        ],
+      }),
+    });
+    expect(md).toContain("- OpenAlex: lookup at api.openalex.org timed out, ask (email)");
+    for (const leak of ["search=", "Jan%20Novak", "mailto", "ops@example.org", "hr@example.com"]) expect(md).not.toContain(leak);
+  });
+
   it("falls back to the plain 7-day wording when created_at does not parse", () => {
     expect(notice({ created_at: "yesterday" })).toContain("deleted 7 days after the research");
   });

@@ -20,6 +20,7 @@ All notable changes to oldboys are documented here. The format follows [Keep a C
 - OPENALEX_API_KEY support for OpenAlex API calls
 
 ### Changed
+- Radar design applied to every page: run page (timeline progress, question card, brief sections, evidence lists), roles overview and table, audit record, start form, not-found and loading states. Shared class vocabulary in `src/app/ui.tsx`, spec in `docs/design/radar-ui.md`; the temporary zinc/teal remap in `globals.css` is gone.
 - Brief sections now shown only if content was found; honest gaps for unavailable sections
 - Lineup questions ask profile-platform confirmation only (web form handles up to 3)
 - Progress indication: step index, step count, and failed-step marking with plain-words reason
@@ -33,3 +34,4 @@ All notable changes to oldboys are documented here. The format follows [Keep a C
 - Source identity properly set via `identityFor` for all collectors; unverified for name-search and SERP hits
 - Answer errors in the lineup are retried automatically
 - Brief display defends against missing `degraded` and `evidence` fields
+||||||| fc92ebf

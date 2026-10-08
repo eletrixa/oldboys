@@ -3,15 +3,18 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/recipe/seams/verify.ts
- * Deps:    zod
+ * Deps:    zod, src/domain/corroborate (fold, hasWord, orgTokens), src/recipe/seams/resolve (confirmedSources)
  * Tested:  src/recipe/__tests__/verify.test.ts
  *
  * Key responsibilities:
- * - Unknown support ids are dropped; a claim left with no support is dropped (never shown without a source)
+ * - Support ids outside confirmedSources (unknown, unverified, under a rejected profile) are dropped; a claim left
+ *   with no support is dropped (never shown without a source)
  * - FACT keeps its kind only if the normalised quote is inside one cited excerpt (after unknown ids are dropped)
  * - FACT with hedged wording ("likely", "may", "pravděpodobně", ...) becomes INFERENCE, note "hedged wording"
  * - screenClaims (shared with synthesize): drops self-declared noise ("unrelated content", "misattributed") and
- *   contradiction claims naming two aliases of one organisation ("A | B", "A (formerly B)", "A, formerly B" in a source)
+ *   contradiction claims that call themselves compatible / not a contradiction (saysCompatible); a contradiction claim
+ *   naming two aliases of one organisation ("A | B", "A (formerly B)", "A, formerly B" in a source, both sides
+ *   organisation-like) is kept as INFERENCE ranked last with ALIAS_MARK in its text
  * - Residue (FACTs that passed) goes to the verify model; "not supported" downgrades to INFERENCE
  *
  * Design constraints:
@@ -21,8 +24,10 @@
 import { z } from "zod";
 import type { Claim, Source } from "@/domain/claim";
 import type { Ports } from "@/domain/ports";
+import { fold, hasWord, orgTokens } from "@/domain/corroborate";
 import { normalizeText, quoteInNormalized } from "@/domain/quote";
 import { emptyOutcome } from "@/recipe/runner";
+import { confirmedSources } from "@/recipe/seams/resolve";
 import type { StepContext, StepOutcome } from "@/recipe/sources/types";
 
 /** The seam's name for the shared normaliser (src/domain/quote.ts): FACT and STATEMENT share one gate. */
@@ -52,7 +57,14 @@ export function hedged(text: string): boolean {
   return HEDGE.test(text) || HEDGE_MAY.test(text);
 }
 
-const fold = (text: string): string => text.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
+/** Wording of a "contradiction" that says it is none: "over 13 years" vs "15 years" agrees within the rounding. */
+const COMPATIBLE = /compatible|not a contradiction|no contradiction|not incompatible|consistent with/i;
+
+/** True when a text (claim or model summary) states the sources agree, so it is no contradiction. */
+export function saysCompatible(text: string): boolean {
+  return COMPATIBLE.test(text);
+}
+
 /** A capitalised word; inner dots allowed (Kiwi.com), a sentence-ending dot is not part of it. */
 const NAME = String.raw`\p{Lu}[\p{L}\p{N}&'-]*(?:\.[\p{L}\p{N}]+)*`;
 const SIDE = String.raw`${NAME}(?:[ \t]+${NAME}){0,2}`;
@@ -60,6 +72,15 @@ const PIPE = new RegExp(String.raw`(${SIDE})[ \t]*\|[ \t]*(${SIDE})`, "gu");
 const FORMERLY = new RegExp(String.raw`(${SIDE})[ \t]*(?:\(|,)[ \t]*(?:formerly|dříve|now|nyní)[ \t]+(${SIDE})`, "gu");
 /** Title separators that join a name with a platform, not two names of one organisation. */
 const NOT_ALIAS = new Set(["linkedin", "facebook", "x", "twitter", "instagram", "github", "youtube", "tiktok", "bluesky", "medium", "threads"]);
+
+/** Words that make a side a job title, not an organisation: "Senior Marketing Manager | Groupon" is no alias pair. */
+const TITLE_WORD = /(?<![\p{L}\p{N}])(?:manager|director|officer|head|lead|engineer|designer|analyst|consultant|specialist|cmo|ceo|cto|cfo|vp)(?![\p{L}\p{N}])/u;
+const MAX_ORG_WORDS = 4;
+
+/** Organisation-like: at most 4 words, no job-title word, and at least one distinctive org token (src/domain/corroborate). */
+function orgLike(side: string, subject: string): boolean {
+  return side.split(/\s+/).length <= MAX_ORG_WORDS && !TITLE_WORD.test(fold(side)) && orgTokens([side], subject).length > 0;
+}
 
 /** Every suffix of the left side and every prefix of the right: "Head Vilgain | Aktin" also yields Vilgain ~ Aktin. */
 function sidePairs(left: string, right: string): [string, string][] {
@@ -70,10 +91,13 @@ function sidePairs(left: string, right: string): [string, string][] {
   return pairs;
 }
 
-/** Alias pairs ("Vilgain", "Aktin") stated by any source excerpt; platform names and the subject's own name never count. */
+/**
+ * Alias pairs ("Vilgain", "Aktin") stated by any source excerpt. Both sides must be organisation-like (orgLike);
+ * platform names and the subject's own name never count.
+ */
 export function aliasPairs(sources: readonly Pick<Source, "excerpt">[], subject = ""): [string, string][] {
   const own = new Set(fold(subject).split(/\s+/).filter(Boolean));
-  const usable = (side: string): boolean => side.split(/\s+/).every((w) => !NOT_ALIAS.has(fold(w)) && !own.has(fold(w)));
+  const usable = (side: string): boolean => side.split(/\s+/).every((w) => !NOT_ALIAS.has(fold(w)) && !own.has(fold(w))) && orgLike(side, subject);
   const out: [string, string][] = [];
   for (const s of sources) {
     for (const re of [PIPE, FORMERLY]) {
@@ -86,29 +110,38 @@ export function aliasPairs(sources: readonly Pick<Source, "excerpt">[], subject 
 }
 
 /** Whole-word, case- and diacritics-insensitive mention. */
-function names(text: string, name: string): boolean {
-  const escaped = fold(name).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return new RegExp(String.raw`(?<![\p{L}\p{N}])${escaped}(?![\p{L}\p{N}])`, "u").test(fold(text));
+const names = (text: string, name: string): boolean => hasWord(fold(text), fold(name));
+
+/** Marker appended to a contradiction claim that names two aliases: it is kept (never deleted), ranked last. */
+export const ALIAS_MARK = "[names aliases of one organisation:";
+
+export function aliasNoted(claim: Pick<Claim, "text">): boolean {
+  return claim.text.includes(ALIAS_MARK);
 }
 
 /**
  * Noise and false-contradiction screen, shared by verify and synthesize so dropped claims never reach the brief,
- * its interview questions or to_verify.
+ * its interview questions or to_verify. A contradiction naming two aliases is kept as INFERENCE, ranked last, with
+ * the alias pair in its text (contradictions via rank, never delete); re-screening it is a no-op.
  */
 export function screenClaims(claims: readonly Claim[], sources: readonly Source[], subject: string): { kept: Claim[]; notes: string[] } {
   const notes: string[] = [];
   const aliases = aliasPairs(sources, subject);
-  const kept = claims.filter((c) => {
+  const last = Math.max(0, ...claims.map((c) => c.rank)) + 1;
+  const kept = claims.flatMap((c): Claim[] => {
     if (NOISE.test(c.text)) {
       notes.push(`dropped (unrelated or misattributed content): ${c.id}`);
-      return false;
+      return [];
     }
-    const alias = c.question_id === "contradictions" ? aliases.find(([a, b]) => names(c.text, a) && names(c.text, b)) : undefined;
-    if (alias !== undefined) {
-      notes.push(`dropped contradiction (aliases of one organisation: ${alias[0]} | ${alias[1]}): ${c.id}`);
-      return false;
+    if (c.question_id !== "contradictions" || aliasNoted(c)) return [c];
+    if (saysCompatible(c.text)) {
+      notes.push(`dropped contradiction (compatible statements): ${c.id}`);
+      return [];
     }
-    return true;
+    const alias = aliases.find(([a, b]) => names(c.text, a) && names(c.text, b));
+    if (alias === undefined) return [c];
+    notes.push(`ranked last contradiction (aliases of one organisation: ${alias[0]} | ${alias[1]}): ${c.id}`);
+    return [{ ...downgrade(c), rank: last, text: `${c.text} ${ALIAS_MARK} ${alias[0]} | ${alias[1]}]` }];
   });
   return { kept, notes };
 }
@@ -118,7 +151,8 @@ const Verdicts = z.array(z.object({ id: z.string(), supported: z.boolean() }));
 export async function verifyClaims(ctx: StepContext, ports: Ports): Promise<StepOutcome> {
   const out = emptyOutcome();
   out.claims_mode = "replace";
-  const known = new Set(ctx.sources.map((s) => s.id));
+  // Only confirmed sources support a claim: an unverified or rejected-profile (namesake) page never backs a FACT
+  const known = new Set(confirmedSources(ctx).map((s) => s.id));
   const screened = screenClaims(ctx.claims, ctx.sources, ctx.subject);
   out.notes.push(...screened.notes);
   const first = screened.kept.flatMap((claim): Claim[] => {

@@ -16,5 +16,6 @@ import type { RunState } from "./state";
 
 export function positionHeader(state: Pick<RunState, "position">): { label: string; href: string } | null {
   const { position } = state;
-  return position === null ? null : { label: `Researched for: ${position.title}`, href: `/positions/${encodeURIComponent(position.id)}` };
+  if (!position) return null;
+  return { label: `Researched for: ${position.title}`, href: `/positions/${encodeURIComponent(position.id)}` };
 }
