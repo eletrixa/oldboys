@@ -1,5 +1,5 @@
 /**
- * Audit record page: GDPR record of one run (who started it, legal basis, candidate notice, every source queried, lineup, calls, retention).
+ * Audit record page: GDPR record of one run (who started it, legal basis, candidate notice, services that processed data, every source queried, lineup, calls, retention).
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/runs/[id]/audit/page.tsx
@@ -171,6 +171,25 @@ function LineupCard({ record }: { record: AuditRecord }): React.JSX.Element {
   );
 }
 
+function ProcessorsCard({ record }: { record: AuditRecord }): React.JSX.Element {
+  return (
+    <section className={CARD}>
+      <h2 className={H2}>Services that processed data</h2>
+      <ul className="flex flex-col divide-y divide-divider">
+        {record.processors.map((p) => (
+          <li key={p.name} className="flex flex-col gap-1 py-2 text-sm">
+            <div className="flex items-center justify-between gap-3">
+              <span className="min-w-0 truncate font-medium">{p.name}</span>
+              <Pill tone={p.used ? "ok" : "neutral"}>{p.used ? "Used" : "Not used"}</Pill>
+            </div>
+            <p className="text-xs text-muted">{p.note === null ? p.role : `${p.role} · ${p.note}`}</p>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 function CallsCard({ record }: { record: AuditRecord }): React.JSX.Element {
   return (
     <section className={CARD}>
@@ -228,6 +247,7 @@ export default async function AuditPage({ params }: { params: Promise<{ id: stri
         <h2 className={H2}>Run</h2>
         <dl className="flex flex-col gap-2">
           <Row label="Started via">{VIA_LABEL[run.started_via]}</Row>
+          <Row label="Started by">{run.started_by ?? <span className="text-muted">not recorded (API, extension or intake run)</span>}</Row>
           <Row label="Started at">{when(run.started_at)}</Row>
           <Row label="Goal">{GOAL_LABEL[run.goal] ?? run.goal}</Row>
           <Row label="Subject">{run.subject}</Row>
@@ -246,6 +266,7 @@ export default async function AuditPage({ params }: { params: Promise<{ id: stri
         </dl>
       </section>
 
+      <ProcessorsCard record={record} />
       <SourcesCard record={record} />
       <LineupCard record={record} />
       <CallsCard record={record} />

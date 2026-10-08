@@ -10,6 +10,7 @@
  * - Start channel (form / extension / api), legal basis (no "informed" claim) + purpose + notice note, deletion date
  * - Collector status: ok, empty, not searched (budget skip or "not searched:" gap), failed, fallback rows
  * - Reasons are scrubbed (request URLs, e-mails, phone numbers never reach the record)
+ * - started_by passes the account name through; processors read Apify / Anthropic / ElevenLabs use from ledger and calls
  * - Lineup answers map to yes / no / not sure; title kept only for "yes"; calls keep status + MOCK flag
  *
  * Design constraints:
@@ -41,6 +42,7 @@ function rows(over: Partial<AuditRows> = {}): AuditRows {
       goal: "hiring",
       role: "Senior backend engineer",
       organization_name: null,
+      started_by_name: null,
       status: "done",
       via: "start",
       source_url: null,
@@ -91,6 +93,7 @@ describe("auditRecord", () => {
       anchor: "Brno",
       role: "Senior backend engineer",
       organization: null,
+      started_by: null,
     });
     expect(a.legal).toEqual({ basis: LEGAL_BASIS, purpose: "Pre-employment screening for the role: Senior backend engineer", notice: NOTICE_NOTE });
     expect(a.legal.basis).not.toContain("informed");
@@ -238,5 +241,61 @@ describe("auditRecord", () => {
     expect(a.legal.purpose).toBe("Research goal: due-diligence (no role entered)");
     expect(a.run.started_via).toBe("api");
     expect(a.sources[0]).toMatchObject({ status: "empty", items: 0 });
+  });
+
+  it("passes the starter's account name through and keeps null when absent", () => {
+    expect(auditRecord({ ...rows(), run: { ...rows().run, started_by_name: "Test Recruiter" } }).run.started_by).toBe("Test Recruiter");
+    expect(auditRecord(rows()).run.started_by).toBeNull();
+  });
+});
+
+describe("processors", () => {
+  const used = (r: AuditRows): Record<string, boolean> => Object.fromEntries(auditRecord(r).processors.map((p) => [p.name, p.used]));
+
+  it("always lists the four services in order, Cloudflare always used", () => {
+    const a = auditRecord(rows());
+    expect(a.processors.map((p) => p.name)).toEqual(["Cloudflare", "Apify", "Anthropic", "ElevenLabs"]);
+    expect(used(rows())).toEqual({ Cloudflare: true, Apify: false, Anthropic: false, ElevenLabs: false });
+  });
+
+  it("marks Apify used for an apify/ or harvestapi/ actor call, not for rest/ or ares/ only", () => {
+    expect(used(rows({ ledger: [row("serp_person", "call", { actor: "apify/google-search-scraper", sources: 1 })] })).Apify).toBe(true);
+    expect(used(rows({ ledger: [row("seed_profile", "call", { actor: "harvestapi/linkedin-profile-scraper", calls: 1 })] })).Apify).toBe(true);
+    const free = rows({
+      ledger: [row("github_profile", "call", { actor: "rest/github", sources: 2 }), row("ares", "call", { actor: "ares/ekonomicke-subjekty-vr", sources: 1 })],
+    });
+    expect(used(free).Apify).toBe(false);
+    expect(used(rows({ ledger: [row("x_profile", "call", { actor: null, sources: 0 })] })).Apify).toBe(false);
+  });
+
+  it("marks Anthropic used with the model call count, or notes no successful call", () => {
+    const ok = auditRecord(rows({ ledger: [row("synthesize_report", "llm", { calls: 2 }), row("resolve_lineup", "llm", { calls: 1 })] }));
+    expect(ok.processors[2]).toEqual({ name: "Anthropic", role: "AI model", used: true, note: "3 model calls" });
+    const none = auditRecord(rows({ ledger: [row("synthesize_report", "llm", { calls: 0 })] }));
+    expect(none.processors[2]).toMatchObject({ used: true, note: "AI steps ran, no successful model call" });
+  });
+
+  it("marks ElevenLabs used only for live calls; mock calls are noted, not used", () => {
+    const call = { status: "done", created_at: START, finished_at: null };
+    const live = auditRecord(rows({ calls: [{ ...call, provider: "elevenlabs" }, { ...call, provider: "mock" }] }));
+    expect(live.processors[3]).toMatchObject({ name: "ElevenLabs", used: true, note: "1 call" });
+    const mock = auditRecord(rows({ calls: [{ ...call, provider: "mock" }] }));
+    expect(mock.processors[3]).toMatchObject({ used: false, note: "mock calls only" });
+  });
+
+  it("never throws on malformed ref_json", () => {
+    const bad = rows({ ledger: [{ step: "serp_person", ts: START, kind: "call", cost_usd: 0, ms: 0, ref_json: "{oops" }, { step: "x", ts: START, kind: "llm", cost_usd: 0, ms: 0, ref_json: "[" }] });
+    expect(used(bad)).toEqual({ Cloudflare: true, Apify: false, Anthropic: true, ElevenLabs: false });
+  });
+
+  it("never carries an e-mail address", () => {
+    const a = auditRecord(
+      rows({
+        run: { ...rows().run, started_by_name: "Test Recruiter", organization_name: "Acme s.r.o." },
+        ledger: [row("serp_person", "call", { actor: "apify/google-search-scraper", sources: 1 }), row("synthesize_report", "llm", { calls: 1 })],
+        calls: [{ status: "done", provider: "elevenlabs", created_at: START, finished_at: null }],
+      }),
+    );
+    expect(JSON.stringify(a)).not.toMatch(/[\w.+-]+@[\w-]+\.[\w.]+/);
   });
 });
