@@ -7,7 +7,8 @@
  * Tested:  n/a (this is the test)
  *
  * Key responsibilities:
- * - sourceOrigin: self profiles, mirror aggregators, independent pages, the candidate's own site via profile URLs
+ * - sourceOrigin: self profiles, mirror aggregators, independent pages, the candidate's own site via profile URLs,
+ *   a pasted CV (non-http URL or actor "cv") as self
  * - Mirrors never raise the count; self-only caps at 0.75, one independent at 0.85, two independent reach 0.95
  * - One source caps at 0.6, no merged source 0.5, inference-only 0.4, a contradiction lowers by 0.2
  * - The reason is one plain sentence a hiring manager understands
@@ -48,6 +49,12 @@ describe("sourceOrigin", () => {
     expect(sourceOrigin("https://github.com/jana/repo", profiles)).toBe("self");
     expect(sourceOrigin("https://github.com/other/repo", profiles)).toBe("independent");
     expect(sourceOrigin("https://jana.dev/about")).toBe("independent");
+  });
+
+  it("calls a pasted CV (non-http URL or actor cv) self", () => {
+    expect(sourceOrigin("cv:run-1")).toBe("self");
+    expect(sourceOrigin("https://example.com/cv.pdf", [], "cv")).toBe("self");
+    expect(sourceOrigin("https://example.com/cv.pdf", [], "web")).toBe("independent");
   });
 });
 

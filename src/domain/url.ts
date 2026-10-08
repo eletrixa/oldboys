@@ -7,13 +7,17 @@
  * Tested:  src/domain/__tests__/url.test.ts
  *
  * Key responsibilities:
- * - canonicalUrl: lowercase host, no fragment, no trailing slash, no `locale`/`l` query parameters
+ * - canonicalUrl: lowercase host, no fragment, no trailing slash, no locale (`locale`, `l`) or tracking (`srsltid`,
+ *   `utm_*`, `fbclid`, `igsh`) query parameters; LinkedIn country hosts fold to www.linkedin.com and a locale suffix
+ *   (`/in/<handle>/cs`) is dropped, mirroring `profileKey` in src/recipe/seams/resolve.ts
  *
  * Design constraints:
  * - Pure; a string that is not a URL comes back trimmed and unchanged
  */
 
-const NOISE_PARAMS = ["locale", "l"];
+const NOISE_PARAMS = new Set(["locale", "l", "srsltid", "fbclid", "igsh"]);
+
+const isNoiseParam = (name: string): boolean => NOISE_PARAMS.has(name) || name.startsWith("utm_");
 
 export function canonicalUrl(url: string): string {
   const raw = url.trim();
@@ -23,7 +27,12 @@ export function canonicalUrl(url: string): string {
   } catch {
     return raw;
   }
-  for (const p of NOISE_PARAMS) u.searchParams.delete(p);
-  const path = u.pathname.length > 1 ? u.pathname.replace(/\/+$/, "") : "";
-  return `${u.protocol}//${u.host}${path}${u.search}`;
+  for (const p of [...u.searchParams.keys()].filter(isNoiseParam)) u.searchParams.delete(p);
+  let host = u.host;
+  let path = u.pathname.length > 1 ? u.pathname.replace(/\/+$/, "") : "";
+  if (/(^|\.)linkedin\.com$/.test(host)) {
+    host = "www.linkedin.com";
+    path = path.replace(/^(\/in\/[^/]+)\/[a-z]{2}$/i, "$1");
+  }
+  return `${u.protocol}//${host}${path}${u.search}`;
 }

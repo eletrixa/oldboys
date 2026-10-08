@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/runs/[id]/parts.tsx
- * Deps:    react, src/domain/claim (types), src/domain/run-cost, ../../ui (Radar vocabulary), ./sections, ./state
+ * Deps:    react, src/domain/claim (types), src/domain/run-cost, ../../ui (Radar vocabulary), ./sections, ./state, ./call-panel-view
  * Tested:  n/a
  *
  * Key responsibilities:
@@ -12,17 +12,20 @@
  * - Brief top line: "Confirmed profile: <headline>" next to "Hiring for: <role>" (both quoted, no model needed),
  *   with the location note (confirmed profile names another city than the anchor) under the profile line
  * - Gap list reads "Searched, nothing confirmed" when any searched gap is a namesake-only one
- * - Confirmed evidence grouped by the URL's platform (evidenceGroup), not by the actor that fetched it
+ * - Confirmed evidence grouped by the URL's platform (evidenceGroup), not by the actor that fetched it; the pasted CV
+ *   is plain text, not a link (SourceLink)
+ * - Phone verification panel (CallPanel, client) right after "To verify"; it fetches its own data
  * - Interview kit buttons (KitActions) under the top line; gap labels come from state.ts (GAP_LABEL, gapLine)
  * - Findings as sections by confidence (SectionList); briefs stored before sections render per question
  *
  * Design constraints:
- * - No data fetching here; callbacks are passed in by the view
+ * - No data fetching here (CallPanel and KitActions are self-contained client components); callbacks are passed in by the view
  * - Radar tokens only (docs/design/radar-ui.md): semantic colours via ../../ui, no raw palette classes
  */
 import type { Brief, Candidate, CandidateDecision } from "@/domain/claim";
 import { formatDuration, type RunCost } from "@/domain/run-cost";
 import { BTN_PRIMARY, BTN_QUIET, BTN_SECONDARY, CARD, CARD_PEACH, Pill, SourceLink, type Tone } from "../../ui";
+import { CallPanel } from "./call-panel-view";
 import { KitActions } from "./kit-actions";
 import { ClaimList, SectionList } from "./sections";
 import { SummaryCard } from "./summary-card";
@@ -393,6 +396,7 @@ export function BriefView({ state }: { state: RunState }): React.JSX.Element | n
       )}
       <List title="Interview questions" items={brief.interview_questions} />
       <List title="To verify" items={brief.to_verify} />
+      <CallPanel state={state} />
       <List title={searchedTitle(searchedEmpty(brief))} items={searchedEmpty(brief).map(gapItem)} />
       <List title="Not searched, and why" items={brief.not_searched.map(gapItem)} />
       <AlsoFound items={brief.also_found} />

@@ -10,6 +10,7 @@ import { describe, expect, it } from "vitest";
 import {
   corroborationReason,
   headlineOrgs,
+  isGenericOrgWord,
   mentionsFullName,
   mentionsPlace,
   orgTokens,
@@ -62,6 +63,24 @@ describe("corroborationReason", () => {
   });
   it("never counts the subject's own surname in a company name as an employer", () => {
     expect(corroborationReason(SUBJECT, tokens, page("Josef Buryan, Buryan Consulting, Brno"))).toBeNull();
+  });
+  it("never merges on a generic Czech or English word: Česká spořitelna vs Česká televize", () => {
+    const sporitelna = orgTokens(["Česká spořitelna"], SUBJECT);
+    expect(sporitelna.map((t) => t.token)).toEqual(["sporitelna"]);
+    expect(corroborationReason(SUBJECT, sporitelna, page("Josef Buryan pro Česká televize"))).toBeNull();
+    expect(corroborationReason(SUBJECT, sporitelna, page("Josef Buryan pro Ceska televize"))).toBeNull();
+    expect(corroborationReason(SUBJECT, sporitelna, page("Josef Buryan, Česká spořitelna"))).toBe("name and employer match (spořitelna)");
+  });
+  it("tells Univerzita Karlova from Univerzita Palackého", () => {
+    const karlova = orgTokens(["Univerzita Karlova"], SUBJECT);
+    expect(corroborationReason(SUBJECT, karlova, page("Josef Buryan, Univerzita Palackého v Olomouci"))).toBeNull();
+    expect(corroborationReason(SUBJECT, karlova, page("Josef Buryan, Univerzita Karlova"))).toBe("name and employer match (Karlova)");
+  });
+  it("drops generic words of both languages from org tokens and ignores a generic token passed in directly", () => {
+    const generic = ["Vysoká Škola", "Banka", "Město", "Group", "Holding", "Technologies", "Services", "Solutions", "Consulting", "Agency", "Studio", "Digital"];
+    expect(orgTokens(generic, SUBJECT)).toEqual([]);
+    expect(isGenericOrgWord("ČESKÁ")).toBe(true);
+    expect(corroborationReason(SUBJECT, [{ token: "ceska", label: "Česká" }], page("Josef Buryan pro Česká televize"))).toBeNull();
   });
 });
 

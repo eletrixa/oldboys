@@ -9,6 +9,7 @@
  * Key responsibilities:
  * - load-call, wait for the `call-result` event (poll the provider if it times out), ingest, extract, finish
  * - Store the transcript as one `sources` row and the extracted STATEMENT/INFERENCE claims in `claims`
+ * - The per-question results (CallAnswer[]) go into the `call:finish` ledger row's ref (`answers`), no column
  * - Any thrown error marks the call `failed` with a ledger reason, then rethrows
  *
  * Design constraints:
@@ -23,7 +24,7 @@
 import { WorkflowEntrypoint, type WorkflowEvent, type WorkflowStep } from "cloudflare:workers";
 import { claimUpsert, makeLedgerAppend, makeSourceStore } from "@/adapters/d1";
 import { makeLlmCall } from "@/adapters/llm";
-import { type Call, CallResult } from "@/domain/call";
+import { type Call, type CallAnswer, CallResult } from "@/domain/call";
 import { callResultToClaims, transcriptToExcerpt } from "@/domain/call-ingest";
 import type { Claim, LedgerKind } from "@/domain/claim";
 import type { LlmCall } from "@/domain/ports";
@@ -78,7 +79,7 @@ export class VerificationCallWorkflow extends WorkflowEntrypoint<CloudflareEnv, 
     if (key === null) return;
 
     const sourceId = await step.do("ingest", async () => this.ingest(call, key));
-    const { claims, gapReason } = await step.do("extract", async () => this.extract(call, key, sourceId));
+    const { claims, gapReason, answers } = await step.do("extract", async () => this.extract(call, key, sourceId));
 
     await step.do("finish", async () =>
       this.ledger(runId, "call:finish", "decision", {
@@ -88,6 +89,7 @@ export class VerificationCallWorkflow extends WorkflowEntrypoint<CloudflareEnv, 
         mock: call.provider === "mock",
         claims,
         gap: gapReason,
+        answers,
       }),
     );
   }
@@ -160,7 +162,11 @@ export class VerificationCallWorkflow extends WorkflowEntrypoint<CloudflareEnv, 
     return source.id;
   }
 
-  private async extract(call: Call, key: string, sourceId: string): Promise<{ claims: number; gapReason: string | null }> {
+  private async extract(
+    call: Call,
+    key: string,
+    sourceId: string,
+  ): Promise<{ claims: number; gapReason: string | null; answers: CallAnswer[] }> {
     const result = await this.readResult(key);
     const inner = makeLlmCall(this.env.ANTHROPIC_API_KEY, {
       primary: this.env.LLM_MODEL_PRIMARY,
@@ -173,7 +179,7 @@ export class VerificationCallWorkflow extends WorkflowEntrypoint<CloudflareEnv, 
       costUsd += out.cost_usd;
       return out;
     };
-    const { claims, gapReason } = await callResultToClaims({
+    const { claims, gapReason, answers } = await callResultToClaims({
       result,
       brief: call.brief,
       runId: call.run_id,
@@ -190,7 +196,7 @@ export class VerificationCallWorkflow extends WorkflowEntrypoint<CloudflareEnv, 
       Date.now() - started,
     );
     await this.writeClaims(call.run_id, claims);
-    return { claims: claims.length, gapReason };
+    return { claims: claims.length, gapReason, answers };
   }
 
   /** Upsert the claims and close the gaps they answer, in one batch. */

@@ -11,7 +11,8 @@
  * - stepRows: map the ledger step + status to the five human progress rows
  * - sortLineup: confirmed first, social platforms before web hits
  * - questionsToAsk: one open profile per platform; roleCriteria: role must-haves (mh-) only
-  * - evidenceGroup: the heading a confirmed source sits under, from its URL's platform (LinkedIn, X), not the actor
+  * - evidenceGroup: the heading a confirmed source sits under, from its URL's platform (LinkedIn, X, CV), not the actor
+ * - isCvSource / CV_SOURCE_TEXT: the pasted CV ("cv:<runId>") renders as text, never as a link
  * - searchedTitle: "Searched, nothing confirmed" when a gap is namesake-only, else "nothing found"
  * - GAP_LABEL, gapText, gapLine, searchedEmpty: human gap lines (raw request errors turned into plain words), shared by BriefView and the interview kit
  * - briefSections (confidence descending, null for briefs stored before sections), confidenceBand, host
@@ -78,7 +79,16 @@ export const PLATFORM_LABEL: Record<string, string> = {
  * pages fall back to the step label (`stepLabels`, e.g. "ARES registry", "Website") or "Web search".
  */
 export function evidenceGroup(e: { step: string; url: string }, stepLabels: Readonly<Record<string, string>> = {}): string {
-  return PLATFORM_LABEL[platformOf(e.url)] ?? stepLabels[e.step] ?? "Web search";
+  const platform = platformOf(e.url);
+  if (platform === "cv") return "CV";
+  return PLATFORM_LABEL[platform] ?? stepLabels[e.step] ?? "Web search";
+}
+
+/** What the page shows instead of a link for the pasted CV ("cv:<runId>" is not a web address). */
+export const CV_SOURCE_TEXT = "Candidate's CV (pasted)";
+
+export function isCvSource(url: string): boolean {
+  return platformOf(url) === "cv";
 }
 const DECISION_RANK: Record<Candidate["decision"], number> = { merge: 0, "possibly-same-as": 1, rejected: 2 };
 

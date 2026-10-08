@@ -1,35 +1,63 @@
 /**
- * POST /api/runs/:id/calls: draft a Verification Call brief from a run's gaps and weak claims.
+ * /api/runs/:id/calls: draft a Verification Call (POST) or show the proposal and the run's calls (GET).
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/api/runs/[id]/calls/route.ts
- * Deps:    @opennextjs/cloudflare (getCloudflareContext), zod, src/domain/call-brief, src/workflow/calls, bindings DB
- * Tested:  n/a
+ * Deps:    @opennextjs/cloudflare (getCloudflareContext), zod, src/domain/call-brief, src/workflow/calls, ./load, bindings DB
+ * Tested:  n/a (brief building in src/domain/__tests__/call-brief.test.ts)
  *
  * Key responsibilities:
- * - Bearer auth; load the run, its base + role questions, gaps and claims; build the deterministic brief
- * - Insert a calls row in status 'drafted' (nothing is dialed here)
+ * - POST: bearer auth; `{language?, questions?}`. With `questions` (operator-edited) the brief is built from
+ *   them (an invalid one is 400 `{error, index}`); without them from the stored brief, gaps and weak claims.
+ *   Inserts a calls row in status 'drafted' (nothing is dialed here)
+ * - GET: `{provider, max, used, proposal, calls}`; the proposal is computed, never stored
  *
  * Design constraints:
  * - No runtime = "edge"; no phone number is accepted or stored at this stage
+ * - POST without `questions` behaves as before (scripts/call-smoke.mjs)
+ * - GET has no auth, like /state and GET /api/calls/:id (the run id is an unguessable UUID); it never
+ *   exposes consent notes, operators or full numbers
  */
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { z } from "zod";
 import { requireBearer } from "@/app/api/_lib/auth";
 import { parseJsonBody } from "@/app/api/_lib/body";
-import { buildCallBrief } from "@/domain/call-brief";
-import { Claim, GoalId, type Gap } from "@/domain/claim";
-import { recipeFor } from "@/recipe/goals";
+import type { RunCalls } from "@/app/runs/[id]/call-panel";
+import type { CallBrief } from "@/domain/call";
+import { briefFromHrQuestions, buildCallBrief } from "@/domain/call-brief";
 import { selectCallProvider } from "@/workflow/calls";
+import { type CallInputs, loadCallInputs, loadRunCallViews } from "./load";
 
-const DraftBody = z.object({ language: z.string().min(2).max(5).optional() });
-/** Role questions appended by the runner (investigations.questions_json); malformed JSON means none. */
-const ExtraQuestions = z.array(z.object({ id: z.string(), text: z.string(), title: z.string().optional() }));
+const DraftBody = z.object({
+  language: z.string().min(2).max(5).optional(),
+  questions: z
+    .array(z.object({ question_id: z.string().max(64).optional(), text: z.string().max(2000), why: z.string().max(500).optional() }))
+    .max(20)
+    .optional(),
+});
 
-type ClaimRow = Omit<Claim, "supports" | "contradicts"> & {
-  supports_json: string;
-  contradicts_json: string;
-};
+function proposal(inputs: CallInputs, language?: string): CallBrief {
+  return buildCallBrief({ ...inputs, language });
+}
+
+export async function GET(
+  _request: Request,
+  { params }: { params: Promise<{ id: string }> },
+): Promise<Response> {
+  const { env } = getCloudflareContext();
+  const { id: runId } = await params;
+  const inputs = await loadCallInputs(env.DB, runId);
+  if (!inputs) return Response.json({ error: "run not found" }, { status: 404 });
+  const calls = await loadRunCallViews(env.DB, runId);
+  const body: RunCalls = {
+    provider: selectCallProvider(env),
+    max: Number(env.RUN_CALL_MAX) || 2,
+    used: calls.filter((c) => c.status !== "drafted").length,
+    proposal: proposal(inputs),
+    calls,
+  };
+  return Response.json(body, { headers: { "Cache-Control": "no-store" } });
+}
 
 export async function POST(
   request: Request,
@@ -43,37 +71,20 @@ export async function POST(
   const body = await parseJsonBody(request, DraftBody, { emptyOk: true });
   if (body.error) return body.error;
 
-  const run = await env.DB.prepare("SELECT subject, goal, status, questions_json FROM investigations WHERE id = ?")
-    .bind(runId)
-    .first<{ subject: string; goal: string; status: string; questions_json: string | null }>();
-  if (!run) return Response.json({ error: "run not found" }, { status: 404 });
-  if (run.status === "queued") {
+  const inputs = await loadCallInputs(env.DB, runId);
+  if (!inputs) return Response.json({ error: "run not found" }, { status: 404 });
+  if (inputs.status === "queued") {
     return Response.json({ error: "run has not started yet" }, { status: 409 });
   }
-  const goal = GoalId.parse(run.goal);
-  const extra = ExtraQuestions.safeParse(tryJson(run.questions_json));
 
-  const [gapRows, claimRows] = await Promise.all([
-    env.DB.prepare("SELECT question_id, reason FROM gaps WHERE run_id = ?").bind(runId).all<Pick<Gap, "question_id" | "reason">>(),
-    env.DB.prepare("SELECT * FROM claims WHERE run_id = ?").bind(runId).all<ClaimRow>(),
-  ]);
-  const gaps: Gap[] = gapRows.results.map((g) => ({ ...g, run_id: runId }));
-  const claims = claimRows.results.map(({ supports_json, contradicts_json, ...rest }) =>
-    Claim.parse({
-      ...rest,
-      supports: JSON.parse(supports_json) as unknown,
-      contradicts: JSON.parse(contradicts_json) as unknown,
-    }),
-  );
-
-  const brief = buildCallBrief({
-    goal,
-    subject: run.subject,
-    questions: [...recipeFor(goal).questions, ...(extra.success ? extra.data : [])],
-    gaps,
-    claims,
-    language: body.data.language,
-  });
+  let brief: CallBrief;
+  if (body.data.questions === undefined) {
+    brief = proposal(inputs, body.data.language);
+  } else {
+    const hr = briefFromHrQuestions({ ...inputs, questions: body.data.questions, language: body.data.language });
+    if (hr.error !== null) return Response.json({ error: hr.error, index: hr.index }, { status: 400 });
+    brief = hr.brief;
+  }
 
   const callId = crypto.randomUUID();
   await env.DB.prepare(
@@ -84,13 +95,4 @@ export async function POST(
     .run();
 
   return Response.json({ id: callId, brief }, { status: 201 });
-}
-
-function tryJson(text: string | null): unknown {
-  if (text === null) return null;
-  try {
-    return JSON.parse(text) as unknown;
-  } catch {
-    return null;
-  }
 }

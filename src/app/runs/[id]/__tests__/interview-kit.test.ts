@@ -11,6 +11,7 @@
  * - Empty lists leave no heading; degraded brief shows the note, role criteria and evidence links
  * - also_found never reaches the kit; model text is escaped and non-http links are dropped
  * - Sections replace coverage, by confidence with the reason; facts before inferences; source-only links
+ * - Phone verification: latest call with answers, one line per question, escaped, MOCK noted; none without calls
  * - kitFileName: run id prefix only
  *
  * Design constraints:
@@ -18,6 +19,7 @@
  */
 import { describe, expect, it } from "vitest";
 import type { Brief, Claim } from "@/domain/claim";
+import type { CallView } from "../call-panel";
 import { interviewKit, kitFileName } from "../interview-kit";
 import type { RunState } from "../state";
 
@@ -159,6 +161,52 @@ describe("interviewKit", () => {
     expect(md).not.toContain("<javascript:");
     expect(md).toContain("- [ ] \\# Not a heading");
     expect(md).not.toMatch(/[^\\]\]\(javascript:/);
+  });
+});
+
+const call = (over: Partial<CallView> = {}): CallView => ({
+  id: "call-1",
+  run_id: "r",
+  status: "done",
+  provider: "elevenlabs",
+  provider_conversation_id: "conv",
+  to_number_masked: "+420*****456",
+  brief: { language: "en", identity_question: "Am I speaking with Jan Novak?", questions: [], script: "x" },
+  call_successful: true,
+  identity_confirmed: true,
+  duration_secs: 120,
+  cost_usd: 0.1,
+  failure_reason: null,
+  last_error: null,
+  created_at: "2026-10-09T08:00:00.000Z",
+  approved_at: "2026-10-09T08:01:00.000Z",
+  finished_at: "2026-10-09T08:03:00.000Z",
+  answers: [
+    { question_id: "mh-1", question: "Tell me about Go?", status: "answered", summary: "Uses *Go* daily.", quote: "I used it every day", at_secs: 83 },
+    { question_id: "tv-1", question: "Led a team at Acme?", status: "unclear", summary: "Led some people.", quote: null, at_secs: null },
+    { question_id: "hr-1", question: "Why did you leave?", status: "declined", summary: null, quote: null, at_secs: null },
+  ],
+  ...over,
+});
+
+const PHONE = "## Phone verification (said by the candidate, not public evidence)";
+
+describe("interviewKit phone verification", () => {
+  it("is left out without calls", () => {
+    expect(kit()).not.toContain("Phone verification");
+    expect(interviewKit(run(), AT, [call({ answers: null }), call({ status: "skipped" })])).not.toContain("Phone verification");
+  });
+
+  it("lists every question of the latest call with answers before the footer", () => {
+    const md = interviewKit(run(), AT, [call({ id: "newer", answers: null }), call()]) ?? "";
+    expect(md).toContain(`${PHONE}\n\n- Answered: Uses \\*Go\\* daily. — "I used it every day" (at 1:23)\n- Unclear: Led some people.\n- Declined: Why did you leave?\n`);
+    expect(md.indexOf(PHONE)).toBeGreaterThan(md.indexOf("## Not searched, and why"));
+    expect(md.indexOf(PHONE)).toBeLessThan(md.indexOf("---"));
+    expect(md).not.toContain("MOCK");
+  });
+
+  it("notes a MOCK call", () => {
+    expect(interviewKit(run(), AT, [call({ provider: "mock" })])).toContain("_MOCK call: the answers are simulated._");
   });
 });
 

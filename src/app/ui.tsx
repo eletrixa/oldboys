@@ -14,7 +14,7 @@
  * - Semantic tokens only (canvas, surface, ink, muted, action, sage, peach, divider, ok, unsure, conflict, inference)
  * - Server-safe: no hooks, no browser APIs
  */
-import { host } from "./runs/[id]/state";
+import { CV_SOURCE_TEXT, host, isCvSource } from "./runs/[id]/state";
 
 const SHADOW = "shadow-[0_8px_30px_rgba(40,45,43,0.06)]";
 
@@ -51,10 +51,12 @@ export function Eyebrow({ children }: { children: React.ReactNode }): React.JSX.
 }
 
 /** External source link shown as its hostname. */
-export function SourceLink({ url, className = "" }: { url: string; className?: string }): React.JSX.Element {
+/** A source as a link; the pasted CV ("cv:<runId>") as plain text with no href. `label` defaults to the host. */
+export function SourceLink({ url, label, className = "" }: { url: string; label?: string; className?: string }): React.JSX.Element {
+  if (isCvSource(url)) return <span className={`text-zinc-400 ${className}`}>{CV_SOURCE_TEXT}</span>;
   return (
     <a href={url} target="_blank" rel="noreferrer" className={`${LINK} ${className}`}>
-      {host(url)}
+      {label ?? host(url)}
     </a>
   );
 }

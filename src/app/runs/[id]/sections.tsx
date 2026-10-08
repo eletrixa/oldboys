@@ -11,12 +11,13 @@
  * - ClaimList: one claim per row with its kind tag and source links (muted "confirmed: <identity_reason>" note when a
  *   source was confirmed by name + employer); also used for the per-question fallback
  * - Source-only sections (platforms without claims) list their confirmed source links; empty ones are not rendered
+ * - SourceLink: the pasted CV renders as "Candidate's CV (pasted)" with no href (its URL is "cv:<runId>")
  *
  * Design constraints:
  * - Pure rendering; the confidence rates the research behind a section, never the person
  */
 import type { BriefSection, Claim } from "@/domain/claim";
-import { CARD, LINK, Pill, SourceLink, type Tone } from "../../ui";
+import { CARD, Pill, SourceLink, type Tone } from "../../ui";
 import { type ConfidenceBand, confidenceBand } from "./state";
 
 const BAND: Record<ConfidenceBand, Tone> = { strong: "ok", fair: "unsure", weak: "neutral" };
@@ -75,9 +76,7 @@ function SectionCard({ section, claims, urlOf, noteOf }: { section: BriefSection
         <ul className="mt-3 flex flex-col gap-1 text-sm">
           {links.map((url) => (
             <li key={url}>
-              <a href={url} target="_blank" rel="noreferrer" className={LINK}>
-                {url.replace(/^https?:\/\/(www\.)?/, "")}
-              </a>
+              <SourceLink url={url} label={url.replace(/^https?:\/\/(www\.)?/, "")} />
             </li>
           ))}
         </ul>

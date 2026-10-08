@@ -16,6 +16,7 @@
 import { describe, expect, it } from "vitest";
 import type { CallBrief } from "@/domain/call";
 import {
+  dataCollectionBoolean,
   ELEVENLABS_API,
   elevenLabsFetchCallResult,
   elevenLabsPlaceCall,
@@ -82,6 +83,18 @@ describe("elevenLabsPlaceCall", () => {
           },
         },
       },
+    });
+  });
+
+  it("overrides prompt and first message with the brief's agent_prompt and first_message", async () => {
+    const { fetchImpl, seen } = fake(() => json({ success: true, conversation_id: "conv_2" }));
+    const full: CallBrief = { ...brief, language: "en", agent_prompt: "# Role\nYou are an AI.", first_message: "Hello, this is an automated AI assistant." };
+    await elevenLabsPlaceCall({ ...base, fetchImpl })({ callId: "call-2", toNumber: "+420123456789", brief: full });
+    const body = first(seen).body as { conversation_initiation_client_data: { conversation_config_override: { agent: unknown } } };
+    expect(body.conversation_initiation_client_data.conversation_config_override.agent).toEqual({
+      prompt: { prompt: "# Role\nYou are an AI." },
+      first_message: "Hello, this is an automated AI assistant.",
+      language: "en",
     });
   });
 
@@ -211,6 +224,33 @@ describe("webhookToResult", () => {
     const result = webhookToResult(event);
     expect(result?.outcome).toBe("failed");
     expect(result?.call_successful).toBeNull();
+  });
+});
+
+describe("dataCollectionBoolean", () => {
+  it("reads the ElevenLabs object form with a boolean or a true/false string", () => {
+    expect(dataCollectionBoolean({ data_collection_id: "identity_confirmed", value: true, rationale: "said yes" })).toBe(true);
+    expect(dataCollectionBoolean({ data_collection_id: "identity_confirmed", value: "false", rationale: "" })).toBe(false);
+    expect(dataCollectionBoolean({ value: " True " })).toBe(true);
+  });
+
+  it("accepts a bare boolean and maps anything else to null", () => {
+    expect(dataCollectionBoolean(false)).toBe(false);
+    expect(dataCollectionBoolean("yes")).toBeNull();
+    expect(dataCollectionBoolean({ value: null })).toBeNull();
+    expect(dataCollectionBoolean(undefined)).toBeNull();
+  });
+
+  it("is used for identity_confirmed in a transcription webhook", () => {
+    const event = parsePostCallWebhook({
+      type: "post_call_transcription",
+      data: {
+        conversation_id: "c",
+        status: "done",
+        analysis: { data_collection_results: { identity_confirmed: { data_collection_id: "identity_confirmed", value: true, rationale: "x" } } },
+      },
+    });
+    expect(webhookToResult(event)?.identity_confirmed).toBe(true);
   });
 });
 

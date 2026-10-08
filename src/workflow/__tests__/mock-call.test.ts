@@ -8,13 +8,14 @@
  *
  * Key responsibilities:
  * - The mock result is a valid CallResult that echoes every question and expected answer
+ * - Questions without an expected text get the canned answer / decline / answer replies by position
  *
  * Design constraints:
  * - Fixtures stay inline
  */
 import { describe, expect, it } from "vitest";
 import { CallResult, type CallBrief } from "@/domain/call";
-import { mockPlaceCall } from "@/workflow/providers/mock-call";
+import { MOCK_REPLIES, mockPlaceCall } from "@/workflow/providers/mock-call";
 
 const brief: CallBrief = {
   language: "en",
@@ -51,7 +52,19 @@ describe("mockPlaceCall", () => {
       expect(text).toContain(q.text);
       if (q.expected.length > 0) expect(text).toContain(q.expected);
     }
-    expect(text).toContain("I don't know.");
+  });
+
+  it("answers questions without an expected text by position: answer, decline, answer", async () => {
+    const open = ["a", "b", "c", "d"].map((id) => ({ question_id: id, text: `Question ${id}?`, expected: "" }));
+    const placed = await mockPlaceCall()({ callId: "c2", toNumber: "+420123456789", brief: { ...brief, questions: open } });
+    const replies = placed.result?.transcript.filter((t) => t.role === "user").slice(1).map((t) => t.message);
+    expect(replies).toEqual([...MOCK_REPLIES, MOCK_REPLIES[2]]);
+  });
+
+  it("declines the second question when it has no expected text", async () => {
+    const placed = await mockPlaceCall()({ callId: "c1", toNumber: "+420123456789", brief });
+    const text = placed.result?.transcript.map((t) => t.message).join("\n") ?? "";
+    expect(text).toContain("I would rather not answer that one.");
   });
 
   it("is deterministic for the same input", async () => {

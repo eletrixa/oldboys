@@ -10,7 +10,9 @@
  * - candidateCopy: null without a brief; role, sources searched / not searched, confirmed links, deletion date, rights
  * - Never claims, summaries, interview questions, to-verify items, cost, excerpts or also_found hits
  * - Model text is escaped and non-http links are dropped
- * - noticeFileName: run id prefix only
+ * - Czech notice (lang "cs"): headings, greeting without the name, role sentences, Czech date, translated labels and
+ *   known reasons, unknown reasons passed through scrubbed, same exclusions
+ * - noticeFileName: run id prefix only, "-cs" suffix for the Czech notice
  *
  * Design constraints:
  * - Pure: no React, no fetch
@@ -187,7 +189,125 @@ describe("candidateCopy", () => {
   });
 });
 
+const cs = (over: Partial<RunState> = {}): string => candidateCopy(run(over), "cs") ?? "";
+
+describe("candidateCopy (cs)", () => {
+  it("returns null while there is no brief", () => {
+    expect(candidateCopy(run({ brief: null }), "cs")).toBeNull();
+  });
+
+  it("Czech headings in order, no English fixed text, greeting without the name", () => {
+    const md = cs();
+    expect(md.startsWith("# Jak jsme se podívali na Vaše veřejné profily\n\nDobrý den,\n")).toBe(true);
+    expect(md).not.toContain("Jan Novak");
+    const order = [
+      "## Proč",
+      "## Co průzkum dělá a co ne",
+      "## Veřejné zdroje, které jsme prohledali",
+      "## Zdroje, které jsme neprohledali, a proč",
+      "## Veřejné profily a stránky, které jsme potvrdili jako Vaše",
+      "## Jak dlouho údaje uchováváme",
+      "## Vaše práva",
+    ].map((h) => md.indexOf(h));
+    expect(order.every((i) => i >= 0)).toBe(true);
+    expect(order).toEqual([...order].sort((a, b) => a - b));
+    for (const en of ["How we looked", "## Why", "Your rights", "Hello", "Public sources", "Kind regards", "Reply to this email", "nothing found"]) {
+      expect(md).not.toContain(en);
+    }
+    expect(md).toContain("Nikdy nehodnotí Vás jako člověka.");
+    expect(md.endsWith("Stačí odpovědět na tento e-mail.\n\nS pozdravem  \nnáborový tým\n")).toBe(true);
+  });
+
+  it("role and no-role sentences", () => {
+    const md = cs();
+    expect(md).toContain("děkujeme za Váš zájem o pozici Senior Data Engineer. V rámci výběrového řízení");
+    expect(md).toContain("Obsazujeme pozici Senior Data Engineer. Průzkum nám pomáhá");
+    const none = cs({ role: "  " });
+    expect(none).toContain("děkujeme za Váš zájem o nabízenou pozici. V rámci");
+    expect(none).toContain("Obsazujeme nabízenou pozici. Průzkum");
+  });
+
+  it("Czech deletion date, and the plain sentence when the date is unknown", () => {
+    expect(cs()).toContain("Všechna data z průzkumu smažeme 15. 10. 2026 (7 dní po průzkumu).");
+    expect(cs({ created_at: "2026-01-01T08:00:00.000Z" })).toContain("smažeme 8. 1. 2026 (7 dní");
+    expect(cs({ created_at: "yesterday" })).toContain("Všechna data z průzkumu smažeme 7 dní po průzkumu.");
+  });
+
+  it("translates generic labels, keeps platform names, marks searched-empty sources", () => {
+    const md = cs({
+      candidates: [candidate(), candidate({ id: "k3", platform: "web", profile_urls: ["https://jan.example/about"] })],
+      brief: brief({
+        searched_empty: [
+          { source: "github_profile", reason: "no public repositories" },
+          { source: "personal_site_crawl", reason: "nothing" },
+          { source: "talks_serp", reason: "nothing" },
+          { source: "social_serp", reason: "nothing" },
+        ],
+      }),
+    });
+    expect(md).toContain("- LinkedIn\n");
+    expect(md).toContain("- X\n");
+    expect(md).toContain("- Vyhledávání na webu\n");
+    expect(md).toContain("- GitHub (nenašli jsme nic, co bychom mohli potvrdit jako Vaše)");
+    expect(md).toContain("- Osobní web (nenašli jsme nic, co bychom mohli potvrdit jako Vaše)");
+    expect(md).toContain("- Přednášky a příspěvky (nenašli jsme nic");
+    expect(md).toContain("- Hledání profilů na sociálních sítích (nenašli jsme nic");
+  });
+
+  it("translates known reasons, keeps the HTTP code, passes unknown reasons through scrubbed", () => {
+    const md = cs({
+      brief: brief({
+        not_searched: [
+          { source: "facebook_profile", reason: "profile not opened (login needed); only search snippets were read" },
+          { source: "x_profile", reason: "request failed: HTTP 429 from https://api.example.com/x?q=Jan%20Novak" },
+          { source: "github_profile", reason: "request failed: timeout" },
+          { source: "instagram_profile", reason: "no confirmed handle or id to look up" },
+          { source: "tiktok_profile", reason: "run budget reached" },
+          { source: "youtube_channel", reason: "no reason recorded" },
+          { source: "bluesky_profile", reason: "run budget reached; request failed: HTTP 503" },
+          { source: "serp_person", reason: "quota hit" },
+          {
+            source: "openalex_author",
+            reason: "lookup at https://api.openalex.org/authors?search=Jan%20Novak&mailto=ops@example.org timed out, ask hr@example.com",
+          },
+        ],
+      }),
+    });
+    expect(md).toContain("- Facebook: profil jsme neotevřeli (vyžaduje přihlášení); četli jsme jen úryvky z výsledků vyhledávání\n");
+    expect(md).toContain("- X: služba odmítla náš dotaz (HTTP 429)\n");
+    expect(md).toContain("- GitHub: služba neodpověděla\n");
+    expect(md).toContain("- Instagram: neměli jsme potvrzený profil, který bychom mohli dohledat\n");
+    expect(md).toContain("- TikTok: vyčerpal se rozpočet průzkumu\n");
+    expect(md).toContain("- YouTube: důvod nebyl zaznamenán\n");
+    expect(md).toContain("- Bluesky: vyčerpal se rozpočet průzkumu; služba odmítla náš dotaz (HTTP 503)\n");
+    expect(md).toContain("- Vyhledávání na webu: quota hit\n");
+    expect(md).toContain("- OpenAlex: lookup at api.openalex.org timed out, ask (email)\n");
+    for (const leak of ["search=", "Jan%20Novak", "mailto", "ops@example.org", "hr@example.com", "api.example.com/x"]) expect(md).not.toContain(leak);
+  });
+
+  it("never includes claims, summaries, questions, cost, excerpts or namesake hits; links only http(s)", () => {
+    for (const degraded of [null, "model timeout"]) {
+      const md = cs({ brief: brief({ degraded }) });
+      for (const text of FORBIDDEN) expect(md).not.toContain(text);
+      expect(md).not.toContain("model timeout");
+    }
+    const md = cs({ brief: brief({ evidence: [{ step: "s", url: "javascript:alert(1)", excerpt: "e" }] }) });
+    expect(md).toContain("- <https://www.linkedin.com/in/jnovak>");
+    expect(md).not.toContain("javascript:");
+    expect(cs({ candidates: [], brief: brief({ evidence: [] }) })).toContain("Žádný veřejný profil jsme jako Váš nepotvrdili.");
+  });
+
+  it("escapes the role", () => {
+    expect(cs({ role: "# Lead\nEngineer" })).toContain("o pozici \\# Lead Engineer.");
+  });
+});
+
 describe("noticeFileName", () => {
+  it("adds -cs for the Czech notice", () => {
+    expect(noticeFileName(run(), "en")).toBe("candidate-notice-01234567.md");
+    expect(noticeFileName(run(), "cs")).toBe("candidate-notice-01234567-cs.md");
+  });
+
   it("uses the run id prefix, never the subject's name", () => {
     const name = noticeFileName(run());
     expect(name).toBe("candidate-notice-01234567.md");

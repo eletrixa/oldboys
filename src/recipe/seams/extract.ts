@@ -23,7 +23,7 @@ import { z } from "zod";
 import { Claim } from "@/domain/claim";
 import type { Ports } from "@/domain/ports";
 import { emptyOutcome } from "@/recipe/runner";
-import { profileKey } from "@/recipe/seams/resolve";
+import { confirmedSources } from "@/recipe/seams/resolve";
 import type { StepContext, StepOutcome } from "@/recipe/sources/types";
 
 const PROMPT_CHARS = 60_000;
@@ -42,10 +42,9 @@ const Extracted = z.array(
 
 export async function extractClaims(ctx: StepContext, ports: Ports): Promise<StepOutcome> {
   const out = emptyOutcome();
-  const rejected = new Set(ctx.candidates.filter((c) => c.decision === "rejected").flatMap((c) => c.profile_urls.map(profileKey)));
   // Only confirmed material reaches the model. A name + city SERP returns every namesake, so a SERP hit counts only
   // once the Workflow marked it "merged" (its profile key equals a merged candidate's); the rest is "also found".
-  const sources = ctx.sources.filter((s) => s.identity === "merged" && !rejected.has(profileKey(s.url)));
+  const sources = confirmedSources(ctx);
   if (sources.length === 0) {
     out.notes.push("no usable sources");
     return out;

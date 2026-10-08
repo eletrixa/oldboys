@@ -3,43 +3,65 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/runs/[id]/kit-actions.tsx
- * Deps:    react, ../../ui (Radar tokens), ./interview-kit, ./candidate-copy, ./ats-note, ./reference-check
+ * Deps:    react, ../../ui (Radar tokens), ./call-panel (types), ./interview-kit, ./candidate-copy, ./ats-note, ./reference-check
  * Tested:  n/a (the texts are tested in __tests__/{interview-kit,candidate-copy,ats-note,reference-check}.test.ts)
  *
  * Key responsibilities:
  * - KitActions: build the kit (generatedAt = now) or the candidate notice at click time, copy it or download it as .md
+ * - Candidate row: an "EN | CZ" switch (local state, default EN) picks the language of the copied and downloaded notice
  * - Copy for ATS: a short plain-text note (atsNote) with the link to this brief, for pasting into any ATS card
  * - Copy reference questions: research gaps as plain-text questions for a former manager or colleague (idea #18)
  * - One compact labelled row per audience (small muted label + its buttons)
  * - Short "Copied" / "Copy failed" label on each copy button
+ * - The kit fetches GET /api/runs/:id/calls at click time for the phone verification section; on any error
+ *   the kit is built without it
  *
  * Design constraints:
- * - Client only; no fetch, every document are built from the RunState already on the page
+ * - Client only; the only fetch is the run's calls for the kit, everything else comes from the RunState on the page
  * - No alert(); failures show on the button
  */
 "use client";
 
 import { useState } from "react";
 import { BTN_SECONDARY } from "../../ui";
+import type { CallView, RunCalls } from "./call-panel";
 import type { RunState } from "./state";
 import { interviewKit, kitFileName } from "./interview-kit";
-import { candidateCopy, noticeFileName } from "./candidate-copy";
+import { candidateCopy, noticeFileName, type NoticeLang } from "./candidate-copy";
 import { atsNote } from "./ats-note";
 import { referenceQuestions } from "./reference-check";
 
 const BTN = BTN_SECONDARY;
 const ROW = "flex flex-wrap items-center gap-2";
 const LABEL = "w-20 shrink-0 text-xs font-medium text-muted";
+const LANG_GROUP = "inline-flex overflow-hidden rounded-md border border-divider text-xs font-medium";
+const LANG_BTN =
+  "px-2 py-1 text-muted hover:bg-sage/60 hover:text-ink aria-pressed:bg-action aria-pressed:text-white aria-pressed:hover:bg-action-hover aria-pressed:hover:text-white";
+const LANGS: readonly { lang: NoticeLang; label: string; title: string }[] = [
+  { lang: "en", label: "EN", title: "Candidate notice in English" },
+  { lang: "cs", label: "CZ", title: "Candidate notice in Czech" },
+];
 
 type CopyStatus = "idle" | "copied" | "failed";
 
+/** The run's calls for the kit's phone verification section; [] on any error. */
+async function runCalls(runId: string): Promise<CallView[]> {
+  try {
+    const res = await fetch(`/api/runs/${runId}/calls`, { cache: "no-store" });
+    return res.ok ? (await res.json<RunCalls>()).calls : [];
+  } catch {
+    return [];
+  }
+}
+
 const STATUS_LABEL: Record<Exclude<CopyStatus, "idle">, string> = { copied: "Copied", failed: "Copy failed" };
 
-/** Copies `text` and reports the outcome, then resets to idle after 2 s. */
-async function copyText(text: string | null, setStatus: (s: CopyStatus) => void): Promise<void> {
-  if (text === null) return;
+/** Copies `text` (or what the promise resolves to) and reports the outcome, then resets to idle after 2 s. */
+async function copyText(text: string | null | Promise<string | null>, setStatus: (s: CopyStatus) => void): Promise<void> {
   try {
-    await navigator.clipboard.writeText(text);
+    const value = await text;
+    if (value === null) return;
+    await navigator.clipboard.writeText(value);
     setStatus("copied");
   } catch {
     setStatus("failed");
@@ -69,10 +91,11 @@ export function KitActions({ state }: { state: RunState }): React.JSX.Element | 
   const [noticeCopy, setNoticeCopy] = useState<CopyStatus>("idle");
   const [atsCopy, setAtsCopy] = useState<CopyStatus>("idle");
   const [refCopy, setRefCopy] = useState<CopyStatus>("idle");
+  const [noticeLang, setNoticeLang] = useState<NoticeLang>("en");
   if (state.brief === null) return null;
 
-  const kit = (): string | null => interviewKit(state, new Date().toISOString());
-  const notice = (): string | null => candidateCopy(state);
+  const kit = async (): Promise<string | null> => interviewKit(state, new Date().toISOString(), await runCalls(state.id));
+  const notice = (): string | null => candidateCopy(state, noticeLang);
   const ats = (): string | null => atsNote(state, `${window.location.origin}/runs/${state.id}`);
   const refs = (): string | null => referenceQuestions(state);
 
@@ -83,16 +106,30 @@ export function KitActions({ state }: { state: RunState }): React.JSX.Element | 
         <button type="button" className={BTN} onClick={() => void copyText(kit(), setKitCopy)} aria-live="polite">
           {kitCopy === "idle" ? "Copy interview kit" : STATUS_LABEL[kitCopy]}
         </button>
-        <button type="button" className={BTN} onClick={() => { downloadText(kit(), kitFileName(state)); }}>
+        <button type="button" className={BTN} onClick={() => void kit().then((text) => { downloadText(text, kitFileName(state)); })}>
           Download .md
         </button>
       </div>
       <div className={ROW}>
         <span className={LABEL}>Candidate</span>
+        <div className={LANG_GROUP} role="group" aria-label="Candidate notice language">
+          {LANGS.map((l) => (
+            <button
+              key={l.lang}
+              type="button"
+              className={LANG_BTN}
+              aria-pressed={noticeLang === l.lang}
+              title={l.title}
+              onClick={() => { setNoticeLang(l.lang); }}
+            >
+              {l.label}
+            </button>
+          ))}
+        </div>
         <button type="button" className={BTN} onClick={() => void copyText(notice(), setNoticeCopy)} aria-live="polite">
           {noticeCopy === "idle" ? "Copy candidate notice" : STATUS_LABEL[noticeCopy]}
         </button>
-        <button type="button" className={BTN} onClick={() => { downloadText(notice(), noticeFileName(state)); }}>
+        <button type="button" className={BTN} onClick={() => { downloadText(notice(), noticeFileName(state, noticeLang)); }}>
           Download candidate notice (.md)
         </button>
       </div>
