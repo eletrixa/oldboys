@@ -51,8 +51,13 @@ export function KitActions({ state }: { state: RunState }): React.JSX.Element | 
     const a = document.createElement("a");
     a.href = url;
     a.download = kitFileName(state);
+    // Attached and revoked a tick later: Firefox and Safari can drop a download whose URL is revoked synchronously.
+    document.body.appendChild(a);
     a.click();
-    URL.revokeObjectURL(url);
+    a.remove();
+    setTimeout(() => {
+      URL.revokeObjectURL(url);
+    }, 0);
   };
 
   return (
