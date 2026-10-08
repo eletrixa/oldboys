@@ -17,19 +17,21 @@
 import { z } from "zod";
 import type { Claim, Source } from "@/domain/claim";
 import type { Ports } from "@/domain/ports";
+import { normalizeText, quoteInNormalized } from "@/domain/quote";
 import { emptyOutcome } from "@/recipe/runner";
 import type { StepContext, StepOutcome } from "@/recipe/sources/types";
 
-export function normalise(text: string): string {
-  return text.toLowerCase().replace(/[\s ]+/g, " ").replace(/[“”"'’‘`.,;:!?()[\]…-]/g, "").trim();
-}
+/** The seam's name for the shared normaliser (src/domain/quote.ts): FACT and STATEMENT share one gate. */
+export const normalise = normalizeText;
 
 export function quoteSupported(claim: Claim, sources: readonly Source[]): boolean {
   if (claim.quote === null) return false;
-  const q = normalise(claim.quote);
-  if (q.length === 0) return false;
+  const quote = claim.quote;
   const byId = new Map(sources.map((s) => [s.id, s]));
-  return claim.supports.every((id) => byId.has(id)) && claim.supports.some((id) => normalise(byId.get(id)?.excerpt ?? "").includes(q));
+  return (
+    claim.supports.every((id) => byId.has(id)) &&
+    claim.supports.some((id) => quoteInNormalized(quote, normalizeText(byId.get(id)?.excerpt ?? "")))
+  );
 }
 
 function downgrade(claim: Claim): Claim {

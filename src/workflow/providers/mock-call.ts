@@ -1,5 +1,5 @@
 /**
- * Mock call provider: a PlaceCall that answers instantly from the brief, plus the Source.actor labels.
+ * Mock call provider: a PlaceCall that answers instantly from the brief.
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/workflow/providers/mock-call.ts
@@ -8,7 +8,6 @@
  *
  * Key responsibilities:
  * - Return a deterministic, synchronous CallResult so the full call flow runs without a phone
- * - Own the Source.actor labels both providers use (MOCK stays visibly labeled downstream)
  *
  * Design constraints:
  * - Never touches the network and never reads secrets
@@ -16,10 +15,6 @@
  */
 import type { CallResult, TranscriptTurn } from "@/domain/call";
 import type { PlaceCall } from "@/domain/ports";
-
-// Both providers label their Source.actor from here.
-export const MOCK_SOURCE_ACTOR = "mock/convai";
-export const ELEVENLABS_SOURCE_ACTOR = "elevenlabs/convai";
 
 export function mockPlaceCall(): PlaceCall {
   return ({ callId, brief }) => {
@@ -43,7 +38,6 @@ export function mockPlaceCall(): PlaceCall {
       provider_conversation_id: providerConversationId,
       outcome: "done",
       transcript,
-      data_collection: { identity_confirmed: true, mock: true },
       call_successful: true,
       identity_confirmed: true,
       duration_secs: (last?.time_in_call_secs ?? 0) + 5,

@@ -12,7 +12,7 @@
 CREATE TABLE calls (
   id                       TEXT PRIMARY KEY,
   run_id                   TEXT NOT NULL REFERENCES investigations(id),
-  status                   TEXT NOT NULL CHECK (status IN ('drafted', 'dialing', 'in_call', 'done', 'failed', 'no_answer', 'refused', 'skipped')),
+  status                   TEXT NOT NULL CHECK (status IN ('drafted', 'dialing', 'done', 'failed', 'no_answer', 'refused', 'skipped')),
   provider                 TEXT NOT NULL CHECK (provider IN ('elevenlabs', 'mock')),
   provider_conversation_id TEXT,
   to_number_masked         TEXT,

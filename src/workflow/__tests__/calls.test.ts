@@ -14,8 +14,10 @@
  */
 import { describe, expect, it } from "vitest";
 import {
+  applyCallEvent,
   callResultR2Key,
   callSourceUrl,
+  providerFor,
   rowToCall,
   selectCallProvider,
   type CallRow,
@@ -63,7 +65,7 @@ describe("rowToCall", () => {
 
 describe("keys and urls", () => {
   it("builds the R2 key", () => {
-    expect(callResultR2Key("r1", "c1")).toBe("oldboys-sources/r1/call-c1.json");
+    expect(callResultR2Key("r1", "c1")).toBe("r1/src-call-c1.json");
   });
   it("builds the source URL per provider", () => {
     expect(callSourceUrl("elevenlabs", "abc")).toBe("https://elevenlabs.io/app/conversational-ai/history/abc");
@@ -71,7 +73,7 @@ describe("keys and urls", () => {
   });
 });
 
-describe("selectCallProvider", () => {
+describe("selectCallProvider / providerFor", () => {
   const full = {
     CALL_PROVIDER: "elevenlabs",
     ELEVENLABS_API_KEY: "k",
@@ -79,16 +81,51 @@ describe("selectCallProvider", () => {
     ELEVENLABS_PHONE_NUMBER_ID: "p",
   };
   it("is mock when CALL_PROVIDER is unset", () => {
-    const b = selectCallProvider({});
-    expect(b.provider).toBe("mock");
-    expect(b.sourceActor).toBe("mock/convai");
+    expect(selectCallProvider({})).toBe("mock");
   });
   it("is mock when elevenlabs is requested but a field is empty", () => {
-    expect(selectCallProvider({ ...full, ELEVENLABS_AGENT_ID: "" }).provider).toBe("mock");
+    expect(selectCallProvider({ ...full, ELEVENLABS_AGENT_ID: "" })).toBe("mock");
   });
   it("is elevenlabs when fully configured", () => {
-    const b = selectCallProvider(full);
-    expect(b.provider).toBe("elevenlabs");
-    expect(b.sourceActor).toBe("elevenlabs/convai");
+    expect(selectCallProvider(full)).toBe("elevenlabs");
+  });
+  it("providerFor never downgrades a stored elevenlabs call to mock", () => {
+    expect(() => providerFor("elevenlabs", {})).toThrow(/ELEVENLABS_API_KEY/);
+    expect(typeof providerFor("elevenlabs", full).placeCall).toBe("function");
+  });
+  it("providerFor mock resolves no result when polled", async () => {
+    await expect(providerFor("mock", {}).fetchResult("x")).resolves.toBeNull();
+  });
+});
+
+describe("applyCallEvent", () => {
+  type Prepared = { sql: string; binds: unknown[] };
+  const fakeDb = (): { db: D1Database; prepared: Prepared[] } => {
+    const prepared: Prepared[] = [];
+    const db = {
+      prepare(sql: string) {
+        const stmt: Prepared = { sql, binds: [] };
+        prepared.push(stmt);
+        return { bind: (...binds: unknown[]) => ((stmt.binds = binds), stmt) };
+      },
+    } as unknown as D1Database;
+    return { db, prepared };
+  };
+
+  it("guards the UPDATE with the allowed from-states of the event", () => {
+    const { db, prepared } = fakeDb();
+    applyCallEvent(db, "c1", { type: "approve" }, { consent_ack: 1, operator: "robert" });
+    const stmt = prepared[0];
+    expect(stmt?.sql).toBe(
+      "UPDATE calls SET status = ?, consent_ack = ?, operator = ? WHERE id = ? AND status IN (?)",
+    );
+    expect(stmt?.binds).toEqual(["dialing", 1, "robert", "c1", "drafted"]);
+  });
+
+  it("appends an extra WHERE clause and its binds after the status list", () => {
+    const { db, prepared } = fakeDb();
+    applyCallEvent(db, "c1", { type: "result", outcome: "refused" }, {}, { sql: " AND x = ?", binds: [7] });
+    expect(prepared[0]?.sql).toBe("UPDATE calls SET status = ? WHERE id = ? AND status IN (?) AND x = ?");
+    expect(prepared[0]?.binds).toEqual(["refused", "c1", "dialing", 7]);
   });
 });

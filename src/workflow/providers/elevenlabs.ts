@@ -35,8 +35,17 @@ const OutboundResponse = z.object({
   message: z.string().optional(),
 });
 
+/** Bound wrapper: a bare `fetch` reference throws "Illegal invocation" on Workers. */
 function doFetch(cfg: ElevenLabsConfig): typeof fetch {
   return cfg.fetchImpl ?? ((input, init) => fetch(input, init));
+}
+
+function tryJson(text: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
 }
 
 export function elevenLabsPlaceCall(cfg: ElevenLabsConfig): PlaceCall {
@@ -61,13 +70,8 @@ export function elevenLabsPlaceCall(cfg: ElevenLabsConfig): PlaceCall {
       }),
     });
     const text = await res.text();
-    if (!res.ok) throw new Error(`elevenlabs outbound-call failed: ${String(res.status)} ${text}`);
-    let conversationId: string | null | undefined;
-    try {
-      conversationId = OutboundResponse.parse(JSON.parse(text)).conversation_id;
-    } catch {
-      throw new Error(`elevenlabs outbound-call failed: ${String(res.status)} ${text}`);
-    }
+    const parsed = res.ok ? OutboundResponse.safeParse(tryJson(text)) : null;
+    const conversationId = parsed?.success === true ? parsed.data.conversation_id : null;
     if (conversationId === null || conversationId === undefined || conversationId === "") {
       throw new Error(`elevenlabs outbound-call failed: ${String(res.status)} ${text}`);
     }
@@ -100,8 +104,13 @@ export const PostCallWebhook = z.object({
       conversation_id: z.string().min(1),
       status: z.string().optional(),
       transcript: Transcript.optional(),
+      // `cost` (webhook) has UNCONFIRMED units; `cost_fiat` (GET conversation) is USD.
       metadata: z
-        .object({ call_duration_secs: z.number().optional(), cost: z.number().optional() })
+        .object({
+          call_duration_secs: z.number().optional(),
+          cost: z.number().optional(),
+          cost_fiat: z.number().nullish(),
+        })
         .loose()
         .optional(),
       analysis: Analysis.optional(),
@@ -119,8 +128,7 @@ type ConversationData = PostCallWebhook["data"];
 
 /** Shared mapping for a finished conversation (webhook `data` and GET body have the same fields). */
 function finishedToResult(data: ConversationData, costUsd: number): CallResult {
-  const dataCollection = data.analysis?.data_collection_results ?? {};
-  const identity = dataCollection.identity_confirmed;
+  const identity = data.analysis?.data_collection_results?.identity_confirmed;
   const verdict = data.analysis?.call_successful;
   return {
     provider_conversation_id: data.conversation_id,
@@ -130,7 +138,6 @@ function finishedToResult(data: ConversationData, costUsd: number): CallResult {
       message: turn.message ?? "",
       time_in_call_secs: turn.time_in_call_secs ?? 0,
     })),
-    data_collection: dataCollection,
     call_successful: verdict === "success" ? true : verdict === "failure" ? false : null,
     identity_confirmed: typeof identity === "boolean" ? identity : null,
     duration_secs: Math.round(data.metadata?.call_duration_secs ?? 0),
@@ -150,7 +157,6 @@ export function webhookToResult(event: PostCallWebhook): CallResult | null {
         provider_conversation_id: event.data.conversation_id,
         outcome: reason === "busy" || reason === "no-answer" ? "no_answer" : "failed",
         transcript: [],
-        data_collection: {},
         call_successful: null,
         identity_confirmed: null,
         duration_secs: 0,
@@ -159,26 +165,12 @@ export function webhookToResult(event: PostCallWebhook): CallResult | null {
       };
     }
     case "post_call_transcription":
-      // metadata.cost has UNCONFIRMED units (credits, not USD), so webhooks store 0.
-      // The GET conversation body gives metadata.cost_fiat (USD) when available.
-      return finishedToResult(event.data, 0);
+      return finishedToResult(event.data, event.data.metadata?.cost_fiat ?? 0);
   }
 }
 
-const Conversation = PostCallWebhook.shape.data.extend({
-  metadata: z
-    .object({
-      call_duration_secs: z.number().optional(),
-      cost: z.number().optional(),
-      cost_fiat: z.number().nullish(),
-    })
-    .loose()
-    .optional(),
-});
-
 /** Map a GET /v1/convai/conversations/:id body to a result. */
-export function conversationToResult(json: unknown): CallResult {
-  const data = Conversation.parse(json);
+function conversationToResult(data: ConversationData): CallResult {
   return finishedToResult(data, data.metadata?.cost_fiat ?? 0);
 }
 
@@ -191,9 +183,8 @@ export function elevenLabsFetchCallResult(cfg: ElevenLabsConfig): FetchCallResul
     if (res.status === 404) return null;
     const text = await res.text();
     if (!res.ok) throw new Error(`elevenlabs get conversation failed: ${String(res.status)} ${text}`);
-    const json: unknown = JSON.parse(text);
-    const status = z.object({ status: z.string().optional() }).parse(json).status;
-    if (status !== "done" && status !== "failed") return null;
-    return conversationToResult(json);
+    const data = PostCallWebhook.shape.data.parse(JSON.parse(text));
+    if (data.status !== "done" && data.status !== "failed") return null;
+    return conversationToResult(data);
   };
 }

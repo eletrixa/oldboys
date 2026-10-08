@@ -65,12 +65,12 @@ curl -X POST http://localhost:3141/api/calls/<call-id>/approve \
     "consent_note":"callee agreed by SMS 2026-10-08",
     "operator":"robert"
   }' \
-  # Response: 202 {id, status:"dialing"|"in_call", provider}
+  # Response: 202 {id, status:"dialing", provider} (mock: status is already terminal)
 
 # Step 3: Poll call status (repeats every 5 s until terminal)
 curl http://localhost:3141/api/calls/<call-id> \
   # Returns {id, run_id, status, provider, brief, ...}
-  # Status: drafted, dialing, in_call, done, failed, no_answer, refused, skipped
+  # Status: drafted, dialing, done, failed, no_answer, refused, skipped
 
 # Step 4: Skip if needed
 curl -X POST http://localhost:3141/api/calls/<call-id>/skip \
@@ -79,7 +79,7 @@ curl -X POST http://localhost:3141/api/calls/<call-id>/skip \
 
 ## What the UI Shows
 
-- **Status machine:** drafted → dialing → in_call → done | failed | no_answer | refused | skipped
+- **Status machine:** drafted → dialing → done | failed | no_answer | refused; drafted → skipped
 - **MOCK label:** appears on calls when `CALL_PROVIDER=mock` (demos)
 - **STATEMENT label:** appears on claims extracted from call transcripts
 - **Cost:** final `cost_usd` populated after the call ends

@@ -105,7 +105,7 @@ sequenceDiagram
   AP->>D1: batch: conditional update drafted to dialing (409 if limit hit)
   AP->>P: placeCall (the only dial, number used only here)
   P-->>AP: provider_conversation_id
-  AP->>D1: store conversation id, masked number, ledger call row, status in_call
+  AP->>D1: store conversation id, masked number, ledger call row, status dialing
   AP->>WF: VERIFY_CALL.create id=callId params {callId, runId}
   P->>WH: post_call_transcription + ElevenLabs-Signature
   WH->>WH: verify signature on raw body (401 on failure)
@@ -152,7 +152,7 @@ Reused unchanged on the move to B: the three domain modules, the provider port a
 
 Full version in 05. Short narratives, written as if it is the end of the hackathon and the feature failed.
 
-1. **The webhook never arrived.** The URL pointed at a preview deployment and the HMAC secret was copied with a trailing newline. Every live call looked stuck at `in_call`. Detection: `GET /api/calls/:id` shows `last_error`, no `webhook_events` row. Response: poll fallback in the Workflow, fixture signature test (E-C3) run before E-C1, demo on MOCK, labeled.
+1. **The webhook never arrived.** The URL pointed at a preview deployment and the HMAC secret was copied with a trailing newline. Every live call looked stuck at `dialing`. Detection: `GET /api/calls/:id` shows `last_error`, no `webhook_events` row. Response: poll fallback in the Workflow, fixture signature test (E-C3) run before E-C1, demo on MOCK, labeled.
 2. **Organisers ruled the call out of bounds.** The brief says outreach is "drafted and shown, never sent". Detection: answer to A1 asked at T+0. Response: MOCK path is identical from the UI's point of view; the report labels the source a consented phone call or MOCK.
 3. **A callee said something false and it shipped as FACT.** The quote-in-transcript check passed by construction. Detection: FACT claims supported only by a call source. Response: STATEMENT kind exists precisely for this, confidence capped at 0.6 and 0.3 without identity confirmation.
 4. **The same stranger got two calls.** A retried Workflow step re-dialed. Detection: two `call` ledger rows per approval. Response: dial lives in the route handler, status transition is conditional, so a retry cannot dial again.

@@ -23,22 +23,7 @@ export async function GET(
   const { env } = getCloudflareContext();
   const call = await loadCall(env.DB, id);
   if (!call) return Response.json({ error: "call not found" }, { status: 404 });
-  return Response.json({
-    id: call.id,
-    run_id: call.run_id,
-    status: call.status,
-    provider: call.provider,
-    brief: call.brief,
-    to_number_masked: call.to_number_masked,
-    provider_conversation_id: call.provider_conversation_id,
-    call_successful: call.call_successful,
-    identity_confirmed: call.identity_confirmed,
-    duration_secs: call.duration_secs,
-    cost_usd: call.cost_usd,
-    failure_reason: call.failure_reason,
-    last_error: call.last_error,
-    created_at: call.created_at,
-    approved_at: call.approved_at,
-    finished_at: call.finished_at,
-  });
+  // Never the consent note, operator, R2 key or transcript; the number is already masked.
+  const { consent_note: _note, operator: _operator, result_r2_key: _key, consent_ack: _ack, ...publicCall } = call;
+  return Response.json(publicCall);
 }

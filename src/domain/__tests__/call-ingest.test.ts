@@ -16,11 +16,10 @@ import { describe, expect, it } from "vitest";
 import type { CallBrief, CallResult } from "@/domain/call";
 import {
   callResultToClaims,
-  normalizeText,
-  quoteInExcerpt,
   transcriptToExcerpt,
   type CallExtraction,
 } from "@/domain/call-ingest";
+import { normalizeText, quoteInExcerpt } from "@/domain/quote";
 import { Claim } from "@/domain/claim";
 import type { LlmCall } from "@/domain/ports";
 
@@ -42,7 +41,6 @@ const result: CallResult = {
     { role: "user", message: "Ano, to jsem já.", time_in_call_secs: 3.6 },
     { role: "user", message: "Jsem vedoucí vývoje, už pět let.", time_in_call_secs: 9 },
   ],
-  data_collection: {},
   call_successful: true,
   identity_confirmed: null,
   duration_secs: 30,
@@ -110,7 +108,7 @@ describe("callResultToClaims", () => {
       llm,
       result: { ...result, outcome: "no_answer" },
     });
-    expect(out).toEqual({ claims: [], gapReason: "call not completed: no_answer", extraction: null });
+    expect(out).toEqual({ claims: [], gapReason: "call not completed: no_answer" });
     expect(calls()).toBe(0);
   });
 
@@ -140,7 +138,6 @@ describe("callResultToClaims", () => {
     const out = await callResultToClaims({ ...base, llm, result });
     expect(out.claims).toEqual([]);
     expect(out.gapReason).toBe("callee declined");
-    expect(out.extraction?.refused).toBe(true);
   });
 
   it("gaps when the provider says identity is not confirmed", async () => {

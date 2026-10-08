@@ -13,8 +13,9 @@
  * - No runtime = "edge"
  */
 import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { makeLedgerAppend } from "@/adapters/d1";
 import { requireBearer } from "@/app/api/_lib/auth";
-import { appendLedger } from "@/workflow/ledger";
+import { applyCallEvent, loadCall } from "@/workflow/calls";
 
 export async function POST(
   request: Request,
@@ -25,14 +26,13 @@ export async function POST(
   if (denied) return denied;
 
   const { id } = await params;
-  const row = await env.DB.prepare(
-    "UPDATE calls SET status = 'skipped', finished_at = ? WHERE id = ? AND status = 'drafted' RETURNING run_id",
-  )
-    .bind(new Date().toISOString(), id)
-    .first<{ run_id: string }>();
-  if (!row) return Response.json({ error: "call not found or not drafted" }, { status: 409 });
+  const call = await loadCall(env.DB, id);
+  if (!call) return Response.json({ error: "call not found" }, { status: 404 });
+  const skipped = await applyCallEvent(env.DB, id, { type: "skip" }, { finished_at: new Date().toISOString() }).run();
+  if (skipped.meta.changes !== 1) return Response.json({ error: "call is not drafted" }, { status: 409 });
 
-  await appendLedger(env.DB, row.run_id, {
+  await makeLedgerAppend(env.DB)({
+    run_id: call.run_id,
     step: "call:skip",
     kind: "decision",
     cost_usd: 0,

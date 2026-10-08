@@ -12,7 +12,8 @@
  * - Raw payloads go to R2 under `<run>/<source>.json`; D1 keeps only the excerpt
  *
  * Design constraints:
- * - Column names mirror migrations 0001 + 0002; no ORM
+ * - Column names mirror migrations 0001–0004; no ORM
+ * - Source and claim writes are INSERT OR REPLACE so a retried Workflow step stays idempotent
  * - Gaps are also mirrored as ledger `decision` rows with `ref.gap = true` for the SSE stream
  */
 import { Brief, Candidate, Claim, Gap, LedgerEntry, Source } from "@/domain/claim";
@@ -22,19 +23,33 @@ import type { Question } from "@/recipe/step";
 
 type Row = Record<string, unknown>;
 
+const LEDGER_ATTEMPTS = 3;
+
+function isSeqCollision(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return message.includes("UNIQUE") || message.includes("PRIMARY KEY");
+}
+
+/** seq is assigned inside the INSERT; two Workflows may append to one run, so a (run_id, seq) collision is retried. */
 export function makeLedgerAppend(db: D1Database): LedgerAppend {
   return async (entry) => {
     const ts = new Date().toISOString();
-    const row = await db
+    const stmt = db
       .prepare(
         `INSERT INTO ledger_entries (run_id, seq, ts, step, kind, cost_usd, ms, ref_json)
          VALUES (?1, (SELECT COALESCE(MAX(seq), 0) + 1 FROM ledger_entries WHERE run_id = ?1), ?2, ?3, ?4, ?5, ?6, ?7)
          RETURNING seq`,
       )
-      .bind(entry.run_id, ts, entry.step, entry.kind, entry.cost_usd, entry.ms, JSON.stringify(entry.ref ?? null))
-      .first<{ seq: number }>();
-    if (!row) throw new Error("ledger insert returned no row");
-    return LedgerEntry.parse({ ...entry, seq: row.seq, ts });
+      .bind(entry.run_id, ts, entry.step, entry.kind, entry.cost_usd, entry.ms, JSON.stringify(entry.ref ?? null));
+    for (let attempt = 1; ; attempt++) {
+      try {
+        const row = await stmt.first<{ seq: number }>();
+        if (!row) throw new Error("ledger insert returned no row");
+        return LedgerEntry.parse({ ...entry, seq: row.seq, ts });
+      } catch (error) {
+        if (attempt >= LEDGER_ATTEMPTS || !isSeqCollision(error)) throw error;
+      }
+    }
   };
 }
 
@@ -45,12 +60,22 @@ export function makeSourceStore(db: D1Database, bucket: R2Bucket): SourceStore {
     const full = Source.parse({ ...source, r2_key });
     await db
       .prepare(
-        `INSERT INTO sources (id, run_id, url, actor, fetched_at, excerpt, r2_key, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT OR REPLACE INTO sources (id, run_id, url, actor, fetched_at, excerpt, r2_key, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .bind(full.id, full.run_id, full.url, full.actor, full.fetched_at, full.excerpt, full.r2_key, full.expires_at)
       .run();
     return full;
   };
+}
+
+/** One claims row upsert; shared with VerificationCallWorkflow so a column change lands in one place. */
+export function claimUpsert(db: D1Database, c: Claim): D1PreparedStatement {
+  return db
+    .prepare(
+      `INSERT OR REPLACE INTO claims (id, run_id, question_id, candidate_id, text, kind, confidence, quote, supports_json, contradicts_json, rank)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+    .bind(c.id, c.run_id, c.question_id, c.candidate_id, c.text, c.kind, c.confidence, c.quote, JSON.stringify(c.supports), JSON.stringify(c.contradicts), c.rank);
 }
 
 function json<T>(v: unknown, fallback: T): T {
@@ -109,16 +134,7 @@ export async function persistOutcome(db: D1Database, runId: string, out: StepOut
     );
   }
   if (out.claims_mode === "replace") stmts.push(db.prepare("DELETE FROM claims WHERE run_id = ?").bind(runId));
-  for (const c of out.claims) {
-    stmts.push(
-      db
-        .prepare(
-          `INSERT OR REPLACE INTO claims (id, run_id, question_id, candidate_id, text, kind, confidence, quote, supports_json, contradicts_json, rank)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        )
-        .bind(c.id, c.run_id, c.question_id, c.candidate_id, c.text, c.kind, c.confidence, c.quote, JSON.stringify(c.supports), JSON.stringify(c.contradicts), c.rank),
-    );
-  }
+  for (const c of out.claims) stmts.push(claimUpsert(db, c));
   for (const g of out.gaps) {
     stmts.push(db.prepare("INSERT OR REPLACE INTO gaps (run_id, question_id, reason) VALUES (?, ?, ?)").bind(g.run_id, g.question_id, g.reason));
   }

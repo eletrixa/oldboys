@@ -20,6 +20,7 @@
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { z } from "zod";
 import { requireBearer } from "@/app/api/_lib/auth";
+import { parseJsonBody } from "@/app/api/_lib/body";
 import { GoalId } from "@/domain/claim";
 import { dedupeSince, RUNS_PER_HOUR_CAP } from "@/domain/run-status";
 
@@ -37,16 +38,8 @@ export async function POST(request: Request): Promise<Response> {
   const denied = requireBearer(request, env.RUN_TOKEN);
   if (denied) return denied;
 
-  let raw: unknown;
-  try {
-    raw = await request.json();
-  } catch {
-    return Response.json({ error: "body must be JSON" }, { status: 400 });
-  }
-  const parsed = StartRunBody.safeParse(raw);
-  if (!parsed.success) {
-    return Response.json({ error: "invalid body", issues: parsed.error.issues }, { status: 400 });
-  }
+  const parsed = await parseJsonBody(request, StartRunBody);
+  if (parsed.error) return parsed.error;
 
   const now = new Date();
   if (parsed.data.sourceUrl !== undefined) {

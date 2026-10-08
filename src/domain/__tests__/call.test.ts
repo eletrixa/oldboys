@@ -15,12 +15,14 @@
  */
 import { describe, expect, it } from "vitest";
 import {
+  allowedFrom,
   Call,
   CallBrief,
   CallResult,
   CallStatus,
   IllegalCallTransition,
   maskNumber,
+  targetStatus,
   transitionCall,
   type CallEvent,
 } from "@/domain/call";
@@ -64,7 +66,6 @@ const result: CallResult = {
     { role: "agent", message: "Am I speaking with Jane Doe?", time_in_call_secs: 0 },
     { role: "user", message: "Yes, this is Jane.", time_in_call_secs: 3 },
   ],
-  data_collection: {},
   call_successful: true,
   identity_confirmed: true,
   duration_secs: 42,
@@ -95,13 +96,10 @@ describe("transitionCall", () => {
   const legal: [CallStatus, CallEvent, CallStatus][] = [
     ["drafted", { type: "approve" }, "dialing"],
     ["drafted", { type: "skip" }, "skipped"],
-    ["dialing", { type: "dial-failed" }, "failed"],
-    ["dialing", { type: "answered" }, "in_call"],
+    ["dialing", { type: "fail" }, "failed"],
     ["dialing", { type: "result", outcome: "no_answer" }, "no_answer"],
-    ["in_call", { type: "result", outcome: "done" }, "done"],
-    ["in_call", { type: "result", outcome: "refused" }, "refused"],
-    ["dialing", { type: "timeout" }, "failed"],
-    ["in_call", { type: "timeout" }, "failed"],
+    ["dialing", { type: "result", outcome: "done" }, "done"],
+    ["dialing", { type: "result", outcome: "refused" }, "refused"],
   ];
 
   it.each(legal)("%s + %o -> %s", (from, event, to) => {
@@ -112,10 +110,8 @@ describe("transitionCall", () => {
     const events: CallEvent[] = [
       { type: "approve" },
       { type: "skip" },
-      { type: "dial-failed" },
-      { type: "answered" },
+      { type: "fail" },
       { type: "result", outcome: "done" },
-      { type: "timeout" },
     ];
     const legalKeys = new Set(legal.map(([s, e]) => `${s}:${e.type}`));
     for (const status of CallStatus.options) {
@@ -124,6 +120,11 @@ describe("transitionCall", () => {
         expect(() => transitionCall(status, event)).toThrow(IllegalCallTransition);
       }
     }
+  });
+
+  it("exposes the from-states table used by the SQL guard", () => {
+    expect(allowedFrom("result")).toEqual(["dialing"]);
+    expect(targetStatus({ type: "result", outcome: "refused" })).toBe("refused");
   });
 });
 

@@ -15,6 +15,8 @@
  * - Never throws on bad input; any problem returns false / null
  */
 
+import { timingSafeEqual } from "@/domain/timing-safe-equal";
+
 export const SIGNATURE_TOLERANCE_SECS = 30 * 60;
 
 export function parseSignatureHeader(header: string | null): { t: number; v0: string } | null {
@@ -36,13 +38,6 @@ function toHex(bytes: Uint8Array): string {
   return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-function constantTimeEqual(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
-  let diff = 0;
-  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  return diff === 0;
-}
-
 export async function verifyElevenLabsSignature(input: {
   rawBody: string;
   header: string | null;
@@ -62,7 +57,7 @@ export async function verifyElevenLabsSignature(input: {
       ["sign"],
     );
     const sig = await crypto.subtle.sign("HMAC", key, enc.encode(`${String(parsed.t)}.${input.rawBody}`));
-    return constantTimeEqual(toHex(new Uint8Array(sig)), parsed.v0.toLowerCase());
+    return timingSafeEqual(toHex(new Uint8Array(sig)), parsed.v0.toLowerCase());
   } catch {
     return false;
   }

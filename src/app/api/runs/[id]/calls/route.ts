@@ -16,6 +16,7 @@
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { z } from "zod";
 import { requireBearer } from "@/app/api/_lib/auth";
+import { parseJsonBody } from "@/app/api/_lib/body";
 import { buildCallBrief } from "@/domain/call-brief";
 import { Claim, GoalId, type Gap } from "@/domain/claim";
 import { recipeFor } from "@/recipe/goals";
@@ -37,19 +38,8 @@ export async function POST(
   if (denied) return denied;
 
   const { id: runId } = await params;
-  const text = await request.text();
-  let raw: unknown = {};
-  if (text.trim().length > 0) {
-    try {
-      raw = JSON.parse(text);
-    } catch {
-      return Response.json({ error: "body must be JSON" }, { status: 400 });
-    }
-  }
-  const parsed = DraftBody.safeParse(raw);
-  if (!parsed.success) {
-    return Response.json({ error: "invalid body", issues: parsed.error.issues }, { status: 400 });
-  }
+  const body = await parseJsonBody(request, DraftBody, { emptyOk: true });
+  if (body.error) return body.error;
 
   const run = await env.DB.prepare("SELECT subject, goal, status FROM investigations WHERE id = ?")
     .bind(runId)
@@ -60,13 +50,11 @@ export async function POST(
   }
   const goal = GoalId.parse(run.goal);
 
-  const gapRows = await env.DB.prepare("SELECT question_id, reason FROM gaps WHERE run_id = ?")
-    .bind(runId)
-    .all<Pick<Gap, "question_id" | "reason">>();
+  const [gapRows, claimRows] = await Promise.all([
+    env.DB.prepare("SELECT question_id, reason FROM gaps WHERE run_id = ?").bind(runId).all<Pick<Gap, "question_id" | "reason">>(),
+    env.DB.prepare("SELECT * FROM claims WHERE run_id = ?").bind(runId).all<ClaimRow>(),
+  ]);
   const gaps: Gap[] = gapRows.results.map((g) => ({ ...g, run_id: runId }));
-  const claimRows = await env.DB.prepare("SELECT * FROM claims WHERE run_id = ?")
-    .bind(runId)
-    .all<ClaimRow>();
   const claims = claimRows.results.map(({ supports_json, contradicts_json, ...rest }) =>
     Claim.parse({
       ...rest,
@@ -81,7 +69,7 @@ export async function POST(
     questions: recipeFor(goal).questions,
     gaps,
     claims,
-    language: parsed.data.language,
+    language: body.data.language,
   });
 
   const callId = crypto.randomUUID();
@@ -89,7 +77,7 @@ export async function POST(
     `INSERT INTO calls (id, run_id, status, provider, consent_ack, brief_json, cost_usd, created_at)
      VALUES (?, ?, 'drafted', ?, 0, ?, 0, ?)`,
   )
-    .bind(callId, runId, selectCallProvider(env).provider, JSON.stringify(brief), new Date().toISOString())
+    .bind(callId, runId, selectCallProvider(env), JSON.stringify(brief), new Date().toISOString())
     .run();
 
   return Response.json({ id: callId, brief }, { status: 201 });

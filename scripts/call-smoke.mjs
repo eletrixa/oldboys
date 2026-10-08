@@ -52,7 +52,7 @@ try {
   const created = await createRes.json();
   callId = created.id;
   log(`Call created: ${callId}`);
-  log(`\nBrief:\n${created.brief}\n`);
+  log(`\nBrief:\n${JSON.stringify(created.brief, null, 2)}\n`);
 
   // Step 2: Approve with consent
   log('Approving call with consent...');

@@ -8,39 +8,27 @@
  *
  * Key responsibilities:
  * - Render the transcript as the source excerpt and build the extraction prompt
- * - Run one `primary` LLM extraction and gate each answer on a verbatim quote in the transcript
+ * - Run one `primary` LLM extraction and gate each answer on a verbatim quote in a callee (`user`) turn
  * - Cap confidence (a callee statement is never a public fact) and never emit kind FACT
  *
  * Design constraints:
  * - Pure: the only side effect is the injected `llm` port
  * - The model never decides kind: STATEMENT only when the quote is found deterministically
- * - Answers for question ids outside the brief are dropped silently
+ * - Answers for question ids outside the brief, or touching an Art. 9 topic, are dropped silently
  */
 import { z } from "zod";
 import type { CallBrief, CallResult, TranscriptTurn } from "@/domain/call";
+import { containsArt9Topic } from "@/domain/call-brief";
 import { Claim } from "@/domain/claim";
 import type { LlmCall } from "@/domain/ports";
+import { normalizeText, quoteInNormalized } from "@/domain/quote";
 
 export const STATEMENT_MAX_CONFIDENCE = 0.6;
-export const UNCONFIRMED_IDENTITY_MAX_CONFIDENCE = 0.3;
 
 export function transcriptToExcerpt(transcript: readonly TranscriptTurn[]): string {
   return transcript
     .map((t) => `[${String(Math.round(t.time_in_call_secs))}s] ${t.role}: ${t.message}`)
     .join("\n");
-}
-
-export function normalizeText(s: string): string {
-  return s
-    .toLowerCase()
-    .replace(/[^\p{L}\p{N}\s]/gu, "")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-export function quoteInExcerpt(quote: string, excerpt: string): boolean {
-  const q = normalizeText(quote);
-  return q.length > 0 && normalizeText(excerpt).includes(q);
 }
 
 export const CallExtraction = z.object({
@@ -93,34 +81,33 @@ export async function callResultToClaims(input: {
   callId: string;
   sourceId: string;
   llm: LlmCall;
-}): Promise<{ claims: Claim[]; gapReason: string | null; extraction: CallExtraction | null }> {
+}): Promise<{ claims: Claim[]; gapReason: string | null }> {
   const { result, brief, runId, callId, sourceId, llm } = input;
-  const none = (gapReason: string, extraction: CallExtraction | null = null) => ({
-    claims: [],
-    gapReason,
-    extraction,
-  });
+  const none = (gapReason: string): { claims: Claim[]; gapReason: string } => ({ claims: [], gapReason });
   if (result.outcome !== "done") {
     return none(`call not completed: ${result.failure_reason ?? result.outcome}`);
   }
   if (!result.transcript.some((t) => t.role === "user")) return none("callee said nothing");
 
   const excerpt = transcriptToExcerpt(result.transcript);
+  // The agent's own lines restate the claims it asks about; only what the callee said can back a STATEMENT.
+  const calleeExcerpt = transcriptToExcerpt(result.transcript.filter((t) => t.role === "user"));
   const { value: extraction } = await llm({
     model: "primary",
     ...buildExtractionPrompt(brief, excerpt),
     schema: CallExtraction,
   });
-  if (extraction.refused) return none("callee declined", extraction);
+  if (extraction.refused) return none("callee declined");
   if (!(result.identity_confirmed ?? extraction.identity_confirmed)) {
-    return none("callee could not confirm identity", extraction);
+    return none("callee could not confirm identity");
   }
 
   const known = new Set(brief.questions.map((q) => q.question_id));
+  const normalizedCallee = normalizeText(calleeExcerpt);
   const claims = extraction.answers
-    .filter((a) => known.has(a.question_id))
+    .filter((a) => known.has(a.question_id) && !containsArt9Topic(a.text))
     .map((a) => {
-      const statement = quoteInExcerpt(a.quote, excerpt);
+      const statement = quoteInNormalized(a.quote, normalizedCallee);
       return Claim.parse({
         id: `${callId}:${a.question_id}`,
         run_id: runId,
@@ -135,9 +122,5 @@ export async function callResultToClaims(input: {
         rank: 0,
       });
     });
-  return {
-    claims,
-    gapReason: claims.length > 0 ? null : "callee gave no usable answers",
-    extraction,
-  };
+  return { claims, gapReason: claims.length > 0 ? null : "callee gave no usable answers" };
 }

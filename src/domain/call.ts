@@ -9,7 +9,8 @@
  * Key responsibilities:
  * - Single source of truth for the call shapes (plans/005-call-verification); routes, Workflow and
  *   providers import from here
- * - `transitionCall` is the only place that knows which status changes are legal
+ * - `allowedFrom` / `targetStatus` are the only place that knows which status changes are legal;
+ *   `transitionCall` is the in-memory form, `applyCallEvent` (src/workflow/calls.ts) the atomic SQL form
  *
  * Design constraints:
  * - Field names are snake_case and mirror migrations/0004_calls.sql one to one; booleans are
@@ -22,7 +23,6 @@ import { z } from "zod";
 export const CallStatus = z.enum([
   "drafted",
   "dialing",
-  "in_call",
   "done",
   "failed",
   "no_answer",
@@ -92,8 +92,6 @@ export const CallResult = z.object({
   provider_conversation_id: z.string().min(1),
   outcome: CallOutcome,
   transcript: z.array(TranscriptTurn),
-  /** Provider-side structured extraction (ElevenLabs data_collection_results), raw. */
-  data_collection: z.record(z.string(), z.unknown()),
   call_successful: z.boolean().nullable(),
   /** Provider-side identity answer when available; null means "ask the extractor". */
   identity_confirmed: z.boolean().nullable(),
@@ -106,10 +104,33 @@ export type CallResult = z.infer<typeof CallResult>;
 export type CallEvent =
   | { type: "approve" }
   | { type: "skip" }
-  | { type: "dial-failed" }
-  | { type: "answered" }
   | { type: "result"; outcome: CallOutcome }
-  | { type: "timeout" };
+  | { type: "fail" };
+
+/** Which statuses may take each event: the single table behind transitionCall and the SQL guards. */
+const ALLOWED_FROM: Record<CallEvent["type"], readonly CallStatus[]> = {
+  approve: ["drafted"],
+  skip: ["drafted"],
+  result: ["dialing"],
+  fail: ["dialing"],
+};
+
+export function allowedFrom(event: CallEvent["type"]): readonly CallStatus[] {
+  return ALLOWED_FROM[event];
+}
+
+export function targetStatus(event: CallEvent): CallStatus {
+  switch (event.type) {
+    case "approve":
+      return "dialing";
+    case "skip":
+      return "skipped";
+    case "result":
+      return event.outcome;
+    case "fail":
+      return "failed";
+  }
+}
 
 export class IllegalCallTransition extends Error {
   constructor(status: CallStatus, event: CallEvent["type"]) {
@@ -118,32 +139,13 @@ export class IllegalCallTransition extends Error {
   }
 }
 
-/** Pure status machine; throws IllegalCallTransition on anything not listed. */
+/** Pure status machine; throws IllegalCallTransition on anything not in ALLOWED_FROM. */
 export function transitionCall(status: CallStatus, event: CallEvent): CallStatus {
-  switch (event.type) {
-    case "approve":
-      if (status === "drafted") return "dialing";
-      break;
-    case "skip":
-      if (status === "drafted") return "skipped";
-      break;
-    case "dial-failed":
-      if (status === "dialing") return "failed";
-      break;
-    case "answered":
-      if (status === "dialing") return "in_call";
-      break;
-    case "result":
-      if (status === "dialing" || status === "in_call") return event.outcome;
-      break;
-    case "timeout":
-      if (status === "dialing" || status === "in_call") return "failed";
-      break;
-  }
-  throw new IllegalCallTransition(status, event.type);
+  if (!allowedFrom(event.type).includes(status)) throw new IllegalCallTransition(status, event.type);
+  return targetStatus(event);
 }
 
-/** Mask an E.164 number for storage: keep the country prefix and the last three digits. */
+/** Mask an E.164 number for storage: keep the country prefix and the last three digits (short inputs are fully masked so nothing leaks). */
 export function maskNumber(e164: string): string {
   const digits = e164.replace(/[^\d]/g, "");
   if (digits.length <= 6) return "+***";

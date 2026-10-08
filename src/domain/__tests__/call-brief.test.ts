@@ -14,7 +14,7 @@
  * - Fixtures stay inline
  */
 import { describe, expect, it } from "vitest";
-import { ART9_DENYLIST, buildCallBrief, containsArt9Topic, MAX_CALL_QUESTIONS } from "@/domain/call-brief";
+import { ART9_PATTERN, buildCallBrief, containsArt9Topic, MAX_CALL_QUESTIONS } from "@/domain/call-brief";
 import { CallBrief } from "@/domain/call";
 import type { Claim, Gap } from "@/domain/claim";
 import type { Question } from "@/recipe/step";
@@ -154,8 +154,11 @@ describe("containsArt9Topic", () => {
     expect(containsArt9Topic("náboženství")).toBe(true);
   });
 
-  it("passes neutral text", () => {
+  it("passes neutral text, including words that merely contain a stem", () => {
     expect(containsArt9Topic("What is the current role and employer?")).toBe(false);
-    expect(ART9_DENYLIST.length).toBeGreaterThan(0);
+    expect(containsArt9Topic("Which third party audited the accounts?")).toBe(false);
+    expect(containsArt9Topic("Can you trace the ownership and embrace the deal?")).toBe(false);
+    expect(containsArt9Topic("Is the account disabled?")).toBe(true);
+    expect(ART9_PATTERN.flags).toContain("u");
   });
 });

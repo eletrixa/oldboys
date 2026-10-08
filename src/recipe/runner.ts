@@ -25,7 +25,7 @@ import { collectorFor } from "@/recipe/sources";
 import type { CollectorRequest, ParsedSource, StepContext, StepOutcome } from "@/recipe/sources/types";
 import type { Step } from "@/recipe/step";
 
-const SOURCE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+export const SOURCE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 export function emptyOutcome(): StepOutcome {
   return { sources: [], candidates: [], claims: [], gaps: [], brief: null, claims_mode: "append", empty: true, cost_usd: 0, calls: 0, notes: [] };

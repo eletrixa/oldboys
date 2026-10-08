@@ -201,7 +201,7 @@ No auth (same as the SSE events route). `404` unknown call. Response `200`:
 {
   "id": "0f3c...-uuid",
   "run_id": "...",
-  "status": "drafted|dialing|in_call|done|failed|no_answer|refused|skipped",
+  "status": "drafted|dialing|done|failed|no_answer|refused|skipped",
   "provider": "elevenlabs|mock",
   "brief": { "language": "en", "identity_question": "...", "questions": [], "script": "..." },
   "to_number_masked": "+420******456",
@@ -220,7 +220,7 @@ No auth (same as the SSE events route). `404` unknown call. Response `200`:
 
 No raw number and no transcript body. Progress also appears as `call` and `decision` rows on `GET /api/runs/:id/events` (SSE). A source labeled "Phone call (AI interviewer)" or MOCK appears when the call completes.
 
-Status machine: `drafted -> dialing -> in_call -> done | failed | no_answer | refused | skipped`.
+Status machine: `drafted -> dialing -> done | failed | no_answer | refused`; `drafted -> skipped`. Claims from a call are `STATEMENT` (quote must be a verbatim callee line), never `FACT`; the transcript Source is `<run>/src-call-<callId>.json` in R2 with actor `elevenlabs/convai` or `mock/convai`.
 
 ### `POST /api/webhooks/elevenlabs` (ElevenLabs only)
 

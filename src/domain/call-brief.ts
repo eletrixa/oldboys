@@ -13,7 +13,7 @@
  *
  * Design constraints:
  * - Pure and deterministic: no I/O, no LLM, same input gives the same output
- * - Never ask about Art. 9 data; the denylist is a substring match on lowercased text
+ * - Never ask about Art. 9 data; the denylist matches case-insensitively at the start of a word (stems allowed)
  */
 import type { CallBrief, CallQuestion } from "@/domain/call";
 import type { Claim, Gap, GoalId } from "@/domain/claim";
@@ -21,15 +21,15 @@ import type { Question } from "@/recipe/step";
 
 export const MAX_CALL_QUESTIONS = 5;
 
-export const ART9_DENYLIST: readonly string[] = [
-  "health", "medical", "illness", "disab", "religio", "politic", "party", "ethnic", "race",
-  "sexual", "orientation", "union member", "biometric", "genetic",
-  "zdrav", "nemoc", "náboženst", "politick", "etnick", "sexuál",
-];
+/**
+ * GDPR Art. 9 topics the agent must never ask about or record. English stems match whole words
+ * (plus suffixes); Czech stems match at word start. Unicode-aware: `\b` is ASCII-only.
+ */
+export const ART9_PATTERN =
+  /(?<![\p{L}])(health|medical|illness|disabilit|disabled|religio|politic|political part|ethnic|race|racial|sexual|sexuality|orientation|trade union|union member|biometric|genetic|zdravot|nemoc|nábožen|politick|etnick|sexuál|odbor)\p{L}*/iu;
 
 export function containsArt9Topic(text: string): boolean {
-  const lower = text.toLowerCase();
-  return ART9_DENYLIST.some((term) => lower.includes(term));
+  return ART9_PATTERN.test(text);
 }
 
 const PURPOSE: Record<GoalId, string> = {
