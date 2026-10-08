@@ -21,27 +21,26 @@ import type { OrganizationInput } from "@/domain/organization";
 import { FIELD } from "../start-form";
 import { CompanyFields } from "./company-fields";
 
-type Step = "account" | "company" | "submitting";
+type Step = "account" | "company";
 type Account = { name: string; email: string; password: string };
-type Failure = { message: string; login: boolean };
+type Failure = { message: string; login?: boolean; step?: Step };
 
-const COMPANY_MESSAGE = "Please check the company details.";
+const FIELD_ERRORS: Record<string, { message: string; step: Step }> = {
+  email: { message: "Please check your email address.", step: "account" },
+  name: { message: "Please enter your name.", step: "account" },
+  password: { message: "Password needs at least 8 characters.", step: "account" },
+  organization: { message: "Please check the company details.", step: "company" },
+};
+const DEFAULT_ERROR: Failure = { message: "Please check the form.", step: "account" };
 
-function messageForPath(path: unknown): { message: string; step: Step } {
-  const head = Array.isArray(path) ? (path as unknown[])[0] : undefined;
-  if (head === "email") return { message: "Please check your email address.", step: "account" };
-  if (head === "name") return { message: "Please enter your name.", step: "account" };
-  if (head === "password") return { message: "Password needs at least 8 characters.", step: "account" };
-  if (head === "organization") return { message: COMPANY_MESSAGE, step: "company" };
-  return { message: "Please check the form.", step: "account" };
-}
-
-async function badRequest(res: Response): Promise<{ message: string; step: Step }> {
+async function badRequest(res: Response): Promise<Failure> {
   try {
     const body = await res.json<{ issues?: { path?: unknown }[] }>();
-    return messageForPath(body.issues?.[0]?.path);
+    const path = body.issues?.[0]?.path;
+    const head = Array.isArray(path) ? (path as unknown[])[0] : undefined;
+    return (typeof head === "string" ? FIELD_ERRORS[head] : undefined) ?? DEFAULT_ERROR;
   } catch {
-    return messageForPath(undefined);
+    return DEFAULT_ERROR;
   }
 }
 
@@ -49,8 +48,8 @@ const EMPTY_COMPANY: OrganizationInput = { name: "", ico: null, dic: null, legal
 
 function failureFor(status: number): Failure {
   if (status === 409) return { message: "This email already has an account. Log in instead.", login: true };
-  if (status === 429) return { message: "Too many sign-ups from this network. Try again in an hour.", login: false };
-  return { message: "We could not create the account. Please try again.", login: false };
+  if (status === 429) return { message: "Too many sign-ups from this network. Try again in an hour." };
+  return { message: "We could not create the account. Please try again." };
 }
 
 export function RegisterForm(): React.JSX.Element {
@@ -59,9 +58,19 @@ export function RegisterForm(): React.JSX.Element {
   const [account, setAccount] = useState<Account>({ name: "", email: "", password: "" });
   const [company, setCompany] = useState<OrganizationInput>(EMPTY_COMPANY);
   const [failure, setFailure] = useState<Failure | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const set = (k: keyof Account) => (e: React.ChangeEvent<HTMLInputElement>) => {
+    setAccount({ ...account, [k]: e.target.value });
+  };
+
+  function fail(f: Failure): void {
+    setFailure(f);
+    setStep(f.step ?? "company");
+  }
 
   async function submit(): Promise<void> {
-    setStep("submitting");
+    setBusy(true);
     setFailure(null);
     try {
       const res = await fetch("/api/auth/register", {
@@ -70,27 +79,22 @@ export function RegisterForm(): React.JSX.Element {
         body: JSON.stringify({ email: account.email.trim(), password: account.password, name: account.name.trim(), organization: company }),
       });
       if (res.status === 201) {
+        // Stay busy while the router navigates, so the button cannot be pressed twice
         router.push("/onboarding");
         router.refresh();
         return;
       }
-      if (res.status === 400) {
-        const bad = await badRequest(res);
-        setFailure({ message: bad.message, login: false });
-        setStep(bad.step);
-        return;
-      }
-      setFailure(failureFor(res.status));
+      fail(res.status === 400 ? await badRequest(res) : failureFor(res.status));
     } catch {
-      setFailure({ message: "We could not reach the service. Please try again.", login: false });
+      fail({ message: "We could not reach the service. Please try again." });
     }
-    setStep("company");
+    setBusy(false);
   }
 
   const error = failure !== null && (
     <p role="alert" className="text-sm text-red-300">
       {failure.message}{" "}
-      {failure.login && (
+      {failure.login === true && (
         <Link href="/login" className="text-teal-300 underline-offset-2 hover:underline">Log in</Link>
       )}
     </p>
@@ -108,15 +112,15 @@ export function RegisterForm(): React.JSX.Element {
       >
         <label className="flex flex-col gap-1.5 text-sm font-medium">
           Your name
-          <input value={account.name} onChange={(e) => { setAccount({ ...account, name: e.target.value }); }} required maxLength={120} autoComplete="name" className={FIELD} />
+          <input value={account.name} onChange={set("name")} required maxLength={120} autoComplete="name" className={FIELD} />
         </label>
         <label className="flex flex-col gap-1.5 text-sm font-medium">
           Work email
-          <input type="email" value={account.email} onChange={(e) => { setAccount({ ...account, email: e.target.value }); }} required maxLength={254} autoComplete="email" className={FIELD} />
+          <input type="email" value={account.email} onChange={set("email")} required maxLength={254} autoComplete="email" className={FIELD} />
         </label>
         <label className="flex flex-col gap-1.5 text-sm font-medium">
           Password
-          <input type="password" value={account.password} onChange={(e) => { setAccount({ ...account, password: e.target.value }); }} required minLength={8} maxLength={200} autoComplete="new-password" className={FIELD} />
+          <input type="password" value={account.password} onChange={set("password")} required minLength={8} maxLength={200} autoComplete="new-password" className={FIELD} />
           <span className="text-xs font-normal text-zinc-400">At least 8 characters.</span>
         </label>
         {error}
@@ -145,10 +149,10 @@ export function RegisterForm(): React.JSX.Element {
       <div className="flex items-center gap-4">
         <button
           type="submit"
-          disabled={step === "submitting"}
+          disabled={busy}
           className="rounded-xl bg-teal-500 px-5 py-3 font-semibold text-zinc-950 hover:bg-teal-400 disabled:opacity-60"
         >
-          {step === "submitting" ? "Creating..." : "Create account"}
+          {busy ? "Creating..." : "Create account"}
         </button>
         <button type="button" onClick={() => { setStep("account"); }} className="text-sm text-zinc-400 hover:text-zinc-200">
           Back

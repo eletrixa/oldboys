@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/api/runs/handler.ts
- * Deps:    src/app/api/_lib/{body,run-body}, src/domain/run-status, bindings DB + RESEARCH_RUN
+ * Deps:    src/app/api/_lib/{body,run-body}, src/domain/{run-status,auth-limits}, bindings DB + RESEARCH_RUN
  * Tested:  src/app/api/runs/__tests__/handler.test.ts; body contract in src/app/api/_lib/__tests__/run-body.test.ts
  *
  * Key responsibilities:
@@ -11,7 +11,7 @@
  * - Profile-first runs insert subject "" / anchor ""; the Workflow's seed_profile step fills them
  * - Optional sourceUrl (browser extension): same page + goal within 24 h returns the earlier run (200), scoped to the
  *   caller's organization (start) or to organization-less runs (api); never another tenant's run id
- * - Shared cap: more than RUNS_PER_HOUR_CAP runs in the last hour → 429; START_PER_HOUR_CAP per organization for via = start
+ * - Shared cap: more than RUNS_PER_HOUR_CAP runs in the last hour → 429; START_PER_HOUR_CAP per organization for via = start (one COUNT query)
  * - Session runs (via = start) store account_id and organization_id; bearer runs keep NULL
  * - runId == Workflow instance id == investigations.id
  *
@@ -21,6 +21,7 @@
  */
 import { parseJsonBody } from "@/app/api/_lib/body";
 import { StartRunBody } from "@/app/api/_lib/run-body";
+import { HOUR_MS, since } from "@/domain/auth-limits";
 import { dedupeSince, RUNS_PER_HOUR_CAP, START_PER_HOUR_CAP } from "@/domain/run-status";
 
 export type RunsEnv = {
@@ -41,41 +42,29 @@ export async function createRun(
   const parsed = await parseJsonBody(request, StartRunBody);
   if (parsed.error) return parsed.error;
 
+  const organizationId = origin.via === "start" ? origin.organizationId : null;
+  const accountId = origin.via === "start" ? origin.accountId : null;
+
   if (parsed.data.sourceUrl !== undefined) {
     // Reuse stays inside one tenant: a session sees only its organization's runs, bearer callers only bearer runs.
-    const scope = origin.via === "start" ? "organization_id = ?" : "organization_id IS NULL";
+    // SQLite `IS` matches NULL, so one statement serves both.
     const earlier = await env.DB.prepare(
-      `SELECT id FROM investigations WHERE source_url = ? AND goal = ? AND created_at > ? AND ${scope}
+      `SELECT id FROM investigations WHERE source_url = ? AND goal = ? AND created_at > ? AND organization_id IS ?
        ORDER BY created_at DESC LIMIT 1`,
     )
-      .bind(
-        parsed.data.sourceUrl,
-        parsed.data.goal,
-        dedupeSince(now),
-        ...(origin.via === "start" ? [origin.organizationId] : []),
-      )
+      .bind(parsed.data.sourceUrl, parsed.data.goal, dedupeSince(now), organizationId)
       .first<{ id: string }>();
     if (earlier) return Response.json({ id: earlier.id, reused: true }, { status: 200 });
   }
 
-  const hourAgo = new Date(now.getTime() - 60 * 60 * 1000).toISOString();
-  const recent = await env.DB.prepare("SELECT COUNT(*) AS n FROM investigations WHERE created_at > ?")
-    .bind(hourAgo)
-    .first<{ n: number }>();
-  if ((recent?.n ?? 0) >= RUNS_PER_HOUR_CAP) {
+  // Shared spend ceiling for everyone, plus a tighter per-organization cap for session runs (via = start).
+  const recent = await env.DB.prepare(
+    "SELECT COUNT(*) AS n, COALESCE(SUM(via = 'start' AND organization_id = ?), 0) AS org FROM investigations WHERE created_at > ?",
+  )
+    .bind(organizationId, since(now, HOUR_MS))
+    .first<{ n: number; org: number }>();
+  if ((recent?.n ?? 0) >= RUNS_PER_HOUR_CAP || (recent?.org ?? 0) >= START_PER_HOUR_CAP) {
     return Response.json({ error: "run cap reached, try again later" }, { status: 429 });
-  }
-  // Session runs (the start form) get a tighter per-organization cap on top of the shared spend ceiling.
-  const via = origin.via;
-  if (origin.via === "start") {
-    const anon = await env.DB.prepare(
-      "SELECT COUNT(*) AS n FROM investigations WHERE via = 'start' AND organization_id = ? AND created_at > ?",
-    )
-      .bind(origin.organizationId, hourAgo)
-      .first<{ n: number }>();
-    if ((anon?.n ?? 0) >= START_PER_HOUR_CAP) {
-      return Response.json({ error: "run cap reached, try again later" }, { status: 429 });
-    }
   }
 
   const id = crypto.randomUUID();
@@ -96,11 +85,11 @@ export async function createRun(
       now.toISOString(),
       parsed.data.sourceUrl ?? null,
       parsed.data.role ?? null,
-      via,
+      origin.via,
       parsed.data.profileUrl ?? null,
       parsed.data.cvText ?? null,
-      origin.via === "start" ? origin.accountId : null,
-      origin.via === "start" ? origin.organizationId : null,
+      accountId,
+      organizationId,
     )
     .run();
 

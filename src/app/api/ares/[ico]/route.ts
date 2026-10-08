@@ -8,29 +8,34 @@
  *
  * Key responsibilities:
  * - Same-origin browser check (403), then 30 lookups per hour per IP (429), then lookupCompany
- * - Responses are never cached by the browser or the edge
+ * - Every response, 403 and 429 included, gets Cache-Control: no-store in one place
  *
  * Design constraints:
  * - No runtime = "edge"; every lookup counts toward the limit, cached or not
  */
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { lookupCompany } from "@/app/api/ares/[ico]/handler";
-import { countAttempts, recordAttempt } from "@/app/api/_lib/auth-store";
-import { isSameOriginBrowserRequest } from "@/app/api/_lib/same-origin";
+import { recordAttempt, throttled } from "@/app/api/_lib/auth-store";
+import { rejectCrossOrigin } from "@/app/api/_lib/same-origin";
 import { fetchJson } from "@/adapters/fetch";
-import { ARES_PER_HOUR_PER_IP, clientIp, HOUR_MS, since } from "@/domain/auth-limits";
+import { ARES_PER_HOUR_PER_IP, clientIp, HOUR_MS } from "@/domain/auth-limits";
 
-export async function GET(request: Request, { params }: { params: Promise<{ ico: string }> }): Promise<Response> {
-  if (!isSameOriginBrowserRequest(request)) return Response.json({ error: "browser only" }, { status: 403 });
+async function lookup(request: Request, params: Promise<{ ico: string }>): Promise<Response> {
+  const denied = rejectCrossOrigin(request);
+  if (denied !== null) return denied;
   const { env } = getCloudflareContext();
   const { ico } = await params;
   const ip = clientIp(request.headers);
   const now = new Date();
-  if ((await countAttempts(env.DB, "ares", ip, since(now, HOUR_MS))) >= ARES_PER_HOUR_PER_IP) {
-    return Response.json({ error: "too many lookups" }, { status: 429, headers: { "Cache-Control": "no-store" } });
+  if (await throttled(env.DB, "ares", ip, HOUR_MS, ARES_PER_HOUR_PER_IP, now)) {
+    return Response.json({ error: "too many lookups" }, { status: 429 });
   }
   await recordAttempt(env.DB, "ares", ip, now.toISOString());
-  const res = await lookupCompany(ico, { db: env.DB, fetchJson, now: () => new Date() });
+  return lookupCompany(ico, { db: env.DB, fetchJson, now: () => new Date() });
+}
+
+export async function GET(request: Request, { params }: { params: Promise<{ ico: string }> }): Promise<Response> {
+  const res = await lookup(request, params);
   res.headers.set("Cache-Control", "no-store");
   return res;
 }

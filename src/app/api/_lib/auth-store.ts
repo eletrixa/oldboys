@@ -8,16 +8,17 @@
  *
  * Key responsibilities:
  * - Raw SQL for the auth routes
+ * - throttled: failure/usage counter at or over a cap inside a window
  *
  * Design constraints:
  * - SQL prefixes are a contract: the test fake dispatches on them
  */
-import { ATTEMPT_RETENTION_MS, type AttemptKind } from "@/domain/auth-limits";
+import { ATTEMPT_RETENTION_MS, since, type AttemptKind } from "@/domain/auth-limits";
 import type { OrganizationInput } from "@/domain/organization";
 import type { SessionUser } from "@/domain/session";
 
 export type AuthEnv = { DB: D1Database };
-export type AccountRow = {
+type AccountRow = {
   id: string;
   email: string;
   name: string;
@@ -115,6 +116,17 @@ export async function countAttempts(
     .bind(kind, subject, sinceIso)
     .first<{ n: number }>();
   return r?.n ?? 0;
+}
+
+export async function throttled(
+  db: D1Database,
+  kind: AttemptKind,
+  subject: string,
+  windowMs: number,
+  cap: number,
+  now: Date,
+): Promise<boolean> {
+  return (await countAttempts(db, kind, subject, since(now, windowMs))) >= cap;
 }
 
 export async function recordAttempt(

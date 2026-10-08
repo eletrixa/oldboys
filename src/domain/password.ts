@@ -8,6 +8,7 @@
  *
  * Key responsibilities:
  * - hashPassword: random 16-byte salt, stored as `pbkdf2$<iterations>$<salt b64>$<hash b64>`
+ * - toBase64: shared with session tokens
  * - verifyPassword: constant-time compare; malformed input is false, never an exception
  *
  * Design constraints:
@@ -20,7 +21,7 @@ export const PBKDF2_ITERATIONS = 100_000;
 const SALT_BYTES = 16;
 const KEY_BITS = 256;
 
-function toBase64(bytes: Uint8Array): string {
+export function toBase64(bytes: Uint8Array): string {
   let bin = "";
   for (const b of bytes) bin += String.fromCharCode(b);
   return btoa(bin);

@@ -12,37 +12,39 @@
  * Design constraints:
  * - Never log credentials; existing email is 409
  */
-import { clientIp, HOUR_MS, REGISTER_PER_HOUR_PER_IP, since } from "@/domain/auth-limits";
+import { clientIp, HOUR_MS, REGISTER_PER_HOUR_PER_IP } from "@/domain/auth-limits";
 import { hashPassword } from "@/domain/password";
-import { hashSessionToken, newSessionToken, sessionCookie, sessionExpiresAt } from "@/domain/session";
 import { RegisterBody } from "../../_lib/auth-body";
 import {
-  countAttempts,
   createAccountWithOrganization,
   findAccountByEmail,
-  insertSession,
   recordAttempt,
+  throttled,
   type AuthEnv,
 } from "../../_lib/auth-store";
 import { parseJsonBody } from "../../_lib/body";
-import { isSameOriginBrowserRequest } from "../../_lib/same-origin";
-import { isHttps, jsonWithCookie } from "../../_lib/session";
+import { rejectCrossOrigin } from "../../_lib/same-origin";
+import { startSession } from "../../_lib/session";
+
+const accountExists = (): Response => Response.json({ error: "account exists" }, { status: 409 });
 
 export async function handleRegister(request: Request, env: AuthEnv, now = new Date()): Promise<Response> {
-  if (!isSameOriginBrowserRequest(request)) return Response.json({ error: "browser only" }, { status: 403 });
+  const denied = rejectCrossOrigin(request);
+  if (denied !== null) return denied;
   const parsed = await parseJsonBody(request, RegisterBody);
   if (parsed.error !== null) return parsed.error;
   const body = parsed.data;
 
   const ip = clientIp(request.headers);
-  if ((await countAttempts(env.DB, "register", ip, since(now, HOUR_MS))) >= REGISTER_PER_HOUR_PER_IP) {
+  if (await throttled(env.DB, "register", ip, HOUR_MS, REGISTER_PER_HOUR_PER_IP, now)) {
     return Response.json({ error: "too many registrations" }, { status: 429 });
   }
   // Every validated attempt counts, including 409s, so the duplicate check cannot enumerate emails unthrottled.
-  await recordAttempt(env.DB, "register", ip, now.toISOString());
-  if ((await findAccountByEmail(env.DB, body.email)) !== null) {
-    return Response.json({ error: "account exists" }, { status: 409 });
-  }
+  const [, existing] = await Promise.all([
+    recordAttempt(env.DB, "register", ip, now.toISOString()),
+    findAccountByEmail(env.DB, body.email),
+  ]);
+  if (existing !== null) return accountExists();
 
   const accountId = crypto.randomUUID();
   try {
@@ -56,19 +58,9 @@ export async function handleRegister(request: Request, env: AuthEnv, now = new D
       now: now.toISOString(),
     });
   } catch (e) {
-    if (e instanceof Error && e.message.includes("UNIQUE")) {
-      return Response.json({ error: "account exists" }, { status: 409 });
-    }
+    if (e instanceof Error && e.message.includes("UNIQUE")) return accountExists();
     throw e;
   }
 
-  const token = newSessionToken();
-  await insertSession(env.DB, {
-    id: crypto.randomUUID(),
-    tokenHash: await hashSessionToken(token),
-    accountId,
-    now: now.toISOString(),
-    expiresAt: sessionExpiresAt(now),
-  });
-  return jsonWithCookie({ ok: true }, 201, sessionCookie(token, { secure: isHttps(request) }));
+  return startSession(env.DB, request, accountId, now, 201);
 }

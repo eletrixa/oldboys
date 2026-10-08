@@ -20,6 +20,11 @@ import { FIELD } from "../start-form";
 
 type Status = { kind: "idle" } | { kind: "submitting" } | { kind: "error"; message: string };
 
+const MESSAGE: Record<number, string> = {
+  401: "Email or password is wrong.",
+  429: "Too many attempts. Please wait 15 minutes.",
+};
+
 export function LoginForm(): React.JSX.Element {
   const router = useRouter();
   const [status, setStatus] = useState<Status>({ kind: "idle" });
@@ -40,15 +45,7 @@ export function LoginForm(): React.JSX.Element {
         router.refresh();
         return;
       }
-      setStatus({
-        kind: "error",
-        message:
-          res.status === 401
-            ? "Email or password is wrong."
-            : res.status === 429
-              ? "Too many attempts. Please wait 15 minutes."
-              : "We could not log you in. Please try again.",
-      });
+      setStatus({ kind: "error", message: MESSAGE[res.status] ?? "We could not log you in. Please try again." });
     } catch {
       setStatus({ kind: "error", message: "We could not reach the service. Please try again." });
     }

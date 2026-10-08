@@ -29,14 +29,13 @@ function makeEnv(seed: Seed[] = []) {
     first: () => {
       if (sql.startsWith("SELECT id FROM investigations WHERE source_url")) {
         const [url, goal, , org] = args;
-        const scoped = sql.includes("organization_id = ?");
-        const hit = rows.find((r) => r.sourceUrl === url && r.goal === goal && (scoped ? r.org === org : r.org === null));
+        const hit = rows.find((r) => r.sourceUrl === url && r.goal === goal && r.org === org);
         return Promise.resolve(hit ? { id: hit.id } : null);
       }
-      if (sql.includes("via = 'start'")) {
-        return Promise.resolve({ n: rows.filter((r) => r.via === "start" && r.org === args[0]).length });
+      if (sql.startsWith("SELECT COUNT(*) AS n, COALESCE(SUM(via = 'start'")) {
+        const org = rows.filter((r) => r.via === "start" && r.org === args[0]).length;
+        return Promise.resolve({ n: rows.length, org });
       }
-      if (sql.startsWith("SELECT COUNT(*) AS n FROM investigations")) return Promise.resolve({ n: rows.length });
       throw new Error(`unexpected SQL: ${sql}`);
     },
     run: () => {

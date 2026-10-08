@@ -35,6 +35,10 @@ const LOOKUP_MESSAGE: Readonly<Partial<Record<Lookup["kind"], string>>> = {
   limited: "Too many lookups just now. Please type the details or try again later.",
 };
 
+const STATUS_KIND: Record<number, Exclude<Lookup["kind"], "found">> = { 400: "invalid", 404: "not_found", 429: "limited" };
+
+const orNull = (s: string): string | null => (s === "" ? null : s);
+
 type Props = { value: OrganizationInput; onChange: (next: OrganizationInput) => void };
 
 export function CompanyFields({ value, onChange }: Props): React.JSX.Element {
@@ -70,7 +74,7 @@ export function CompanyFields({ value, onChange }: Props): React.JSX.Element {
         setLookup({ kind: "found", legalFormLabel: company.legal_form_label });
         return;
       }
-      setLookup({ kind: res.status === 400 ? "invalid" : res.status === 404 ? "not_found" : res.status === 429 ? "limited" : "unavailable" });
+      setLookup({ kind: STATUS_KIND[res.status] ?? "unavailable" });
     } catch {
       setLookup({ kind: "unavailable" });
     }
@@ -156,11 +160,11 @@ export function CompanyFields({ value, onChange }: Props): React.JSX.Element {
       <div className="grid gap-4 sm:grid-cols-2">
         <label className="flex flex-col gap-1.5 text-sm font-medium">
           DIČ (optional)
-          <input value={value.dic ?? ""} onChange={(e) => { patch({ dic: e.target.value === "" ? null : e.target.value }); }} maxLength={20} className={FIELD} />
+          <input value={value.dic ?? ""} onChange={(e) => { patch({ dic: orNull(e.target.value) }); }} maxLength={20} className={FIELD} />
         </label>
         <label className="flex flex-col gap-1.5 text-sm font-medium">
           Legal form (optional)
-          <input value={value.legal_form ?? ""} onChange={(e) => { patch({ legal_form: e.target.value === "" ? null : e.target.value }); }} maxLength={10} className={FIELD} />
+          <input value={value.legal_form ?? ""} onChange={(e) => { patch({ legal_form: orNull(e.target.value) }); }} maxLength={10} className={FIELD} />
           {lookup.kind === "found" && lookup.legalFormLabel !== null && (
             <span className="text-xs font-normal text-zinc-400">{lookup.legalFormLabel}</span>
           )}
@@ -168,7 +172,7 @@ export function CompanyFields({ value, onChange }: Props): React.JSX.Element {
       </div>
       <label className="flex flex-col gap-1.5 text-sm font-medium">
         Address (optional)
-        <input value={value.address ?? ""} onChange={(e) => { patch({ address: e.target.value === "" ? null : e.target.value }); }} maxLength={300} autoComplete="street-address" className={FIELD} />
+        <input value={value.address ?? ""} onChange={(e) => { patch({ address: orNull(e.target.value) }); }} maxLength={300} autoComplete="street-address" className={FIELD} />
       </label>
     </div>
   );

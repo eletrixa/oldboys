@@ -12,40 +12,33 @@
  * Design constraints:
  * - Unknown email and wrong password give the same 401; never log credentials
  */
-import { clientIp, LOGIN_FAILS_PER_WINDOW, LOGIN_WINDOW_MS, since } from "@/domain/auth-limits";
+import { clientIp, LOGIN_FAILS_PER_WINDOW, LOGIN_WINDOW_MS } from "@/domain/auth-limits";
 import { hashPassword, verifyPassword } from "@/domain/password";
-import { hashSessionToken, newSessionToken, sessionCookie, sessionExpiresAt } from "@/domain/session";
 import { LoginBody } from "../../_lib/auth-body";
-import { countAttempts, findAccountByEmail, insertSession, recordAttempt, type AuthEnv } from "../../_lib/auth-store";
+import { findAccountByEmail, recordAttempt, throttled, type AuthEnv } from "../../_lib/auth-store";
 import { parseJsonBody } from "../../_lib/body";
-import { isSameOriginBrowserRequest } from "../../_lib/same-origin";
-import { isHttps, jsonWithCookie } from "../../_lib/session";
+import { rejectCrossOrigin } from "../../_lib/same-origin";
+import { startSession } from "../../_lib/session";
 
 export async function handleLogin(request: Request, env: AuthEnv, now = new Date()): Promise<Response> {
-  if (!isSameOriginBrowserRequest(request)) return Response.json({ error: "browser only" }, { status: 403 });
+  const denied = rejectCrossOrigin(request);
+  if (denied !== null) return denied;
   const parsed = await parseJsonBody(request, LoginBody);
   if (parsed.error !== null) return parsed.error;
   const { email, password } = parsed.data;
 
   // Keyed by email and IP so a stranger cannot lock a recruiter out from another address.
   const subject = `${email}|${clientIp(request.headers)}`;
-  if ((await countAttempts(env.DB, "login_fail", subject, since(now, LOGIN_WINDOW_MS))) >= LOGIN_FAILS_PER_WINDOW) {
-    return Response.json({ error: "too many attempts" }, { status: 429 });
-  }
-  const account = await findAccountByEmail(env.DB, email);
+  const [locked, account] = await Promise.all([
+    throttled(env.DB, "login_fail", subject, LOGIN_WINDOW_MS, LOGIN_FAILS_PER_WINDOW, now),
+    findAccountByEmail(env.DB, email),
+  ]);
+  if (locked) return Response.json({ error: "too many attempts" }, { status: 429 });
   const ok = account !== null ? await verifyPassword(password, account.password_hash) : (await hashPassword(password), false);
   if (account === null || !ok) {
     await recordAttempt(env.DB, "login_fail", subject, now.toISOString());
     return Response.json({ error: "email or password is wrong" }, { status: 401 });
   }
 
-  const token = newSessionToken();
-  await insertSession(env.DB, {
-    id: crypto.randomUUID(),
-    tokenHash: await hashSessionToken(token),
-    accountId: account.id,
-    now: now.toISOString(),
-    expiresAt: sessionExpiresAt(now),
-  });
-  return jsonWithCookie({ ok: true }, 200, sessionCookie(token, { secure: isHttps(request) }));
+  return startSession(env.DB, request, account.id, now, 200);
 }

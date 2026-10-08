@@ -7,13 +7,21 @@
  * Tested:  src/app/api/auth/__tests__/auth.test.ts
  *
  * Key responsibilities:
- * - loadSession, cookie-header lookup, 401 and cookie-setting JSON responses
+ * - loadSession, cookie-header and request lookup, 401 and cookie-setting JSON responses
+ * - startSession: mint a token, store its hash, answer with the session cookie
  *
  * Design constraints:
  * - No next/headers import; current-user.ts is the only Next-bound auth file
  */
-import { hashSessionToken, readSessionCookie, type SessionUser } from "@/domain/session";
-import { findSessionUser } from "./auth-store";
+import {
+  hashSessionToken,
+  newSessionToken,
+  readSessionCookie,
+  sessionCookie,
+  sessionExpiresAt,
+  type SessionUser,
+} from "@/domain/session";
+import { findSessionUser, insertSession } from "./auth-store";
 
 export async function loadSession(db: D1Database, token: string, now: Date): Promise<SessionUser | null> {
   return findSessionUser(db, await hashSessionToken(token), now.toISOString());
@@ -28,6 +36,10 @@ export async function getSessionFromCookieHeader(
   return token === null ? null : loadSession(db, token, now);
 }
 
+export function sessionFromRequest(request: Request, db: D1Database, now = new Date()): Promise<SessionUser | null> {
+  return getSessionFromCookieHeader(db, request.headers.get("Cookie"), now);
+}
+
 export function unauthorized(): Response {
   return Response.json({ error: "login required" }, { status: 401 });
 }
@@ -40,4 +52,22 @@ export function jsonWithCookie(body: unknown, status: number, setCookie: string)
 
 export function isHttps(request: Request): boolean {
   return new URL(request.url).protocol === "https:";
+}
+
+export async function startSession(
+  db: D1Database,
+  request: Request,
+  accountId: string,
+  now: Date,
+  status: number,
+): Promise<Response> {
+  const token = newSessionToken();
+  await insertSession(db, {
+    id: crypto.randomUUID(),
+    tokenHash: await hashSessionToken(token),
+    accountId,
+    now: now.toISOString(),
+    expiresAt: sessionExpiresAt(now),
+  });
+  return jsonWithCookie({ ok: true }, status, sessionCookie(token, { secure: isHttps(request) }));
 }

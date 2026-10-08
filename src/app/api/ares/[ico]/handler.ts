@@ -7,7 +7,7 @@
  * Tested:  src/app/api/ares/__tests__/lookup.test.ts
  *
  * Key responsibilities:
- * - Normalize the IČO (400 on bad checksum), replay a fresh cache row, else fetch ARES and cache the result
+ * - Normalize the IČO (400 on bad checksum), replay a fresh cache row (corrupt JSON counts as a miss), else fetch ARES and cache the result
  * - 200 {company}, 404 {error} for an unknown IČO (cached too), 502 {error} when ARES fails (never cached)
  *
  * Design constraints:
@@ -30,7 +30,13 @@ const unavailable = (): Response => Response.json({ error: "ares unavailable" },
 function replay(row: CacheRow): Response | null {
   if (row.status === "not_found") return notFound();
   if (row.payload_json === null) return null;
-  const parsed = AresSubjekt.safeParse(JSON.parse(row.payload_json));
+  let payload: unknown;
+  try {
+    payload = JSON.parse(row.payload_json);
+  } catch {
+    return null;
+  }
+  const parsed = AresSubjekt.safeParse(payload);
   return parsed.success ? Response.json({ company: organizationFromAres(parsed.data) }) : null;
 }
 

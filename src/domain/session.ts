@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/domain/session.ts
- * Deps:    WebCrypto (globalThis.crypto)
+ * Deps:    WebCrypto (globalThis.crypto), src/domain/password (toBase64)
  * Tested:  src/domain/__tests__/session.test.ts
  *
  * Key responsibilities:
@@ -14,6 +14,8 @@
  * - Workers-safe: no Buffer
  * - Cookie is HttpOnly, SameSite=Lax, Path=/; Secure only on https
  */
+import { toBase64 } from "@/domain/password";
+
 export const SESSION_COOKIE = "oldboys_session";
 export const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
@@ -28,9 +30,7 @@ export type SessionUser = {
 
 export function newSessionToken(): string {
   const bytes = globalThis.crypto.getRandomValues(new Uint8Array(32));
-  let bin = "";
-  for (const b of bytes) bin += String.fromCharCode(b);
-  return btoa(bin).replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
+  return toBase64(bytes).replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
 }
 
 export async function hashSessionToken(token: string): Promise<string> {

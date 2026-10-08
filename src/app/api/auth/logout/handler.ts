@@ -14,11 +14,12 @@
  */
 import { clearSessionCookie, hashSessionToken, readSessionCookie } from "@/domain/session";
 import { deleteSessionByHash, type AuthEnv } from "../../_lib/auth-store";
-import { isSameOriginBrowserRequest } from "../../_lib/same-origin";
+import { rejectCrossOrigin } from "../../_lib/same-origin";
 import { isHttps } from "../../_lib/session";
 
 export async function handleLogout(request: Request, env: AuthEnv): Promise<Response> {
-  if (!isSameOriginBrowserRequest(request)) return Response.json({ error: "browser only" }, { status: 403 });
+  const denied = rejectCrossOrigin(request);
+  if (denied !== null) return denied;
   const token = readSessionCookie(request.headers.get("Cookie"));
   if (token !== null) await deleteSessionByHash(env.DB, await hashSessionToken(token));
   return new Response(null, {

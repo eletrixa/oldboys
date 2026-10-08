@@ -14,14 +14,15 @@
  * - No RUN_TOKEN and no header rewriting; CLI, extension and curl keep calling /api/runs with their own bearer
  */
 import { getCloudflareContext } from "@opennextjs/cloudflare";
-import { isSameOriginBrowserRequest } from "@/app/api/_lib/same-origin";
-import { getSessionFromCookieHeader, unauthorized } from "@/app/api/_lib/session";
+import { rejectCrossOrigin } from "@/app/api/_lib/same-origin";
+import { sessionFromRequest, unauthorized } from "@/app/api/_lib/session";
 import { createRun } from "@/app/api/runs/handler";
 
 export async function POST(request: Request): Promise<Response> {
   const { env } = getCloudflareContext();
-  if (!isSameOriginBrowserRequest(request)) return Response.json({ error: "browser only" }, { status: 403 });
-  const user = await getSessionFromCookieHeader(env.DB, request.headers.get("Cookie"), new Date());
+  const denied = rejectCrossOrigin(request);
+  if (denied !== null) return denied;
+  const user = await sessionFromRequest(request, env.DB);
   if (user === null) return unauthorized();
   return createRun(request, env, { via: "start", accountId: user.accountId, organizationId: user.organizationId });
 }

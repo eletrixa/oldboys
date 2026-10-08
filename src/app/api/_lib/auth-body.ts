@@ -26,7 +26,5 @@ export const RegisterBody = z.object({
   name: z.string().trim().min(1).max(120),
   organization: OrganizationInput,
 });
-export type RegisterBody = z.infer<typeof RegisterBody>;
 
 export const LoginBody = z.object({ email: Email, password: z.string().min(1).max(200) });
-export type LoginBody = z.infer<typeof LoginBody>;
