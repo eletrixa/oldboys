@@ -17,9 +17,6 @@
       "Bash(git log:*)"
     ],
     "deny": [
-      "Bash(pnpm deploy)",
-      "Bash(pnpm db:migrate:remote)",
-      "Bash(pnpm exec wrangler secret:*)",
       "Read(.dev.vars)",
       "Read(~/s/**)"
     ]

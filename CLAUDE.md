@@ -75,7 +75,7 @@ Every change to `src/`, `migrations/`, `scripts/` or any root config must pass `
 - Run `pnpm check` yourself after editing; do not wait for the hook.
 - Never skip or weaken a test, lint rule or the hook to get green. Fix the code.
 - New code under `src/domain` and `src/recipe` ships with a Vitest test next to it (`__tests__/`).
-- Agents may not deploy, migrate remote D1, touch Worker secrets, or read `.dev.vars` or `~/s` (denied in `.claude/settings.json`). Push only when Robert asks in the current task.
+- Agents deploy, migrate remote D1, touch Worker secrets or push only when Robert asks for it in the current task. Reading `.dev.vars` or `~/s` is denied in `.claude/settings.json`.
 - `pnpm exec wrangler deploy --dry-run --outdir <scratch>` is the allowed way to prove the Worker still bundles.
 
 ## Known gotchas
