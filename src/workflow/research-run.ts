@@ -27,7 +27,7 @@
 import { WorkflowEntrypoint, type WorkflowEvent, type WorkflowStep } from "cloudflare:workers";
 import { makeActorCall } from "@/adapters/apify";
 import { applySourceIdentity, loadContext, makeLedgerAppend, makeSourceStore, persistOutcome, setCandidateDecisions } from "@/adapters/d1";
-import { fetchJson } from "@/adapters/fetch";
+import { makeFetchJson } from "@/adapters/fetch";
 import { makeLlmCall } from "@/adapters/llm";
 import type { Candidate, GoalId } from "@/domain/claim";
 import type { Ports } from "@/domain/ports";
@@ -68,7 +68,7 @@ export class ResearchRunWorkflow extends WorkflowEntrypoint<CloudflareEnv, Resea
     const env = this.env;
     return {
       callActor: makeActorCall(env.APIFY_TOKEN),
-      fetchJson,
+      fetchJson: makeFetchJson({ githubToken: env.GITHUB_TOKEN, stackExchangeKey: env.STACKEXCHANGE_KEY }),
       llm: makeLlmCall(env.ANTHROPIC_API_KEY, { primary: env.LLM_MODEL_PRIMARY, verify: env.LLM_MODEL_VERIFY }),
       appendLedger: makeLedgerAppend(env.DB),
       storeSource: makeSourceStore(env.DB, env.SOURCES),

@@ -1,0 +1,72 @@
+/**
+ * Tests for the JSON fetch adapter: per-host credentials, error body snippet, single retry.
+ *
+ * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
+ * Module:  src/adapters/__tests__/fetch.test.ts
+ * Deps:    vitest (fake global fetch)
+ * Tested:  itself
+ *
+ * Key responsibilities:
+ * - Token only for api.github.com, snippet in error, one retry on 429
+ *
+ * Design constraints:
+ * - No network; retry delay set to 0
+ */
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { makeFetchJson } from "@/adapters/fetch";
+
+function stub(...responses: Response[]) {
+  const fn = vi.fn<typeof fetch>();
+  for (const r of responses) fn.mockResolvedValueOnce(r);
+  vi.stubGlobal("fetch", fn);
+  return fn;
+}
+const headersOf = (fn: ReturnType<typeof stub>, i = 0) => new Headers(fn.mock.calls[i]?.[1]?.headers);
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
+describe("makeFetchJson", () => {
+  it("adds the GitHub bearer token only for api.github.com", async () => {
+    const fn = stub(Response.json({}), Response.json({}));
+    const f = makeFetchJson({ githubToken: "tok", retryDelayMs: 0 });
+    await f("https://api.github.com/users/x");
+    await f("https://api.openalex.org/authors");
+    expect(headersOf(fn, 0).get("authorization")).toBe("Bearer tok");
+    expect(headersOf(fn, 1).get("authorization")).toBeNull();
+  });
+
+  it("adds no authorization header without a token", async () => {
+    const fn = stub(Response.json({}));
+    await makeFetchJson()("https://api.github.com/users/x");
+    expect(headersOf(fn).get("authorization")).toBeNull();
+  });
+
+  it("appends the Stack Exchange key only for api.stackexchange.com", async () => {
+    const fn = stub(Response.json({}), Response.json({}));
+    const f = makeFetchJson({ stackExchangeKey: "k" });
+    await f("https://api.stackexchange.com/2.3/users?site=stackoverflow");
+    await f("https://api.github.com/users/x");
+    expect((fn.mock.calls[0]?.[0] as string)).toContain("key=k");
+    expect((fn.mock.calls[1]?.[0] as string)).not.toContain("key=");
+  });
+
+  it("puts a bounded body snippet in the error", async () => {
+    stub(new Response("x".repeat(500), { status: 400 }));
+    const err = (await makeFetchJson()("https://api.stackexchange.com/2.3/users").catch((e: unknown) => e)) as Error;
+    expect(err.message).toMatch(/^https:\/\/api\.stackexchange\.com\/2\.3\/users: HTTP 400 x{160}$/);
+  });
+
+  it("retries once on 429 and returns the second response", async () => {
+    const fn = stub(new Response("slow down", { status: 429 }), Response.json({ ok: 1 }));
+    await expect(makeFetchJson({ retryDelayMs: 0 })("https://api.openalex.org/authors")).resolves.toEqual({ ok: 1 });
+    expect(fn).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not retry twice", async () => {
+    const fn = stub(new Response("a", { status: 429 }), new Response("b", { status: 429 }));
+    await expect(makeFetchJson({ retryDelayMs: 0 })("https://api.openalex.org/authors")).rejects.toThrow("HTTP 429 b");
+    expect(fn).toHaveBeenCalledTimes(2);
+  });
+});
