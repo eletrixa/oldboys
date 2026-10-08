@@ -1,0 +1,22 @@
+From: Jobs.cz <noreply@jobs.example>
+To: jobs+senior-be@asajj.cz
+Subject: =?utf-8?Q?Nov=C3=A1_odpov=C4=9B=C4=8F_na_inzer=C3=A1t_Senior_Backend_Engineer?=
+Date: Thu, 08 Oct 2026 11:30:45 +0200
+Message-ID: <jobscz-notif-0003@mailer.jobs.example>
+MIME-Version: 1.0
+Content-Type: text/html; charset=utf-8
+Content-Transfer-Encoding: 8bit
+X-Fixture-Note: PLACEHOLDER shape, invented person. Replace with a real Jobs.cz notification captured from a live test application (docs/ops/intake.md, Jobs.cz).
+
+<!DOCTYPE html>
+<html><head><style>p { color: #333; }</style></head>
+<body>
+<h1>Nová odpověď na inzerát Senior Backend Engineer</h1>
+<table>
+<tr><td>Uchazeč:</td><td>Petr Holeček</td></tr>
+<tr><td>E-mail:</td><td><a href="mailto:petr.holecek@example.cz">petr.holecek@example.cz</a></td></tr>
+<tr><td>Telefon:</td><td>+420&nbsp;600&nbsp;111&nbsp;222</td></tr>
+</table>
+<p>Životopis: <a href="https://www.jobs.example/cv/download?id=123&amp;token=abc">Stáhnout životopis</a></p>
+<p>Průvodní dopis: Dobrý den, mám zájem o pozici &quot;Senior Backend Engineer&quot; &amp; těším se na odpověď.</p>
+</body></html>
