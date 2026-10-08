@@ -135,3 +135,8 @@ Each agent appends: what it starts, progress, what it finishes. Newest at the bo
 - Switched production `CALL_PROVIDER` from `"mock"` to `"elevenlabs"` and set `ELEVENLABS_AGENT_ID` / `ELEVENLABS_PHONE_NUMBER_ID` (non-secret dashboard ids) in `wrangler.jsonc`. Documented the live ElevenLabs/Twilio setup state in `docs/ops/call-verification.md`.
 - Worker secrets `ELEVENLABS_API_KEY` and `ELEVENLABS_WEBHOOK_SECRET` are still Robert's step (`wrangler secret put`); until set, the webhook route answers 503. No code or schema change; pnpm check green, wrangler dry-run bundles.
 - Files: wrangler.jsonc, docs/ops/call-verification.md, PROGRESS.md.
+
+## 2026-10-09 · audit-who-processors agent (Minas)
+- Started: 00:48. Idea #17 follow-up: audit record shows who started the run (account name from investigations.account_id; "not recorded" for API, extension and intake runs) and the services that processed the run's data (Cloudflare always; Apify, Anthropic, ElevenLabs only when this run used them, from the ledger and call rows).
+- Finished: 00:52. No e-mail in the record. No schema change, no new endpoint; pnpm check green, wrangler dry-run bundles.
+- Files: src/domain/audit.ts, src/domain/__tests__/audit.test.ts, src/app/api/runs/[id]/audit/load.ts, src/app/runs/[id]/audit/page.tsx, PROGRESS.md.

@@ -42,7 +42,7 @@ export function ClaimList({ claims, urlOf, noteOf }: { claims: Claim[]; urlOf: R
           <Pill tone={c.kind === "INFERENCE" ? "inference" : "neutral"} className="mt-0.5">
             {KIND_LABEL[c.kind]}
           </Pill>
-          <span className="min-w-0">
+          <span className="min-w-0 [overflow-wrap:anywhere]">
             {c.text}
             {c.contradicts.length > 0 && (
               <Pill tone="conflict" className="ml-2">
