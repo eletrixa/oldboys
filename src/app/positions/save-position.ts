@@ -1,5 +1,5 @@
 /**
- * Client call: PATCH /api/positions/:id with the stored token.
+ * Client call: PATCH /api/positions/:id with the session cookie, plus the stored token when there is one.
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/positions/save-position.ts
@@ -25,7 +25,7 @@ export async function savePosition(id: string, body: PatchBody): Promise<PatchRe
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
-    if (res.status === 401) return { ok: false, message: "The token no longer works. Reload the page to enter it again." };
+    if (res.status === 401) return { ok: false, message: "You are logged out. Reload the page to log in again." };
     if (!res.ok) return { ok: false, message: "We could not save the change. Check the fields and try again." };
     const { position } = await res.json<{ position: Position }>();
     return { ok: true, position };

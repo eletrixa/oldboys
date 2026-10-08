@@ -3,17 +3,17 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/positions/new/new-position-form.tsx
- * Deps:    react, next/link, next/navigation, src/app/ui, src/app/_components (token, token-form)
+ * Deps:    react, next/link, next/navigation, src/app/ui, src/app/_components (token, auth-states)
  * Tested:  by e2e/positions.spec.ts
  *
  * Key responsibilities:
  * - POST /api/positions; on 201 or 200 route to /positions/<id> (the detail page flags fallback must-haves, so notes are not shown here)
- * - 4xx/5xx show the error next to the form and keep the input; 401 returns to the token form
+ * - 4xx/5xx show the error next to the form and keep the input; 401 swaps the form for the log-in card (token form behind "Use the team token instead"), input kept
  *
  * Design constraints:
  * - Client component; submit is disabled while pending and when text and URL are both empty
- * - The token is asked for up front and kept only in sessionStorage; it is read with useSyncExternalStore so the
- *   server render (token form) hydrates cleanly when the tab already holds one
+ * - The session cookie travels by default; a token, if the tab holds one, is sent as bearer. It lives only in
+ *   sessionStorage and is read with useSyncExternalStore so the server render hydrates cleanly
  */
 "use client";
 
@@ -21,7 +21,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useSyncExternalStore } from "react";
 import { authFetch, readToken, writeToken } from "@/app/_components/token";
-import { TokenForm } from "@/app/_components/token-form";
+import { LoginOrToken } from "@/app/_components/auth-states";
 import { BTN_PRIMARY, Eyebrow, FIELD } from "@/app/ui";
 
 type CreateReply = { id?: string; error?: string };
@@ -33,7 +33,7 @@ const noTokenOnServer = (): null => null;
 export function NewPositionForm(): React.JSX.Element {
   const router = useRouter();
   const [token, setToken] = useState<string | null>(null);
-  const [tokenError, setTokenError] = useState<string | null>(null);
+  const [denied, setDenied] = useState<{ tokenFailed: boolean } | null>(null);
   const [text, setText] = useState("");
   const [url, setUrl] = useState("");
   const [title, setTitle] = useState("");
@@ -56,7 +56,7 @@ export function NewPositionForm(): React.JSX.Element {
       if (res.status === 401) {
         writeToken(null);
         setToken(null);
-        setTokenError("That token did not work. Please try again.");
+        setDenied({ tokenFailed: active !== null });
         return;
       }
       const reply = await res.json<CreateReply>().catch((): CreateReply => ({}));
@@ -80,10 +80,12 @@ export function NewPositionForm(): React.JSX.Element {
         <h1 className="font-serif text-4xl leading-[1.05] md:text-5xl">Add a position</h1>
         <p className="text-muted">Paste the job posting or give its link. We read the must-haves from it, and you can edit them.</p>
       </header>
-      {active === null ? (
-        <TokenForm
-          error={tokenError}
-          onSubmit={(t) => { writeToken(t); setToken(t); setTokenError(null); }}
+      {denied !== null ? (
+        <LoginOrToken
+          title="Log in to add a position"
+          body="Positions are shared by your team. Log in to add one."
+          error={denied.tokenFailed ? "That token did not work. Please try again." : null}
+          onToken={(t) => { writeToken(t); setToken(t); setDenied(null); }}
           hint="Adding a position needs the team token. Kept only in this tab."
           submitLabel="Continue"
         />

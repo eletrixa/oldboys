@@ -3,19 +3,19 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  e2e/positions.spec.ts
- * Deps:    @playwright/test
+ * Deps:    @playwright/test, e2e/session
  * Tested:  n/a (this is the test)
  *
  * Key responsibilities:
  * - Add a position, see its must-haves, open the research start form with it, find it in the list
  *
  * Design constraints:
- * - Reads E2E_RUN_TOKEN, skips when unset, never prints it; no research run is started (no spend)
+ * - Logs in through a throwaway account (session cookie), no team token; no research run is started (no spend)
  * - Assertions hold on the deterministic fallback extraction (no LLM needed)
  */
 import { expect, test } from "@playwright/test";
+import { registerAndLogin } from "./session";
 
-const TOKEN = process.env.E2E_RUN_TOKEN;
 const SUFFIX = Date.now().toString(36);
 const TITLE = `Senior Data Engineer ${SUFFIX}`;
 const POSTING = [
@@ -26,13 +26,10 @@ const POSTING = [
   "Nice to have: dbt, Kafka, and a record of mentoring colleagues.",
 ].join(" ");
 
-test.skip(TOKEN === undefined || TOKEN === "", "E2E_RUN_TOKEN is not set; skipping the positions e2e");
-
 test("paste a posting, research from it, find it in the list", async ({ page }) => {
   test.setTimeout(90_000);
+  await registerAndLogin(page);
   await page.goto("/positions/new");
-  await page.getByLabel("Team access token").fill(TOKEN ?? "");
-  await page.getByRole("button", { name: "Continue" }).click();
   await page.getByLabel("Posting text").fill(POSTING);
   await page.getByLabel("Title (optional)").fill(TITLE);
   await page.getByRole("button", { name: "Add position" }).click();

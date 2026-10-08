@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/roles/roles-view.tsx
- * Deps:    next/link, react, src/domain/role-overview, src/app/ui, src/app/_components/role-table
+ * Deps:    next/link, react, src/domain/role-overview, src/app/ui, src/app/_components/{role-table,login-card}
  * Tested:  builder in src/domain/__tests__/role-overview.test.ts; view n/a
  *
  * Key responsibilities:
@@ -20,9 +20,10 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { LoginCard } from "@/app/_components/login-card";
 import { RoleTable } from "@/app/_components/role-table";
 import type { RoleGroup } from "@/domain/role-overview";
-import { BTN_PRIMARY, CARD, Eyebrow, LINK } from "../ui";
+import { Eyebrow, LINK } from "../ui";
 
 type Load =
   | { kind: "loading" }
@@ -94,14 +95,7 @@ export function RolesView({ roleKey }: { roleKey?: string }): React.JSX.Element 
         </div>
       )}
       {load.kind === "unauthorized" && (
-        <div className={`${CARD} flex w-full max-w-md flex-col items-start gap-3`}>
-          <h2 className="text-base font-semibold">Log in to see your team&apos;s roles</h2>
-          <p className="text-sm text-muted">Roles and their briefs are visible only to your organization.</p>
-          <div className="flex items-center gap-4">
-            <Link href="/login" className={BTN_PRIMARY}>Log in</Link>
-            <Link href="/register" className={`${LINK} text-sm`}>Create an account</Link>
-          </div>
-        </div>
+        <LoginCard title="Log in to see your team's roles" body="Roles and their briefs are visible only to your organization." />
       )}
       {load.kind === "error" && <p className="text-conflict">{load.message}</p>}
       {load.kind === "ready" && roleKey === undefined && <RoleList groups={load.groups} />}

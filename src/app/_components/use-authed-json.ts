@@ -1,5 +1,5 @@
 /**
- * Hook: GET one bearer-protected JSON route with the stored operator token.
+ * Hook: GET one team-shared JSON route with the session cookie, falling back to the stored operator token.
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/_components/use-authed-json.ts
@@ -7,8 +7,9 @@
  * Tested:  n/a (covered by e2e/positions.spec.ts and the roles page)
  *
  * Key responsibilities:
- * - States loading / token / notfound / error / ready; 401 clears the token and asks again
- * - Makes no request while there is no token
+ * - States loading / login / token / notfound / error / ready
+ * - Tries the cookie first; on 401 retries with the stored bearer token if there is one, else asks to log in
+ * - A token that fails is cleared and the token form shows an error
  *
  * Design constraints:
  * - Client only; a stale response never overwrites a newer one
@@ -20,22 +21,28 @@ import { authFetch, readToken, writeToken } from "./token";
 
 export type AuthedLoad<T> =
   | { kind: "loading" }
+  | { kind: "login" }
   | { kind: "token"; error: string | null }
   | { kind: "notfound" }
   | { kind: "error"; message: string }
   | { kind: "ready"; data: T };
 
 async function load<T>(path: string, token: string | null): Promise<AuthedLoad<T>> {
-  if (token === null) return { kind: "token", error: null };
   try {
-    const res = await authFetch(path, token);
+    let res = await authFetch(path, null);
+    let viaToken = false;
+    if (res.status === 401 && token !== null) {
+      res = await authFetch(path, token);
+      viaToken = true;
+    }
     if (res.status === 401 || res.status === 503) {
+      if (!viaToken) return { kind: "login" };
       writeToken(null);
       return { kind: "token", error: res.status === 401 ? "That token did not work. Please try again." : "The service has no access token set." };
     }
     if (res.status === 404) return { kind: "notfound" };
     if (!res.ok) return { kind: "error", message: "We could not load this page. Please try again." };
-    writeToken(token);
+    if (viaToken) writeToken(token);
     return { kind: "ready", data: await res.json<T>() };
   } catch {
     return { kind: "error", message: "We could not reach the service. Please try again." };

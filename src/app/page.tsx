@@ -3,12 +3,13 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/page.tsx
- * Deps:    next, next/link, ./start-form, ./api/_lib/current-user, ./ui
+ * Deps:    next, next/link, ./start-form, ./login/next-path, ./api/_lib/current-user, ./ui
  * Tested:  n/a
  *
  * Key responsibilities:
  * - Editorial heading, sub copy and the client start form (Screen 1) in a white card
  * - Three plain steps (what Radar does) and the "never a score" line
+ * - Logged-out visitors go to /login with `?positionId=` carried in `next`
  * - Small link to /positions (pick or add a position; /roles stays reachable by URL)
  *
  * Design constraints:
@@ -18,6 +19,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { currentUser } from "./api/_lib/current-user";
+import { loginHref } from "./login/next-path";
 import { StartForm } from "./start-form";
 import { CARD, Eyebrow, LINK } from "./ui";
 
@@ -27,9 +29,12 @@ const STEPS: readonly (readonly [string, string])[] = [
   ["Prepare the conversation", "Gaps become suggested interview questions. You make the decision."],
 ];
 
-export default async function HomePage(): Promise<React.JSX.Element> {
+export default async function HomePage({ searchParams }: { searchParams: Promise<{ positionId?: string }> }): Promise<React.JSX.Element> {
   const user = await currentUser();
-  if (user === null) redirect("/login");
+  if (user === null) {
+    const { positionId } = await searchParams;
+    redirect(loginHref(typeof positionId === "string" && positionId !== "" ? `/?positionId=${encodeURIComponent(positionId)}` : "/"));
+  }
   return (
     <main className="mx-auto grid max-w-5xl gap-10 px-4 py-12 md:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] md:items-start md:py-16">
       <section className="flex flex-col gap-6">
