@@ -27,8 +27,8 @@ wrangler r2 bucket create oldboys-sources
 wrangler secret put ANTHROPIC_API_KEY
 wrangler secret put APIFY_TOKEN
 wrangler secret put RUN_TOKEN           # bearer token required by POST /api/runs
-pnpm db:migrate:remote
-pnpm deploy
+pnpm db:migrate:remote   # run by hand BEFORE pushing a new migration; CI cannot (no D1 scope on its token)
+pnpm deploy              # or just push to main: .github/workflows/deploy.yml deploys
 ```
 
 ## Links

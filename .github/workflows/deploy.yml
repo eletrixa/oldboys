@@ -1,4 +1,4 @@
-# Deploy to Cloudflare Workers on push to main: check, OpenNext build, remote D1 migration, wrangler deploy.
+# Deploy to Cloudflare Workers on push to main: check, OpenNext build, wrangler deploy. D1 migrations are applied by hand first.
 #
 # Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
 # Module:  .github/workflows/deploy.yml
@@ -21,10 +21,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm check
       - run: pnpm exec opennextjs-cloudflare build
-      - run: pnpm db:migrate:remote
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      # Remote D1 migrations are applied by hand (`pnpm db:migrate:remote`, OAuth wrangler login) before
+      # merging a migration: the CI token (Workers edit) has no D1 scope. See README Deploy.
       - run: pnpm exec wrangler deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
