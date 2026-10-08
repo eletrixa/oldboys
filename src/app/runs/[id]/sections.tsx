@@ -8,7 +8,8 @@
  *
  * Key responsibilities:
  * - SectionList: sections in the order given (BriefView passes them confidence descending)
- * - ClaimList: one claim per row with its kind tag and source links; also used for the per-question fallback
+ * - ClaimList: one claim per row with its kind tag and source links (muted "confirmed: <identity_reason>" note when a
+ *   source was confirmed by name + employer); also used for the per-question fallback
  * - Source-only sections (social presence, platforms without claims) list their confirmed source links
  *
  * Design constraints:
@@ -33,7 +34,10 @@ function SourceLink({ url }: { url: string }): React.JSX.Element {
   );
 }
 
-export function ClaimList({ claims, urlOf }: { claims: Claim[]; urlOf: ReadonlyMap<string, string> }): React.JSX.Element | null {
+/** source id -> why it was confirmed beyond its profile link (sources.identity_reason). */
+type NoteOf = ReadonlyMap<string, string>;
+
+export function ClaimList({ claims, urlOf, noteOf }: { claims: Claim[]; urlOf: ReadonlyMap<string, string>; noteOf?: NoteOf }): React.JSX.Element | null {
   if (claims.length === 0) return null;
   return (
     <ul className="mt-3 flex flex-col gap-3">
@@ -45,8 +49,12 @@ export function ClaimList({ claims, urlOf }: { claims: Claim[]; urlOf: ReadonlyM
           {c.text}
           {c.supports.map((sid) => {
             const url = urlOf.get(sid);
+            const note = noteOf?.get(sid);
             return url !== undefined ? (
-              <SourceLink key={sid} url={url} />
+              <span key={sid}>
+                <SourceLink url={url} />
+                {note !== undefined && <span className="ml-1 text-xs text-zinc-500">(confirmed: {note})</span>}
+              </span>
             ) : (
               <span key={sid} className="ml-2 text-xs text-zinc-500">
                 source missing
@@ -59,7 +67,7 @@ export function ClaimList({ claims, urlOf }: { claims: Claim[]; urlOf: ReadonlyM
   );
 }
 
-function SectionCard({ section, claims, urlOf }: { section: BriefSection; claims: Claim[]; urlOf: ReadonlyMap<string, string> }): React.JSX.Element {
+function SectionCard({ section, claims, urlOf, noteOf }: { section: BriefSection; claims: Claim[]; urlOf: ReadonlyMap<string, string>; noteOf?: NoteOf }): React.JSX.Element {
   const band = confidenceBand(section.confidence);
   const facts = claims.filter((c) => c.kind !== "INFERENCE");
   const inferences = claims.filter((c) => c.kind === "INFERENCE");
@@ -74,8 +82,8 @@ function SectionCard({ section, claims, urlOf }: { section: BriefSection; claims
       </div>
       <p className="mt-1 text-xs text-zinc-500">{section.confidence_reason}</p>
       {section.summary !== "" && <p className="mt-2 text-sm text-zinc-300">{section.summary}</p>}
-      <ClaimList claims={facts} urlOf={urlOf} />
-      <ClaimList claims={inferences} urlOf={urlOf} />
+      <ClaimList claims={facts} urlOf={urlOf} noteOf={noteOf} />
+      <ClaimList claims={inferences} urlOf={urlOf} noteOf={noteOf} />
       {links.length > 0 && (
         <ul className="mt-3 flex flex-col gap-1 text-sm">
           {links.map((url) => (
@@ -91,11 +99,11 @@ function SectionCard({ section, claims, urlOf }: { section: BriefSection; claims
   );
 }
 
-export function SectionList({ sections, claims, urlOf }: { sections: BriefSection[]; claims: Claim[]; urlOf: ReadonlyMap<string, string> }): React.JSX.Element {
+export function SectionList({ sections, claims, urlOf, noteOf }: { sections: BriefSection[]; claims: Claim[]; urlOf: ReadonlyMap<string, string>; noteOf?: NoteOf }): React.JSX.Element {
   return (
     <>
       {sections.map((s) => (
-        <SectionCard key={s.id} section={s} claims={claims.filter((c) => s.claim_ids.includes(c.id))} urlOf={urlOf} />
+        <SectionCard key={s.id} section={s} claims={claims.filter((c) => s.claim_ids.includes(c.id))} urlOf={urlOf} noteOf={noteOf} />
       ))}
     </>
   );

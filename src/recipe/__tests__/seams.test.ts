@@ -161,8 +161,8 @@ describe("identity after the lineup (namesake SERP hits never reach the model)",
 
   it("marks only SERP hits on the merged profile (post and locale variants included) as merged", () => {
     expect(sourceIdentityUpdates(cands, serp)).toEqual([
-      { id: "li", identity: "merged" },
-      { id: "post", identity: "merged" },
+      { id: "li", identity: "merged", reason: null },
+      { id: "post", identity: "merged", reason: null },
     ]);
     expect(profileKey("https://www.linkedin.com/posts/lukas-pokorny-436438295_x-activity-2")).toBe(profileKey(`${li}/cs`));
   });

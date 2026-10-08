@@ -11,7 +11,7 @@
  * - Questions = recipe base questions + investigations.questions_json; mentions = COUNT(sources)
  * - step_index/step_count from the recipe; failed_step = first recipe step without a ledger row on a failed run
  * - role = investigations.role (the brief's "Hiring for" line); subject is "" until the seed step derived it;
- *   headline = what the seed_profile ledger row recorded (plans/006)
+ *   headline = what the seed_profile ledger row recorded (plans/006); sources carry identity_reason (migration 0008)
  * - cost = runCost over the ledger rows (seq order) from investigations.created_at
  *
  * Design constraints:
@@ -63,7 +63,7 @@ export async function GET(
   const [cands, claims, sources, brief, ledger] = await Promise.all([
     env.DB.prepare("SELECT * FROM candidates WHERE run_id = ? ORDER BY score DESC").bind(id).all<CandidateRow>(),
     env.DB.prepare("SELECT * FROM claims WHERE run_id = ? ORDER BY rank").bind(id).all<ClaimRow>(),
-    env.DB.prepare("SELECT id, url FROM sources WHERE run_id = ?").bind(id).all<{ id: string; url: string }>(),
+    env.DB.prepare("SELECT id, url, identity_reason FROM sources WHERE run_id = ?").bind(id).all<{ id: string; url: string; identity_reason: string | null }>(),
     env.DB.prepare("SELECT brief_json FROM briefs WHERE run_id = ?").bind(id).first<{ brief_json: string }>(),
     env.DB.prepare("SELECT step, ts, kind, cost_usd, ms, ref_json FROM ledger_entries WHERE run_id = ? ORDER BY seq")
       .bind(id)

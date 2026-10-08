@@ -4,12 +4,13 @@
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/recipe/sources/linkedin.ts
  * Deps:    zod
- * Tested:  src/recipe/__tests__/sources-web.test.ts
+ * Tested:  src/recipe/__tests__/sources-web.test.ts, src/recipe/__tests__/identity-corroboration.test.ts (experienceCompanies)
  *
  * Key responsibilities:
  * - Request all candidate LinkedIn URLs in one actor run; parse each profile into one Source
  * - `harvestRequest` / `harvestProfiles`: shared with the seed seam (plans/006), which scrapes the manager's profile URL first
  * - Never scrape a URL twice: profiles already fetched at seed are skipped and reported via `alreadyFetched`
+ * - `experienceCompanies`: company names back out of a profile excerpt's experience lines (employer corroboration)
  *
  * Design constraints:
  * - Pure: no network; the runner performs the actor call. Parsing is lenient (unknown fields ignored)
@@ -60,6 +61,23 @@ function expLine(title: unknown, company: unknown, start: unknown, end: unknown)
   const e = txt(end);
   const span = s || e ? ` (${s}–${e})` : "";
   return `${txt(title)} @ ${txt(company)}${span}`;
+}
+
+/** Actors whose excerpt is a parsed LinkedIn profile (experience lines built by expLine). */
+export const LINKEDIN_PROFILE_ACTORS: ReadonlySet<string> = new Set([HARVEST_ACTOR, "apimaestro/linkedin-profile-detail"]);
+
+/**
+ * Company names from a profile excerpt: "Title @ Company (start–end)", "Current: Title @ Company", and the
+ * apimaestro "Current: Company" line. Deduped, in order; empty companies dropped.
+ */
+export function experienceCompanies(excerpt: string): string[] {
+  const out = excerpt.split("\n").flatMap((raw) => {
+    const line = raw.trim();
+    const at = line.lastIndexOf(" @ ");
+    if (at >= 0) return [line.slice(at + 3).replace(/\s*\([^()]*\)$/, "").trim()];
+    return line.startsWith("Current: ") ? [line.slice("Current: ".length).trim()] : [];
+  });
+  return [...new Set(out.filter((c) => c !== ""))];
 }
 
 function eduLine(school: unknown, degree: unknown, field: unknown): string {
