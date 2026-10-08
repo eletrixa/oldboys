@@ -8,7 +8,8 @@
  *
  * Key responsibilities:
  * - Poll GET /api/runs/:id/state every 2 s until done or failed
- * - Header: derived name once the seed step knows it ("the candidate" before), the seed headline under it
+ * - Header: derived name once the seed step knows it ("the candidate" before), the seed headline under it,
+ *   then "From <source> · <tag> · <date>" when an intake application started the run
  * - "Researched for: <position title>" link to /positions/<id> under the name when the run came from a position
  * - When done, the brief comes first and the confirmation steps fold into a closed "How we confirmed it" disclosure
  * - One footer closes the page: running hint (not done), then "Back to home" and "Audit record" links
@@ -26,6 +27,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { intakeLine } from "@/app/intake/intake-rows";
 import type { Candidate, CandidateDecision } from "@/domain/claim";
 import { BTN_SECONDARY, CARD_CONFLICT, Chevron, Eyebrow, LINK, Pill, SUMMARY } from "../../ui";
 import { IdentityMapCard } from "./identity-map-card";
@@ -210,6 +212,7 @@ export function RunView({ id }: { id: string }): React.JSX.Element {
           {headerText(state.subject, state.status === "done")}
         </h1>
         {state.headline !== null && <p className="text-lg text-muted">{state.headline}</p>}
+        {state.intake !== null && <p className="text-sm text-muted">{intakeLine(state.intake)}</p>}
         {forPosition !== null && (
           <p className="text-sm text-muted">
             <Link href={`/positions/${encodeURIComponent(forPosition.id)}`} className={LINK}>Researched for: {forPosition.title}</Link>
@@ -220,7 +223,7 @@ export function RunView({ id }: { id: string }): React.JSX.Element {
         )}
         {cached && (
           <Pill tone="neutral" className="w-fit">
-            CACHED · run from {new Date(state.created_at).toLocaleString()}
+            CACHED · run from {state.created_at.slice(0, 16).replace("T", " ")} UTC
           </Pill>
         )}
         <CostLine cost={state.cost} />

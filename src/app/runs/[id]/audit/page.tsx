@@ -8,7 +8,7 @@
  *
  * Key responsibilities:
  * - Server-render the AuditRecord from D1; "Download audit record (.json)" fetches the same data from
- *   GET /api/runs/:id/audit?download=1
+ *   GET /api/runs/:id/audit?download=1; "Download data access export" links GET /api/runs/:id/access-export (GDPR Art. 15)
  *
  * Design constraints:
  * - Missing times are omitted from meta lines, never shown as a dash; lineup answers are Pills
@@ -240,6 +240,13 @@ export default async function AuditPage({ params }: { params: Promise<{ id: stri
           className={`${BTN_SECONDARY} self-start`}
         >
           Download audit record (.json)
+        </a>
+        <a
+          href={`/api/runs/${id}/access-export`}
+          download={`access-export-${id.slice(0, 8)}.json`}
+          className={`${BTN_SECONDARY} self-start`}
+        >
+          Download data access export (GDPR Art. 15, .json)
         </a>
       </header>
 

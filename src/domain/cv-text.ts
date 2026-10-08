@@ -21,11 +21,16 @@ export type CvTextResult = { text: string | null; note: string | null };
 
 const PDF_MAGIC = [0x25, 0x50, 0x44, 0x46]; // %PDF
 
+/** Media type application/pdf or a .pdf file name. */
+export function isPdf(file: { filename: string; contentType: string }): boolean {
+  return file.contentType.toLowerCase().startsWith("application/pdf") || file.filename.toLowerCase().endsWith(".pdf");
+}
+
 export async function extractCvText(file: { bytes: ArrayBuffer; contentType: string; filename: string }): Promise<CvTextResult> {
   const type = file.contentType.toLowerCase();
   const name = file.filename.toLowerCase();
 
-  if (type.startsWith("application/pdf") || name.endsWith(".pdf")) {
+  if (isPdf(file)) {
     const head = new Uint8Array(file.bytes, 0, Math.min(4, file.bytes.byteLength));
     if (!PDF_MAGIC.every((b, i) => head[i] === b)) return { text: null, note: "not a PDF (no %PDF header)" };
     try {

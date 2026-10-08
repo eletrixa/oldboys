@@ -15,8 +15,8 @@ POST /api/intake/startupjobs/<token>  (StartupJobs webhook)                     
 - Idempotent per `(source, external_id)`: sending the same application twice returns the first row and starts no second run.
 - Spend brakes: known tag required, `INTAKE_PER_HOUR_CAP` (default 10) intake runs per hour, on top of the global `RUNS_PER_HOUR_CAP` (20) and the per-run budget of $0.50.
 - The candidate never learns a run exists. The apply page and the webhook answer "received"; run ids appear only on `/intake` and in operator routes.
-- Statuses: `received` (inserted, not decided; stays here only when something threw) -> `run-started` | `unmatched` (unknown or missing tag, sender not allowed) | `incomplete` (no LinkedIn URL and no readable CV text) | `capped`. The `note` column says why.
-- Raw mail is not kept. Only the CV file (R2 `intake/<applicationId>/<filename>`, purged with the other raw data) and the extracted text are stored.
+- Statuses: `received` (inserted, not decided; stays here only when something threw, and the next delivery of the same source after 5 minutes picks it up) -> `run-started` | `unmatched` (unknown or missing tag, sender not allowed) | `incomplete` (no LinkedIn URL and no readable CV text) | `capped`. The `note` column says why.
+- Raw mail is not kept. Only the CV file (R2 `intake/<applicationId>/<filename>`, written only for a known tag and an allowed sender, purged with the other raw data) and the extracted text are stored.
 - Public data only, outreach drafted never sent, no Art. 9 inference: the brief's hard rules apply to intake runs unchanged.
 
 ## Config
@@ -35,7 +35,7 @@ POST /api/intake/startupjobs/<token>  (StartupJobs webhook)                     
 |---|---|
 | `INTAKE_TOKEN` | Bearer for `POST /api/intake/form`; also stored as a Script Property in the Apps Script |
 | `STARTUPJOBS_WEBHOOK_TOKEN` | Path segment of the StartupJobs webhook URL; treat the URL as a secret |
-| `STARTUPJOBS_TOKEN` | Optional. StartupJobs bearer, used only to retry a CV file download that answers 401/403 (the company API itself is never called) |
+| `STARTUPJOBS_TOKEN` | Optional. StartupJobs bearer, sent with the CV file download when the file URL is on a startupjobs.cz host (the company API itself is never called) |
 
 Generate a value without printing it, then store it where `RUN_TOKEN` lives (`~/s/oldboys/.env`) so it can be pasted into Apps Script / StartupJobs:
 
@@ -204,13 +204,13 @@ The endpoint answers 201 `{applicationId, status}` or, for a repeated response i
 
 ## Door 3: hosted apply page
 
-`https://oldboys.asajj.cz/apply/<tag>` (404 for an unknown tag). Public, candidate-facing, no mention of research. Fields: full name, email, LinkedIn URL or CV PDF (up to 5 MB, one of the two), optional message, a hidden honeypot. One application per email per position: a resubmit is a duplicate. The page says "Received" in every case except the hourly cap, where it asks to try again in an hour. This is the URL for LinkedIn "external website", the Jobs.cz ad text and StartupJobs ad text.
+`https://oldboys.asajj.cz/apply/<tag>` (404 for an unknown tag). Public, candidate-facing, no mention of research. Fields: full name, email, LinkedIn URL or CV PDF (up to 10 MB, one of the two), optional message, a hidden honeypot. One application per email per position: a resubmit is a duplicate. The page says "Received" in every case except the hourly cap, where it asks to try again in an hour. This is the URL for LinkedIn "external website", the Jobs.cz ad text and StartupJobs ad text.
 
 ## Door 4: StartupJobs webhook
 
 Facts (StartupJobs developer docs, 2024-07-25): a webhook URL is set per offer; on each application StartupJobs POSTs the full application as JSON; the endpoint must answer 200, 201, 202, 204 or 422, any other status **deletes the webhook**; there is no signature, so the secret lives in the path. The Worker answers only those codes (404 for a wrong token is the single exception and is intended: StartupJobs would delete the webhook, which is the right outcome for a leaked or rotated URL).
 
-1. Set the secret: `pnpm exec wrangler secret put STARTUPJOBS_WEBHOOK_TOKEN` (generate as above). Optional: `STARTUPJOBS_TOKEN`. The StartupJobs company API is **not called**; the webhook payload is the whole application. The only use of `STARTUPJOBS_TOKEN` is one retry of the CV file download when the file URL answers 401 or 403.
+1. Set the secret: `pnpm exec wrangler secret put STARTUPJOBS_WEBHOOK_TOKEN` (generate as above). Optional: `STARTUPJOBS_TOKEN`. The StartupJobs company API is **not called**; the webhook payload is the whole application. The only use of `STARTUPJOBS_TOKEN` is the CV file download: it is sent as a bearer when the file URL is on a startupjobs.cz host.
 2. Map the offer to a tag, either way:
    - set the offer's **internal position name** to the tag (`senior-be`), or
    - create the tag with `startupjobsOfferId` set to the numeric offer id (the offer id mapping wins when both exist).
@@ -270,11 +270,11 @@ curl -s $H/api/intake/tags -H "Authorization: Bearer $RUN_TOKEN"
 pnpm exec opennextjs-cloudflare build
 pnpm exec wrangler dev        # second terminal below
 
-curl -X POST 'http://localhost:8787/cdn-cgi/handler/email?from=a@b.cz&to=jobs+senior-be@asajj.cz' \
+curl -X POST 'http://localhost:8787/cdn-cgi/handler/email?from=a@b.cz&to=jobs%2Bsenior-be@asajj.cz' \
   --data-binary @src/domain/__tests__/fixtures/gmail-forward.eml -H 'Content-Type: message/rfc822'
 ```
 
-That fixture carries a LinkedIn URL and a PDF, so with the tag `senior-be` present it starts a run. Other fixtures: `seznam-copy.eml` (plain text, Czech diacritics), `jobs-cz-notification.eml` (HTML only, `incomplete`), `no-tag.eml` (`unmatched`). Use `to=jobs+nosuchtag@asajj.cz` for a spend-free check.
+That fixture carries a LinkedIn URL and a PDF, so with the tag `senior-be` present it starts a run. Other fixtures: `seznam-copy.eml` (plain text, Czech diacritics), `jobs-cz-notification.eml` (HTML only, `incomplete`), `no-tag.eml` (`unmatched`). Use `to=jobs%2Bnosuchtag@asajj.cz` (the plus must be URL-encoded in the query, or wrangler reads it as a space and the Worker answers "no such address") for a spend-free check.
 
 **Email, production.** Send a real mail from any address to `jobs+<tag>@asajj.cz`, then:
 
@@ -300,7 +300,7 @@ Also check the Cloudflare dashboard Activity log under Email Routing: it shows d
 | `/apply/<tag>` 404 | Tag not in `intake_tags` or invalid | Create the tag |
 | StartupJobs webhook deleted by StartupJobs | The URL once answered something other than 200/201/202/204/422 (wrong token gives 404) | Re-enter the correct URL in the offer; check the token |
 | Webhook 503 | `STARTUPJOBS_WEBHOOK_TOKEN` not set | `wrangler secret put STARTUPJOBS_WEBHOOK_TOKEN` |
-| Webhook 202 `{received:false}` | The funnel threw; the row, if created, stays `received` | `wrangler tail oldboys`, fix, then see `received` below |
+| Webhook 202 `{received:false}` | The funnel threw; the row, if created, stays `received`. StartupJobs does not redeliver, so the raw body was kept at R2 `intake/dead-letter/startupjobs/<time>-<candidateID>.json` | `wrangler tail oldboys`, fix the cause, then re-POST the kept body to the webhook URL: `pnpm exec wrangler r2 object get oldboys-sources/intake/dead-letter/startupjobs/<file> --file /tmp/dl.json` and `curl -X POST .../api/intake/startupjobs/<token> -H 'content-type: application/json' --data-binary @/tmp/dl.json` (after 5 minutes the `received` row is resumed, see below) |
 | Webhook 422 | Body is not the documented payload | Compare with `specs/intake/startupjobs.md`; StartupJobs stops retrying |
 | `unmatched`, note "unknown tag" | Plus-address, position code or internal position name matches no `intake_tags` row | Create the tag, or correct the address/offer mapping; then re-send the source |
 | `unmatched`, note "sender not allowed" | `INTAKE_FROM_ALLOW` excludes the envelope sender | Add the domain/address or empty the var, deploy, re-send |
@@ -309,8 +309,8 @@ Also check the Cloudflare dashboard Activity log under Email Routing: it shows d
 | `incomplete`, note "unsupported CV format" | DOCX or other format (stored in R2, not parsed) | Same as above |
 | `incomplete`, note "cv download failed <status>" | StartupJobs file URL needs auth or expired | Set `STARTUPJOBS_TOKEN`; or fetch the file from the application's admin page |
 | `incomplete` for Jobs.cz mails | The notification links the CV instead of attaching it | Put the apply page link in the ad; capture a real mail into the fixture |
-| `capped` | `INTAKE_PER_HOUR_CAP` reached when the application arrived | Start the run by hand from the start form with the row's LinkedIn URL, or raise the cap. Re-sending does not retry, because duplicates return the first row |
-| `received` that never moves | R2, D1 or Workflow create threw after the insert | `wrangler tail oldboys`, fix the cause, then delete the row (`DELETE FROM applications WHERE id = '<id>'` via `wrangler d1 execute oldboys --remote`) and re-send the source |
+| `capped` | `INTAKE_PER_HOUR_CAP` reached when the application arrived | Wait for the hour to pass and deliver the same application again (candidate resubmits the apply page, Apps Script re-POSTs the response, the mail is forwarded again): a `capped` row is the one duplicate that is re-decided and starts its run when there is room. Or raise the cap |
+| `received` that never moves | R2, D1 or Workflow create threw after the insert | `wrangler tail oldboys`, fix the cause, then re-send the source (forward the mail again, `resendAll` in Apps Script, resubmit the apply page, re-POST the StartupJobs dead letter): a `received` row older than 5 minutes is processed again from the new delivery, and a run the failed attempt had already started is linked, not started twice |
 | No row for a sent mail | Mail never reached the Worker: wrong address, recipient rejected, destination or rule disabled, over 10 MiB | Email Routing Activity log; rule `jobs@` and catch-all point to Worker `oldboys`; recipient must be `jobs@` or `jobs+<tag>@` |
 | Gmail "forwarding address" confirmation never arrives | `INTAKE_FORWARD_TO` was emptied, or the destination was removed in Email Routing | Restore the var and deploy, check Destination addresses shows `robert@soulfire.cz` verified, resend the confirmation |
 | Log line "forward failed" | Destination removed or unverified | Verify it in Email Routing -> Destination addresses; the application was stored anyway |

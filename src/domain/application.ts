@@ -9,7 +9,7 @@
  * Key responsibilities:
  * - Zod schemas for an intake tag, source, status, CV file and IntakeInput (specs/intake/data.md)
  * - `candidateInput`: LinkedIn URL normalised or dropped with a note, CV text passed through
- * - `decideStatus`: unmatched > incomplete > capped > run-started, in that order
+ * - `decideStatus`: unmatched > incomplete > capped > run-started, in that order; CAPPED_NOTE is the capped note
  * - `safeFilename` / `cvR2Key`: the R2 key a CV file is stored under
  * - Owns CV_MAX (run-body.ts re-exports it)
  *
@@ -21,6 +21,17 @@ import { normalizeLinkedinProfile } from "./profile-url";
 
 /** Longest CV text a run accepts (pasted or extracted). */
 export const CV_MAX = 20_000;
+/** Largest CV file any connector stores (R2) or parses; the same cap for mail, form, apply page and StartupJobs. */
+export const CV_MAX_BYTES = 10 * 1024 * 1024;
+export const NAME_MAX = 200;
+export const EMAIL_MAX = 200;
+export const PHONE_MAX = 40;
+export const LINKEDIN_MAX = 500;
+export const COVER_LETTER_MAX = 10_000;
+/** Longest applications.note; joinNotes cuts here, so connectors never need their own limit. */
+export const NOTE_MAX = 1000;
+/** Longest CvFile.filename a connector may hand in (safeFilename cuts the stored key to 80). */
+export const CV_FILENAME_MAX = 200;
 
 /** Routing key of an open position: plus-address, apply page path, form hidden field, StartupJobs mapping. */
 export const IntakeTag = z.string().regex(/^[a-z0-9][a-z0-9-]{1,39}$/);
@@ -32,26 +43,43 @@ export const ApplicationStatus = z.enum(["received", "run-started", "unmatched",
 export type ApplicationStatus = z.infer<typeof ApplicationStatus>;
 
 export const CvFile = z.object({
-  bytes: z.instanceof(ArrayBuffer),
-  filename: z.string().min(1).max(200),
+  bytes: z.instanceof(ArrayBuffer).refine((b) => b.byteLength <= CV_MAX_BYTES, { message: `CV file over ${String(CV_MAX_BYTES)} bytes` }),
+  filename: z.string().min(1).max(CV_FILENAME_MAX),
   contentType: z.string().max(100),
 });
 export type CvFile = z.infer<typeof CvFile>;
+
+/** Build a CvFile with the shared defaults: "cv.pdf" when the name is empty, "application/pdf" when the type is. */
+export function toCvFile(file: { bytes: ArrayBuffer; filename?: string | null; contentType?: string | null }): CvFile {
+  const filename = (file.filename ?? "").trim();
+  const contentType = (file.contentType ?? "").trim();
+  return {
+    bytes: file.bytes,
+    filename: (filename === "" ? "cv.pdf" : filename).slice(0, CV_FILENAME_MAX),
+    contentType: (contentType === "" ? "application/pdf" : contentType).slice(0, 100),
+  };
+}
+
+/** "; "-joined non-empty notes, cut to NOTE_MAX; null when there is nothing to say. */
+export function joinNotes(...parts: (string | null | undefined)[]): string | null {
+  const kept = parts.filter((n): n is string => n !== null && n !== undefined && n !== "");
+  return kept.length > 0 ? kept.join("; ").slice(0, NOTE_MAX) : null;
+}
 
 export const IntakeInput = z.object({
   source: ApplicationSource,
   externalId: z.string().min(1).max(300),
   /** Validated against IntakeTag by the funnel; kept raw here so an unknown tag can be shown on the row. */
   tag: z.string().trim().toLowerCase().max(60).optional(),
-  name: z.string().trim().min(1).max(200).optional(),
-  email: z.email().max(200).optional(),
-  phone: z.string().trim().min(3).max(40).optional(),
+  name: z.string().trim().min(1).max(NAME_MAX).optional(),
+  email: z.email().max(EMAIL_MAX).optional(),
+  phone: z.string().trim().min(3).max(PHONE_MAX).optional(),
   /** Normalised in candidateInput(); an invalid URL is dropped with a note. */
-  linkedinUrl: z.string().max(500).optional(),
+  linkedinUrl: z.string().max(LINKEDIN_MAX).optional(),
   cvText: z.string().trim().min(1).max(CV_MAX).optional(),
   cv: CvFile.optional(),
-  coverLetter: z.string().trim().min(1).max(10_000).optional(),
-  note: z.string().max(1000).optional(),
+  coverLetter: z.string().trim().min(1).max(COVER_LETTER_MAX).optional(),
+  note: z.string().max(NOTE_MAX).optional(),
 });
 export type IntakeInput = z.infer<typeof IntakeInput>;
 
@@ -90,6 +118,9 @@ export function candidateInput(app: Pick<IntakeInput, "linkedinUrl" | "cvText">)
 
 export type DecidedStatus = Exclude<ApplicationStatus, "received">;
 
+/** The note a capped row carries; the capped retry drops it when the run finally starts. */
+export const CAPPED_NOTE = "intake run cap reached for this hour";
+
 export function decideStatus(args: {
   tagKnown: boolean;
   senderAllowed: boolean;
@@ -101,7 +132,7 @@ export function decideStatus(args: {
   if (args.candidate.profileUrl === undefined && args.candidate.cvText === undefined) {
     return { status: "incomplete", note: "no LinkedIn profile URL and no readable CV text" };
   }
-  if (args.capped) return { status: "capped", note: "intake run cap reached for this hour" };
+  if (args.capped) return { status: "capped", note: CAPPED_NOTE };
   return { status: "run-started", note: null };
 }
 

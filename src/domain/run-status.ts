@@ -82,6 +82,9 @@ export function dedupeSince(now: Date): string {
   return new Date(now.getTime() - DEDUPE_WINDOW_MS).toISOString();
 }
 
+/** One hour in ms: the window of every per-hour cap below. */
+export const HOUR_MS = 60 * 60 * 1000;
+
 /** Runs started per hour across the shared token before the API answers 429. */
 export const RUNS_PER_HOUR_CAP = 20;
 /** Runs started from the public start form (no bearer of its own) in any rolling hour. */

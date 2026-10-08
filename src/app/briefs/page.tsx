@@ -16,7 +16,7 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { currentUser } from "../api/_lib/current-user";
-import { Eyebrow, LINK, Pill, type Tone } from "../ui";
+import { BTN_PRIMARY, CARD, Eyebrow, LINK, Pill, type Tone } from "../ui";
 import { listOrganizationRuns } from "./load";
 
 const STATUS_TONE: Readonly<Record<string, Tone>> = { done: "ok", failed: "conflict", paused: "unsure" };
@@ -27,21 +27,23 @@ export default async function BriefsPage(): Promise<React.JSX.Element> {
   const { env } = getCloudflareContext();
   const rows = await listOrganizationRuns(env.DB, user.organizationId);
   return (
-    <main className="mx-auto flex max-w-3xl flex-col gap-8 px-4 py-10 md:py-14">
-      <header className="flex flex-col gap-3">
-        <Eyebrow>Your company</Eyebrow>
-        <h1 className="font-serif text-4xl leading-[1.05] md:text-5xl">My briefs</h1>
+    <main className="mx-auto flex max-w-5xl flex-col gap-8 px-4 py-10 md:py-14">
+      <header className="flex flex-col gap-3 border-b border-divider pb-8">
+        <Eyebrow>{user.organizationName}</Eyebrow>
+        <h1 className="font-serif text-4xl leading-[1.05] md:text-5xl">Our briefs</h1>
+        <p className="max-w-[62ch] text-muted">Every brief your team has started, newest first. Open one to read the evidence or answer a profile question.</p>
       </header>
       {rows.length === 0 ? (
-        <p className="text-muted">
-          No briefs yet.{" "}
-          <Link href="/" className={LINK}>Start your first one</Link>
-        </p>
+        <div className={`${CARD} flex w-full max-w-md flex-col items-start gap-3`}>
+          <h2 className="text-base font-semibold">No briefs yet</h2>
+          <p className="text-sm text-muted">Start with a candidate&apos;s LinkedIn profile or CV and the role you are hiring for.</p>
+          <Link href="/" className={BTN_PRIMARY}>Start a brief</Link>
+        </div>
       ) : (
-        <div className="overflow-x-auto">
+        <div role="region" aria-label="Briefs" tabIndex={0} className="overflow-x-auto">
           <table className="w-full text-left text-sm">
             <caption className="sr-only">Briefs started by {user.organizationName}, newest first</caption>
-            <thead className="text-xs text-muted">
+            <thead className="text-xs font-semibold tracking-[0.08em] text-muted uppercase">
               <tr className="border-b border-divider">
                 <th scope="col" className="px-3 py-3 font-medium">Candidate</th>
                 <th scope="col" className="px-3 py-3 font-medium">Role</th>

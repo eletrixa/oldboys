@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/api/runs/[id]/state/route.ts
- * Deps:    @opennextjs/cloudflare (getCloudflareContext), bindings DB, src/recipe/goals, src/domain/run-cost
+ * Deps:    @opennextjs/cloudflare (getCloudflareContext), bindings DB, src/recipe/goals, src/domain/run-cost, src/app/intake/intake-rows (type)
  * Tested:  n/a
  *
  * Key responsibilities:
@@ -15,6 +15,7 @@
  * - position = LEFT JOIN positions on investigations.position_id ({id, title}); null without one or once purged (migration 0009)
  * - organization_name = LEFT JOIN organizations (null for bearer/extension runs)
  * - cost = runCost over the ledger rows (seq order) from investigations.created_at
+ * - intake = the applications row LEFT JOINed into the head query on investigations.application_id ({source, tag, receivedAt}), null for runs started by hand; never cv_text or cover_letter
  *
  * Design constraints:
  * - No runtime = "edge"; never cached; no auth (the id is an unguessable UUID, like GET /api/runs/:id)
@@ -24,6 +25,7 @@ import type { Brief, Candidate, Claim } from "@/domain/claim";
 import { GoalId } from "@/domain/claim";
 import { type CostRow, runCost } from "@/domain/run-cost";
 import { recipeFor } from "@/recipe/goals";
+import type { RunIntake } from "@/app/intake/intake-rows";
 import { type RunState, type RunStatus, seedHeadline } from "@/app/runs/[id]/state";
 
 type HeadRow = {
@@ -37,6 +39,9 @@ type HeadRow = {
   position_id: string | null;
   position_title: string | null;
   organization_name: string | null;
+  intake_source: RunIntake["source"] | null;
+  intake_tag: string | null;
+  intake_received_at: string | null;
 };
 type CandidateRow = Omit<Candidate, "profile_urls" | "reasons"> & { profile_urls_json: string; reasons_json: string };
 type ClaimRow = Omit<Claim, "supports" | "contradicts"> & { supports_json: string; contradicts_json: string };
@@ -59,9 +64,14 @@ export async function GET(
   const { env } = getCloudflareContext();
 
   const head = await env.DB.prepare(
-    `SELECT i.id, i.subject, i.goal, i.role, i.status, i.questions_json, i.created_at, p.id AS position_id, p.title AS position_title,
-       o.name AS organization_name
-     FROM investigations i LEFT JOIN positions p ON p.id = i.position_id LEFT JOIN organizations o ON o.id = i.organization_id
+    `SELECT i.id, i.subject, i.goal, i.role, i.status, i.questions_json, i.created_at,
+            p.id AS position_id, p.title AS position_title,
+            o.name AS organization_name,
+            a.source AS intake_source, a.tag AS intake_tag, a.received_at AS intake_received_at
+     FROM investigations i
+     LEFT JOIN positions p ON p.id = i.position_id
+     LEFT JOIN organizations o ON o.id = i.organization_id
+     LEFT JOIN applications a ON a.id = i.application_id
      WHERE i.id = ?`,
   )
     .bind(id)
@@ -126,6 +136,10 @@ export async function GET(
     failed_step: head.status === "failed" ? (recipeSteps[stepIndex]?.id ?? last?.step ?? null) : null,
     step_index: stepIndex,
     step_count: recipeSteps.length,
+    intake:
+      head.intake_source === null || head.intake_received_at === null
+        ? null
+        : { source: head.intake_source, tag: head.intake_tag, receivedAt: head.intake_received_at },
   };
   return Response.json(state, { headers: { "Cache-Control": "no-store" } });
 }

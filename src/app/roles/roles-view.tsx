@@ -37,9 +37,9 @@ function RoleList({ groups }: { groups: RoleGroup[] }): React.JSX.Element {
     <ul className="divide-y divide-divider border-b border-divider">
       {groups.map((g) => (
         <li key={g.key}>
-          <Link href={`/roles/${encodeURIComponent(g.key)}`} className="group -mx-3 flex min-h-11 items-center justify-between gap-4 rounded-lg px-3 py-4 hover:bg-surface">
+          <Link href={`/roles/${encodeURIComponent(g.key)}`} className="group -mx-3 flex min-h-11 items-center gap-4 rounded-lg px-3 py-4 hover:bg-surface">
             <span className="font-serif text-xl group-hover:text-action">{g.role}</span>
-            <span className="shrink-0 text-sm text-muted tabular-nums">
+            <span className="ml-auto min-w-[5.5rem] shrink-0 text-right text-sm text-muted tabular-nums">
               {g.run_count} {g.run_count === 1 ? "brief" : "briefs"}
             </span>
             <span aria-hidden="true" className="text-muted group-hover:text-action">›</span>

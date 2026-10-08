@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/start-form.tsx
- * Deps:    react, next/navigation, ./ui (Radar tokens), ./start-body, ./start-position
+ * Deps:    react, next/navigation, ./ui (Radar tokens), ./start-body, ./start-position, src/app/_lib/form-text
  * Tested:  n/a (body builder: src/app/__tests__/start-body.test.ts)
  *
  * Key responsibilities:
@@ -25,6 +25,7 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
+import { formText } from "@/app/_lib/form-text";
 import { buildStartBody, positionIdParam } from "./start-body";
 import { PositionBanner, usePositionSummary } from "./start-position";
 import { BTN_PRIMARY, CARD_PEACH, CARD_SAGE, Chevron, FIELD, LINK, SUMMARY } from "./ui";
@@ -79,12 +80,8 @@ function StartFormInner({ initialRole, autoFocusRole = false }: StartFormProps):
 
   async function submit(form: HTMLFormElement): Promise<void> {
     const data = new FormData(form);
-    const text = (key: string): string => {
-      const raw = data.get(key);
-      return typeof raw === "string" ? raw.trim() : "";
-    };
-    const profileUrl = text("profileUrl");
-    const cvText = text("cvText");
+    const profileUrl = formText(data, "profileUrl").trim();
+    const cvText = formText(data, "cvText").trim();
     if (position.status === "loading") return;
     if (profileUrl === "" && cvText === "") {
       setError("Please add their LinkedIn profile or paste their CV.");
@@ -97,7 +94,7 @@ function StartFormInner({ initialRole, autoFocusRole = false }: StartFormProps):
       const res = await fetch("/api/start", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(buildStartBody({ role: text("role"), profileUrl, cvText, positionId })),
+        body: JSON.stringify(buildStartBody({ role: formText(data, "role").trim(), profileUrl, cvText, positionId })),
       });
       if (res.status === 201) {
         const { id } = await res.json<{ id: string }>();

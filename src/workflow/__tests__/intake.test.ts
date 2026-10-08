@@ -1,5 +1,5 @@
 /**
- * Tests for the intake funnel (ingestApplication) with hand-written D1, R2 and Workflow fakes.
+ * Tests for the intake funnel (ingestApplication) on the shared D1, R2 and Workflow fakes (fixtures/intake-fakes).
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/workflow/__tests__/intake.test.ts
@@ -8,93 +8,19 @@
  *
  * Key responsibilities:
  * - Cover specs/intake/funnel.md: happy path, CV-only PDF, duplicate and insert race, unknown tag, sender not
- *   allowed, incomplete, capped, R2 failure leaving the row at 'received'
+ *   allowed (no CV file stored for either), incomplete, capped (and the capped retry), R2 failure leaving the row
+ *   at 'received' and its resume on the next delivery after the stale window (linking an already started run)
  *
  * Design constraints:
- * - No module mocks; fakes match on SQL prefixes and keep state in plain maps
+ * - No module mocks; the fakes match on SQL prefixes and keep state in plain maps
  */
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { tinyPdf } from "@/domain/__tests__/fixtures/tiny-pdf";
-import { ingestApplication, type IntakeEnv } from "../intake";
+import { ingestApplication, STALE_RECEIVED_MS } from "../intake";
+import { makeIntakeFakes as makeEnv } from "./fixtures/intake-fakes";
 
 const NOW = new Date("2026-10-08T12:00:00.000Z");
 const PROFILE = "https://www.linkedin.com/in/josef-buryan";
-
-type Row = Record<string, unknown>;
-
-function makeEnv(opts: { intakeRunsLastHour?: number; cap?: string; r2Error?: Error; raceInsert?: boolean } = {}) {
-  const tags = new Map<string, Row>([["senior-be", { role: "Senior backend engineer", goal: "hiring" }]]);
-  const apps = new Map<string, Row>();
-  const investigations: Row[] = [];
-  const puts: { key: string; size: number; contentType: string | undefined }[] = [];
-  const create = vi.fn((_: unknown) => Promise.resolve({ id: "wf" }));
-  const countArgs: unknown[][] = [];
-
-  const exec = (sql: string, args: unknown[]): { rows: Row[]; changes: number } => {
-    if (sql.startsWith("SELECT id, status, run_id, note FROM applications")) {
-      const hit = [...apps.values()].find((a) => a.source === args[0] && a.external_id === args[1]);
-      return { rows: hit ? [hit] : [], changes: 0 };
-    }
-    if (sql.startsWith("INSERT INTO applications")) {
-      const cols = /\(([^)]*)\)/.exec(sql)?.[1]?.split(", ") ?? [];
-      const row: Row = Object.fromEntries(cols.map((c, i) => [c, args[i]]));
-      row.status = "received";
-      const clash = [...apps.values()].some((a) => a.source === row.source && a.external_id === row.external_id);
-      if (opts.raceInsert === true) {
-        // Another delivery committed the same message between our SELECT and INSERT.
-        apps.set("app-winner", { ...row, id: "app-winner", status: "run-started", run_id: "run-winner", note: null });
-        throw new Error("D1_ERROR: UNIQUE constraint failed: applications.source, applications.external_id: SQLITE_CONSTRAINT");
-      }
-      if (clash) throw new Error("D1_ERROR: UNIQUE constraint failed: applications.source, applications.external_id");
-      apps.set(row.id as string, row);
-      return { rows: [], changes: 1 };
-    }
-    if (sql.startsWith("SELECT role, goal FROM intake_tags WHERE tag = ?")) {
-      const t = tags.get(args[0] as string);
-      return { rows: t ? [t] : [], changes: 0 };
-    }
-    if (sql.startsWith("SELECT COUNT(*) AS n FROM investigations")) {
-      countArgs.push(args);
-      return { rows: [{ n: opts.intakeRunsLastHour ?? 0 }], changes: 0 };
-    }
-    if (sql.startsWith("INSERT INTO investigations")) {
-      const cols = /\(([^)]*)\)/.exec(sql)?.[1]?.split(", ") ?? [];
-      const values = [...args.slice(0, 4), "queued", ...args.slice(4)];
-      investigations.push(Object.fromEntries(cols.map((c, i) => [c, values[i]])));
-      return { rows: [], changes: 1 };
-    }
-    const update = /^UPDATE applications SET (.*) WHERE id = \?$/.exec(sql);
-    if (update) {
-      const cols = (update[1] ?? "").split(", ").map((c) => c.split(" = ")[0] ?? "");
-      const row = apps.get(args[cols.length] as string);
-      if (!row) return { rows: [], changes: 0 };
-      cols.forEach((c, i) => (row[c] = args[i]));
-      return { rows: [], changes: 1 };
-    }
-    throw new Error(`unexpected SQL: ${sql}`);
-  };
-
-  const stmt = (sql: string, args: unknown[] = []) => ({
-    bind: (...a: unknown[]) => stmt(sql, a),
-    first: () => Promise.resolve().then(() => exec(sql, args).rows[0] ?? null),
-    run: () => Promise.resolve().then(() => ({ meta: { changes: exec(sql, args).changes } })),
-  });
-  const env = {
-    DB: { prepare: (sql: string) => stmt(sql) },
-    RESEARCH_RUN: { create },
-    RUN_BUDGET_USD: "0.50",
-    RUN_BUDGET_CALLS: "16",
-    INTAKE_PER_HOUR_CAP: opts.cap,
-    SOURCES: {
-      put: (key: string, bytes: ArrayBuffer, o?: { httpMetadata?: { contentType?: string } }) => {
-        if (opts.r2Error) return Promise.reject(opts.r2Error);
-        puts.push({ key, size: bytes.byteLength, contentType: o?.httpMetadata?.contentType });
-        return Promise.resolve(null);
-      },
-    },
-  } as unknown as IntakeEnv;
-  return { env, apps, investigations, puts, create, countArgs };
-}
 
 const base = { source: "email", externalId: "<m1@mail.test>", tag: "senior-be", name: "Josef Buryan", email: "josef@mail.test" } as const;
 
@@ -135,7 +61,9 @@ describe("ingestApplication", () => {
 
     expect(res.status).toBe("run-started");
     const key = `intake/${res.applicationId}/My_CV.pdf`;
-    expect(puts).toEqual([{ key, size: cv.bytes.byteLength, contentType: "application/pdf" }]);
+    expect(puts.map((p) => ({ key: p.key, size: p.bytes.byteLength, contentType: p.contentType }))).toEqual([
+      { key, size: cv.bytes.byteLength, contentType: "application/pdf" },
+    ]);
     expect(apps.get(res.applicationId)).toMatchObject({ cv_key: key, cv_text: "Josef Buryan Kubernetes", linkedin_url: null });
     expect(investigations[0]).toMatchObject({ cv_text: "Josef Buryan Kubernetes", profile_url: null });
   });
@@ -198,6 +126,37 @@ describe("ingestApplication", () => {
     expect(puts).toHaveLength(1);
   });
 
+  it("a capped application re-decides on the next delivery and starts the run once the hour has room", async () => {
+    const opts = { intakeRunsLastHour: 10 };
+    const { env, apps, investigations, create } = makeEnv(opts);
+    const first = await ingestApplication({ ...base, linkedinUrl: PROFILE }, env, NOW);
+    expect(first.status).toBe("capped");
+    expect(create).not.toHaveBeenCalled();
+
+    const stillFull = await ingestApplication({ ...base, linkedinUrl: PROFILE }, env, NOW);
+    expect(stillFull).toMatchObject({ applicationId: first.applicationId, status: "capped", duplicate: true });
+
+    opts.intakeRunsLastHour = 0;
+    const retried = await ingestApplication({ ...base, linkedinUrl: "https://linkedin.com/in/someone-else" }, env, NOW);
+    expect(retried).toMatchObject({ applicationId: first.applicationId, status: "run-started", duplicate: true, note: null });
+    expect(retried.runId).not.toBeNull();
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(investigations[0]).toMatchObject({ profile_url: PROFILE, via: "intake", application_id: first.applicationId });
+    expect(apps.get(first.applicationId)).toMatchObject({ status: "run-started", run_id: retried.runId, note: null });
+  });
+
+  it("a capped retry keeps the stored parser and subject notes and only drops the cap note", async () => {
+    const opts = { intakeRunsLastHour: 10 };
+    const { env, apps } = makeEnv(opts);
+    const first = await ingestApplication({ ...base, linkedinUrl: PROFILE, note: "subject: Hi; there" }, env, NOW);
+    expect(first.note).toBe("intake run cap reached for this hour; subject: Hi; there");
+
+    opts.intakeRunsLastHour = 0;
+    const retried = await ingestApplication(base, env, NOW);
+    expect(retried).toMatchObject({ status: "run-started", note: "subject: Hi; there" });
+    expect(apps.get(first.applicationId)).toMatchObject({ status: "run-started", note: "subject: Hi; there" });
+  });
+
   it("capped when the intake runs of the last hour reach INTAKE_PER_HOUR_CAP", async () => {
     const { env, create } = makeEnv({ intakeRunsLastHour: 3, cap: "3" });
     const res = await ingestApplication({ ...base, linkedinUrl: PROFILE }, env, NOW);
@@ -217,6 +176,54 @@ describe("ingestApplication", () => {
     expect([...apps.values()][0]).toMatchObject({ status: "received" });
     expect([...apps.values()][0]?.note).toBeUndefined();
     expect(create).not.toHaveBeenCalled();
+  });
+
+  it("a row left at received is resumed from the next delivery once it is older than the stale window", async () => {
+    const opts: { r2Error?: Error } = { r2Error: new Error("R2 down") };
+    const { env, apps, puts, create } = makeEnv(opts);
+    const cv = { bytes: tinyPdf("Kubernetes"), filename: "cv.pdf", contentType: "application/pdf" };
+    await expect(ingestApplication({ ...base, cv }, env, NOW)).rejects.toThrow("R2 down");
+    const id = [...apps.keys()][0] ?? "";
+    delete opts.r2Error;
+
+    // Seconds later it may still be in flight: nothing happens.
+    const inFlight = await ingestApplication({ ...base, cv }, env, new Date(NOW.getTime() + STALE_RECEIVED_MS - 1));
+    expect(inFlight).toMatchObject({ applicationId: id, status: "received", duplicate: true });
+    expect(create).not.toHaveBeenCalled();
+
+    const resumed = await ingestApplication({ ...base, cv }, env, new Date(NOW.getTime() + STALE_RECEIVED_MS));
+    expect(resumed).toMatchObject({ applicationId: id, status: "run-started", duplicate: true, note: null });
+    expect(create).toHaveBeenCalledOnce();
+    expect(puts.map((p) => p.key)).toEqual([`intake/${id}/cv.pdf`]);
+    expect(apps.get(id)).toMatchObject({ status: "run-started", run_id: resumed.runId, cv_key: `intake/${id}/cv.pdf`, cv_text: "Kubernetes" });
+    expect(apps.size).toBe(1);
+  });
+
+  it("a resumed row links the run its failed delivery had started instead of starting a second one", async () => {
+    const { env, apps, investigations, create } = makeEnv();
+    create.mockRejectedValueOnce(new Error("workflow create down"));
+    await expect(ingestApplication({ ...base, linkedinUrl: PROFILE }, env, NOW)).rejects.toThrow("workflow create down");
+    const id = [...apps.keys()][0] ?? "";
+    expect(investigations).toHaveLength(1);
+    expect(apps.get(id)).toMatchObject({ status: "received" });
+
+    const resumed = await ingestApplication({ ...base, linkedinUrl: PROFILE }, env, new Date(NOW.getTime() + STALE_RECEIVED_MS));
+    expect(resumed).toMatchObject({ applicationId: id, status: "run-started", runId: investigations[0]?.id, duplicate: true });
+    expect(investigations).toHaveLength(1);
+    expect(create).toHaveBeenCalledOnce();
+    expect(apps.get(id)).toMatchObject({ status: "run-started", run_id: investigations[0]?.id });
+  });
+
+  it("an unknown tag or a disallowed sender stores no CV file", async () => {
+    const { env, apps, puts } = makeEnv();
+    const cv = { bytes: tinyPdf("Kubernetes"), filename: "cv.pdf", contentType: "application/pdf" };
+    const unknown = await ingestApplication({ ...base, tag: "nope", cv }, env, NOW);
+    const denied = await ingestApplication({ ...base, externalId: "m2", cv }, env, NOW, { senderAllowed: false });
+    expect(unknown.status).toBe("unmatched");
+    expect(denied.status).toBe("unmatched");
+    expect(puts).toHaveLength(0);
+    expect(apps.get(unknown.applicationId)).toMatchObject({ cv_key: null, cv_text: "Kubernetes" });
+    expect(apps.get(denied.applicationId)).toMatchObject({ cv_key: null });
   });
 
   it("rejects invalid input before touching D1", async () => {

@@ -10,6 +10,7 @@ All notable changes to oldboys are documented here. The format follows [Keep a C
 - Seed profile step to extract name, location, and LinkedIn from the given input
 - Role overview page (`/roles` and `/roles/<key>`) listing runs and must-have criteria coverage per role
 - GDPR audit record per run: full transparency on data sources, processing, timing, cost, and retention (idea #17)
+- GDPR Art. 15 data access export per run (`GET /api/runs/:id/access-export`, link on the audit page): confirmed sources, linked profiles, claims backed only by confirmed sources, the brief text, purpose, legal basis, controller and deletion date; never namesakes, unconfirmed pages or Art. 9 claims
 - 30-second summary card above the brief: confirmed platforms, role criteria coverage, top gaps and interview question (idea #15)
 - Candidate notice export: polite Markdown copy for the candidate informed under Art. 6(1)(f), with deletion date and correction link (idea #7)
 - Interview kit export: Markdown template for the hiring team with role, profile, cost, coverage checklist, sourced answers, and gaps (idea #6)

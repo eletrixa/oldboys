@@ -3,11 +3,11 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/runs/[id]/state.ts
- * Deps:    src/domain/claim, src/domain/run-cost (types only)
+ * Deps:    src/domain/claim, src/domain/run-cost, src/app/intake/intake-rows (types only)
  * Tested:  src/app/runs/[id]/__tests__/state.test.ts
  *
  * Key responsibilities:
- * - RunState: the GET /api/runs/:id/state contract (incl. position {id, title} | null and organization_name)
+ * - RunState: the GET /api/runs/:id/state contract (incl. position {id, title} | null, organization_name, and intake = the application that started the run, or null)
  * - stepRows: map the ledger step + status to the five human progress rows
  * - sortLineup: confirmed first, social platforms before web hits
  * - questionsToAsk: one open profile per platform; roleCriteria: role must-haves (mh-) only
@@ -26,6 +26,7 @@
  */
 import type { Brief, BriefSection, Candidate, Claim } from "@/domain/claim";
 import type { RunCost } from "@/domain/run-cost";
+import type { RunIntake } from "@/app/intake/intake-rows";
 import { platformOf } from "@/recipe/sources/types";
 
 export type RunStatus = "queued" | "running" | "paused" | "done" | "failed";
@@ -61,6 +62,8 @@ export type RunState = {
   step_index: number;
   step_count: number;
   cost: RunCost;
+  /** The intake application that started this run (source, tag, received time); null for runs started by hand. */
+  intake: RunIntake | null;
 };
 
 export type RowState = "done" | "active" | "todo" | "failed" | "skipped";

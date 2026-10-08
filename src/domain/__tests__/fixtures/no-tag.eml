@@ -1,0 +1,9 @@
+From: Ondrej Svoboda <ondrej.svoboda@example.org>
+To: jobs@asajj.cz
+Subject: Open application
+Date: Thu, 08 Oct 2026 12:45:00 +0200
+MIME-Version: 1.0
+Content-Type: text/plain; charset=us-ascii
+X-Fixture-Note: invented person; no plus-tag and no Message-ID (externalId falls back to the raw sha256)
+
+Hi, I have no specific position in mind. Profile: https://www.linkedin.com/in/ondrej-svoboda-dev
