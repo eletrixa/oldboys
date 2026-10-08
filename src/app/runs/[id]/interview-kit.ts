@@ -3,11 +3,12 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/runs/[id]/interview-kit.ts
- * Deps:    src/domain/run-cost (formatDuration), ./call-panel (CallView, formatAt), ./state (RunState, gap helpers, roleCriteria, briefSections, confidenceBand)
+ * Deps:    src/domain/run-cost (formatDuration), ./call-panel (CallView, formatAt), ./evidence (retrievedLabel), ./state (RunState, gap helpers, roleCriteria, briefSections, confidenceBand, host)
  * Tested:  src/app/runs/[id]/__tests__/interview-kit.test.ts
  *
  * Key responsibilities:
- * - interviewKit: header (role, or the position title when the run has one, confirmed profile, date, research cost), coverage per question with sourced claims,
+ * - interviewKit: header (role, or the position title when the run has one, confirmed profile, date, research cost), coverage per question with sourced claims
+ *   (each with its verbatim quote and the retrieval date per linked source, idea #5),
  *   interview questions as a checklist with room for notes, to-verify list, gap lists, footer
  * - Findings by section (confidence descending, with the reason) replace per-question coverage; briefs stored
  *   before sections fall back to coverage
@@ -25,7 +26,8 @@
 import { formatDuration } from "@/domain/run-cost";
 import type { Brief, BriefSection, Claim } from "@/domain/claim";
 import { ANSWER_BADGE, type CallView, formatAt, placedCalls } from "./call-panel";
-import { type RunState, briefSections, confidenceBand, gapLine, hiringFor, roleCriteria, searchedEmpty, searchedTitle } from "./state";
+import { retrievedLabel } from "./evidence";
+import { type RunState, briefSections, confidenceBand, gapLine, hiringFor, host, roleCriteria, searchedEmpty, searchedTitle } from "./state";
 
 const FOOTER = "This kit rates the research, never the candidate. Public sources only; run data is deleted after 7 days.";
 
@@ -76,20 +78,31 @@ function header(state: RunState, brief: Brief, generatedAt: string): string[] {
   return ["# Interview kit", "", ...lines.map((l, i) => (i < lines.length - 1 ? `${l}  ` : l)), ""];
 }
 
-/** "- FACT: text (<link>, <link>)" with only parseable http(s) links. */
-function claimLine(c: Claim, urlOf: ReadonlyMap<string, string>): string {
-  const links = c.supports.flatMap((sid) => {
-    const link = mdLink(urlOf.get(sid) ?? "");
-    return link === null ? [] : [link];
+type KitSource = RunState["sources"][number];
+
+/**
+ * "- FACT: text (<link>, <link>)" with only parseable http(s) links, then nested lines with the verbatim quote and,
+ * per linked source, when it was retrieved.
+ */
+function claimLine(c: Claim, sourceOf: ReadonlyMap<string, KitSource>): string {
+  const linked = c.supports.flatMap((sid) => {
+    const s = sourceOf.get(sid);
+    const link = mdLink(s?.url ?? "");
+    return s === undefined || link === null ? [] : [{ s, link }];
   });
-  return `- ${c.kind}: ${escapeMd(c.text)}${links.length > 0 ? ` (${links.join(", ")})` : ""}`;
+  const quote = c.quote !== null && c.quote.trim() !== "" ? `\n  - Quote: "${escapeMd(c.quote)}"` : "";
+  const retrieved = linked
+    .filter(({ s }) => typeof s.fetched_at === "string")
+    .map(({ s }) => `\n  - ${retrievedLabel(s.fetched_at)} (${escapeMd(host(s.url))})`)
+    .join("");
+  return `- ${c.kind}: ${escapeMd(c.text)}${linked.length > 0 ? ` (${linked.map((l) => l.link).join(", ")})` : ""}${quote}${retrieved}`;
 }
 
 function coverage(state: RunState, brief: Brief): string[] {
-  const urlOf = new Map(state.sources.map((s) => [s.id, s.url]));
+  const sourceOf = new Map(state.sources.map((s) => [s.id, s]));
   const textOf = new Map(state.questions.map((q) => [q.id, q.text]));
   const lines = brief.per_question.flatMap((q) => {
-    const claims = state.claims.filter((c) => q.claim_ids.includes(c.id)).map((c) => claimLine(c, urlOf));
+    const claims = state.claims.filter((c) => q.claim_ids.includes(c.id)).map((c) => claimLine(c, sourceOf));
     const summary = escapeMd(q.summary);
     return [
       `### ${escapeMd(textOf.get(q.question_id) ?? q.question_id)}`,
@@ -105,11 +118,11 @@ function coverage(state: RunState, brief: Brief): string[] {
 
 /** Sections by confidence: how well the research backs each finding, facts before inferences, links for source-only sections. */
 function findings(state: RunState, sections: readonly BriefSection[]): string[] {
-  const urlOf = new Map(state.sources.map((s) => [s.id, s.url]));
+  const sourceOf = new Map(state.sources.map((s) => [s.id, s]));
   const lines = sections.flatMap((sec) => {
     const claims = state.claims.filter((c) => sec.claim_ids.includes(c.id));
-    const ordered = [...claims.filter((c) => c.kind !== "INFERENCE"), ...claims.filter((c) => c.kind === "INFERENCE")].map((c) => claimLine(c, urlOf));
-    const links = claims.length === 0 ? [...new Set(sec.source_ids.flatMap((sid) => mdLink(urlOf.get(sid) ?? "") ?? []))].map((l) => `- ${l}`) : [];
+    const ordered = [...claims.filter((c) => c.kind !== "INFERENCE"), ...claims.filter((c) => c.kind === "INFERENCE")].map((c) => claimLine(c, sourceOf));
+    const links = claims.length === 0 ? [...new Set(sec.source_ids.flatMap((sid) => mdLink(sourceOf.get(sid)?.url ?? "") ?? []))].map((l) => `- ${l}`) : [];
     const summary = escapeMd(sec.summary);
     return [
       `### ${escapeMd(sec.title)}`,

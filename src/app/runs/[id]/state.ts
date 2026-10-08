@@ -3,11 +3,12 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/runs/[id]/state.ts
- * Deps:    src/domain/claim, src/domain/run-cost, src/app/intake/intake-rows (types only)
+ * Deps:    src/domain/claim, src/domain/run-cost, src/domain/quote, src/app/intake/intake-rows (types only)
  * Tested:  src/app/runs/[id]/__tests__/state.test.ts
  *
  * Key responsibilities:
- * - RunState: the GET /api/runs/:id/state contract (incl. position {id, title} | null, organization_name, and intake = the application that started the run, or null)
+ * - RunState: the GET /api/runs/:id/state contract (incl. position {id, title} | null, organization_name, and intake = the application that started the run, or null;
+ *   sources carry fetched_at / expires_at and quote_contexts the saved text around each claim's quote, never whole excerpts)
  * - stepRows: map the ledger step + status to the five human progress rows
  * - sortLineup: confirmed first, social platforms before web hits
  * - questionsToAsk: one open profile per platform; roleCriteria: role must-haves (mh-) only
@@ -25,6 +26,7 @@
  * - Pure (types plus the pure platformOf), so both the route handler and client code can use it
  */
 import type { Brief, BriefSection, Candidate, Claim } from "@/domain/claim";
+import type { ClaimQuoteContext } from "@/domain/quote";
 import type { RunCost } from "@/domain/run-cost";
 import type { RunIntake } from "@/app/intake/intake-rows";
 import { platformOf } from "@/recipe/sources/types";
@@ -50,8 +52,13 @@ export type RunState = {
   mentions: number;
   candidates: Candidate[];
   claims: Claim[];
-  /** identity_reason: why a source was confirmed beyond its profile link ("name and employer match (Groupon)"); null otherwise. */
-  sources: { id: string; url: string; identity_reason?: string | null }[];
+  /**
+   * identity_reason: why a source was confirmed beyond its profile link ("name and employer match (Groupon)"); null otherwise.
+   * fetched_at: when we read the source; expires_at: when the saved excerpt is purged (both ISO; absent in older code paths).
+   */
+  sources: { id: string; url: string; identity_reason?: string | null; fetched_at?: string | null; expires_at?: string | null }[];
+  /** Saved text around each claim's quote, one per (claim with a quote, source it cites); Art. 9 surroundings are emptied. */
+  quote_contexts?: ClaimQuoteContext[];
   questions: { id: string; text: string; title?: string }[];
   brief: Brief | null;
   /** Reason recorded by the Workflow when status is failed; null otherwise. */

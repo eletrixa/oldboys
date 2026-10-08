@@ -3,14 +3,15 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/runs/[id]/sections.tsx
- * Deps:    react, src/domain/claim (types), ./state, ../../ui (Radar primitives)
- * Tested:  isShown in __tests__/sections.test.ts; ordering and bands in __tests__/state.test.ts
+ * Deps:    react, src/domain/claim (types), ./state, ./evidence, ./claim-evidence, ../../ui (Radar primitives)
+ * Tested:  isShown and the claim evidence rendering in __tests__/sections.test.ts; ordering and bands in __tests__/state.test.ts
  *
  * Key responsibilities:
  * - SectionList: sections in the order given (BriefView passes them confidence descending)
  * - ClaimList: one claim per row (grid: kind tag cell, text cell, so wrapped text hangs beside the tag) with its kind tag, a "Conflicts with another claim" pill when claim.contradicts is
- *   non-empty, and source links (the "confirmed: <identity_reason>" note is the link's tooltip); also used for the
- *   per-question fallback
+ *   non-empty, and source links that open the page at the quote (quoteLink; tooltip = "Confirmed: <identity_reason>"
+ *   and the retrieval date); also used for the per-question fallback
+ * - Under each claim a "Show evidence" disclosure (ClaimEvidence, idea #5): quote, sources, retrieval dates, saved copy
  * - Source-only sections (platforms without claims) list their confirmed source links; empty ones are not rendered
  * - SourceLink: the pasted CV renders as "Candidate's CV (pasted)" with no href (its URL is "cv:<runId>")
  *
@@ -20,7 +21,9 @@
  */
 import type { BriefSection, Claim } from "@/domain/claim";
 import { CARD, Pill, SourceLink, type Tone } from "../../ui";
-import { type ConfidenceBand, confidenceBand } from "./state";
+import { ClaimEvidence } from "./claim-evidence";
+import { type Evidence, quoteLink, retrievedLabel } from "./evidence";
+import { type ConfidenceBand, confidenceBand, host } from "./state";
 
 const BAND: Record<ConfidenceBand, { tone: Tone; label: string }> = {
   strong: { tone: "ok", label: "Strong evidence" },
@@ -30,10 +33,12 @@ const BAND: Record<ConfidenceBand, { tone: Tone; label: string }> = {
 
 const KIND_LABEL: Record<Claim["kind"], string> = { FACT: "Fact", INFERENCE: "Inference", STATEMENT: "Statement" };
 
-/** source id -> why it was confirmed beyond its profile link (sources.identity_reason). */
-type NoteOf = ReadonlyMap<string, string>;
+/** Tooltip of an inline source link: why the source is theirs, and when we read it. */
+function linkTitle(reason: string | null | undefined, fetchedAt: string | null | undefined): string {
+  return [typeof reason === "string" && reason !== "" ? `Confirmed: ${reason}` : null, retrievedLabel(fetchedAt)].filter((t) => t !== null).join(" · ");
+}
 
-export function ClaimList({ claims, urlOf, noteOf }: { claims: Claim[]; urlOf: ReadonlyMap<string, string>; noteOf?: NoteOf }): React.JSX.Element | null {
+export function ClaimList({ claims, evidence }: { claims: Claim[]; evidence: Evidence }): React.JSX.Element | null {
   if (claims.length === 0) return null;
   return (
     <ul className="mt-3 flex flex-col gap-3">
@@ -50,11 +55,10 @@ export function ClaimList({ claims, urlOf, noteOf }: { claims: Claim[]; urlOf: R
               </Pill>
             )}
             {c.supports.map((sid) => {
-              const url = urlOf.get(sid);
-              const note = noteOf?.get(sid);
-              return url !== undefined ? (
-                <span key={sid} title={note === undefined ? undefined : `Confirmed: ${note}`}>
-                  <SourceLink url={url} className="ml-2" />
+              const info = evidence.sourceOf.get(sid);
+              return info !== undefined ? (
+                <span key={sid} title={linkTitle(info.identity_reason, info.fetched_at)}>
+                  <SourceLink url={quoteLink(info.url, c.quote)} label={host(info.url)} className="ml-2" />
                 </span>
               ) : (
                 <span key={sid} className="ml-2 text-xs text-muted">
@@ -63,17 +67,18 @@ export function ClaimList({ claims, urlOf, noteOf }: { claims: Claim[]; urlOf: R
               );
             })}
           </span>
+          <ClaimEvidence claim={c} evidence={evidence} className="col-start-2" />
         </li>
       ))}
     </ul>
   );
 }
 
-function SectionCard({ section, claims, urlOf, noteOf }: { section: BriefSection; claims: Claim[]; urlOf: ReadonlyMap<string, string>; noteOf?: NoteOf }): React.JSX.Element {
+function SectionCard({ section, claims, evidence }: { section: BriefSection; claims: Claim[]; evidence: Evidence }): React.JSX.Element {
   const band = confidenceBand(section.confidence);
   const facts = claims.filter((c) => c.kind !== "INFERENCE");
   const inferences = claims.filter((c) => c.kind === "INFERENCE");
-  const links = claims.length === 0 ? [...new Set(section.source_ids.flatMap((sid) => urlOf.get(sid) ?? []))] : [];
+  const links = claims.length === 0 ? [...new Set(section.source_ids.flatMap((sid) => evidence.sourceOf.get(sid)?.url ?? []))] : [];
   return (
     <section className={CARD}>
       <div className="flex items-start justify-between gap-3">
@@ -82,8 +87,8 @@ function SectionCard({ section, claims, urlOf, noteOf }: { section: BriefSection
       </div>
       <p className="mt-1 text-xs text-muted">{section.confidence_reason}</p>
       {section.summary !== "" && <p className="mt-2 text-sm text-ink">{section.summary}</p>}
-      <ClaimList claims={facts} urlOf={urlOf} noteOf={noteOf} />
-      <ClaimList claims={inferences} urlOf={urlOf} noteOf={noteOf} />
+      <ClaimList claims={facts} evidence={evidence} />
+      <ClaimList claims={inferences} evidence={evidence} />
       {links.length > 0 && (
         <ul className="mt-3 flex flex-col gap-1 text-sm">
           {links.map((url) => (
@@ -102,11 +107,11 @@ export function isShown(s: BriefSection): boolean {
   return s.claim_ids.length > 0 || (s.source_ids.length > 0 && s.id !== "social-presence");
 }
 
-export function SectionList({ sections, claims, urlOf, noteOf }: { sections: BriefSection[]; claims: Claim[]; urlOf: ReadonlyMap<string, string>; noteOf?: NoteOf }): React.JSX.Element {
+export function SectionList({ sections, claims, evidence }: { sections: BriefSection[]; claims: Claim[]; evidence: Evidence }): React.JSX.Element {
   return (
     <>
       {sections.filter(isShown).map((s) => (
-        <SectionCard key={s.id} section={s} claims={claims.filter((c) => s.claim_ids.includes(c.id))} urlOf={urlOf} noteOf={noteOf} />
+        <SectionCard key={s.id} section={s} claims={claims.filter((c) => s.claim_ids.includes(c.id))} evidence={evidence} />
       ))}
     </>
   );

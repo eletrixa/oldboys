@@ -230,3 +230,23 @@ describe("kitFileName", () => {
     expect(name.toLowerCase()).not.toContain("novak");
   });
 });
+
+describe("interviewKit evidence lines (idea #5)", () => {
+  it("adds the verbatim quote and the retrieval date per linked source under a claim", () => {
+    const md = kit({
+      claims: [{ ...claim("c1", "Works at Acme since 2021", ["s1", "s2"]), quote: "Data *engineer* at Acme" }],
+      sources: [
+        { id: "s1", url: "https://www.linkedin.com/in/jnovak", fetched_at: "2026-10-08T21:14:00Z" },
+        { id: "s2", url: "javascript:alert(1)", fetched_at: "2026-10-08T21:15:00Z" },
+      ],
+    });
+    expect(md).toContain(
+      '- FACT: Works at Acme since 2021 (<https://www.linkedin.com/in/jnovak>)\n  - Quote: "Data \\*engineer\\* at Acme"\n  - Retrieved 8 Oct 2026, 21:14 UTC (linkedin.com)\n',
+    );
+    expect(md).not.toContain("21:15");
+  });
+
+  it("adds no retrieval line when the source has no time recorded", () => {
+    expect(kit()).not.toContain("Retrieved");
+  });
+});
