@@ -13,6 +13,7 @@
     "lint": "eslint",
     "test": "vitest run",
     "test:watch": "vitest",
+    "e2e": "playwright test",
     "db:migrate:local": "wrangler d1 migrations apply oldboys --local",
     "db:migrate:remote": "wrangler d1 migrations apply oldboys --remote",
     "check": "pnpm typecheck && pnpm lint && pnpm test && pnpm --filter oldboys-extension check",
@@ -31,6 +32,7 @@
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20261007.1",
+    "@playwright/test": "^1.63.0",
     "@tailwindcss/postcss": "^4.3.3",
     "@types/node": "^26.6.4",
     "@types/react": "^19.3.0",

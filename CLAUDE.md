@@ -77,6 +77,7 @@ Every change to `src/`, `migrations/`, `scripts/` or any root config must pass `
 - New code under `src/domain` and `src/recipe` ships with a Vitest test next to it (`__tests__/`).
 - Agents deploy, migrate remote D1, touch Worker secrets, read `.dev.vars` or a single variable from `~/s`, or push only when Robert asks for it in the current task; never print or copy a secrets file.
 - `pnpm exec wrangler deploy --dry-run --outdir <scratch>` is the allowed way to prove the Worker still bundles.
+- Every user-visible change adds a line to `CHANGELOG.md` under Unreleased in the same commit.
 
 ## Known gotchas
 - `extension/` is a second pnpm workspace package; after pulling, run `pnpm install --frozen-lockfile` once or `pnpm check` fails with `wxt: command not found`.

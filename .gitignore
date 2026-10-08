@@ -16,3 +16,5 @@ extension/.output/
 extension/.wxt/
 AGENTS.md
 .playwright-mcp/
+.claude/worktrees/
+test-results/
