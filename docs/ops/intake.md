@@ -15,8 +15,8 @@ POST /api/intake/startupjobs/<token>  (StartupJobs webhook)                     
 - Idempotent per `(source, external_id)`: sending the same application twice returns the first row and starts no second run.
 - Spend brakes: known tag required, `INTAKE_PER_HOUR_CAP` (default 10) intake runs per hour, on top of the global `RUNS_PER_HOUR_CAP` (20) and the per-run budget of $0.50.
 - The candidate never learns a run exists. The apply page and the webhook answer "received"; run ids appear only on `/intake` and in operator routes.
-- Statuses: `received` (inserted, not decided; stays here only when something threw) -> `run-started` | `unmatched` (unknown or missing tag, sender not allowed) | `incomplete` (no LinkedIn URL and no readable CV text) | `capped`. The `note` column says why.
-- Raw mail is not kept. Only the CV file (R2 `intake/<applicationId>/<filename>`, purged with the other raw data) and the extracted text are stored.
+- Statuses: `received` (inserted, not decided; stays here only when something threw, and the next delivery of the same source after 5 minutes picks it up) -> `run-started` | `unmatched` (unknown or missing tag, sender not allowed) | `incomplete` (no LinkedIn URL and no readable CV text) | `capped`. The `note` column says why.
+- Raw mail is not kept. Only the CV file (R2 `intake/<applicationId>/<filename>`, written only for a known tag and an allowed sender, purged with the other raw data) and the extracted text are stored.
 - Public data only, outreach drafted never sent, no Art. 9 inference: the brief's hard rules apply to intake runs unchanged.
 
 ## Config
@@ -300,7 +300,7 @@ Also check the Cloudflare dashboard Activity log under Email Routing: it shows d
 | `/apply/<tag>` 404 | Tag not in `intake_tags` or invalid | Create the tag |
 | StartupJobs webhook deleted by StartupJobs | The URL once answered something other than 200/201/202/204/422 (wrong token gives 404) | Re-enter the correct URL in the offer; check the token |
 | Webhook 503 | `STARTUPJOBS_WEBHOOK_TOKEN` not set | `wrangler secret put STARTUPJOBS_WEBHOOK_TOKEN` |
-| Webhook 202 `{received:false}` | The funnel threw; the row, if created, stays `received` | `wrangler tail oldboys`, fix, then see `received` below |
+| Webhook 202 `{received:false}` | The funnel threw; the row, if created, stays `received`. StartupJobs does not redeliver, so the raw body was kept at R2 `intake/dead-letter/startupjobs/<time>-<candidateID>.json` | `wrangler tail oldboys`, fix the cause, then re-POST the kept body to the webhook URL: `pnpm exec wrangler r2 object get oldboys-sources/intake/dead-letter/startupjobs/<file> --file /tmp/dl.json` and `curl -X POST .../api/intake/startupjobs/<token> -H 'content-type: application/json' --data-binary @/tmp/dl.json` (after 5 minutes the `received` row is resumed, see below) |
 | Webhook 422 | Body is not the documented payload | Compare with `specs/intake/startupjobs.md`; StartupJobs stops retrying |
 | `unmatched`, note "unknown tag" | Plus-address, position code or internal position name matches no `intake_tags` row | Create the tag, or correct the address/offer mapping; then re-send the source |
 | `unmatched`, note "sender not allowed" | `INTAKE_FROM_ALLOW` excludes the envelope sender | Add the domain/address or empty the var, deploy, re-send |
@@ -310,7 +310,7 @@ Also check the Cloudflare dashboard Activity log under Email Routing: it shows d
 | `incomplete`, note "cv download failed <status>" | StartupJobs file URL needs auth or expired | Set `STARTUPJOBS_TOKEN`; or fetch the file from the application's admin page |
 | `incomplete` for Jobs.cz mails | The notification links the CV instead of attaching it | Put the apply page link in the ad; capture a real mail into the fixture |
 | `capped` | `INTAKE_PER_HOUR_CAP` reached when the application arrived | Wait for the hour to pass and deliver the same application again (candidate resubmits the apply page, Apps Script re-POSTs the response, the mail is forwarded again): a `capped` row is the one duplicate that is re-decided and starts its run when there is room. Or raise the cap |
-| `received` that never moves | R2, D1 or Workflow create threw after the insert | `wrangler tail oldboys`, fix the cause, then delete the row (`DELETE FROM applications WHERE id = '<id>'` via `wrangler d1 execute oldboys --remote`) and re-send the source |
+| `received` that never moves | R2, D1 or Workflow create threw after the insert | `wrangler tail oldboys`, fix the cause, then re-send the source (forward the mail again, `resendAll` in Apps Script, resubmit the apply page, re-POST the StartupJobs dead letter): a `received` row older than 5 minutes is processed again from the new delivery, and a run the failed attempt had already started is linked, not started twice |
 | No row for a sent mail | Mail never reached the Worker: wrong address, recipient rejected, destination or rule disabled, over 10 MiB | Email Routing Activity log; rule `jobs@` and catch-all point to Worker `oldboys`; recipient must be `jobs@` or `jobs+<tag>@` |
 | Gmail "forwarding address" confirmation never arrives | `INTAKE_FORWARD_TO` was emptied, or the destination was removed in Email Routing | Restore the var and deploy, check Destination addresses shows `robert@soulfire.cz` verified, resend the confirmation |
 | Log line "forward failed" | Destination removed or unverified | Verify it in Email Routing -> Destination addresses; the application was stored anyway |

@@ -13,11 +13,13 @@
  * - Download the first `.pdf` of `files[]` (https, at most CV_MAX_BYTES = 10 MiB); on *.startupjobs.cz the first request
  *   already carries `Authorization: Bearer STARTUPJOBS_TOKEN` when that secret is set (no 401/403 retry)
  * - The tag lookup and the download run in parallel
- * - Answer 200 for every handled delivery (duplicates included) and 202 after an unexpected throw
+ * - Answer 200 for every handled delivery (duplicates included) and 202 after an unexpected throw, with the raw
+ *   payload kept at R2 `intake/dead-letter/startupjobs/<time>-<candidateID>.json` for a re-POST by hand
  *
  * Design constraints:
  * - Never answer 5xx for a delivery: StartupJobs deletes the webhook on any code except 200/201/202/204/422
- *   (the 503 above is only reachable while no valid webhook URL can exist)
+ *   (the 503 above is only reachable while no valid webhook URL can exist) and never redelivers, so a funnel
+ *   failure is only recoverable from the dead letter
  * - A failed file download never fails the webhook; it becomes a note on the application
  * - Takes bindings, clock and fetch as parameters so tests run under plain Node; no Next.js imports
  * - The company API is not called; STARTUPJOBS_TOKEN is only ever sent to startupjobs.cz hosts
@@ -44,7 +46,8 @@ export async function handleStartupJobsWebhook(
   // 404, not 401: a wrong token must not confirm that the route exists.
   if (!timingSafeEqual(token, secret)) return Response.json({ error: "not found" }, { status: 404 });
 
-  const parsed = StartupJobsWebhook.safeParse(await request.json().catch(() => null));
+  const body = await request.text();
+  const parsed = StartupJobsWebhook.safeParse(parseJson(body));
   if (!parsed.success) return Response.json({ error: "invalid StartupJobs payload" }, { status: 422 });
   const payload = parsed.data;
 
@@ -65,7 +68,27 @@ export async function handleStartupJobsWebhook(
     return Response.json({ received: true });
   } catch (err) {
     console.error("startupjobs webhook failed:", errorText(err));
+    await keepDeadLetter(env.SOURCES, body, payload.candidateID, now);
     return Response.json({ received: false }, { status: 202 });
+  }
+}
+
+function parseJson(text: string): unknown {
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    return null;
+  }
+}
+
+/** StartupJobs never redelivers, so the raw payload is kept in R2 for a re-POST by hand (docs/ops/intake.md). */
+async function keepDeadLetter(bucket: R2Bucket, body: string, candidateId: number, now: Date): Promise<void> {
+  const key = `intake/dead-letter/startupjobs/${now.toISOString()}-${String(candidateId)}.json`;
+  try {
+    await bucket.put(key, new TextEncoder().encode(body), { httpMetadata: { contentType: "application/json" } });
+    console.error(`startupjobs webhook: payload kept at ${key}`);
+  } catch (err) {
+    console.error("startupjobs webhook: dead letter failed:", errorText(err));
   }
 }
 

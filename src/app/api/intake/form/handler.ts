@@ -9,7 +9,8 @@
  * Key responsibilities:
  * - 503 when INTAKE_TOKEN is unset, 401 on a wrong bearer, 400 on a body that fails IntakeFormBody
  * - Map the body to an IntakeInput with source "form"; 201 for a new application, 200 with duplicate: true for a repeat
- * - A funnel failure answers 500 {error} so the Apps Script throws and the response can be re-sent
+ * - A funnel failure answers 500 {error} so the Apps Script throws; a re-send after five minutes resumes the row the
+ *   failed call left at 'received' (src/workflow/intake.ts)
  *
  * Design constraints:
  * - Never returns runId: the token holder owns the form, not the research (runs are visible on /intake)

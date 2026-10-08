@@ -9,14 +9,16 @@
  *
  * Key responsibilities:
  * - Idempotency per (source, externalId): a repeat (or an insert race) returns the first row, never a second run
- * - Store the CV file in R2 (intake/<id>/<safe name>) and extract its text when no text was sent
+ * - Store the CV file in R2 (intake/<id>/<safe name>) when the delivery can become a run, and extract its text
  * - Decide the status (unknown tag / sender not allowed / incomplete / capped / run-started) and start the run in one
- *   tail (`decideAndStart`) shared by a new delivery and the re-decision of a capped duplicate
+ *   tail (`decideAndStart`) shared by a new delivery, the re-decision of a capped duplicate and the resume of a row
+ *   that a failed delivery left at 'received'
  *
  * Design constraints:
  * - The only writer of `applications` and the only intake path to startRun (specs/intake/00-overview.md rule 1)
- * - No transaction: a failure after the INSERT propagates and leaves the row 'received'; CV text extraction, the
- *   R2 put and the intake_tags lookup are independent and run in parallel
+ * - No transaction: a failure after the INSERT propagates and leaves the row 'received'; the next delivery of the same
+ *   message resumes it once it is older than STALE_RECEIVED_MS (an in-flight delivery takes seconds), and links a run
+ *   the failed attempt had already started instead of starting a second one
  * - Never returns anything to a candidate; callers decide what leaves the Worker
  * - No Next.js imports (called from the Worker email handler)
  */
@@ -46,6 +48,9 @@ export type IntakeResult = {
   note: string | null;
 };
 
+/** A row still 'received' after this long is not in flight: the delivery that inserted it threw. */
+export const STALE_RECEIVED_MS = 5 * 60_000;
+
 type ExistingRow = {
   id: string;
   status: ApplicationStatus;
@@ -53,6 +58,7 @@ type ExistingRow = {
   note: string | null;
   tag: string | null;
   linkedin_url: string | null;
+  received_at: string;
 };
 
 type Position = { role: string; goal: GoalId };
@@ -64,9 +70,14 @@ export async function ingestApplication(
   opts: { senderAllowed?: boolean } = {},
 ): Promise<IntakeResult> {
   const input = IntakeInput.parse(raw);
+  const senderAllowed = opts.senderAllowed ?? true;
 
   const existing = await findExisting(env.DB, input.source, input.externalId);
-  if (existing) return existing.status === "capped" ? retryCapped(existing, env, now) : toResult(existing);
+  if (existing) {
+    if (existing.status === "capped") return retryCapped(existing, env, now);
+    if (existing.status === "received" && isStale(existing, now)) return resumeReceived(existing.id, input, env, now, senderAllowed);
+    return toResult(existing);
+  }
 
   const id = crypto.randomUUID();
   try {
@@ -93,18 +104,32 @@ export async function ingestApplication(
     throw err;
   }
 
-  // Independent work in parallel: unpdf reads its own copy of the bytes, the R2 put the original.
+  return decideAndWrite(id, input, env, now, senderAllowed, false);
+}
+
+/** Everything after the INSERT: CV text, tag lookup, the file put, the decision, the row update. */
+async function decideAndWrite(
+  id: string,
+  input: IntakeInput,
+  env: IntakeEnv,
+  now: Date,
+  senderAllowed: boolean,
+  duplicate: boolean,
+): Promise<IntakeResult> {
+  // Independent work in parallel: unpdf reads its own copy of the bytes.
   const { cv } = input;
-  const cvKey = cv ? cvR2Key(id, cv.filename) : null;
   const [extracted, position] = await Promise.all([
     cv && input.cvText === undefined ? extractCvText(cv) : null,
     findPosition(env.DB, input.tag),
-    cv && cvKey !== null ? env.SOURCES.put(cvKey, cv.bytes, { httpMetadata: { contentType: cv.contentType } }) : null,
   ]);
   const cvText = input.cvText ?? extracted?.text ?? undefined;
 
+  // The file is kept only for a delivery that can become a run: a stranger's attachment costs no R2 object.
+  const cvKey = cv && position !== null && senderAllowed ? cvR2Key(id, cv.filename) : null;
+  if (cv && cvKey !== null) await env.SOURCES.put(cvKey, cv.bytes, { httpMetadata: { contentType: cv.contentType } });
+
   const candidate = candidateInput({ linkedinUrl: input.linkedinUrl, cvText });
-  const decision = await decideAndStart(env, { id, position, candidate, senderAllowed: opts.senderAllowed ?? true }, now);
+  const decision = await decideAndStart(env, { id, position, candidate, senderAllowed }, now);
   const note = joinNotes(decision.note, extracted?.note, ...candidate.notes, input.note);
 
   await env.DB.prepare(
@@ -113,7 +138,7 @@ export async function ingestApplication(
     .bind(decision.status, decision.runId, note, candidate.profileUrl ?? null, cvKey, cvText ?? null, id)
     .run();
 
-  return { applicationId: id, status: decision.status, runId: decision.runId, duplicate: false, note };
+  return { applicationId: id, status: decision.status, runId: decision.runId, duplicate, note };
 }
 
 /**
@@ -148,13 +173,31 @@ async function findPosition(db: D1Database, rawTag: string | null | undefined): 
 
 async function findExisting(db: D1Database, source: string, externalId: string): Promise<ExistingRow | null> {
   return db
-    .prepare("SELECT id, status, run_id, note, tag, linkedin_url FROM applications WHERE source = ? AND external_id = ?")
+    .prepare("SELECT id, status, run_id, note, tag, linkedin_url, received_at FROM applications WHERE source = ? AND external_id = ?")
     .bind(source, externalId)
     .first<ExistingRow>();
 }
 
 function toResult(row: ExistingRow): IntakeResult {
   return { applicationId: row.id, status: row.status, runId: row.run_id, duplicate: true, note: row.note };
+}
+
+function isStale(row: ExistingRow, now: Date): boolean {
+  return now.getTime() - Date.parse(row.received_at) >= STALE_RECEIVED_MS;
+}
+
+/**
+ * A row left at 'received' is a delivery that threw after its INSERT (R2, D1 or the Workflow create). The next
+ * delivery of the same message runs the same tail from its own payload, so the operator only has to re-send the
+ * source. When the failed attempt had already started the run (the throw came after startRun's INSERT), that run is
+ * linked and no second one starts.
+ */
+async function resumeReceived(id: string, input: IntakeInput, env: IntakeEnv, now: Date, senderAllowed: boolean): Promise<IntakeResult> {
+  const run = await env.DB.prepare("SELECT id FROM investigations WHERE application_id = ?").bind(id).first<{ id: string }>();
+  if (run === null) return decideAndWrite(id, input, env, now, senderAllowed, true);
+
+  await env.DB.prepare("UPDATE applications SET status = ?, run_id = ? WHERE id = ?").bind("run-started", run.id, id).run();
+  return { applicationId: id, status: "run-started", runId: run.id, duplicate: true, note: null };
 }
 
 /**

@@ -13,7 +13,8 @@ Job applications from email, Google Forms, a hosted apply page and a StartupJobs
 - **Email door**: Cloudflare Email Routing on `asajj.cz` (`jobs@` rule and catch-all to the Worker), `worker.email()` parses with `postal-mime`, reads CV text from PDF with `unpdf`, forwards a copy to `INTAKE_FORWARD_TO`, honours `INTAKE_FROM_ALLOW`.
 - **Form door**: `POST /api/intake/form` with bearer `INTAKE_TOKEN`, fed by a Google Apps Script `onFormSubmit` trigger; never returns a run id.
 - **Apply page**: public `/apply/<tag>` and `POST /api/apply` (same-origin check, honeypot); the candidate only ever sees "received".
-- **StartupJobs door**: `POST /api/intake/startupjobs/<token>` answers only codes that keep the webhook alive (200, 202, 422; 404 for a wrong token), downloads the first PDF from `files[]`.
+- **StartupJobs door**: `POST /api/intake/startupjobs/<token>` answers only codes that keep the webhook alive (200, 202, 422; 404 for a wrong token), downloads the first PDF from `files[]`; when the funnel throws the raw payload is kept in R2 under `intake/dead-letter/startupjobs/` for a re-POST by hand, since StartupJobs never redelivers.
+- **Failed deliveries recover on re-send**: a row left at `received` by a throw is processed again by the next delivery of the same source once it is 5 minutes old, and a run the failed attempt had already started is linked instead of started twice. CV files are stored in R2 only for a known tag and an allowed sender.
 - **Operator UI**: `/intake` queue and tag form, `GET /api/intake/applications`, `GET|POST /api/intake/tags`, "From <source> · <tag> · <date>" line on the run page.
 - **Run start extracted**: `startRun` and `runsStartedSince` shared by `POST /api/runs` and the funnel; behaviour of `POST /api/runs` unchanged.
 - **Config and docs**: vars `INTAKE_PER_HOUR_CAP`, `INTAKE_FORWARD_TO`, `INTAKE_FROM_ALLOW`; secrets `INTAKE_TOKEN`, `STARTUPJOBS_WEBHOOK_TOKEN`, `STARTUPJOBS_TOKEN`; no new bindings.

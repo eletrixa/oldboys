@@ -8,14 +8,15 @@
  *
  * Key responsibilities:
  * - Cover specs/intake/funnel.md: happy path, CV-only PDF, duplicate and insert race, unknown tag, sender not
- *   allowed, incomplete, capped (and the capped retry), R2 failure leaving the row at 'received'
+ *   allowed (no CV file stored for either), incomplete, capped (and the capped retry), R2 failure leaving the row
+ *   at 'received' and its resume on the next delivery after the stale window (linking an already started run)
  *
  * Design constraints:
  * - No module mocks; the fakes match on SQL prefixes and keep state in plain maps
  */
 import { describe, expect, it } from "vitest";
 import { tinyPdf } from "@/domain/__tests__/fixtures/tiny-pdf";
-import { ingestApplication } from "../intake";
+import { ingestApplication, STALE_RECEIVED_MS } from "../intake";
 import { makeIntakeFakes as makeEnv } from "./fixtures/intake-fakes";
 
 const NOW = new Date("2026-10-08T12:00:00.000Z");
@@ -175,6 +176,54 @@ describe("ingestApplication", () => {
     expect([...apps.values()][0]).toMatchObject({ status: "received" });
     expect([...apps.values()][0]?.note).toBeUndefined();
     expect(create).not.toHaveBeenCalled();
+  });
+
+  it("a row left at received is resumed from the next delivery once it is older than the stale window", async () => {
+    const opts: { r2Error?: Error } = { r2Error: new Error("R2 down") };
+    const { env, apps, puts, create } = makeEnv(opts);
+    const cv = { bytes: tinyPdf("Kubernetes"), filename: "cv.pdf", contentType: "application/pdf" };
+    await expect(ingestApplication({ ...base, cv }, env, NOW)).rejects.toThrow("R2 down");
+    const id = [...apps.keys()][0] ?? "";
+    delete opts.r2Error;
+
+    // Seconds later it may still be in flight: nothing happens.
+    const inFlight = await ingestApplication({ ...base, cv }, env, new Date(NOW.getTime() + STALE_RECEIVED_MS - 1));
+    expect(inFlight).toMatchObject({ applicationId: id, status: "received", duplicate: true });
+    expect(create).not.toHaveBeenCalled();
+
+    const resumed = await ingestApplication({ ...base, cv }, env, new Date(NOW.getTime() + STALE_RECEIVED_MS));
+    expect(resumed).toMatchObject({ applicationId: id, status: "run-started", duplicate: true, note: null });
+    expect(create).toHaveBeenCalledOnce();
+    expect(puts.map((p) => p.key)).toEqual([`intake/${id}/cv.pdf`]);
+    expect(apps.get(id)).toMatchObject({ status: "run-started", run_id: resumed.runId, cv_key: `intake/${id}/cv.pdf`, cv_text: "Kubernetes" });
+    expect(apps.size).toBe(1);
+  });
+
+  it("a resumed row links the run its failed delivery had started instead of starting a second one", async () => {
+    const { env, apps, investigations, create } = makeEnv();
+    create.mockRejectedValueOnce(new Error("workflow create down"));
+    await expect(ingestApplication({ ...base, linkedinUrl: PROFILE }, env, NOW)).rejects.toThrow("workflow create down");
+    const id = [...apps.keys()][0] ?? "";
+    expect(investigations).toHaveLength(1);
+    expect(apps.get(id)).toMatchObject({ status: "received" });
+
+    const resumed = await ingestApplication({ ...base, linkedinUrl: PROFILE }, env, new Date(NOW.getTime() + STALE_RECEIVED_MS));
+    expect(resumed).toMatchObject({ applicationId: id, status: "run-started", runId: investigations[0]?.id, duplicate: true });
+    expect(investigations).toHaveLength(1);
+    expect(create).toHaveBeenCalledOnce();
+    expect(apps.get(id)).toMatchObject({ status: "run-started", run_id: investigations[0]?.id });
+  });
+
+  it("an unknown tag or a disallowed sender stores no CV file", async () => {
+    const { env, apps, puts } = makeEnv();
+    const cv = { bytes: tinyPdf("Kubernetes"), filename: "cv.pdf", contentType: "application/pdf" };
+    const unknown = await ingestApplication({ ...base, tag: "nope", cv }, env, NOW);
+    const denied = await ingestApplication({ ...base, externalId: "m2", cv }, env, NOW, { senderAllowed: false });
+    expect(unknown.status).toBe("unmatched");
+    expect(denied.status).toBe("unmatched");
+    expect(puts).toHaveLength(0);
+    expect(apps.get(unknown.applicationId)).toMatchObject({ cv_key: null, cv_text: "Kubernetes" });
+    expect(apps.get(denied.applicationId)).toMatchObject({ cv_key: null });
   });
 
   it("rejects invalid input before touching D1", async () => {

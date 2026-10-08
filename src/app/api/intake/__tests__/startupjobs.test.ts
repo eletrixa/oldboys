@@ -8,7 +8,7 @@
  *
  * Key responsibilities:
  * - Cover specs/intake/startupjobs.md: 503, 404, 422, test payload, happy path with a PDF, bearer on the first request
- *   (startupjobs.cz only), download failures, duplicate, unexpected throw answering 202
+ *   (startupjobs.cz only), download failures, duplicate, unexpected throw answering 202 with an R2 dead letter
  *
  * Design constraints:
  * - No module mocks; the shared fakes match on SQL prefixes and keep state in plain maps
@@ -22,8 +22,8 @@ const NOW = new Date("2026-10-09T10:00:00.000Z");
 const TOKEN = "whtoken-123";
 const PDF_URL = "https://www.startupjobs.cz/download/cv.pdf";
 
-function makeEnv(opts: { secret?: string | null; bearer?: string; r2Error?: Error } = {}) {
-  const fakes = makeIntakeFakes({ offerTags: { "1234": "senior-be" }, r2Error: opts.r2Error });
+function makeEnv(opts: { secret?: string | null; bearer?: string; r2Error?: Error; dbError?: Error } = {}) {
+  const fakes = makeIntakeFakes({ offerTags: { "1234": "senior-be" }, r2Error: opts.r2Error, dbError: opts.dbError });
   const env = {
     ...fakes.env,
     STARTUPJOBS_WEBHOOK_TOKEN: opts.secret === null ? undefined : (opts.secret ?? TOKEN),
@@ -215,14 +215,27 @@ describe("handleStartupJobsWebhook: CV download", () => {
 });
 
 describe("handleStartupJobsWebhook: failures never delete the webhook", () => {
-  it("answers 202 and logs when the funnel throws", async () => {
-    const { env, apps } = makeEnv({ r2Error: new Error("R2 down") });
+  it("answers 202, logs and keeps the raw payload in R2 when the funnel throws", async () => {
+    const { env, puts } = makeEnv({ dbError: new Error("D1 down") });
     const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const res = await handleStartupJobsWebhook(post(payload), TOKEN, env, NOW, fetchOf(pdfResponse()));
 
     expect(res.status).toBe(202);
     expect(await res.json()).toEqual({ received: false });
-    expect(error).toHaveBeenCalledOnce();
+    expect(error.mock.calls[0]?.[0]).toBe("startupjobs webhook failed:");
+    expect(puts.map((p) => ({ key: p.key, contentType: p.contentType, body: new TextDecoder().decode(p.bytes) }))).toEqual([
+      { key: "intake/dead-letter/startupjobs/2026-10-09T10:00:00.000Z-12345.json", contentType: "application/json", body: JSON.stringify(payload) },
+    ]);
+    error.mockRestore();
+  });
+
+  it("still answers 202 when the dead letter cannot be written either", async () => {
+    const { env, apps } = makeEnv({ r2Error: new Error("R2 down") });
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const res = await handleStartupJobsWebhook(post(payload), TOKEN, env, NOW, fetchOf(pdfResponse()));
+
+    expect(res.status).toBe(202);
+    expect(error.mock.calls.map((c) => String(c[0]))).toEqual(["startupjobs webhook failed:", "startupjobs webhook: dead letter failed:"]);
     expect([...apps.values()][0]).toMatchObject({ status: "received" });
     error.mockRestore();
   });

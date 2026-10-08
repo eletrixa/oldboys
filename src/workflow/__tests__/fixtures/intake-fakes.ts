@@ -16,6 +16,7 @@
  * - The applications INSERT enforces the (source, external_id) unique index like D1 does; `raceInsert` fakes a lost race
  * - The duplicate SELECT is matched on its column prefix and the capped re-read on `FROM applications WHERE id`,
  *   so a trimmed column list in the funnel does not break the connector tests
+ * - `opts` is read on every call, so a test can clear `r2Error` or change `intakeRunsLastHour` between deliveries
  */
 import { vi, type Mock } from "vitest";
 import type { IntakeEnv } from "../../intake";
@@ -98,6 +99,10 @@ export function makeIntakeFakes(opts: IntakeFakeOpts = {}): IntakeFakes {
     if (sql.startsWith("SELECT COUNT(*) AS n FROM investigations")) {
       countArgs.push(args);
       return { rows: [{ n: opts.intakeRunsLastHour ?? 0 }], changes: 0 };
+    }
+    if (sql.startsWith("SELECT id FROM investigations WHERE application_id = ?")) {
+      const hit = investigations.find((i) => i.application_id === args[0]);
+      return { rows: hit ? [{ id: hit.id }] : [], changes: 0 };
     }
     if (sql.startsWith("INSERT INTO investigations")) {
       const cols = /\(([^)]*)\)/.exec(sql)?.[1]?.split(", ") ?? [];
