@@ -15,7 +15,7 @@
  *   batches run at most (budget - spent) paid actor steps at once (planBatch), free REST steps always run
  * - Source identity re-marked after the lineup and before extract (applySourceIdentity), so only SERP hits on
  *   a merged profile count as confirmed
- * - Truthful gaps: a collector that made no request records "not searched: <why>", not its onEmpty text; a
+ * - Truthful gaps: a collector that made no request, or whose requests all failed, records "not searched: <why>", not its onEmpty text; a
  *   post-lineup collector whose hits are all unconfirmed records UNCONFIRMED_GAP, so every source ends in a row or a gap
  * - Model failures degrade (evidence-only brief, ledger `{degraded}`) and the run still ends `done`;
  *   `failed` is only for unexpected throws
@@ -197,7 +197,10 @@ export class ResearchRunWorkflow extends WorkflowEntrypoint<CloudflareEnv, Resea
       });
       const degraded = out.brief?.degraded ?? null;
       if (degraded !== null) await this.ledger(runId, recipeStep.id, "decision", 0, 0, { degraded });
-      const skipped = COLLECTOR_KINDS.has(recipeStep.kind) && out.calls === 0 && out.notes.length > 0 ? out.notes.join("; ") : null;
+      // A collector that made no request, or whose every request failed, has not searched anything: the gap
+      // must say so instead of the recipe's "nothing found" text (a 401 from Apify is not "no search hits").
+      const allFailed = out.empty && out.notes.length > 0 && out.notes.every((n) => n.startsWith("request failed") || n === "run budget reached");
+      const skipped = COLLECTOR_KINDS.has(recipeStep.kind) && (out.calls === 0 || allFailed) && out.notes.length > 0 ? out.notes.join("; ") : null;
       const unconfirmed = COLLECTOR_KINDS.has(recipeStep.kind) && noneConfirmed(out.sources, ctx.candidates);
       return { empty: out.empty, skipped, unconfirmed };
     });
