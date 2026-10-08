@@ -10,3 +10,5 @@ ELEVENLABS_WEBHOOK_SECRET=
 GITHUB_TOKEN=
 # Optional: Stack Exchange app key (stackapps.com) lifts the 300 req/day per IP quota
 STACKEXCHANGE_KEY=
+# Optional: OpenAlex free API key (openalex.org/settings/api); anonymous budget is shared and answers 429 from the Worker IP
+OPENALEX_API_KEY=

@@ -21,7 +21,7 @@ const RETRY_DELAY_MS = 2_000;
 const SNIPPET_CHARS = 160;
 const UA = "oldboys-hackathon/0.1 (+https://oldboys.asajj.cz)";
 
-export type FetchCreds = { githubToken?: string; stackExchangeKey?: string; retryDelayMs?: number };
+export type FetchCreds = { githubToken?: string; stackExchangeKey?: string; openAlexKey?: string; retryDelayMs?: number };
 
 export function makeFetchJson(creds: FetchCreds = {}): JsonFetch {
   const retryDelay = creds.retryDelayMs ?? RETRY_DELAY_MS;
@@ -33,10 +33,13 @@ export function makeFetchJson(creds: FetchCreds = {}): JsonFetch {
       "user-agent": UA,
       ...init?.headers,
     };
-    const { githubToken = "", stackExchangeKey = "" } = creds;
+    const { githubToken = "", stackExchangeKey = "", openAlexKey = "" } = creds;
     if (u.hostname === "api.github.com" && githubToken !== "") headers.authorization = `Bearer ${githubToken}`;
     if (u.hostname === "api.stackexchange.com" && stackExchangeKey !== "" && !u.searchParams.has("key")) {
       u.searchParams.set("key", stackExchangeKey);
+    }
+    if (u.hostname === "api.openalex.org" && openAlexKey !== "" && !u.searchParams.has("api_key")) {
+      u.searchParams.set("api_key", openAlexKey);
     }
     const url = u.toString();
     const attempt = () =>

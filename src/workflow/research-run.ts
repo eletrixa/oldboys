@@ -80,7 +80,7 @@ export class ResearchRunWorkflow extends WorkflowEntrypoint<CloudflareEnv, Resea
     const env = this.env;
     return {
       callActor: makeActorCall(env.APIFY_TOKEN),
-      fetchJson: makeFetchJson({ githubToken: env.GITHUB_TOKEN, stackExchangeKey: env.STACKEXCHANGE_KEY }),
+      fetchJson: makeFetchJson({ githubToken: env.GITHUB_TOKEN, stackExchangeKey: env.STACKEXCHANGE_KEY, openAlexKey: env.OPENALEX_API_KEY }),
       llm: makeLlmCall(env.ANTHROPIC_API_KEY, { primary: env.LLM_MODEL_PRIMARY, verify: env.LLM_MODEL_VERIFY }),
       appendLedger: makeLedgerAppend(env.DB),
       storeSource: makeSourceStore(env.DB, env.SOURCES),
