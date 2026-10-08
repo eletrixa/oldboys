@@ -181,7 +181,7 @@ function lineupAnswer(decision: string): LineupAnswer {
   return "not sure";
 }
 
-function purpose(run: AuditRun): string {
+export function purpose(run: Pick<AuditRun, "role" | "organization_name" | "goal">): string {
   if (run.role !== null && run.role !== "") {
     const by = run.organization_name !== null ? ` by ${run.organization_name}` : "";
     return `Pre-employment screening${by} for the role: ${run.role}`;

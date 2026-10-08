@@ -145,3 +145,8 @@ Each agent appends: what it starts, progress, what it finishes. Newest at the bo
 - Started: 00:48. Idea #17 follow-up: audit record shows who started the run (account name from investigations.account_id; "not recorded" for API, extension and intake runs) and the services that processed the run's data (Cloudflare always; Apify, Anthropic, ElevenLabs only when this run used them, from the ledger and call rows).
 - Finished: 00:52. No e-mail in the record. No schema change, no new endpoint; pnpm check green, wrangler dry-run bundles.
 - Files: src/domain/audit.ts, src/domain/__tests__/audit.test.ts, src/app/api/runs/[id]/audit/load.ts, src/app/runs/[id]/audit/page.tsx, PROGRESS.md.
+
+## 2026-10-09 · access-export agent (Minas)
+- Started: 00:55. GDPR Art. 15 "data access export": GET /api/runs/:id/access-export + a download link on the audit page; one JSON with what the run holds about the candidate (confirmed sources with excerpts, linked profiles, claims backed only by confirmed sources, the brief text, purpose, legal basis, controller, deletion date) and a "not included" list.
+- Finished: 01:00. Never unverified sources, namesakes, also_found, ledger notes, phone numbers or Art. 9 claims; same access rule as the audit route. No schema change; pnpm check green, wrangler dry-run bundles.
+- Files: src/domain/access-export.ts, src/domain/__tests__/access-export.test.ts, src/app/api/runs/[id]/access-export/{route,load}.ts (new), src/app/runs/[id]/audit/page.tsx, CHANGELOG.md, PROGRESS.md (+ `purpose` exported from src/domain/audit.ts).
