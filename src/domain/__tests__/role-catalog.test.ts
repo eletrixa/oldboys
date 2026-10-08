@@ -9,7 +9,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { BASE_IDS, FAMILIES, MustHaves } from "@/domain/position";
-import { HIRING_EVIDENCE_STEPS, matchRoleTemplate, normalizeRoleTitle, ROLE_CATALOG, ROLE_TITLES, roleSitesQuery, templateFromRow, templateToRow } from "@/domain/role-catalog";
+import { filterRoleOptions, HIRING_EVIDENCE_STEPS, matchRoleTemplate, normalizeRoleTitle, ROLE_CATALOG, ROLE_OPTIONS, ROLE_TITLES, roleSitesQuery, templateFromRow, templateToRow } from "@/domain/role-catalog";
 import { hiringRecipe } from "@/recipe/goals/hiring";
 
 // GDPR Art. 9 and the brief's banned scores; "health insurance" (payroll) and "Medical Chamber" (register) are role facts, not inferences.
@@ -88,6 +88,15 @@ describe("matchRoleTemplate", () => {
     expect(keyOf("")).toBeNull();
   });
 
+  it("every catalog title matches its own template, level words and brackets included", () => {
+    const wrong = ROLE_CATALOG.filter((t) => matchRoleTemplate(t.title, ROLE_CATALOG)?.key !== t.key).map((t) => t.title);
+    expect(wrong).toEqual([]);
+    const keyOf = (role: string): string | null => matchRoleTemplate(role, ROLE_CATALOG)?.key ?? null;
+    expect(keyOf("Senior Product Manager, Prague")).toBe("senior-product-manager");
+    expect(keyOf("Tech Lead (m/ž)")).toBe("tech-lead");
+    expect(keyOf("Product Manager II ")).toBe("product-manager");
+  });
+
   it("prefers the longest alias on containment", () => {
     const t = [
       { key: "engineer", title: "Engineer", aliases: [] },
@@ -110,5 +119,19 @@ describe("rows", () => {
   it("builds the site: clause", () => {
     expect(roleSitesQuery(["github.com", "npmjs.com"])).toBe("site:github.com OR site:npmjs.com");
     expect(roleSitesQuery([])).toBe("");
+  });
+});
+
+describe("filterRoleOptions", () => {
+  it("ranks title prefix, then title, then alias, then family; empty query lists the first options", () => {
+    expect(filterRoleOptions("", ROLE_OPTIONS, 3).map((o) => o.title)).toEqual(ROLE_TITLES.slice(0, 3));
+    const data = filterRoleOptions("data eng", ROLE_OPTIONS).map((o) => o.title);
+    expect(data[0]).toBe("Data Engineer");
+    expect(filterRoleOptions("datový inž", ROLE_OPTIONS)[0]?.title).toBe("Data Engineer");
+    const design = filterRoleOptions("design", ROLE_OPTIONS, 200);
+    expect(design.length).toBeGreaterThan(5);
+    expect(design.every((o) => o.family === "design" || /design/i.test(o.title) || o.aliases.some((a) => a.includes("design")))).toBe(true);
+    expect(filterRoleOptions("chief happiness wizard", ROLE_OPTIONS)).toEqual([]);
+    expect(filterRoleOptions("ux", ROLE_OPTIONS, 2)).toHaveLength(2);
   });
 });

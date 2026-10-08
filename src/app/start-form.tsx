@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/start-form.tsx
- * Deps:    react, next/navigation, ./ui (Radar tokens), ./start-body, ./start-position, ./profile-picker, src/app/_lib/form-text
+ * Deps:    react, next/navigation, ./ui (Radar tokens), ./start-body, ./start-position, ./profile-picker, ./role-picker, src/app/_lib/form-text
  * Tested:  n/a (body builder: src/app/__tests__/start-body.test.ts)
  *
  * Key responsibilities:
@@ -13,6 +13,7 @@
  *   field and send positionId instead of role; an unknown id shows an inline note and the normal form
  * - Client check: one of profile URL or CV; the server normalises and validates the URL
  * - initialRole / autoFocusRole prefill and focus the role field; 401 shows a log-in link
+ * - Role field is the RolePicker over `roleOptions` (catalog titles, families, aliases from the server page); free text still allowed
  * - Inline humane error on 4xx/5xx or network failure
  *
  * Design constraints:
@@ -24,12 +25,15 @@
 "use client";
 
 import Link from "next/link";
+import { trackRun } from "@/app/_components/run-tray-store";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { formText } from "@/app/_lib/form-text";
 import { buildStartBody, positionIdParam } from "./start-body";
 import { ProfilePicker } from "./profile-picker";
 import { PositionBanner, usePositionSummary } from "./start-position";
+import { RolePicker } from "./role-picker";
+import type { RoleOption } from "@/domain/role-catalog";
 import { BTN_PRIMARY, CARD_PEACH, CARD_SAGE, Chevron, FIELD, LINK, SUMMARY } from "./ui";
 
 const CV_MAX = 20_000;
@@ -63,9 +67,9 @@ function Field({ name, label, helper, required = false, defaultValue, autoFocus 
   );
 }
 
-type StartFormProps = { initialRole?: string; autoFocusRole?: boolean };
+type StartFormProps = { initialRole?: string; autoFocusRole?: boolean; roleOptions?: readonly RoleOption[] };
 
-function StartFormInner({ initialRole, autoFocusRole = false }: StartFormProps): React.JSX.Element {
+function StartFormInner({ initialRole, autoFocusRole = false, roleOptions = [] }: StartFormProps): React.JSX.Element {
   const router = useRouter();
   const position = usePositionSummary(positionIdParam(useSearchParams()));
   const positionId = position.status === "ready" ? position.summary.id : null;
@@ -93,6 +97,7 @@ function StartFormInner({ initialRole, autoFocusRole = false }: StartFormProps):
       });
       if (res.status === 201) {
         const { id } = await res.json<{ id: string }>();
+        trackRun(id);
         router.push(`/runs/${id}`);
         return;
       }
@@ -145,7 +150,7 @@ function StartFormInner({ initialRole, autoFocusRole = false }: StartFormProps):
         />
       </details>
       {positionId === null && position.status !== "loading" && (
-        <Field name="role" label="Role you are hiring for" required defaultValue={initialRole} autoFocus={autoFocusRole} helper="The brief focuses on what matters for this role." />
+        <RolePicker options={roleOptions} defaultValue={initialRole} autoFocus={autoFocusRole} />
       )}
       <p className={`${CARD_SAGE} text-sm text-ink`}>
         <strong>Privacy:</strong> Public information only. We never look at private accounts, and we do not judge

@@ -7,7 +7,8 @@
  * Tested:  src/domain/__tests__/role-catalog.test.ts
  *
  * Key responsibilities:
- * - `ROLE_CATALOG`: every template, families concatenated; `ROLE_TITLES` for the start form datalist
+ * - `ROLE_CATALOG`: every template, families concatenated; `ROLE_OPTIONS` (title, family, aliases) for the start form picker
+ * - `filterRoleOptions`: substring search over title, aliases and family, ranked title-prefix first; the picker's one rule
  * - `matchRoleTemplate`: free-text role ("Senior Data Engineer, Prague, hybrid") -> the template whose title or alias
  *   names it; seniority words and the location/work-mode tail are ignored; longest alias wins on containment
  * - `templateToRow` / `templateFromRow`: the D1 `role_templates` row shape (JSON columns) both ways
@@ -35,8 +36,38 @@ export { HIRING_EVIDENCE_STEPS } from "./role-catalog/types";
 
 export const ROLE_CATALOG: readonly RoleTemplate[] = [...ENGINEERING, ...DATA, ...PRODUCT, ...DESIGN, ...MARKETING, ...SALES, ...OPERATIONS, ...FINANCE, ...PEOPLE, ...OTHER];
 
-/** Canonical titles, family order, for the start form datalist. */
+/** What the start form picker needs per role: nothing of the must-haves or sources reaches the client. */
+export type RoleOption = Pick<RoleTemplate, "title" | "family" | "aliases">;
+
+export const ROLE_OPTIONS: readonly RoleOption[] = ROLE_CATALOG.map(({ title, family, aliases }) => ({ title, family, aliases }));
+
+/** Canonical titles, family order. */
 export const ROLE_TITLES: readonly string[] = ROLE_CATALOG.map((t) => t.title);
+
+/**
+ * Options whose title, an alias or the family contains every word of `query` (case-insensitive), ranked: title starts
+ * with the query, title contains it, an alias matches, family matches; stable within a rank. Empty query = all, capped.
+ */
+export function filterRoleOptions(query: string, options: readonly RoleOption[], limit = 12): RoleOption[] {
+  const q = query.trim().toLowerCase().replace(/\s+/g, " ");
+  if (q === "") return options.slice(0, limit);
+  const words = q.split(" ");
+  const has = (text: string): boolean => words.every((w) => text.includes(w));
+  const rank = (o: RoleOption): number => {
+    const title = o.title.toLowerCase();
+    if (title.startsWith(q)) return 0;
+    if (has(title)) return 1;
+    if (o.aliases.some(has)) return 2;
+    if (has(o.family)) return 3;
+    return -1;
+  };
+  return options
+    .map((o, i) => ({ o, i, r: rank(o) }))
+    .filter((x) => x.r >= 0)
+    .sort((a, b) => a.r - b.r || a.i - b.i)
+    .slice(0, limit)
+    .map((x) => x.o);
+}
 
 /** D1 `role_templates` row (migrations/0013_role_templates.sql). */
 export type RoleTemplateRow = {
@@ -90,18 +121,26 @@ export function templateFromRow(row: RoleTemplateRow): RoleTemplate | null {
 }
 
 const LEVEL_WORDS = /\b(senior|junior|sr\.?|jr\.?|mid-?level|medior|lead|principal|staff|intern|trainee|associate|experienced|seniorní|juniorní|zkušený)\b/g;
-const TAIL_NOISE = /\((?:m\/[fžw]|f\/m|w\/m|d\/f\/m|all genders)\)|\b(?:m\/ž|ž\/m|m\/f|f\/m)\b|\b(?:i{1,3}|iv|v)\b$/g;
+const TAIL_NOISE = /(?:^|\s)(?:m\/[fžw]|f\/m|w\/m|d\/f\/m|ž\/m|all genders)(?=\s|$)|\s(?:i{1,3}|iv|v)$/g;
 
-/** Role text to the comparable title: before the first comma, lower case, level words and gender tags removed. */
-export function normalizeRoleTitle(role: string): string {
-  const head = role.split(/[,|–—]/)[0] ?? role;
-  return head
+/** Lower case, punctuation (except &+./#-) to spaces, single-spaced, trimmed; the same cleaning for role text and catalog names. */
+function clean(s: string): string {
+  return s
     .toLowerCase()
-    .replace(TAIL_NOISE, " ")
-    .replace(LEVEL_WORDS, " ")
     .replace(/[^\p{L}\p{N}&+./#-]+/gu, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function normalize(role: string, keepLevels: boolean): string {
+  const head = role.split(/[,|–—]/)[0] ?? role;
+  const cleaned = clean(head).replace(TAIL_NOISE, " ");
+  return clean(keepLevels ? cleaned : cleaned.replace(LEVEL_WORDS, " "));
+}
+
+/** Role text to the comparable title: before the first comma, lower case, level words and gender tags removed. */
+export function normalizeRoleTitle(role: string): string {
+  return normalize(role, false);
 }
 
 const escapeRe = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -109,23 +148,31 @@ const escapeRe = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
 type Named = Pick<RoleTemplate, "key" | "title" | "aliases">;
 
 /**
- * The template a role text names, or null. Exact match on title or alias first; otherwise the template whose
- * longest alias occurs as a whole phrase in the normalised title ("backend engineer (go)" -> backend engineer).
+ * The template a role text names, or null. The text is compared twice: with its level words ("Staff Engineer",
+ * "Senior Product Manager" are catalog titles of their own) and without them. Exact match on title or alias first;
+ * otherwise the template whose longest alias occurs as a whole phrase ("backend engineer (go)" -> backend engineer).
  */
 export function matchRoleTemplate<T extends Named>(role: string, templates: readonly T[]): T | null {
-  const title = normalizeRoleTitle(role);
-  if (title === "") return null;
-  const names = (t: Named): string[] => [t.title.toLowerCase(), ...t.aliases.map((a) => a.toLowerCase())];
-  const exact = templates.find((t) => names(t).includes(title));
-  if (exact !== undefined) return exact;
-  let best: { t: T; len: number } | null = null;
-  for (const t of templates) {
-    for (const name of names(t)) {
-      if (name.length <= (best?.len ?? 0)) continue;
-      if (new RegExp(`(?:^|\\s)${escapeRe(name)}(?:\\s|$)`, "u").test(title)) best = { t, len: name.length };
-    }
+  const full = normalize(role, true);
+  const bare = normalize(role, false);
+  const titles = full === bare ? [full] : [full, bare];
+  if (bare === "") return null;
+  const names = (t: Named): string[] => [t.title, ...t.aliases].map(clean);
+  for (const title of titles) {
+    const exact = templates.find((t) => names(t).includes(title));
+    if (exact !== undefined) return exact;
   }
-  return best?.t ?? null;
+  for (const title of titles) {
+    let best: { t: T; len: number } | null = null;
+    for (const t of templates) {
+      for (const name of names(t)) {
+        if (name.length <= (best?.len ?? 0)) continue;
+        if (new RegExp(`(?:^|\\s)${escapeRe(name)}(?:\\s|$)`, "u").test(title)) best = { t, len: name.length };
+      }
+    }
+    if (best !== null) return best.t;
+  }
+  return null;
 }
 
 /** `site:a OR site:b` for a Google query; empty string when there are no sites. */
