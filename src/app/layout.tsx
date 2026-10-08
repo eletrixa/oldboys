@@ -8,7 +8,7 @@
  *
  * Key responsibilities:
  * - Metadata and the <html>/<body> wrapper for every page
- * - Radar brand header (Echo r mark + wordmark, New brief, Roles) and a short honesty footer
+ * - Radar brand header (Echo r mark + wordmark, Roles, New brief as a secondary button so each page keeps one rust action) and a short honesty footer
  *
  * Design constraints:
  * - No runtime = "edge"; no next/font network fetch at build (fonts are self-hosted in public/fonts)

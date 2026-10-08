@@ -13,6 +13,7 @@
  * Design constraints:
  * - Client component; no token handling, the session cookie travels by default
  * - Radar design (docs/design/radar-ui.md): semantic tokens and src/app/ui.tsx classes only
+ * - Table scrolls sideways inside a focusable labelled region; the person column stays sticky
  * - Shows the amount of evidence found, never a verdict on the person: no total, no ranking, no coverage sort
  */
 "use client";
@@ -20,7 +21,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { CoverageLabel, RoleGroup } from "@/domain/role-overview";
-import { BTN_QUIET, CARD, CARD_SAGE, Eyebrow, LINK } from "../ui";
+import { BTN_QUIET, CARD_FLUSH, CARD_SAGE, Eyebrow, LINK, Pill } from "../ui";
 
 const DISCLAIMER = "This table shows how much public evidence the research found, not how good a candidate is.";
 
@@ -44,7 +45,7 @@ function RoleList({ groups }: { groups: RoleGroup[] }): React.JSX.Element {
     <ul className="divide-y divide-divider">
       {groups.map((g) => (
         <li key={g.key}>
-          <Link href={`/roles/${encodeURIComponent(g.key)}`} className="-mx-2 flex items-center justify-between gap-4 rounded-lg px-2 py-4 hover:bg-sage/40">
+          <Link href={`/roles/${encodeURIComponent(g.key)}`} className="-mx-2 flex min-h-11 items-center justify-between gap-4 rounded-lg px-2 py-4 hover:bg-sage/40">
             <span className="font-serif text-xl">{g.role}</span>
             <span className="shrink-0 text-sm text-muted tabular-nums">
               {g.run_count} {g.run_count === 1 ? "brief" : "briefs"}
@@ -61,40 +62,42 @@ function RoleTable({ group }: { group: RoleGroup }): React.JSX.Element {
     <div className="flex flex-col gap-4">
       <h2 className="font-serif text-2xl">{group.role}</h2>
       <p className={`${CARD_SAGE} text-sm`}>{DISCLAIMER}</p>
-      <div className={`${CARD} overflow-hidden p-0 md:p-0`}>
-        <div className="overflow-x-auto">
-        <table className="w-full text-left text-sm">
-          <caption className="sr-only">Evidence found per must-have for {group.role}, newest brief first</caption>
-          <thead className="bg-canvas text-xs font-semibold tracking-[0.08em] text-muted uppercase">
-            <tr>
-              <th scope="col" className="px-4 py-3 font-semibold">Person</th>
-              <th scope="col" className="px-4 py-3 font-semibold">Date</th>
-              <th scope="col" className="px-4 py-3 font-semibold">Status</th>
-              {group.questions.map((q) => (
-                <th key={q} scope="col" className="min-w-40 px-4 py-3 font-semibold">{q}</th>
-              ))}
-              <th scope="col" className="px-4 py-3 font-semibold">Sources confirmed</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-divider">
-            {group.runs.map((run) => (
-              <tr key={run.id}>
-                <th scope="row" className="px-4 py-3">
-                  <Link href={`/runs/${run.id}`} className={LINK}>{run.subject}</Link>
-                </th>
-                <td className="whitespace-nowrap px-4 py-3 text-muted tabular-nums">{run.created_at.slice(0, 10)}</td>
-                <td className="px-4 py-3 text-muted tabular-nums">{run.status}</td>
-                {run.cells.map((label, i) => (
-                  <td key={group.questions[i] ?? i} className={`px-4 py-3 ${CELL_STYLE[label].text}`}>
-                    <span aria-hidden="true" className={`mr-2 inline-block size-2 rounded-full ${CELL_STYLE[label].dot}`} />
-                    {label}
-                  </td>
+      <div className={CARD_FLUSH}>
+        <p className="px-4 pt-3 text-xs text-muted md:hidden">Swipe sideways to see every must-have.</p>
+        <div role="region" aria-label="Evidence per must-have" tabIndex={0} className="overflow-x-auto">
+          <table className="w-full min-w-[44rem] text-left text-sm">
+            <caption className="sr-only">Evidence found per must-have for {group.role}, newest brief first</caption>
+            <thead className="bg-canvas text-xs font-semibold tracking-[0.08em] text-muted uppercase">
+              <tr>
+                <th scope="col" className="sticky left-0 z-10 bg-canvas px-4 py-3 font-semibold">Person</th>
+                <th scope="col" className="px-4 py-3 font-semibold">Date</th>
+                {group.questions.map((q) => (
+                  <th key={q} scope="col" className="min-w-40 px-4 py-3 font-semibold">{q}</th>
                 ))}
-                <td className="px-4 py-3 tabular-nums">{run.sources_confirmed}</td>
+                <th scope="col" className="px-4 py-3 font-semibold">Sources confirmed</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="divide-y divide-divider">
+              {group.runs.map((run) => (
+                <tr key={run.id}>
+                  <th scope="row" className="sticky left-0 z-10 bg-surface px-4 py-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Link href={`/runs/${run.id}`} className={LINK}>{run.subject}</Link>
+                      {run.status !== "done" && <Pill tone={run.status === "failed" ? "conflict" : "unsure"}>{run.status}</Pill>}
+                    </div>
+                  </th>
+                  <td className="whitespace-nowrap px-4 py-3 text-muted tabular-nums">{run.created_at.slice(0, 10)}</td>
+                  {run.cells.map((label, i) => (
+                    <td key={group.questions[i] ?? i} className={`px-4 py-3 ${CELL_STYLE[label].text}`}>
+                      <span aria-hidden="true" className={`mr-2 inline-block size-2 rounded-full ${CELL_STYLE[label].dot}`} />
+                      {label}
+                    </td>
+                  ))}
+                  <td className="px-4 py-3 tabular-nums">{run.sources_confirmed}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
       <p className="text-xs text-muted">
@@ -137,9 +140,9 @@ export function RolesView({ roleKey }: { roleKey?: string }): React.JSX.Element 
       <header className="flex flex-col items-start gap-3 border-b border-divider pb-8">
         <Eyebrow>Roles</Eyebrow>
         <h1 className="font-serif text-4xl leading-[1.05] md:text-5xl">Candidates by role</h1>
-        <p className="text-muted">Compare the briefs made for the same role. {DISCLAIMER}</p>
+        <p className="text-muted">Compare the briefs made for the same role.</p>
         {roleKey !== undefined && (
-          <Link href="/roles" className={BTN_QUIET}>All roles</Link>
+          <Link href="/roles" className={`${BTN_QUIET} -ml-3`}>All roles</Link>
         )}
       </header>
       {load.kind === "loading" && (

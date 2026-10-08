@@ -57,18 +57,27 @@ export function TokenForm({
         if (typeof raw === "string" && raw.trim() !== "") onSubmit(raw.trim());
       }}
     >
-      <label className="flex flex-col gap-1.5 text-sm font-semibold">
-        Team access token
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor="team-token" className="text-sm font-semibold">
+          Team access token
+        </label>
         <input
+          id="team-token"
           name="token"
           type="password"
           required
           autoComplete="off"
-          className={`${FIELD} font-normal`}
+          aria-describedby="team-token-help"
+          aria-invalid={error !== null}
+          className={FIELD}
         />
-        <span className="text-xs font-normal text-muted">{hint}</span>
-      </label>
-      {error !== null && <p className="text-sm text-conflict">{error}</p>}
+        <span id="team-token-help" className="text-xs text-muted">{hint}</span>
+      </div>
+      {error !== null && (
+        <p role="alert" className="text-sm text-conflict">
+          {error}
+        </p>
+      )}
       <button type="submit" className={`${BTN_PRIMARY} self-start`}>
         {submitLabel}
       </button>

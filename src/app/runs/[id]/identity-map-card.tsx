@@ -8,8 +8,9 @@
  *
  * Key responsibilities:
  * - IdentityMapCard: SVG with the subject in the center, linked profiles on a ring (solid green = this is them,
- *   dashed = not sure yet), namesakes in a grey "Someone else" column without a line; each node links out
- * - Decision mark inside every node (✓ ? ×) so colour is not the only carrier of meaning; HTML legend below
+ *   dashed = not sure yet), namesakes in a grey "Someone else" column without a line; hidden below sm (the sentence
+ *   stays), nodes are not links (the profile list carries them) but keep tooltips
+ * - Decision mark inside every node (✓ ? ×) so colour is not the only carrier of meaning; HTML legend below (sm and up)
  *
  * Design constraints:
  * - No hooks, no next/link; decisions come from the same decisionOf as the profile list
@@ -45,7 +46,7 @@ function Node({ node, center }: { node: MapNode; center: { x: number; y: number 
       ))}
     </>
   );
-  return node.href === null ? <g>{body}</g> : <a href={node.href} target="_blank" rel="noreferrer">{body}</a>;
+  return <g>{body}</g>;
 }
 
 export function IdentityMapCard({
@@ -62,8 +63,9 @@ export function IdentityMapCard({
   const { center } = layout;
   return (
     <section>
-      <h3 className="text-base font-semibold">Identity map</h3>
+      <h2 className="text-base font-semibold">Identity map</h2>
       <p className="mb-3 text-sm text-muted">{layout.summary}</p>
+      <div className="hidden sm:block">
       <svg viewBox={`0 0 ${String(layout.width)} ${String(layout.height)}`} className="h-auto w-full" role="img" aria-labelledby={`${TITLE_ID} ${DESC_ID}`}>
         <title id={TITLE_ID}>Identity map</title>
         <desc id={DESC_ID}>{layout.summary}</desc>
@@ -101,7 +103,8 @@ export function IdentityMapCard({
           </text>
         )}
       </svg>
-      <ul className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted">
+      </div>
+      <ul className="mt-3 hidden flex-wrap gap-x-4 gap-y-1 text-xs text-muted sm:flex">
         <li className="flex items-center gap-2">
           <span aria-hidden="true" className="inline-block w-5 border-t-[3px] border-ok" />
           This is them

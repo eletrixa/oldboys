@@ -8,19 +8,27 @@
  *
  * Key responsibilities:
  * - SectionList: sections in the order given (BriefView passes them confidence descending)
- * - ClaimList: one claim per row with its kind tag and source links (muted "confirmed: <identity_reason>" note when a
- *   source was confirmed by name + employer); also used for the per-question fallback
+ * - ClaimList: one claim per row with its kind tag, a "Conflicts with another claim" pill when claim.contradicts is
+ *   non-empty, and source links (the "confirmed: <identity_reason>" note is the link's tooltip); also used for the
+ *   per-question fallback
  * - Source-only sections (platforms without claims) list their confirmed source links; empty ones are not rendered
  * - SourceLink: the pasted CV renders as "Candidate's CV (pasted)" with no href (its URL is "cv:<runId>")
  *
  * Design constraints:
- * - Pure rendering; the confidence rates the research behind a section, never the person
+ * - Pure rendering; the confidence rates the research behind a section, never the person, and is shown in words only
+ *   (Strong / Some / Thin evidence), never as a percentage
  */
 import type { BriefSection, Claim } from "@/domain/claim";
 import { CARD, Pill, SourceLink, type Tone } from "../../ui";
 import { type ConfidenceBand, confidenceBand } from "./state";
 
-const BAND: Record<ConfidenceBand, Tone> = { strong: "ok", fair: "unsure", weak: "neutral" };
+const BAND: Record<ConfidenceBand, { tone: Tone; label: string }> = {
+  strong: { tone: "ok", label: "Strong evidence" },
+  fair: { tone: "unsure", label: "Some evidence" },
+  weak: { tone: "neutral", label: "Thin evidence" },
+};
+
+const KIND_LABEL: Record<Claim["kind"], string> = { FACT: "Fact", INFERENCE: "Inference", STATEMENT: "Statement" };
 
 /** source id -> why it was confirmed beyond its profile link (sources.identity_reason). */
 type NoteOf = ReadonlyMap<string, string>;
@@ -31,17 +39,21 @@ export function ClaimList({ claims, urlOf, noteOf }: { claims: Claim[]; urlOf: R
     <ul className="mt-3 flex flex-col gap-3">
       {claims.map((c) => (
         <li key={c.id} className="text-sm">
-          <Pill tone={c.kind === "INFERENCE" ? "inference" : "neutral"} className="mr-2 text-[10px] tracking-wide uppercase">
-            {c.kind}
+          <Pill tone={c.kind === "INFERENCE" ? "inference" : "neutral"} className="mr-2">
+            {KIND_LABEL[c.kind]}
           </Pill>
           {c.text}
+          {c.contradicts.length > 0 && (
+            <Pill tone="conflict" className="ml-2">
+              Conflicts with another claim
+            </Pill>
+          )}
           {c.supports.map((sid) => {
             const url = urlOf.get(sid);
             const note = noteOf?.get(sid);
             return url !== undefined ? (
-              <span key={sid}>
+              <span key={sid} title={note === undefined ? undefined : `Confirmed: ${note}`}>
                 <SourceLink url={url} className="ml-2" />
-                {note !== undefined && <span className="ml-1 text-xs text-muted">(confirmed: {note})</span>}
               </span>
             ) : (
               <span key={sid} className="ml-2 text-xs text-muted">
@@ -64,9 +76,7 @@ function SectionCard({ section, claims, urlOf, noteOf }: { section: BriefSection
     <section className={CARD}>
       <div className="flex items-start justify-between gap-3">
         <h3 className="text-base font-semibold">{section.title}</h3>
-        <Pill tone={BAND[band]}>
-          {String(Math.round(section.confidence * 100))}% {band}
-        </Pill>
+        <Pill tone={BAND[band].tone}>{BAND[band].label}</Pill>
       </div>
       <p className="mt-1 text-xs text-muted">{section.confidence_reason}</p>
       {section.summary !== "" && <p className="mt-2 text-sm text-ink">{section.summary}</p>}

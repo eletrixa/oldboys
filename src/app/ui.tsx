@@ -7,7 +7,7 @@
  * Tested:  n/a (visual; docs/design/radar-ui.md is the spec)
  *
  * Key responsibilities:
- * - Class strings for cards, buttons, fields and links so pages do not drift
+ * - Class strings for cards (plain, flush, peach, sage, conflict, unsure), buttons, fields and links so pages do not drift
  * - Eyebrow, Pill (semantic tone) and SourceLink
  *
  * Design constraints:
@@ -18,17 +18,22 @@ import { CV_SOURCE_TEXT, host, isCvSource } from "./runs/[id]/state";
 
 const SHADOW = "shadow-[0_8px_30px_rgba(40,45,43,0.06)]";
 
-export const CARD = `rounded-2xl border border-divider bg-surface p-5 md:p-6 ${SHADOW}`;
+const CARD_BASE = "rounded-2xl border border-divider bg-surface";
+export const CARD = `${CARD_BASE} p-5 md:p-6 ${SHADOW}`;
+/** A card whose content runs edge to edge (tables); no padding. */
+export const CARD_FLUSH = `${CARD_BASE} overflow-hidden ${SHADOW}`;
 export const CARD_PEACH = "rounded-2xl border border-peach bg-peach/40 p-5 md:p-6";
 export const CARD_SAGE = "rounded-2xl border border-sage bg-sage/50 p-5 md:p-6";
+export const CARD_CONFLICT = "rounded-2xl border border-conflict/40 bg-conflict-bg p-5 md:p-6";
+export const CARD_UNSURE = "rounded-2xl border border-unsure/40 bg-unsure-bg p-5 md:p-6";
 
-const BTN = "inline-flex min-h-11 items-center justify-center gap-2 rounded-lg text-sm transition-colors";
+const BTN = "inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-lg text-sm whitespace-nowrap transition-colors";
 export const BTN_PRIMARY = `${BTN} bg-action px-5 font-semibold text-white hover:bg-action-hover disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-action`;
 export const BTN_SECONDARY = `${BTN} border border-line/60 bg-surface px-4 font-medium text-ink hover:border-ink hover:bg-sage/60`;
-export const BTN_QUIET = `${BTN} min-h-9 px-3 font-medium text-muted hover:bg-sage/60 hover:text-ink`;
+export const BTN_QUIET = `${BTN} px-3 font-medium text-muted hover:bg-sage/60 hover:text-ink`;
 
-export const FIELD =
-  "w-full rounded-lg border border-line/60 bg-surface px-4 py-3 text-ink placeholder:text-muted/70 focus:border-focus focus:outline-none focus:ring-2 focus:ring-focus/30";
+/** Border and placeholder meet 3:1 / 4.5:1; focus uses the global :focus-visible ring. */
+export const FIELD = "w-full rounded-lg border border-line bg-surface px-4 py-3 text-ink placeholder:text-muted";
 
 export const LINK = "font-medium text-action underline decoration-action/40 underline-offset-4 hover:decoration-action";
 

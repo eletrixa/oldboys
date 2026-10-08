@@ -14,6 +14,7 @@
  *
  * Design constraints:
  * - Client component; posts to /api/start with the session cookie; no token ships to the browser
+ * - Helper text sits beside the label (aria-describedby), never inside it; CV summary is a 44px target
  * - Copy stays short and calm; no emoji
  */
 "use client";
@@ -21,7 +22,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { BTN_PRIMARY, CARD_SAGE, FIELD } from "./ui";
+import { BTN_PRIMARY, CARD_SAGE, FIELD, LINK } from "./ui";
 
 const CV_MAX = 20_000;
 
@@ -34,16 +35,30 @@ type FieldProps = {
   required?: boolean;
   defaultValue?: string;
   autoFocus?: boolean;
+  invalid?: boolean;
 };
 
-function Field({ name, label, helper, type = "text", placeholder, required = false, defaultValue, autoFocus = false }: FieldProps): React.JSX.Element {
+function Field({ name, label, helper, type = "text", placeholder, required = false, defaultValue, autoFocus = false, invalid = false }: FieldProps): React.JSX.Element {
   return (
-    <label className="flex flex-col gap-1.5 text-sm font-semibold">
-      {label}
+    <div className="flex flex-col gap-1.5">
+      <label htmlFor={name} className="text-sm font-semibold">{label}</label>
       {/* type="text" with a url keyboard: the browser would reject "linkedin.com/in/..." without https, the server accepts it */}
-      <input name={name} type="text" inputMode={type === "url" ? "url" : "text"} required={required} maxLength={type === "url" ? 500 : 300} placeholder={placeholder} defaultValue={defaultValue} autoFocus={autoFocus} className={FIELD} />
-      {helper !== undefined && <span className="text-xs font-normal text-muted">{helper}</span>}
-    </label>
+      <input
+        id={name}
+        name={name}
+        type="text"
+        inputMode={type === "url" ? "url" : "text"}
+        required={required}
+        maxLength={type === "url" ? 500 : 300}
+        placeholder={placeholder}
+        defaultValue={defaultValue}
+        autoFocus={autoFocus}
+        aria-describedby={helper === undefined ? undefined : `${name}-help`}
+        aria-invalid={invalid || undefined}
+        className={FIELD}
+      />
+      {helper !== undefined && <span id={`${name}-help`} className="text-xs text-muted">{helper}</span>}
+    </div>
   );
 }
 
@@ -118,12 +133,13 @@ export function StartForm({ initialRole, autoFocusRole = false }: StartFormProps
       <Field
         name="profileUrl"
         type="url"
+        invalid={error?.includes("LinkedIn") === true}
         label="Candidate's LinkedIn profile"
         placeholder="https://www.linkedin.com/in/..."
         helper="We read their name, location and employer from it, so we know exactly who they are."
       />
-      <details className="group rounded-lg border border-divider p-4">
-        <summary className="cursor-pointer text-sm font-semibold text-muted hover:text-ink">or paste their CV</summary>
+      <details className="group rounded-lg border border-line/60 p-4">
+        <summary className="flex min-h-11 cursor-pointer items-center text-sm font-semibold text-muted hover:text-ink">or paste their CV</summary>
         <textarea
           name="cvText"
           rows={8}
@@ -143,15 +159,15 @@ export function StartForm({ initialRole, autoFocusRole = false }: StartFormProps
         </p>
       )}
       {expired && (
-        <p role="alert" className="text-sm text-red-300">
+        <p role="alert" className="text-sm text-conflict">
           Your session has ended. Please{" "}
-          <Link href="/login" className="text-teal-300 underline-offset-2 hover:underline">
+          <Link href="/login" className={LINK}>
             log in
           </Link>{" "}
           again.
         </p>
       )}
-      <div className="flex items-center gap-4">
+      <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:gap-4">
         <button
           type="submit"
           disabled={busy}
