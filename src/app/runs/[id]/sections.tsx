@@ -8,7 +8,7 @@
  *
  * Key responsibilities:
  * - SectionList: sections in the order given (BriefView passes them confidence descending)
- * - ClaimList: one claim per row with its kind tag, a "Conflicts with another claim" pill when claim.contradicts is
+ * - ClaimList: one claim per row (grid: kind tag cell, text cell, so wrapped text hangs beside the tag) with its kind tag, a "Conflicts with another claim" pill when claim.contradicts is
  *   non-empty, and source links (the "confirmed: <identity_reason>" note is the link's tooltip); also used for the
  *   per-question fallback
  * - Source-only sections (platforms without claims) list their confirmed source links; empty ones are not rendered
@@ -38,29 +38,31 @@ export function ClaimList({ claims, urlOf, noteOf }: { claims: Claim[]; urlOf: R
   return (
     <ul className="mt-3 flex flex-col gap-3">
       {claims.map((c) => (
-        <li key={c.id} className="text-sm">
-          <Pill tone={c.kind === "INFERENCE" ? "inference" : "neutral"} className="mr-2">
+        <li key={c.id} className="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-x-2 gap-y-1 py-1.5 text-sm">
+          <Pill tone={c.kind === "INFERENCE" ? "inference" : "neutral"} className="mt-0.5">
             {KIND_LABEL[c.kind]}
           </Pill>
-          {c.text}
-          {c.contradicts.length > 0 && (
-            <Pill tone="conflict" className="ml-2">
-              Conflicts with another claim
-            </Pill>
-          )}
-          {c.supports.map((sid) => {
-            const url = urlOf.get(sid);
-            const note = noteOf?.get(sid);
-            return url !== undefined ? (
-              <span key={sid} title={note === undefined ? undefined : `Confirmed: ${note}`}>
-                <SourceLink url={url} className="ml-2" />
-              </span>
-            ) : (
-              <span key={sid} className="ml-2 text-xs text-muted">
-                source missing
-              </span>
-            );
-          })}
+          <span className="min-w-0">
+            {c.text}
+            {c.contradicts.length > 0 && (
+              <Pill tone="conflict" className="ml-2">
+                Conflicts with another claim
+              </Pill>
+            )}
+            {c.supports.map((sid) => {
+              const url = urlOf.get(sid);
+              const note = noteOf?.get(sid);
+              return url !== undefined ? (
+                <span key={sid} title={note === undefined ? undefined : `Confirmed: ${note}`}>
+                  <SourceLink url={url} className="ml-2" />
+                </span>
+              ) : (
+                <span key={sid} className="ml-2 text-xs text-muted">
+                  source missing
+                </span>
+              );
+            })}
+          </span>
         </li>
       ))}
     </ul>

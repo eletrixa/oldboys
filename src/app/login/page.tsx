@@ -25,6 +25,7 @@ export default async function LoginPage(): Promise<React.JSX.Element> {
       <header className="flex flex-col gap-3">
         <Eyebrow>Account</Eyebrow>
         <h1 className="font-serif text-4xl leading-[1.05] md:text-5xl">Log in</h1>
+        <p className="max-w-[62ch] text-muted">Radar prepares a sourced brief on a candidate for your hiring team. Log in to start one.</p>
       </header>
       <LoginForm />
       <p className="text-sm text-muted">

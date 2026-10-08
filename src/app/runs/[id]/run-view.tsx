@@ -26,7 +26,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Candidate, CandidateDecision } from "@/domain/claim";
-import { BTN_PRIMARY, BTN_SECONDARY, CARD_CONFLICT, Chevron, Eyebrow, LINK, Pill, SUMMARY } from "../../ui";
+import { BTN_SECONDARY, CARD_CONFLICT, Chevron, Eyebrow, LINK, Pill, SUMMARY } from "../../ui";
 import { IdentityMapCard } from "./identity-map-card";
 import { type Answer, BriefView, CostLine, ProfileList, ProgressSteps, QuestionCard } from "./parts";
 import { type RunState, firstName, headerText, questionsToAsk, sortLineup, stepRows } from "./state";
@@ -140,7 +140,7 @@ export function RunView({ id }: { id: string }): React.JSX.Element {
         <Eyebrow>Brief</Eyebrow>
         <h1 className="font-serif text-4xl leading-[1.05] md:text-5xl">We could not find this brief</h1>
         <p className="text-muted">The link may be mistyped, or the run is no longer available.</p>
-        <Link href="/" className={`${BTN_PRIMARY} self-start`}>Back to home</Link>
+        <Link href="/" className={LINK}>Back to home</Link>
       </main>
     );
   }

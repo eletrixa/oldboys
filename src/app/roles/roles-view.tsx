@@ -21,7 +21,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { CoverageLabel, RoleGroup } from "@/domain/role-overview";
-import { CARD_FLUSH, CARD_SAGE, Eyebrow, LINK, Pill } from "../ui";
+import { BTN_PRIMARY, CARD, CARD_FLUSH, CARD_SAGE, Eyebrow, LINK, Pill } from "../ui";
 
 const DISCLAIMER = "This table shows how much public evidence the research found, not how good a candidate is.";
 
@@ -142,7 +142,7 @@ export function RolesView({ roleKey }: { roleKey?: string }): React.JSX.Element 
         <Eyebrow>Roles</Eyebrow>
         <h1 className="font-serif text-4xl leading-[1.05] md:text-5xl">Candidates by role</h1>
         <p className="max-w-[62ch] text-muted">Compare the briefs made for the same role.</p>
-        {roleKey !== undefined && (
+        {roleKey !== undefined && load.kind === "ready" && (
           <Link href="/roles" className={`${LINK} text-sm`}>All roles</Link>
         )}
       </header>
@@ -153,9 +153,14 @@ export function RolesView({ roleKey }: { roleKey?: string }): React.JSX.Element 
         </div>
       )}
       {load.kind === "unauthorized" && (
-        <p className="text-muted">
-          <Link href="/login" className={LINK}>Log in</Link> to see your team&apos;s roles.
-        </p>
+        <div className={`${CARD} flex w-full max-w-md flex-col items-start gap-3`}>
+          <h2 className="text-base font-semibold">Log in to see your team&apos;s roles</h2>
+          <p className="text-sm text-muted">Roles and their briefs are visible only to your organization.</p>
+          <div className="flex items-center gap-4">
+            <Link href="/login" className={BTN_PRIMARY}>Log in</Link>
+            <Link href="/register" className={`${LINK} text-sm`}>Create an account</Link>
+          </div>
+        </div>
       )}
       {load.kind === "error" && <p className="text-conflict">{load.message}</p>}
       {load.kind === "ready" && roleKey === undefined && <RoleList groups={load.groups} />}

@@ -19,7 +19,6 @@ import { LogoutButton } from "./logout-button";
 import { NavLink } from "./nav-link";
 import { BTN_SECONDARY } from "./ui";
 
-const PRIMARY = "flex min-h-11 items-center rounded-lg bg-action px-4 text-sm font-semibold text-white hover:bg-action-hover";
 
 export function SiteNav({ user }: { user: SessionUser | null }): React.JSX.Element {
   return (
@@ -27,7 +26,7 @@ export function SiteNav({ user }: { user: SessionUser | null }): React.JSX.Eleme
       {user === null ? (
         <>
           <NavLink href="/login">Log in</NavLink>
-          <Link href="/register" className={PRIMARY}>Create account</Link>
+          <Link href="/register" className={BTN_SECONDARY}>Create account</Link>
         </>
       ) : (
         <>

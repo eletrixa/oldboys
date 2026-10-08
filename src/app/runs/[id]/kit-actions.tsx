@@ -12,7 +12,8 @@
  * - Copy for ATS: a short plain-text note (atsNote) with the link to this brief, for pasting into any ATS card
  * - Copy reference questions: research gaps as plain-text questions for a former manager or colleague (idea #18)
  * - One row: primary copy button + "More exports" disclosure (group/chevron from ui.tsx)
- * - One sr-only role="status" span reports "Copied" / "Copy failed" for the last copy that ran
+ * - One sr-only role="status" span reports "Copied" / "Copy failed" for the last copy that ran; that button's label shows it too for 2 s
+ * - EN/CZ buttons are 44px targets (BTN_QUIET, aria-pressed = font-semibold text-ink); the row carries the brief tail's divider
  * - The kit fetches GET /api/runs/:id/calls at click time for the phone verification section; on any error
  *   the kit is built without it
  *
@@ -31,9 +32,7 @@ import { candidateCopy, noticeFileName, type NoticeLang } from "./candidate-copy
 import { atsNote } from "./ats-note";
 import { referenceQuestions } from "./reference-check";
 
-const LANG_GROUP = "inline-flex overflow-hidden rounded-md border border-divider text-xs font-medium";
-const LANG_BTN =
-  "px-2 py-1 text-muted hover:bg-sage/60 hover:text-ink aria-pressed:bg-action aria-pressed:text-white aria-pressed:hover:bg-action-hover aria-pressed:hover:text-white";
+const LANG_BTN = `${BTN_QUIET} min-h-11 px-3 aria-pressed:font-semibold aria-pressed:text-ink`;
 const LANGS: readonly { lang: NoticeLang; label: string; title: string }[] = [
   { lang: "en", label: "EN", title: "Candidate notice in English" },
   { lang: "cs", label: "CZ", title: "Candidate notice in Czech" },
@@ -52,6 +51,9 @@ async function runCalls(runId: string): Promise<CallView[]> {
 }
 
 const STATUS_LABEL: Record<Exclude<CopyStatus, "idle">, string> = { copied: "Copied", failed: "Copy failed" };
+
+/** Button label: swaps to the outcome for 2 s after this button's own copy ran. */
+const labelFor = (active: boolean, status: CopyStatus, label: string): string => (active && status !== "idle" ? STATUS_LABEL[status] : label);
 
 /** Copies `text` (or what the promise resolves to) and reports the outcome, then resets to idle after 2 s. */
 async function copyText(text: string | null | Promise<string | null>, setStatus: (s: CopyStatus) => void): Promise<void> {
@@ -84,7 +86,12 @@ function downloadText(text: string | null, fileName: string): void {
 }
 
 export function KitActions({ state }: { state: RunState }): React.JSX.Element | null {
-  const [status, setCopy] = useState<CopyStatus>("idle");
+  const [status, setStatus] = useState<CopyStatus>("idle");
+  const [last, setLast] = useState<"kit" | "notice" | "ats" | "refs">("kit");
+  const setCopy = (which: typeof last) => (s: CopyStatus): void => {
+    setLast(which);
+    setStatus(s);
+  };
   const [noticeLang, setNoticeLang] = useState<NoticeLang>("en");
   if (state.brief === null) return null;
 
@@ -96,10 +103,10 @@ export function KitActions({ state }: { state: RunState }): React.JSX.Element | 
   const item = "w-full justify-start";
   const exportBtn = `${BTN_QUIET} ${item}`;
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex flex-col gap-2 border-t border-divider pt-6">
       <div className="flex flex-wrap items-center gap-2">
-        <button type="button" className={BTN_SECONDARY} onClick={() => void copyText(kit(), setCopy)}>
-          Copy interview kit
+        <button type="button" className={BTN_SECONDARY} onClick={() => void copyText(kit(), setCopy("kit"))}>
+          {labelFor(last === "kit", status, "Copy interview kit")}
         </button>
         <details className="group relative">
           <summary className={`${SUMMARY} ${BTN_QUIET}`}>
@@ -111,7 +118,7 @@ export function KitActions({ state }: { state: RunState }): React.JSX.Element | 
               Download .md
             </button>
             <div className="flex items-center gap-2 px-3 py-1">
-              <div className={LANG_GROUP} role="group" aria-label="Candidate notice language">
+              <div className="flex gap-1" role="group" aria-label="Candidate notice language">
                 {LANGS.map((l) => (
                   <button
                     key={l.lang}
@@ -127,17 +134,17 @@ export function KitActions({ state }: { state: RunState }): React.JSX.Element | 
               </div>
               <span className="text-xs text-muted">Candidate notice language</span>
             </div>
-            <button type="button" className={exportBtn} onClick={() => void copyText(notice(), setCopy)}>
-              Copy candidate notice
+            <button type="button" className={exportBtn} onClick={() => void copyText(notice(), setCopy("notice"))}>
+              {labelFor(last === "notice", status, "Copy candidate notice")}
             </button>
             <button type="button" className={exportBtn} onClick={() => { downloadText(notice(), noticeFileName(state, noticeLang)); }}>
               Download candidate notice (.md)
             </button>
-            <button type="button" className={exportBtn} onClick={() => void copyText(ats(), setCopy)}>
-              Copy for ATS
+            <button type="button" className={exportBtn} onClick={() => void copyText(ats(), setCopy("ats"))}>
+              {labelFor(last === "ats", status, "Copy for ATS")}
             </button>
-            <button type="button" className={exportBtn} onClick={() => void copyText(refs(), setCopy)}>
-              Copy reference questions
+            <button type="button" className={exportBtn} onClick={() => void copyText(refs(), setCopy("refs"))}>
+              {labelFor(last === "refs", status, "Copy reference questions")}
             </button>
           </div>
         </details>

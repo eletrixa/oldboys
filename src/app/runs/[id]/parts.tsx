@@ -15,7 +15,8 @@
  * - Confirmed evidence grouped by the URL's platform (evidenceGroup), not by the actor that fetched it; the pasted CV
  *   is plain text, not a link (SourceLink)
  * - Phone verification panel (CallPanel, client) right after "To verify"; it fetches its own data
- * - Interview kit exports (KitActions) after the gap lists, before AlsoFound; gap labels come from state.ts (GAP_LABEL, gapLine)
+ * - Interview kit exports (KitActions) after the gap lists, one block with AlsoFound and the removed line;
+ *   gap rows split "Label: reason" into a medium label and muted reason; Check rows hang under a grid; gap labels come from state.ts (GAP_LABEL, gapLine)
  * - Findings as sections by confidence (SectionList); briefs stored before sections render per question
  * - Accessibility: labelled progressbar with status text, QuestionCard focuses its heading on mount, 44px summary and link targets
  *
@@ -33,6 +34,7 @@ import { CallPanel } from "./call-panel-view";
 import { KitActions } from "./kit-actions";
 import { ClaimList, SectionList } from "./sections";
 import { SummaryCard } from "./summary-card";
+import { STEP_LABEL } from "./source-labels";
 import { PLATFORM_LABEL, type RowState, type RunState, briefSections, evidenceGroup, gapLine, host, roleCriteria, searchedEmpty, searchedTitle } from "./state";
 
 function Mark({ state }: { state: RowState }): React.JSX.Element {
@@ -266,45 +268,36 @@ function List({
     <section>
       <h2 className="font-serif text-xl">{title}</h2>
       <ul className="mt-2 divide-y divide-divider">
-        {items.map((t) =>
-          typeof t === "string" ? (
-            <li key={t} className="py-2 text-sm">
-              {check && <Pill tone="unsure" className="mr-2">Check</Pill>}
-              {t}
+        {items.map((t) => {
+          const text = typeof t === "string" ? t : t.text;
+          if (check) {
+            return (
+              <li key={text} className="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-x-2 py-2 text-sm">
+                <Pill tone="unsure" className="mt-0.5">Check</Pill>
+                <span className="min-w-0">{text}</span>
+              </li>
+            );
+          }
+          const cut = text.indexOf(": ");
+          return (
+            <li key={text} title={typeof t === "string" ? undefined : t.hint} className="py-2 text-sm">
+              {cut > 0 && cut < 40 ? (
+                <>
+                  <span className="font-medium text-ink">{text.slice(0, cut)}</span>
+                  <span className="text-muted">{text.slice(cut)}</span>
+                </>
+              ) : (
+                text
+              )}
             </li>
-          ) : (
-            <li key={t.text} title={t.hint} className="py-2 text-sm">
-              {t.text}
-            </li>
-          ),
-        )}
+          );
+        })}
       </ul>
     </section>
   );
 }
 
 type Evidence = Brief["evidence"][number];
-
-/** Plain words for the actor id a source came from. */
-const STEP_LABEL: Record<string, string> = {
-  "apify/google-search-scraper": "Web search",
-  "harvestapi/linkedin-profile-scraper": "LinkedIn",
-  "apimaestro/linkedin-profile-detail": "LinkedIn",
-  "harvestapi/linkedin-company": "LinkedIn company",
-  "rest/github": "GitHub",
-  "rest/stackexchange": "Stack Exchange",
-  "rest/huggingface": "Hugging Face",
-  "rest/orcid": "ORCID",
-  "rest/openalex": "OpenAlex",
-  "apidojo/tweet-scraper": "X",
-  "apify/instagram-profile-scraper": "Instagram",
-  "clockworks/tiktok-profile-scraper": "TikTok",
-  "streamers/youtube-scraper": "YouTube",
-  "rest/bluesky": "Bluesky",
-  "apify/website-content-crawler": "Website",
-  "ares/ekonomicke-subjekty/vyhledat": "ARES registry",
-  "ares/ekonomicke-subjekty-vr": "ARES public register",
-};
 
 const EVIDENCE_VISIBLE = 10;
 
@@ -452,11 +445,13 @@ export function BriefView({ state }: { state: RunState }): React.JSX.Element | n
       <CallPanel state={state} />
       <List title={searchedTitle(searchedEmpty(brief))} items={searchedEmpty(brief).map(gapItem)} />
       <List title="Not searched, and why" items={brief.not_searched.map(gapItem)} />
-      <KitActions state={state} />
-      <AlsoFound items={brief.also_found} />
-      {brief.removed_protected > 0 ? (
-        <p className="text-xs text-muted">{String(brief.removed_protected)} {brief.removed_protected === 1 ? "item" : "items"} removed (protected categories)</p>
-      ) : null}
+      <div className="flex flex-col gap-3">
+        <KitActions state={state} />
+        <AlsoFound items={brief.also_found} />
+        {brief.removed_protected > 0 ? (
+          <p className="text-xs text-muted">{String(brief.removed_protected)} {brief.removed_protected === 1 ? "item" : "items"} removed (protected categories)</p>
+        ) : null}
+      </div>
     </div>
   );
 }

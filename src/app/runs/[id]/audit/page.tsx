@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/runs/[id]/audit/page.tsx
- * Deps:    next, @opennextjs/cloudflare (getCloudflareContext), binding DB, src/app/api/runs/[id]/audit/load, src/app/ui.tsx
+ * Deps:    next, @opennextjs/cloudflare (getCloudflareContext), binding DB, src/app/api/runs/[id]/audit/load, src/app/ui.tsx, ../state (GAP_LABEL, PLATFORM_LABEL), ../source-labels
  * Tested:  n/a (projection tested in src/domain/__tests__/audit.test.ts)
  *
  * Key responsibilities:
@@ -16,13 +16,17 @@
  * - Lineup titles only for confirmed profiles; the record holds null for namesakes and "not sure"
  * - Same access rule as the run page: the id is an unguessable UUID
  * - Back link arrow is decorative (aria-hidden); download is an <a download> styled BTN_SECONDARY
+ * - Source rows show the plain name (GAP_LABEL, then STEP_LABEL) with the raw id beneath only when it differs; "not searched" rows fold into a details
+ * - Raw values read as words (goal, status, source status, lineup platform); numbers and times are untouched
  * - Radar look per docs/design/radar-ui.md: ui.tsx primitives and semantic tokens only, no raw colours
  */
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import Link from "next/link";
 import { loadAuditRecord } from "@/app/api/runs/[id]/audit/load";
 import type { AuditRecord, LineupAnswer, SourceStatus } from "@/domain/audit";
-import { BTN_PRIMARY, BTN_QUIET, BTN_SECONDARY, CARD, Eyebrow, Pill, type Tone } from "@/app/ui";
+import { BTN_PRIMARY, BTN_QUIET, BTN_SECONDARY, CARD, Chevron, Eyebrow, Pill, SUMMARY, type Tone } from "@/app/ui";
+import { STEP_LABEL } from "../source-labels";
+import { GAP_LABEL, PLATFORM_LABEL } from "../state";
 
 export const dynamic = "force-dynamic";
 
@@ -37,6 +41,21 @@ const STATUS_TONE: Record<SourceStatus, Tone> = {
   empty: "neutral",
   failed: "conflict",
   "not searched": "neutral",
+};
+
+const STATUS_TEXT: Record<SourceStatus, string> = {
+  ok: "Found",
+  empty: "Nothing found",
+  failed: "Failed",
+  "not searched": "Not searched",
+};
+const GOAL_LABEL: Record<string, string> = { hiring: "Hiring", "due-diligence": "Due diligence" };
+const RUN_STATUS_LABEL: Record<string, string> = {
+  done: "Done",
+  running: "Running",
+  paused: "Waiting for an answer",
+  failed: "Failed",
+  queued: "Queued",
 };
 
 /** "2026-10-08 20:00 UTC"; empty or unreadable dates read as a dash. */
@@ -69,33 +88,58 @@ function Row({ label, children }: { label: string; children: React.ReactNode }):
   );
 }
 
+type SourceRecord = AuditRecord["sources"][number];
+
+function SourceRow({ s }: { s: SourceRecord }): React.JSX.Element {
+  const name = GAP_LABEL[s.step] ?? STEP_LABEL[s.source] ?? s.source;
+  return (
+    <li className="flex flex-col gap-1 py-2 text-sm">
+      <div className="flex items-center justify-between gap-3">
+        <span className="min-w-0 truncate font-medium">{name}</span>
+        <Pill tone={STATUS_TONE[s.status]}>{STATUS_TEXT[s.status]}</Pill>
+      </div>
+      {name !== s.source && <p className="text-xs text-muted break-all">{s.source}</p>}
+      <p className="text-xs text-muted tabular-nums">
+        {[whenOrNull(s.time), `${String(s.items)} ${s.items === 1 ? "item" : "items"}`, usd(s.cost_usd), s.reason]
+          .filter((part): part is string => part !== null)
+          .join(" · ")}
+      </p>
+    </li>
+  );
+}
+
 function SourcesCard({ record }: { record: AuditRecord }): React.JSX.Element {
+  const searched = record.sources.filter((s) => s.status !== "not searched");
+  const skipped = record.sources.filter((s) => s.status === "not searched");
+  const LIST = "flex flex-col divide-y divide-divider";
   return (
     <section className={CARD}>
       <h2 className={H2}>Sources queried</h2>
       {record.sources.length === 0 ? (
         <p className="text-sm text-muted">No source steps recorded.</p>
       ) : (
-        <ul className="flex flex-col divide-y divide-divider">
-          {record.sources.map((s) => (
-            <li key={s.step} className="flex flex-col gap-1 py-2 text-sm">
-              <div className="flex items-center justify-between gap-3">
-                <span className="min-w-0 truncate font-medium">{s.source}</span>
-                <Pill tone={STATUS_TONE[s.status]}>{s.status}</Pill>
-              </div>
-              <p className="text-xs text-muted tabular-nums">
-                {[
-                  whenOrNull(s.time),
-                  `${String(s.items)} ${s.items === 1 ? "item" : "items"}`,
-                  usd(s.cost_usd),
-                  s.reason,
-                ]
-                  .filter((part): part is string => part !== null)
-                  .join(" · ")}
-              </p>
-            </li>
-          ))}
-        </ul>
+        <>
+          {searched.length > 0 && (
+            <ul className={LIST}>
+              {searched.map((s) => (
+                <SourceRow key={s.step} s={s} />
+              ))}
+            </ul>
+          )}
+          {skipped.length > 0 && (
+            <details className="group">
+              <summary className={SUMMARY}>
+                <Chevron />
+                Not searched ({String(skipped.length)})
+              </summary>
+              <ul className={LIST}>
+                {skipped.map((s) => (
+                  <SourceRow key={s.step} s={s} />
+                ))}
+              </ul>
+            </details>
+          )}
+        </>
       )}
       <p className="mt-3 text-sm text-muted tabular-nums">
         Model calls: {String(record.model_calls)} · Total cost: {usd(record.total_cost_usd)}
@@ -115,7 +159,7 @@ function LineupCard({ record }: { record: AuditRecord }): React.JSX.Element {
           {record.lineup.map((l, i) => (
             <li key={`${l.platform}-${String(i)}`} className="flex items-center justify-between gap-3">
               <span className="min-w-0 truncate">
-                <span className="text-muted">{l.platform}</span> ·{" "}
+                <span className="text-muted">{PLATFORM_LABEL[l.platform] ?? l.platform}</span> ·{" "}
                 {l.title ?? <span className="text-muted">title not kept</span>}
               </span>
               <AnswerPill answer={l.answer} />
@@ -185,11 +229,11 @@ export default async function AuditPage({ params }: { params: Promise<{ id: stri
         <dl className="flex flex-col gap-2">
           <Row label="Started via">{VIA_LABEL[run.started_via]}</Row>
           <Row label="Started at">{when(run.started_at)}</Row>
-          <Row label="Goal">{run.goal}</Row>
+          <Row label="Goal">{GOAL_LABEL[run.goal] ?? run.goal}</Row>
           <Row label="Subject">{run.subject}</Row>
           <Row label="Anchor">{run.anchor}</Row>
           <Row label="Role">{run.role ?? "–"}</Row>
-          <Row label="Status">{run.status}</Row>
+          <Row label="Status">{RUN_STATUS_LABEL[run.status] ?? run.status}</Row>
         </dl>
       </section>
 
