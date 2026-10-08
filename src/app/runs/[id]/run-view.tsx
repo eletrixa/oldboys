@@ -8,7 +8,8 @@
  *
  * Key responsibilities:
  * - Poll GET /api/runs/:id/state every 2 s until done or failed
- * - Header: derived name once the seed step knows it ("the candidate" before), the seed headline under it
+ * - Header: derived name once the seed step knows it ("the candidate" before), the seed headline under it,
+ *   then "From <source> · <tag> · <date>" when an intake application started the run
  * - Show the run cost and research time line (ledger projection) while running and when done
  * - Identity map above the profile list (same live decisions)
  * - On failure keep the progress rows, mark the failed one, show the reason, sources so far and a retry link
@@ -22,6 +23,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { intakeLine } from "@/app/intake/intake-rows";
 import type { Candidate, CandidateDecision } from "@/domain/claim";
 import { IdentityMapCard } from "./identity-map-card";
 import { type Answer, BriefView, CostLine, ProfileList, ProgressSteps, QuestionCard } from "./parts";
@@ -159,6 +161,7 @@ export function RunView({ id }: { id: string }): React.JSX.Element {
           {headerText(state.subject, state.status === "done")}
         </h1>
         {state.headline !== null && <p className="text-zinc-300">{state.headline}</p>}
+        {state.intake !== null && <p className="text-sm text-muted">{intakeLine(state.intake)}</p>}
         {state.status !== "done" && (
           <p className="text-zinc-400">This usually takes 2 to 4 minutes. Keep this tab open.</p>
         )}
