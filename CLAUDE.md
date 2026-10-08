@@ -4,7 +4,7 @@
 Hackathon Case 01 (Apify): social media deep research. Input (hiring, plans/006): the candidate's LinkedIn profile URL or a pasted CV, plus the role; name, location and employer are derived from it and the given profile is the confirmed identity (the extension, curl and due-diligence still send a subject + anchor pair). Output: a report where every claim links to a source, FACT is split from INFERENCE, gaps are stated, namesakes are handled, and a different goal yields different substance. Judging: value 35, originality 25, e2e 20, tech 10, honesty 10. Brief: `docs/brief.md`.
 
 ## Binding decisions
-001 (`plans/001-deep-research-arch/00-SYNTHESIS.md`) domain, 002 (`plans/002-cloudflare-platform/`) platform, 005 (`plans/005-call-verification/`) verification calls, 006 (`plans/006-profile-first/`) profile-first start. Where they conflict, 002 wins. Ops runbook for calls: `docs/ops/call-verification.md`.
+001 (`plans/001-deep-research-arch/00-SYNTHESIS.md`) domain, 002 (`plans/002-cloudflare-platform/`) platform, 005 (`plans/005-call-verification/`) verification calls, 006 (`plans/006-profile-first/`) profile-first start, 008 (`plans/008-intake-connectors/`, contracts in `specs/intake/`) candidate intake. Where they conflict, 002 wins. Ops runbooks: `docs/ops/call-verification.md` (calls), `docs/ops/intake.md` (intake).
 
 | Topic | Decision |
 |---|---|
@@ -21,10 +21,11 @@ Hackathon Case 01 (Apify): social media deep research. Input (hiring, plans/006)
 | Streaming | SSE route polls D1 `seq > last` every 1s, replays whole ledger on connect, events idempotent by `seq` |
 | Replay | serve old ledger, labeled CACHED |
 | Verification calls (005) | Operator-approved, operator-entered numbers with recorded consent only; dialed once in `POST /api/calls/:id/approve`, never in a Workflow step; `VerificationCallWorkflow` (binding `VERIFY_CALL`) waits for the ElevenLabs webhook, ingests the transcript as a Source and writes `STATEMENT` claims (never FACT); `CALL_PROVIDER=mock` is labeled MOCK; max `RUN_CALL_MAX` calls per run |
+| Intake (008) | Every channel (email `jobs+<tag>@asajj.cz` via Email Routing and `worker.email()`, `POST /api/intake/form` with bearer `INTAKE_TOKEN`, hosted `/apply/<tag>` + `POST /api/apply`, `POST /api/intake/startupjobs/<token>`) normalises into `IntakeInput` and calls `ingestApplication`, the only writer of `applications` and the only intake path to `startRun` (`via='intake'`); a run starts only for a known `intake_tags` tag with a LinkedIn URL or readable CV, capped by `INTAKE_PER_HOUR_CAP`; the candidate never sees a run |
 
 ## Stack and bindings
 Next.js 16 on Workers via `@opennextjs/cloudflare`; `ai` + `@ai-sdk/anthropic`; `apify-client`; Zod; Vitest; pnpm; Node 26 locally, 22 in CI.
-Bindings in `wrangler.jsonc`: `DB` (D1), `SOURCES` (R2), `RESEARCH_RUN` and `VERIFY_CALL` (Workflows), `ASSETS`. Vars: `LLM_MODEL_PRIMARY=claude-opus-5-5`, `LLM_MODEL_VERIFY=claude-sonnet-5-5`, `RUN_BUDGET_USD`, `RUN_BUDGET_CALLS`, `CALL_PROVIDER` (`mock`|`elevenlabs`), `CALL_BUDGET_USD`, `RUN_CALL_MAX`, `ELEVENLABS_AGENT_ID`, `ELEVENLABS_PHONE_NUMBER_ID`. Secrets: `ANTHROPIC_API_KEY`, `APIFY_TOKEN`, `RUN_TOKEN` (bearer for POST /api/runs and the call routes), `ELEVENLABS_API_KEY` and `ELEVENLABS_WEBHOOK_SECRET` (live calls only); optional `GITHUB_TOKEN`, `STACKEXCHANGE_KEY` and `OPENALEX_API_KEY` (added by `makeFetchJson` for api.github.com / api.stackexchange.com / api.openalex.org only).
+Bindings in `wrangler.jsonc`: `DB` (D1), `SOURCES` (R2), `RESEARCH_RUN` and `VERIFY_CALL` (Workflows), `ASSETS`. Vars: `LLM_MODEL_PRIMARY=claude-opus-5-5`, `LLM_MODEL_VERIFY=claude-sonnet-5-5`, `RUN_BUDGET_USD`, `RUN_BUDGET_CALLS`, `CALL_PROVIDER` (`mock`|`elevenlabs`), `CALL_BUDGET_USD`, `RUN_CALL_MAX`, `ELEVENLABS_AGENT_ID`, `ELEVENLABS_PHONE_NUMBER_ID`, `INTAKE_PER_HOUR_CAP`, `INTAKE_FORWARD_TO` (verified Email Routing destination for a human copy, may be empty), `INTAKE_FROM_ALLOW` (sender domains or addresses allowed to start runs by email, empty = any). Secrets: `ANTHROPIC_API_KEY`, `APIFY_TOKEN`, `RUN_TOKEN` (bearer for POST /api/runs and the call routes), `ELEVENLABS_API_KEY` and `ELEVENLABS_WEBHOOK_SECRET` (live calls only); optional `GITHUB_TOKEN`, `STACKEXCHANGE_KEY` and `OPENALEX_API_KEY` (added by `makeFetchJson` for api.github.com / api.stackexchange.com / api.openalex.org only); intake: `INTAKE_TOKEN` (bearer for `POST /api/intake/form`), `STARTUPJOBS_WEBHOOK_TOKEN` (path token of the StartupJobs webhook), optional `STARTUPJOBS_TOKEN`.
 Worker entry `src/worker.ts` re-exports the OpenNext `fetch` and exports `ResearchRunWorkflow` and `VerificationCallWorkflow`. The Workflow imports only `src/domain/*` and `src/recipe/*`, never Next.js.
 
 ## Scripts (pnpm)
@@ -39,6 +40,7 @@ Worker entry `src/worker.ts` re-exports the OpenNext `fetch` and exports `Resear
 - `migrations/` D1 SQL.
 - `rules/` repo coding rules.
 - `plans/` decision dossiers (001, 002).
+- `specs/` unit contracts for a plan in flight (`specs/intake/` for 008); the code and tests are the source of truth once a unit lands.
 - `docs/` brief, discovery, ops, cli, architecture pointer.
 
 ## Rules
