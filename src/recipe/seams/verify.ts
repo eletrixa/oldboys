@@ -1,9 +1,9 @@
 /**
- * Verify seam: deterministic screens (noise, unknown ids, quote-in-excerpt, hedges, alias contradictions), then a second model that may only downgrade.
+ * Verify seam: deterministic screens (noise, unknown ids, quote-in-excerpt, hedges, alias contradictions, duplicates), then a second model that may only downgrade.
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/recipe/seams/verify.ts
- * Deps:    zod, src/domain/corroborate (fold, hasWord, orgTokens), src/recipe/seams/resolve (confirmedSources)
+ * Deps:    zod, src/domain/corroborate (fold, hasWord, orgTokens), src/domain/similar (nearDuplicate), src/recipe/seams/resolve (confirmedSources)
  * Tested:  src/recipe/__tests__/verify.test.ts
  *
  * Key responsibilities:
@@ -15,6 +15,9 @@
  *   contradiction claims that call themselves compatible / not a contradiction (saysCompatible); a contradiction claim
  *   naming two aliases of one organisation ("A | B", "A (formerly B)", "A, formerly B" in a source, both sides
  *   organisation-like) is kept as INFERENCE ranked last with ALIAS_MARK in its text
+ * - mergeDuplicates: claims with the same question_id whose folded texts are equal or token Jaccard >= 0.8
+ *   (src/domain/similar) merge into the better-ranked / higher-confidence one, supports unioned, note
+ *   "merged duplicate: <id>"
  * - Residue (FACTs that passed) goes to the verify model; "not supported" downgrades to INFERENCE
  *
  * Design constraints:
@@ -26,6 +29,7 @@ import type { Claim, Source } from "@/domain/claim";
 import type { Ports } from "@/domain/ports";
 import { fold, hasWord, orgTokens } from "@/domain/corroborate";
 import { normalizeText, quoteInNormalized } from "@/domain/quote";
+import { nearDuplicate } from "@/domain/similar";
 import { emptyOutcome } from "@/recipe/runner";
 import { confirmedSources } from "@/recipe/seams/resolve";
 import type { StepContext, StepOutcome } from "@/recipe/sources/types";
@@ -146,6 +150,30 @@ export function screenClaims(claims: readonly Claim[], sources: readonly Source[
   return { kept, notes };
 }
 
+/** Lower rank wins, then higher confidence, then the earlier claim. */
+const outranks = (a: Claim, b: Claim): boolean => (a.rank !== b.rank ? a.rank < b.rank : a.confidence >= b.confidence);
+
+/**
+ * Merges near-duplicate claims (same question_id, src/domain/similar nearDuplicate): the better one is kept at the
+ * earlier position with the union of both supports; note "merged duplicate: <dropped id>".
+ */
+export function mergeDuplicates(claims: readonly Claim[]): { kept: Claim[]; notes: string[] } {
+  const kept: Claim[] = [];
+  const notes: string[] = [];
+  for (const c of claims) {
+    const i = kept.findIndex((k) => k.question_id === c.question_id && nearDuplicate(k.text, c.text));
+    const prev = kept[i];
+    if (prev === undefined) {
+      kept.push(c);
+      continue;
+    }
+    const [win, lose] = outranks(prev, c) ? [prev, c] : [c, prev];
+    kept[i] = { ...win, supports: [...new Set([...win.supports, ...lose.supports])] };
+    notes.push(`merged duplicate: ${lose.id}`);
+  }
+  return { kept, notes };
+}
+
 const Verdicts = z.array(z.object({ id: z.string(), supported: z.boolean() }));
 
 export async function verifyClaims(ctx: StepContext, ports: Ports): Promise<StepOutcome> {
@@ -175,8 +203,11 @@ export async function verifyClaims(ctx: StepContext, ports: Ports): Promise<Step
     }
     return [c];
   });
-  const residue = first.filter((c) => c.kind === "FACT");
-  let final = first;
+  const merged = mergeDuplicates(first);
+  out.notes.push(...merged.notes);
+  const deduped = merged.kept;
+  const residue = deduped.filter((c) => c.kind === "FACT");
+  let final = deduped;
   if (residue.length > 0) {
     try {
       const byId = new Map(ctx.sources.map((s) => [s.id, s]));
@@ -191,7 +222,7 @@ export async function verifyClaims(ctx: StepContext, ports: Ports): Promise<Step
       out.calls += 1;
       out.cost_usd += r.cost_usd;
       const rejected = new Set(r.value.filter((v) => !v.supported).map((v) => v.id));
-      final = first.map((c) => (rejected.has(c.id) ? downgrade(c) : c));
+      final = deduped.map((c) => (rejected.has(c.id) ? downgrade(c) : c));
       for (const id of rejected) out.notes.push(`downgraded (second model): ${id}`);
     } catch (error) {
       out.notes.push(`verify model failed, deterministic result kept: ${error instanceof Error ? error.message : String(error)}`);

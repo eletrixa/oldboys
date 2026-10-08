@@ -1,7 +1,7 @@
 /**
  * Verify seam tests: planted unsupported FACTs are downgraded, unknown ids and noise dropped, alias contradictions
- * ranked last (job titles are never aliases), unverified excerpts never back a FACT, hedges downgraded; second model
- * may only downgrade.
+ * ranked last (job titles are never aliases), unverified excerpts never back a FACT, hedges downgraded, near-duplicate
+ * claims merged; second model may only downgrade.
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/recipe/__tests__/verify.test.ts
@@ -14,7 +14,7 @@ import { ALIAS_MARK, aliasNoted, aliasPairs, hedged, normalise, quoteSupported, 
 import { baseContext, fakeLlm, fakePorts } from "@/recipe/__tests__/fakes";
 
 const src: Source = { id: "s1", run_id: "run-1", url: "https://github.com/jdvorakova", actor: "x", fetched_at: "t", excerpt: "Jana Dvořáková — Data Engineer at Kiwi.com, Brno. Maintains dbt-airflow-kit.", r2_key: "k", expires_at: "e", identity: "merged" };
-const fact = (id: string, quote: string | null, supports = ["s1"]): Claim => ({ id, run_id: "run-1", question_id: "current-role", candidate_id: null, text: "Works at Kiwi.com", kind: "FACT", confidence: 0.9, quote, supports, contradicts: [], rank: 1 });
+const fact = (id: string, quote: string | null, supports = ["s1"]): Claim => ({ id, run_id: "run-1", question_id: "current-role", candidate_id: null, text: `Works at Kiwi.com (${id})`, kind: "FACT", confidence: 0.9, quote, supports, contradicts: [], rank: 1 });
 
 describe("quoteSupported", () => {
   it("normalises quotes and punctuation", () => {
@@ -54,6 +54,21 @@ describe("verifyClaims", () => {
     const out = await verifyClaims(ctx, fakePorts());
     expect(out.claims[0]?.kind).toBe("FACT");
     expect(out.notes.join()).toContain("verify model failed");
+  });
+});
+
+describe("duplicate merge", () => {
+  it("merges two near-duplicates of one question into the better one with unioned supports, keeps the distinct claim", async () => {
+    const src2: Source = { ...src, id: "s2", url: "https://www.linkedin.com/in/jdvorakova", excerpt: "Data Engineer at Kiwi.com" };
+    const claims: Claim[] = [
+      { ...fact("dup-low", "Data Engineer at Kiwi.com", ["s2"]), text: "She is Data Engineer at Kiwi.com", confidence: 0.7 },
+      { ...fact("dup-high", "Data Engineer at Kiwi.com"), text: "She is a Data Engineer at Kiwi.com.", confidence: 0.9 },
+      { ...fact("distinct", "Maintains dbt-airflow-kit"), text: "She maintains dbt-airflow-kit" },
+    ];
+    const out = await verifyClaims(baseContext({ sources: [src, src2], claims }), fakePorts({ llm: fakeLlm(() => []) }));
+    expect(out.claims.map((c) => c.id)).toEqual(["dup-high", "distinct"]);
+    expect(out.claims[0]?.supports).toEqual(["s1", "s2"]);
+    expect(out.notes).toContain("merged duplicate: dup-low");
   });
 });
 
