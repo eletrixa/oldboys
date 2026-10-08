@@ -1,5 +1,5 @@
 ---
-plan: 008-recruiter-accounts
+plan: 009-recruiter-accounts
 status: draft
 owner: Robert
 created: 2026-10-08
@@ -52,5 +52,5 @@ type: feature
 | `src/domain/session.ts` | Session token and cookie handling |
 | `src/app/api/auth/` | Register, login, logout routes |
 | `src/app/api/ares/[ico]/` | ARES lookup and caching |
-| `migrations/0008_accounts.sql` | Accounts, organizations, sessions, auth_attempts, ARES cache |
+| `migrations/0010_accounts.sql` | Accounts, organizations, sessions, auth_attempts, ARES cache |
 | `src/app/(auth)/` | Register, login, onboarding pages |

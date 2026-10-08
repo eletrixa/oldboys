@@ -47,7 +47,7 @@
 
 **Worktree:** This work runs in its own Git worktree at `/home/asajj/code/oldboys-accounts` on branch `accounts`, off `main`. Merges into `main` when all success criteria are green.
 
-**Migration:** `0008_accounts.sql` creates `organizations`, `accounts`, `sessions`, `auth_attempts`, `ares_cache` tables and alters `investigations` to add `account_id` and `organization_id` columns. Applied before deploy via `pnpm db:migrate:remote`.
+**Migration:** `0010_accounts.sql` creates `organizations`, `accounts`, `sessions`, `auth_attempts`, `ares_cache` tables and alters `investigations` to add `account_id` and `organization_id` columns. Applied before deploy via `pnpm db:migrate:remote`.
 
 **Lint:** TypeScript 6.x. ESLint rules: `strict-boolean-expressions`, `explicit-module-boundary-types`, `consistent-type-definitions: type` (no `interface`), `restrict-template-expressions`, `no-floating-promises`, `noUncheckedIndexedAccess`, `prefer-nullish-coalescing`. Zod 4: `.z.email()`, `.default()` after `.nullable()`.
 

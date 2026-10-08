@@ -89,4 +89,4 @@ Criterion 11: Playwright smoke pass (register → onboarding → brief → logou
 
 ## Next steps
 
-Architecture dossier: `plans/008-recruiter-accounts/`. Build contracts and agents: `plans/008-recruiter-accounts/00-SYNTHESIS.md`.
+Architecture dossier: `plans/009-recruiter-accounts/`. Build contracts and agents: `plans/009-recruiter-accounts/00-SYNTHESIS.md`.

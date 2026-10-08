@@ -1,4 +1,4 @@
-﻿<# Cheatsheet: cheatoldboys — Next.js 16 on Cloudflare Workers (OpenNext, Workflows, D1, R2). #>
+<# Cheatsheet: cheatoldboys — Next.js 16 on Cloudflare Workers (OpenNext, Workflows, D1, R2). #>
 function global:cheatoldboys {
     Write-Host ""
     Write-Host "  ╔═══════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
@@ -46,6 +46,8 @@ function global:cheatoldboys {
     Write-Host "Run Vitest once" -ForegroundColor White
     Write-Host "    pnpm test:watch                        " -NoNewline -ForegroundColor Green
     Write-Host "Vitest watch mode" -ForegroundColor White
+    Write-Host "    pnpm e2e                               " -NoNewline -ForegroundColor Green
+    Write-Host "Root Playwright smoke against pnpm dev on port 3141" -ForegroundColor White
     Write-Host "    LIVE=1 SUBJECT=.. ANCHOR=.. REPORT=out.txt pnpm exec vitest run live-sources" -ForegroundColor Green
     Write-Host "                                           Live Apify smoke of every hiring collector (spends ~\$0.01)" -ForegroundColor White
     Write-Host "    node scripts/ui-flow.mjs name city role prefix" -NoNewline -ForegroundColor Green
@@ -82,10 +84,12 @@ function global:cheatoldboys {
     Write-Host "Apply migrations to remote D1" -ForegroundColor White
     Write-Host ""
     Write-Host "  ┌─────────────────────────────────────────────────────────────────┐" -ForegroundColor DarkGray
-    Write-Host "  │  VERIFICATION CALLS                                            │" -ForegroundColor Yellow
+    Write-Host "  │  ENVIRONMENT VARIABLES                                         │" -ForegroundColor Yellow
     Write-Host "  └─────────────────────────────────────────────────────────────────┘" -ForegroundColor DarkGray
+    Write-Host "    POSITION_INGEST_USD=0.05               " -NoNewline -ForegroundColor Green
+    Write-Host "Budget cap for position must-haves LLM call (wrangler.jsonc var)" -ForegroundColor White
     Write-Host "    CALL_PROVIDER=mock|elevenlabs          " -NoNewline -ForegroundColor Green
-    Write-Host "wrangler.jsonc var" -ForegroundColor White
+    Write-Host "wrangler.jsonc var for verification calls" -ForegroundColor White
     Write-Host "    POST /api/runs/:id/calls               " -NoNewline -ForegroundColor Green
     Write-Host "Draft a verification call" -ForegroundColor White
     Write-Host "    POST /api/calls/:id/approve            " -NoNewline -ForegroundColor Green
@@ -96,6 +100,28 @@ function global:cheatoldboys {
     Write-Host "Call status and result" -ForegroundColor White
     Write-Host "    node scripts/call-smoke.mjs            " -NoNewline -ForegroundColor Green
     Write-Host "live smoke; needs SMOKE_TO_NUMBER + RUN_TOKEN env" -ForegroundColor White
+    Write-Host ""
+    Write-Host "  ┌─────────────────────────────────────────────────────────────────┐" -ForegroundColor DarkGray
+    Write-Host "  │  REGISTRATION                                                  │" -ForegroundColor Yellow
+    Write-Host "  └─────────────────────────────────────────────────────────────────┘" -ForegroundColor DarkGray
+    Write-Host "    GET /register                          " -NoNewline -ForegroundColor Green
+    Write-Host "Recruiter signup form (email, password, name, IČO)" -ForegroundColor White
+    Write-Host "    POST /api/auth/register                " -NoNewline -ForegroundColor Green
+    Write-Host "Create account and organization (201 + Set-Cookie or 409/429)" -ForegroundColor White
+    Write-Host "    GET /login                             " -NoNewline -ForegroundColor Green
+    Write-Host "Recruiter login form" -ForegroundColor White
+    Write-Host "    POST /api/auth/login                   " -NoNewline -ForegroundColor Green
+    Write-Host "Authenticate account (200 + Set-Cookie or 401/429)" -ForegroundColor White
+    Write-Host "    POST /api/auth/logout                  " -NoNewline -ForegroundColor Green
+    Write-Host "Logout (204, clears session cookie)" -ForegroundColor White
+    Write-Host "    GET /api/ares/:ico                     " -NoNewline -ForegroundColor Green
+    Write-Host "Look up company by IČO (200/404/400/502)" -ForegroundColor White
+    Write-Host "    GET /onboarding                        " -NoNewline -ForegroundColor Green
+    Write-Host "Post-signup onboarding (shows company, start form)" -ForegroundColor White
+    Write-Host "    GET /briefs                            " -NoNewline -ForegroundColor Green
+    Write-Host "List organization's research runs (scoped by session)" -ForegroundColor White
+    Write-Host "    pnpm db:migrate:local                  " -NoNewline -ForegroundColor Green
+    Write-Host "Apply 0010_accounts migration (organizations, accounts, sessions, auth_attempts)" -ForegroundColor White
     Write-Host ""
     Write-Host "  ┌─────────────────────────────────────────────────────────────────┐" -ForegroundColor DarkGray
     Write-Host "  │  NAVIGATION                                                    │" -ForegroundColor Yellow

@@ -145,4 +145,4 @@ flowchart LR
 - Hackathon timeline: 8–10 hours for a small team, parallel WP-A through WP-E.
 - Evolution: can become B (add middleware + Access layer) or C (extract to a library) without refactoring.
 
-**Risk register in Option A:** See `plans/008-recruiter-accounts/04-steelman.md` for prosecution and cross-examination.
+**Risk register in Option A:** See `plans/009-recruiter-accounts/04-steelman.md` for prosecution and cross-examination.

@@ -81,4 +81,4 @@ Each iteration, new agent tasks are written for failing checks. Target: two iter
 
 ## Next steps
 
-Pre-mortem: `docs/12-registration-pre-mortem.md`. Architecture dossier: `plans/008-recruiter-accounts/`.
+Pre-mortem: `docs/12-registration-pre-mortem.md`. Architecture dossier: `plans/009-recruiter-accounts/`.
