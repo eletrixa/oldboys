@@ -1,5 +1,5 @@
 /**
- * E2E smoke: a logged-in recruiter sees the start form; a logged-out visitor is sent to /login.
+ * E2E smoke: a logged-in recruiter sees the start form; a logged-out visitor sees the landing, or /login with a position.
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  e2e/home.spec.ts
@@ -7,6 +7,7 @@
  * Tested:  n/a (this is the test)
  *
  * Key responsibilities:
+ * - Anonymous `/` shows the landing with Create an account and Log in
  * - Anonymous `/?positionId=x` lands on `/login?next=...`
  * - After registering, heading, profile URL input, submit button and the Positions link are present
  *
@@ -19,6 +20,13 @@ import { registerAndLogin } from "./session";
 test("logged-out visitors go to login and keep the position", async ({ page }) => {
   await page.goto("/?positionId=abc");
   await expect(page).toHaveURL(/\/login\?next=%2F%3FpositionId%3Dabc$/);
+});
+
+test("logged-out visitors see the landing", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.getByRole("heading", { level: 1 })).toContainText("interview knowing");
+  await expect(page.getByRole("main").getByRole("link", { name: "Create an account" }).first()).toHaveAttribute("href", "/register");
+  await expect(page.getByRole("main").getByRole("link", { name: "Log in" }).first()).toHaveAttribute("href", "/login");
 });
 
 test("home page renders the start form", async ({ page }) => {

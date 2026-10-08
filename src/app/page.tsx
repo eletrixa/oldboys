@@ -1,15 +1,15 @@
 /**
- * Home page: Radar intro, how the brief is made, and the start form.
+ * Home page: the public landing for logged-out visitors; Radar intro, how the brief is made, and the start form once logged in.
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/page.tsx
- * Deps:    next, next/link, ./start-form, ./login/next-path, ./api/_lib/current-user, ./ui
+ * Deps:    next, next/link, ./start-form, ./login/next-path, ./api/_lib/current-user, ./ui, ./landing/landing
  * Tested:  n/a
  *
  * Key responsibilities:
  * - Editorial heading, sub copy and the client start form (Screen 1) in a white card
  * - Three plain steps (what Radar does) and the "never a score" line
- * - Logged-out visitors go to /login with `?positionId=` carried in `next`
+ * - Logged-out visitors see the landing (src/app/landing); with `?positionId=` they go to /login with it carried in `next`
  * - Small link to /positions (pick or add a position; /roles stays reachable by URL)
  *
  * Design constraints:
@@ -19,6 +19,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { currentUser } from "./api/_lib/current-user";
+import { Landing } from "./landing/landing";
 import { loginHref } from "./login/next-path";
 import { StartForm } from "./start-form";
 import { CARD, Eyebrow, LINK } from "./ui";
@@ -33,7 +34,8 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
   const user = await currentUser();
   if (user === null) {
     const { positionId } = await searchParams;
-    redirect(loginHref(typeof positionId === "string" && positionId !== "" ? `/?positionId=${encodeURIComponent(positionId)}` : "/"));
+    if (typeof positionId !== "string" || positionId === "") return <Landing />;
+    redirect(loginHref(`/?positionId=${encodeURIComponent(positionId)}`));
   }
   return (
     <main className="mx-auto grid max-w-5xl gap-10 px-4 py-12 md:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] md:items-start md:py-16">

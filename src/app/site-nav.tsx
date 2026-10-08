@@ -7,7 +7,7 @@
  * Tested:  n/a
  *
  * Key responsibilities:
- * - Logged out: Log in, Create account. Logged in: Positions, Roles, Applications, My briefs, organization name, Log out, New brief (primary)
+ * - Logged out: landing anchors (Product, How it works, Trust; md and up), Log in, Create account. Logged in: Positions, Roles, Applications, My briefs, organization name, Log out, New brief (primary)
  *
  * Design constraints:
  * - Server component; rendered inside the layout's header next to the Radar mark
@@ -17,14 +17,19 @@ import Link from "next/link";
 import type { SessionUser } from "@/domain/session";
 import { LogoutButton } from "./logout-button";
 import { NavLink } from "./nav-link";
-import { BTN_SECONDARY } from "./ui";
+import { BTN_QUIET, BTN_SECONDARY } from "./ui";
 
+/** Landing section anchors for logged-out visitors; hidden on phones where the header has room for the two actions only. */
+const ANCHOR = BTN_QUIET.replace("inline-flex", "hidden md:inline-flex");
 
 export function SiteNav({ user }: { user: SessionUser | null }): React.JSX.Element {
   return (
     <nav aria-label="Main" className="flex w-full flex-wrap items-center gap-1 sm:w-auto sm:justify-end">
       {user === null ? (
         <>
+          <Link href="/#product" className={ANCHOR}>Product</Link>
+          <Link href="/#how" className={ANCHOR}>How it works</Link>
+          <Link href="/#trust" className={ANCHOR}>Trust</Link>
           <NavLink href="/login">Log in</NavLink>
           <Link href="/register" className={BTN_SECONDARY}>Create account</Link>
         </>

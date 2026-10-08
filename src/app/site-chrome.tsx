@@ -53,7 +53,7 @@ export function SiteFooter(): React.JSX.Element | null {
   return (
     <footer className="border-t border-divider">
       <p className="mx-auto max-w-5xl px-4 py-6 text-xs text-muted">
-        Radar prepares evidence and never scores people. A person makes every decision. Hackathon prototype.
+        Radar prepares evidence and never scores people. A person makes every decision.
       </p>
     </footer>
   );

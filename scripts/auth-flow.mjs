@@ -57,7 +57,7 @@ try {
   // 1
   await page.goto(base + "/", { waitUntil: "networkidle" });
   const nav = page.locator('nav[aria-label="Main"]');
-  check("1 logged-out / lands on /login", new URL(page.url()).pathname === "/login", page.url());
+  check("1 logged-out / shows the landing", new URL(page.url()).pathname === "/" && (await page.getByRole("heading", { level: 1 }).textContent())?.includes("interview knowing") === true, page.url());
   check("1 nav shows Log in and Create account", (await nav.getByText("Log in").count()) > 0 && (await nav.getByText("Create account").count()) > 0);
   await shot(1, "logged-out");
 
