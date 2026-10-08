@@ -223,7 +223,7 @@ export function RunView({ id }: { id: string }): React.JSX.Element {
         )}
         {cached && (
           <Pill tone="neutral" className="w-fit">
-            CACHED · run from {new Date(state.created_at).toLocaleString()}
+            CACHED · run from {state.created_at.slice(0, 16).replace("T", " ")} UTC
           </Pill>
         )}
         <CostLine cost={state.cost} />

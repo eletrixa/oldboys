@@ -1,22 +1,23 @@
 /**
- * Bearer-guarded route functions of /api/positions: ingest, list, read and edit.
+ * Session-or-bearer guarded route functions of /api/positions: ingest, list, read and edit.
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/api/positions/routes.ts
- * Deps:    src/app/api/_lib/{auth,body,position-body}, ./handler, src/workflow/ingest-position, src/adapters/llm
+ * Deps:    src/app/api/_lib/{session-or-bearer,body,position-body}, ./handler, src/workflow/ingest-position, src/adapters/llm
  * Tested:  src/app/api/positions/__tests__/handler.test.ts
  *
  * Key responsibilities:
- * - `createPositionRoute`, `listPositionsRoute`, `getPositionRoute`, `patchPositionRoute`: bearer first, then body, then the tested function
+ * - `createPositionRoute`, `listPositionsRoute`, `getPositionRoute`, `patchPositionRoute`: session or bearer first, then body, then the tested function
  *
  * Design constraints:
+ * - Positions are team-shared: any logged-in account (or the bearer) sees all of them; there is no organization column
  * - Takes bindings as parameters so tests run under plain Node; no Next.js imports
  * - Every response, errors included, carries `Cache-Control: no-store`, applied once by `guarded`
  */
 import { makeLlmCall } from "@/adapters/llm";
-import { requireBearer } from "@/app/api/_lib/auth";
 import { parseJsonBody } from "@/app/api/_lib/body";
 import { CreatePositionBody, PatchPositionBody } from "@/app/api/_lib/position-body";
+import { requireSessionOrBearer } from "@/app/api/_lib/session-or-bearer";
 import { estimatePositionUsd, ingestCapUsd, ingestPosition, type IngestDeps } from "@/workflow/ingest-position";
 import { getPosition, listPositions, patchPosition } from "./handler";
 
@@ -33,9 +34,9 @@ export type PositionsEnv = {
 const json = (body: unknown, status = 200): Response => Response.json(body, { status });
 const notFound = (): Response => json({ error: "position not found" }, 404);
 
-/** Bearer check, then the handler; whatever it returns is marked no-store. */
+/** Session cookie or bearer check, then the handler; whatever it returns is marked no-store. */
 async function guarded(request: Request, env: PositionsEnv, handle: () => Promise<Response>): Promise<Response> {
-  const res = requireBearer(request, env.RUN_TOKEN) ?? (await handle());
+  const res = (await requireSessionOrBearer(request, env)) ?? (await handle());
   res.headers.set("Cache-Control", "no-store");
   return res;
 }

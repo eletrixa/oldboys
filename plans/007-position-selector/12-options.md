@@ -4,7 +4,7 @@ Three genuinely different ways to give oldboys a position selector. All keep the
 
 ## Option A — "Role text is the position" (do less)
 Keep the peer's `/roles` pages (group by `roleKey(role)`) as the selector. Add only:
-- `investigations.posting_url` (migration 0010, one column) captured on the start form.
+- `investigations.posting_url` (migration 0011, one column) captured on the start form.
 - `/roles/[key]` lists the distinct posting URLs of its runs as outbound links and offers "Research another candidate for this role" → `/?role=…&posting=…` pre-fills the start form.
 - A LinkedIn people-search deep link built from the role text.
 No positions table, no ingest, no families, no change to `role_questions` (each run still derives its own must-haves from the role string).
@@ -22,7 +22,7 @@ flowchart LR
 
 ## Option B — Positions table, strategy-chain ingest, families by enum (boring, Postgres-first shape)
 New aggregate **Position** owning its must-haves.
-- migration 0010: `positions(id, title, family, company, location, board, posting_url, external_id, must_haves_json, source_r2_key, created_at, expires_at)` with UNIQUE `(board, external_id)`; `investigations.position_id` nullable FK; purge list extended.
+- migration 0011: `positions(id, title, family, company, location, board, posting_url, external_id, must_haves_json, source_r2_key, created_at, expires_at)` with UNIQUE `(board, external_id)`; `investigations.position_id` nullable FK; purge list extended.
 - `POST /api/positions` (bearer): body `{postingUrl?, postingText?, title?}`. Ingest = pure `postingFetchPlan(url)` → one of `ats-json` (Greenhouse/Lever/Ashby), `jsonld` (Jobs.cz, careers pages), `linkedin-guest`, `apify:memo23` (only if guest fails and `POSITION_INGEST_USD` allows), or `pasted`. Then `roleQuestions`-style LLM extract with a schema `{title, company, location, family (enum), must_haves[]}` on the cleaned text. The raw payload goes to R2 `positions/<id>.json`; cost and method are recorded in a `position_ledger` row (or `ledger_entries` with `run_id = 'position:<id>'`).
 - Start: `StartRunBody.positionId`; the insert copies `must_haves_json` into `questions_json` and `title` into `role`, so `role_questions` is skipped and every candidate for the position gets the **same** questions.
 - Selector: `/positions` (families → positions, search), `/positions/[id]` = the peer's coverage table filtered by `position_id` (fallback `roleKey` for legacy runs) + "Open posting" + "Search people on LinkedIn" + "Research a candidate" (pre-filled form).

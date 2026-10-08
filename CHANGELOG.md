@@ -5,11 +5,12 @@ All notable changes to oldboys are documented here. The format follows [Keep a C
 ## [Unreleased]
 
 ### Added
-- Position selector ([plans/007-position-selector/](plans/007-position-selector/)): `/positions` lists positions by family with posting links, `/positions/new` ingests a posting from pasted text or a URL (Jobs.cz, Greenhouse, Lever, Ashby, JSON-LD) and extracts up to five must-haves once, `/positions/<id>` shows the posting, a LinkedIn people-search link, editable must-haves and the coverage table of its runs; "Research a candidate" pre-fills the start form and every run started from a position gets the same questions. Migration `0010_positions.sql`; var `POSITION_INGEST_USD`; `pnpm e2e` root Playwright smoke.
+- Position selector ([plans/007-position-selector/](plans/007-position-selector/)): `/positions` lists positions by family with posting links, `/positions/new` ingests a posting from pasted text or a URL (Jobs.cz, Greenhouse, Lever, Ashby, JSON-LD) and extracts up to five must-haves once, `/positions/<id>` shows the posting, a LinkedIn people-search link, editable must-haves and the coverage table of its runs; "Research a candidate" pre-fills the start form and every run started from a position gets the same questions. Migration `0011_positions.sql`; var `POSITION_INGEST_USD`; `pnpm e2e` root Playwright smoke.
 - Profile-first start: candidate search from LinkedIn profile URL or pasted CV, plus role ([plans/006-profile-first/](plans/006-profile-first/))
 - Seed profile step to extract name, location, and LinkedIn from the given input
 - Role overview page (`/roles` and `/roles/<key>`) listing runs and must-have criteria coverage per role
 - GDPR audit record per run: full transparency on data sources, processing, timing, cost, and retention (idea #17)
+- GDPR Art. 15 data access export per run (`GET /api/runs/:id/access-export`, link on the audit page): confirmed sources, linked profiles, claims backed only by confirmed sources, the brief text, purpose, legal basis, controller and deletion date; never namesakes, unconfirmed pages or Art. 9 claims
 - 30-second summary card above the brief: confirmed platforms, role criteria coverage, top gaps and interview question (idea #15)
 - Candidate notice export: polite Markdown copy for the candidate informed under Art. 6(1)(f), with deletion date and correction link (idea #7)
 - Interview kit export: Markdown template for the hiring team with role, profile, cost, coverage checklist, sourced answers, and gaps (idea #6)

@@ -7,7 +7,7 @@
  * Tested:  n/a
  *
  * Key responsibilities:
- * - Submit credentials; on 200 route to / and refresh; map 401 and 429 to calm messages
+ * - Submit credentials; on 200 route to `next` (default /) and refresh; map 401 and 429 to calm messages
  *
  * Design constraints:
  * - Client component; the same message for unknown email and wrong password comes from the server
@@ -25,7 +25,7 @@ const MESSAGE: Record<number, string> = {
   429: "Too many attempts. Please wait 15 minutes.",
 };
 
-export function LoginForm(): React.JSX.Element {
+export function LoginForm({ next = "/" }: { next?: string }): React.JSX.Element {
   const router = useRouter();
   const [status, setStatus] = useState<Status>({ kind: "idle" });
 
@@ -41,7 +41,7 @@ export function LoginForm(): React.JSX.Element {
         body: JSON.stringify({ email: typeof email === "string" ? email.trim() : "", password: typeof password === "string" ? password : "" }),
       });
       if (res.status === 200) {
-        router.push("/");
+        router.push(next);
         router.refresh();
         return;
       }
