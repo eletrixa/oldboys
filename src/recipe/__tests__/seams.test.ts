@@ -9,7 +9,7 @@
 import { describe, expect, it } from "vitest";
 import type { Claim, Source } from "@/domain/claim";
 import { extractClaims } from "@/recipe/seams/extract";
-import { decisionFor, fallbackScores, resolveCandidates } from "@/recipe/seams/resolve";
+import { canonicalProfile, decisionFor, fallbackScores, resolveCandidates } from "@/recipe/seams/resolve";
 import { coverageOf, synthesizeBrief } from "@/recipe/seams/synthesize";
 import { baseContext, fakeLlm, fakePorts } from "@/recipe/__tests__/fakes";
 
@@ -175,5 +175,21 @@ describe("synthesize", () => {
     expect(brief?.not_searched[0]?.reason).toMatch(/^not searched:/);
     expect(brief?.interview_questions.join()).toContain("no public GitHub profile found");
     expect(brief?.interview_questions.join()).not.toContain("not searched");
+  });
+});
+
+describe("canonicalProfile", () => {
+  it("collapses posts, statuses and photos onto the profile they belong to", () => {
+    expect(canonicalProfile("https://www.linkedin.com/posts/josef-buryan_groupon-activity-7312840998689103873-C4IV")).toEqual({
+      url: "https://www.linkedin.com/in/josef-buryan/",
+      handle: "josef-buryan",
+    });
+    expect(canonicalProfile("https://cz.linkedin.com/in/Luk%C3%A1%C5%A1-pokorn%C3%BD-436438295/cs")).toEqual({
+      url: "https://cz.linkedin.com/in/Luk%C3%A1%C5%A1-pokorn%C3%BD-436438295/cs",
+      handle: "lukáš-pokorný-436438295",
+    });
+    expect(canonicalProfile("https://x.com/josefburyan/status/123")).toEqual({ url: "https://x.com/josefburyan", handle: "josefburyan" });
+    expect(canonicalProfile("https://www.instagram.com/p/abc/")).toEqual({ url: "https://www.instagram.com/p/abc/", handle: "abc" });
+    expect(canonicalProfile("https://www.linkedin.com/pub/dir/Lukas/Pokorny")).toEqual({ url: "https://www.linkedin.com/pub/dir/Lukas/Pokorny", handle: null });
   });
 });

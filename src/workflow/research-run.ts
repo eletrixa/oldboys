@@ -40,6 +40,8 @@ export type LineupAnswer = { decisions: { id: string; decision: Candidate["decis
 type Head = { subject: string; anchor: string; goal: GoalId; role: string | null; questions_json: string | null };
 
 const COLLECTOR_KINDS = new Set<Step["kind"]>(["serp", "actor", "ares"]);
+/** Collector steps run concurrently after the lineup; Apify + REST calls are I/O bound and independent. */
+const PARALLEL = 5;
 
 export class ResearchRunWorkflow extends WorkflowEntrypoint<CloudflareEnv, ResearchRunParams> {
   async run(event: Readonly<WorkflowEvent<ResearchRunParams>>, step: WorkflowStep): Promise<void> {
@@ -93,11 +95,7 @@ export class ResearchRunWorkflow extends WorkflowEntrypoint<CloudflareEnv, Resea
     }
 
     const ran = new Set<string>();
-    for (const recipeStep of recipe.steps) {
-      if (recipeStep.kind === "resolve") {
-        await this.resolveWithPause(runId, recipeStep, recipe.questions, step);
-        continue;
-      }
+    const runOne = async (recipeStep: Step): Promise<void> => {
       const result = await this.doStep(runId, recipeStep, recipe.questions, step);
       ran.add(recipeStep.id);
       if (result.skipped !== null) {
@@ -118,7 +116,31 @@ export class ResearchRunWorkflow extends WorkflowEntrypoint<CloudflareEnv, Resea
           }
         }
       }
+    };
+
+    // Before the lineup every step feeds the next (SERP -> candidates), so they run in order. After it the
+    // collectors are independent: run them in batches of PARALLEL so a full recipe stays inside the 2-4 minute promise.
+    let afterResolve = false;
+    let batch: Step[] = [];
+    const flush = async (): Promise<void> => {
+      if (batch.length > 0) await Promise.all(batch.map(runOne));
+      batch = [];
+    };
+    for (const recipeStep of recipe.steps) {
+      if (recipeStep.kind === "resolve") {
+        await this.resolveWithPause(runId, recipeStep, recipe.questions, step);
+        afterResolve = true;
+        continue;
+      }
+      if (afterResolve && COLLECTOR_KINDS.has(recipeStep.kind)) {
+        batch.push(recipeStep);
+        if (batch.length >= PARALLEL) await flush();
+        continue;
+      }
+      await flush();
+      await runOne(recipeStep);
     }
+    await flush();
 
     await step.do("finish", async () => {
       await this.setStatus(runId, "done");

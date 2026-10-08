@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  scripts/ui-flow.mjs
- * Deps:    playwright (extension workspace), system chromium at /usr/bin/chromium
+ * Deps:    @playwright/test from the extension workspace, system chromium at /usr/bin/chromium
  * Tested:  n/a (manual, used by the CEO review loop)
  *
  * Key responsibilities:
@@ -13,7 +13,7 @@
  * Design constraints:
  * - Spends real Apify money through the Worker; never run in CI
  */
-import { chromium } from "@playwright/test";
+import { chromium } from "../extension/node_modules/@playwright/test/index.mjs";
 const [subject, anchor, role, prefix] = process.argv.slice(2);
 const log = (...parts) => process.stdout.write(parts.join(" ") + "\n");
 const browser = await chromium.launch({ executablePath: "/usr/bin/chromium" });

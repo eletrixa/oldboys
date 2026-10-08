@@ -90,7 +90,8 @@ export function RunView({ id }: { id: string }): React.JSX.Element {
 
   // The set to ask is stable (derived from server decisions); answered ones drop out of it.
   const pending = questionsToAsk(state?.candidates ?? [], MAX_QUESTIONS).filter((c) => !(c.id in local) && !(c.id in unsure));
-  const question = pending[0];
+  // Only while the Workflow actually waits; after the answers went out the remaining lineup keeps the server's decision
+  const question = state?.status === "paused" && !sent && !sendFailed ? pending[0] : undefined;
 
   const submit = useCallback(
     async (decisions: Decisions) => {

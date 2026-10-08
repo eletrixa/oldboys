@@ -34,13 +34,38 @@ export function decisionFor(score: number): Candidate["decision"] {
   return "possibly-same-as";
 }
 
-function handleOf(url: string): string | null {
+/**
+ * Profile URL + handle for a social hit. Post, status and photo links collapse onto the profile they belong to,
+ * so one LinkedIn post about the subject yields a `/in/<handle>` candidate the collectors can fetch.
+ */
+export function canonicalProfile(url: string): { url: string; handle: string | null } {
   try {
-    const seg = new URL(url).pathname.split("/").filter(Boolean);
+    const u = new URL(url);
+    const host = u.hostname.replace(/^www\./, "");
+    const seg = u.pathname.split("/").filter(Boolean).map((x) => decodeURIComponent(x));
+    const clean = (h: string) => h.replace(/^@/, "").toLowerCase();
+    if (host.endsWith("linkedin.com")) {
+      if (seg[0] === "in" && seg[1] !== undefined) return { url, handle: clean(seg[1]) };
+      if (seg[0] === "posts" && seg[1] !== undefined) {
+        const h = clean(seg[1].split("_")[0] ?? "");
+        return h.length > 0 ? { url: `https://www.linkedin.com/in/${h}/`, handle: h } : { url, handle: null };
+      }
+      return { url, handle: null };
+    }
+    if ((host === "x.com" || host === "twitter.com") && seg[0] !== undefined && !["search", "hashtag", "i"].includes(seg[0])) {
+      return { url: `https://x.com/${clean(seg[0])}`, handle: clean(seg[0]) };
+    }
+    if (host === "instagram.com" && seg[0] !== undefined && !["p", "reel", "explore"].includes(seg[0])) {
+      return { url: `https://www.instagram.com/${clean(seg[0])}/`, handle: clean(seg[0]) };
+    }
+    if (host === "tiktok.com" && seg[0]?.startsWith("@") === true) {
+      return { url: `https://www.tiktok.com/${seg[0]}`, handle: clean(seg[0]) };
+    }
+    if (host === "github.com" && seg[0] !== undefined) return { url: `https://github.com/${seg[0]}`, handle: seg[0] };
     const last = seg.at(-1) ?? null;
-    return last === null ? null : decodeURIComponent(last).replace(/^@/, "");
+    return { url, handle: last === null ? null : clean(last) };
   } catch {
-    return null;
+    return { url, handle: null };
   }
 }
 
@@ -103,7 +128,10 @@ export async function resolveCandidates(ctx: StepContext, ports: Ports): Promise
     .filter((s) => !known.has(s.url) && !isNoise(s.url))
     .filter((s) => PROFILE_PLATFORMS.has(platformOf(s.url)) || s.excerpt.toLowerCase().includes(surname(ctx.subject)))
     .slice(0, 12)
-    .map((s) => ({ id: ports.newId(), url: s.url, platform: platformOf(s.url), handle: handleOf(s.url), snippet: s.excerpt.split("\n")[0] ?? "" , excerpt: s.excerpt }));
+    .map((s) => {
+      const prof = canonicalProfile(s.url);
+      return { id: ports.newId(), url: prof.url, platform: platformOf(s.url), handle: prof.handle, snippet: s.excerpt.split("\n")[0] ?? "", excerpt: s.excerpt };
+    });
   if (drafts.length === 0) {
     out.notes.push("no profile-like sources to resolve");
     return out;
