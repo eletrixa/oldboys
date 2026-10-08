@@ -14,11 +14,14 @@
   * - evidenceGroup: the heading a confirmed source sits under, from its URL's platform (LinkedIn, X), not the actor
  * - searchedTitle: "Searched, nothing confirmed" when a gap is namesake-only, else "nothing found"
  * - GAP_LABEL, gapLine, searchedEmpty: human gap lines, shared by BriefView and the interview kit
+ * - briefSections (confidence descending, null for briefs stored before sections), confidenceBand, host
+ * - headerText / firstName: the run page title; "the candidate" until the seed step derived a name (plans/006)
+ * - seedHeadline: the headline the seed_profile ledger row recorded
  *
  * Design constraints:
  * - Pure (types plus the pure platformOf), so both the route handler and client code can use it
  */
-import type { Brief, Candidate, Claim } from "@/domain/claim";
+import type { Brief, BriefSection, Candidate, Claim } from "@/domain/claim";
 import type { RunCost } from "@/domain/run-cost";
 import { platformOf } from "@/recipe/sources/types";
 
@@ -26,7 +29,10 @@ export type RunStatus = "queued" | "running" | "paused" | "done" | "failed";
 
 export type RunState = {
   id: string;
+  /** "" until the seed step derived the name from the LinkedIn profile or CV (profile-first runs). */
   subject: string;
+  /** Headline the seed step read from the given profile or CV; null when none (or older runs). */
+  headline: string | null;
   /** Role the manager is hiring for (hiring goal); null for other goals and older runs. */
   role: string | null;
   /** ISO timestamp the run was created; drives the CACHED label. */
@@ -85,7 +91,7 @@ export function sortLineup<T extends Pick<Candidate, "platform" | "decision" | "
 
 /** Index of the human row a ledger step belongs to; unknown steps are treated as collectors. */
 function rowOf(step: string): number {
-  if (step.startsWith("serp") || step.startsWith("load") || step.startsWith("role") || step.startsWith("social")) return 0;
+  if (step.startsWith("seed") || step.startsWith("serp") || step.startsWith("load") || step.startsWith("role") || step.startsWith("social")) return 0;
   if (step.startsWith("resolve")) return 1;
   if (step.startsWith("extract") || step.startsWith("verify")) return 3;
   if (step.startsWith("synthesize")) return 4;
@@ -124,6 +130,33 @@ export function stepRows(state: Pick<RunState, "status" | "step" | "mentions" | 
   return Array.from({ length: 5 }, (_, i) => (i < current ? "done" : i === current ? "active" : "todo"));
 }
 
+/** First name for copy, or null while the name is not known yet (profile-first run before the seed step). */
+export function firstName(subject: string): string | null {
+  const first = subject.trim().split(/\s+/)[0] ?? "";
+  return first === "" ? null : first;
+}
+
+/** Run page title: "<First>'s brief" / "Putting together <First>'s brief", or "the candidate" / "the brief" before the name is known. */
+export function headerText(subject: string, done: boolean): string {
+  const first = firstName(subject);
+  if (first === null) return done ? "The candidate's brief" : "Putting together the brief";
+  return done ? `${first}'s brief` : `Putting together ${first}'s brief`;
+}
+
+/** Last headline a seed_profile ledger row recorded (ref.headline), null when none. */
+export function seedHeadline(rows: readonly { step: string; ref_json: string | null }[]): string | null {
+  for (const row of [...rows].reverse()) {
+    if (row.step !== "seed_profile" || row.ref_json === null) continue;
+    try {
+      const ref: unknown = JSON.parse(row.ref_json);
+      if (typeof ref === "object" && ref !== null && "headline" in ref && typeof ref.headline === "string" && ref.headline !== "") return ref.headline;
+    } catch {
+      continue;
+    }
+  }
+  return null;
+}
+
 /** Gap list heading: "nothing confirmed" once any searched source returned only namesakes, else "nothing found". */
 export function searchedTitle(gaps: readonly { reason: string }[]): string {
   return gaps.some((g) => g.reason.includes("none confirmed")) ? "Searched, nothing confirmed" : "Searched, nothing found";
@@ -159,3 +192,27 @@ export function searchedEmpty(brief: Brief): Gap[] {
 
 /** "LinkedIn: no public profile" — step id replaced by its human label. */
 export const gapLine = (g: Gap): string => `${GAP_LABEL[g.source] ?? g.source}: ${g.reason}`;
+
+/** Sections by confidence, highest first; null when the stored brief predates sections (render per question instead). */
+export function briefSections(brief: Brief): BriefSection[] | null {
+  const b: unknown = brief;
+  if (typeof b !== "object" || b === null || !("sections" in b) || !Array.isArray(b.sections) || b.sections.length === 0) return null;
+  return (b.sections as BriefSection[]).toSorted((x, y) => y.confidence - x.confidence);
+}
+
+export type ConfidenceBand = "strong" | "fair" | "weak";
+
+/** >= 0.75 strong, 0.5 to 0.74 fair, below 0.5 weak. */
+export function confidenceBand(confidence: number): ConfidenceBand {
+  if (confidence >= 0.75) return "strong";
+  return confidence >= 0.5 ? "fair" : "weak";
+}
+
+/** "linkedin.com" for a link label; the raw string when it does not parse. */
+export function host(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return url;
+  }
+}

@@ -1,5 +1,5 @@
 /**
- * Zod schemas for the core aggregates: Investigation, Candidate, Source, Claim, Gap, LedgerEntry.
+ * Zod schemas for the core aggregates: Investigation, Candidate, Source, Claim, Gap, LedgerEntry, Brief (+ BriefSection).
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/domain/claim.ts
@@ -132,6 +132,21 @@ export type LedgerEntry = z.infer<typeof LedgerEntry>;
 export const Coverage = z.enum(["evidenced", "partial", "none"]);
 export type Coverage = z.infer<typeof Coverage>;
 
+/**
+ * One block of the finished brief, cut by what the run actually found (a question with claims, social presence,
+ * or a platform with confirmed sources but no claim). `confidence` is deterministic (src/domain/confidence.ts).
+ */
+export const BriefSection = z.object({
+  id: z.string().min(1),
+  title: z.string().min(1),
+  confidence: z.number().min(0).max(1),
+  confidence_reason: z.string(),
+  claim_ids: z.array(z.string().min(1)),
+  source_ids: z.array(z.string().min(1)),
+  summary: z.string(),
+});
+export type BriefSection = z.infer<typeof BriefSection>;
+
 /** The hiring-manager brief: one block per question (= must-have), gaps turned into interview questions. */
 export const Brief = z.object({
   run_id: z.string().min(1),
@@ -161,5 +176,7 @@ export const Brief = z.object({
   headline: z.string().max(160).nullable().default(null),
   /** "Confirmed profile mentions <place>, you entered <anchor>": deterministic anchor contradiction, null when none. Defaulted for older briefs. */
   location_note: z.string().nullable().default(null),
+  /** Findings by section, built deterministically in the synthesize seam. Defaulted for older briefs. */
+  sections: z.array(BriefSection).default([]),
 });
 export type Brief = z.infer<typeof Brief>;

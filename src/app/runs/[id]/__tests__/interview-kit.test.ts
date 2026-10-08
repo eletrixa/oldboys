@@ -10,6 +10,7 @@
  * - interviewKit: null without a brief; header, coverage, checklist, gaps, footer in order
  * - Empty lists leave no heading; degraded brief shows the note, role criteria and evidence links
  * - also_found never reaches the kit; model text is escaped and non-http links are dropped
+ * - Sections replace coverage, by confidence with the reason; facts before inferences; source-only links
  * - kitFileName: run id prefix only
  *
  * Design constraints:
@@ -39,12 +40,14 @@ const brief = (over: Partial<Brief> = {}): Brief => ({
   also_found: [{ step: "apify/google-search-scraper", url: "https://namesake.example/jan", excerpt: "Another Jan Novak, dentist" }],
   headline: "Senior Data Engineer at Acme",
   location_note: null,
+  sections: [],
   ...over,
 });
 
 const run = (over: Partial<RunState> = {}): RunState => ({
   id: "0123456789abcdef",
   subject: "Jan Novak",
+  headline: null,
   role: "Senior Data Engineer",
   created_at: "2026-10-08T21:00:00.000Z",
   status: "done",
@@ -115,6 +118,26 @@ describe("interviewKit", () => {
     expect(md).toContain("- jnovak: 12 repositories (<https://github.com/jnovak>)");
     expect(md).not.toContain("Coverage: evidenced");
     expect(md).toContain("2 items removed (protected categories)");
+  });
+
+  it("lists sections by confidence instead of coverage, facts before inferences", () => {
+    const section = (id: string, title: string, confidence: number, claim_ids: string[], source_ids: string[]): Brief["sections"][number] => ({
+      id, title, confidence, confidence_reason: `reason ${id}`, claim_ids, source_ids, summary: `summary ${id}`,
+    });
+    const md = kit({
+      claims: [claim("c2", "Probably leads a team", [], "INFERENCE"), claim("c1", "Works at Acme since 2021", ["s1"])],
+      sources: [{ id: "s1", url: "https://www.linkedin.com/in/jnovak" }, { id: "s2", url: "https://www.instagram.com/jnovak" }],
+      brief: brief({
+        sections: [section("social-presence", "Social presence", 0.4, [], ["s2"]), section("mh-exp", "Data engineering", 0.82, ["c2", "c1"], ["s1"])],
+      }),
+    });
+    expect(md).toContain("## What the research found");
+    expect(md).not.toContain("Coverage: evidenced");
+    expect(md.indexOf("### Data engineering")).toBeLessThan(md.indexOf("### Social presence"));
+    expect(md).toContain("Research confidence: 82% (strong), reason mh-exp");
+    expect(md).toContain("Research confidence: 40% (weak), reason social-presence");
+    expect(md.indexOf("- FACT: Works at Acme")).toBeLessThan(md.indexOf("- INFERENCE: Probably leads a team"));
+    expect(md).toContain("- <https://www.instagram.com/jnovak>");
   });
 
   it("never includes unconfirmed namesake hits", () => {

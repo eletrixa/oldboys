@@ -42,6 +42,7 @@ const brief = (over: Partial<Brief> = {}): Brief => ({
   also_found: [{ step: "apify/google-search-scraper", url: "https://www.instagram.com/someone", excerpt: "Another Jan Novak" }],
   headline: "Senior Data Engineer at Acme",
   location_note: null,
+  sections: [],
   ...over,
 });
 
@@ -49,6 +50,7 @@ const run = (over: Partial<RunState> = {}): RunState => ({
   id: "0123456789abcdef",
   subject: "Jan Novak",
   role: "Senior Data Engineer",
+  headline: null,
   created_at: "2026-10-08T21:00:00.000Z",
   status: "done",
   step: null,

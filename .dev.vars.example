@@ -6,3 +6,7 @@ ELEVENLABS_API_KEY=
 RUN_TOKEN=
 # HMAC secret shown when the post-call webhook is created in the ElevenLabs workspace settings
 ELEVENLABS_WEBHOOK_SECRET=
+# Optional: GitHub token (no scopes) lifts api.github.com from the shared anonymous limit to 5000 req/h
+GITHUB_TOKEN=
+# Optional: Stack Exchange app key (stackapps.com) lifts the 300 req/day per IP quota
+STACKEXCHANGE_KEY=

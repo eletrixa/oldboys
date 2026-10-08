@@ -10,7 +10,8 @@
  * - Read investigation, candidates, claims, sources, brief and last ledger step from D1
  * - Questions = recipe base questions + investigations.questions_json; mentions = COUNT(sources)
  * - step_index/step_count from the recipe; failed_step = first recipe step without a ledger row on a failed run
- * - role = investigations.role (the brief's "Hiring for" line)
+ * - role = investigations.role (the brief's "Hiring for" line); subject is "" until the seed step derived it;
+ *   headline = what the seed_profile ledger row recorded (plans/006)
  * - cost = runCost over the ledger rows (seq order) from investigations.created_at
  *
  * Design constraints:
@@ -21,7 +22,7 @@ import type { Brief, Candidate, Claim } from "@/domain/claim";
 import { GoalId } from "@/domain/claim";
 import { type CostRow, runCost } from "@/domain/run-cost";
 import { recipeFor } from "@/recipe/goals";
-import type { RunState, RunStatus } from "@/app/runs/[id]/state";
+import { type RunState, type RunStatus, seedHeadline } from "@/app/runs/[id]/state";
 
 type HeadRow = {
   id: string;
@@ -91,6 +92,7 @@ export async function GET(
   const state: RunState = {
     id: head.id,
     subject: head.subject,
+    headline: seedHeadline(ledger.results),
     role: head.role,
     created_at: head.created_at,
     status: head.status,

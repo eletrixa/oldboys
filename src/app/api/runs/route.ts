@@ -3,12 +3,13 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/api/runs/route.ts
- * Deps:    @opennextjs/cloudflare (getCloudflareContext), zod, src/app/api/_lib/auth, bindings DB + RESEARCH_RUN, secret RUN_TOKEN
- * Tested:  n/a
+ * Deps:    @opennextjs/cloudflare (getCloudflareContext), src/app/api/_lib/{auth,body,run-body}, bindings DB + RESEARCH_RUN, secret RUN_TOKEN
+ * Tested:  body contract in src/app/api/_lib/__tests__/run-body.test.ts; handler n/a
  *
  * Key responsibilities:
  * - Bearer auth against secret RUN_TOKEN (401 when missing or wrong, 503 when the secret is unset)
- * - Body validation with Zod; 400 on bad input
+ * - Body validation (StartRunBody, plans/006): profileUrl or cvText or subject + anchor; 400 on bad input
+ * - Profile-first runs insert subject "" / anchor ""; the Workflow's seed_profile step fills them
  * - Optional sourceUrl (browser extension): same page + goal within 24 h returns the earlier run (200)
  * - Shared-token cap: more than RUNS_PER_HOUR_CAP runs in the last hour → 429; START_PER_HOUR_CAP for the public form
  * - runId == Workflow instance id == investigations.id
@@ -18,20 +19,10 @@
  * - Budget defaults come from vars RUN_BUDGET_USD / RUN_BUDGET_CALLS, never from the client
  */
 import { getCloudflareContext } from "@opennextjs/cloudflare";
-import { z } from "zod";
 import { requireBearer } from "@/app/api/_lib/auth";
 import { parseJsonBody } from "@/app/api/_lib/body";
-import { GoalId } from "@/domain/claim";
+import { StartRunBody } from "@/app/api/_lib/run-body";
 import { dedupeSince, RUNS_PER_HOUR_CAP, START_PER_HOUR_CAP } from "@/domain/run-status";
-
-const StartRunBody = z.object({
-  subject: z.string().trim().min(1).max(200),
-  anchor: z.string().trim().min(1).max(200),
-  goal: GoalId,
-  sourceUrl: z.url().max(500).optional(),
-  /** Free-text role the manager is hiring for; drives the must-have questions (hiring goal). */
-  role: z.string().trim().min(1).max(300).optional(),
-});
 
 export async function POST(request: Request): Promise<Response> {
   const { env } = getCloudflareContext();
@@ -76,13 +67,13 @@ export async function POST(request: Request): Promise<Response> {
   const budgetCalls = Number(env.RUN_BUDGET_CALLS);
 
   await env.DB.prepare(
-    `INSERT INTO investigations (id, subject, anchor, goal, status, budget_usd, budget_calls, created_at, source_url, role, via)
-     VALUES (?, ?, ?, ?, 'queued', ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO investigations (id, subject, anchor, goal, status, budget_usd, budget_calls, created_at, source_url, role, via, profile_url, cv_text)
+     VALUES (?, ?, ?, ?, 'queued', ?, ?, ?, ?, ?, ?, ?, ?)`,
   )
     .bind(
       id,
-      parsed.data.subject,
-      parsed.data.anchor,
+      parsed.data.subject ?? "",
+      parsed.data.anchor ?? "",
       parsed.data.goal,
       budgetUsd,
       budgetCalls,
@@ -90,6 +81,8 @@ export async function POST(request: Request): Promise<Response> {
       parsed.data.sourceUrl ?? null,
       parsed.data.role ?? null,
       via,
+      parsed.data.profileUrl ?? null,
+      parsed.data.cvText ?? null,
     )
     .run();
 

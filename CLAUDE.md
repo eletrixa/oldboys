@@ -1,10 +1,10 @@
 # oldboys — agent context
 
 ## Product
-Hackathon Case 01 (Apify): social media deep research. Input: a person or organization, one anchor (city, website or IČO) and a goal. Output: a report where every claim links to a source, FACT is split from INFERENCE, gaps are stated, namesakes are handled, and a different goal yields different substance. Judging: value 35, originality 25, e2e 20, tech 10, honesty 10. Brief: `docs/brief.md`.
+Hackathon Case 01 (Apify): social media deep research. Input (hiring, plans/006): the candidate's LinkedIn profile URL or a pasted CV, plus the role; name, location and employer are derived from it and the given profile is the confirmed identity (the extension, curl and due-diligence still send a subject + anchor pair). Output: a report where every claim links to a source, FACT is split from INFERENCE, gaps are stated, namesakes are handled, and a different goal yields different substance. Judging: value 35, originality 25, e2e 20, tech 10, honesty 10. Brief: `docs/brief.md`.
 
 ## Binding decisions
-001 (`plans/001-deep-research-arch/00-SYNTHESIS.md`) domain, 002 (`plans/002-cloudflare-platform/`) platform, 005 (`plans/005-call-verification/`) verification calls. Where they conflict, 002 wins. Ops runbook for calls: `docs/ops/call-verification.md`.
+001 (`plans/001-deep-research-arch/00-SYNTHESIS.md`) domain, 002 (`plans/002-cloudflare-platform/`) platform, 005 (`plans/005-call-verification/`) verification calls, 006 (`plans/006-profile-first/`) profile-first start. Where they conflict, 002 wins. Ops runbook for calls: `docs/ops/call-verification.md`.
 
 | Topic | Decision |
 |---|---|
@@ -24,7 +24,7 @@ Hackathon Case 01 (Apify): social media deep research. Input: a person or organi
 
 ## Stack and bindings
 Next.js 16 on Workers via `@opennextjs/cloudflare`; `ai` + `@ai-sdk/anthropic`; `apify-client`; Zod; Vitest; pnpm; Node 26 locally, 22 in CI.
-Bindings in `wrangler.jsonc`: `DB` (D1), `SOURCES` (R2), `RESEARCH_RUN` and `VERIFY_CALL` (Workflows), `ASSETS`. Vars: `LLM_MODEL_PRIMARY=claude-opus-5-5`, `LLM_MODEL_VERIFY=claude-sonnet-5-5`, `RUN_BUDGET_USD`, `RUN_BUDGET_CALLS`, `CALL_PROVIDER` (`mock`|`elevenlabs`), `CALL_BUDGET_USD`, `RUN_CALL_MAX`, `ELEVENLABS_AGENT_ID`, `ELEVENLABS_PHONE_NUMBER_ID`. Secrets: `ANTHROPIC_API_KEY`, `APIFY_TOKEN`, `RUN_TOKEN` (bearer for POST /api/runs and the call routes), `ELEVENLABS_API_KEY` and `ELEVENLABS_WEBHOOK_SECRET` (live calls only).
+Bindings in `wrangler.jsonc`: `DB` (D1), `SOURCES` (R2), `RESEARCH_RUN` and `VERIFY_CALL` (Workflows), `ASSETS`. Vars: `LLM_MODEL_PRIMARY=claude-opus-5-5`, `LLM_MODEL_VERIFY=claude-sonnet-5-5`, `RUN_BUDGET_USD`, `RUN_BUDGET_CALLS`, `CALL_PROVIDER` (`mock`|`elevenlabs`), `CALL_BUDGET_USD`, `RUN_CALL_MAX`, `ELEVENLABS_AGENT_ID`, `ELEVENLABS_PHONE_NUMBER_ID`. Secrets: `ANTHROPIC_API_KEY`, `APIFY_TOKEN`, `RUN_TOKEN` (bearer for POST /api/runs and the call routes), `ELEVENLABS_API_KEY` and `ELEVENLABS_WEBHOOK_SECRET` (live calls only); optional `GITHUB_TOKEN` and `STACKEXCHANGE_KEY` (added by `makeFetchJson` for api.github.com / api.stackexchange.com only).
 Worker entry `src/worker.ts` re-exports the OpenNext `fetch` and exports `ResearchRunWorkflow` and `VerificationCallWorkflow`. The Workflow imports only `src/domain/*` and `src/recipe/*`, never Next.js.
 
 ## Scripts (pnpm)
@@ -75,7 +75,7 @@ Every change to `src/`, `migrations/`, `scripts/` or any root config must pass `
 - Run `pnpm check` yourself after editing; do not wait for the hook.
 - Never skip or weaken a test, lint rule or the hook to get green. Fix the code.
 - New code under `src/domain` and `src/recipe` ships with a Vitest test next to it (`__tests__/`).
-- Agents deploy, migrate remote D1, touch Worker secrets or push only when Robert asks for it in the current task. Reading `.dev.vars` or `~/s` is denied in `.claude/settings.json`.
+- Agents deploy, migrate remote D1, touch Worker secrets, read `.dev.vars` or a single variable from `~/s`, or push only when Robert asks for it in the current task; never print or copy a secrets file.
 - `pnpm exec wrangler deploy --dry-run --outdir <scratch>` is the allowed way to prove the Worker still bundles.
 
 ## Known gotchas
@@ -85,3 +85,4 @@ Every change to `src/`, `migrations/`, `scripts/` or any root config must pass `
 - `typescript` stays on 6.x: typescript-eslint's peer range is `<6.1.0`, and `pnpm lint` (strictTypeChecked) is part of the gate.
 - ESLint runs typescript-eslint `strictTypeChecked` + `stylisticTypeChecked` with no `warn` level; every finding fails `pnpm check`.
 - `POST /api/runs` needs `Authorization: Bearer <RUN_TOKEN>`; the value lives in `~/s/oldboys/.env` and in the Worker secret.
+- Without `GITHUB_TOKEN` the Worker gets HTTP 403 from api.github.com (anonymous limit shared by all Workers egress IPs); without `STACKEXCHANGE_KEY` Stack Exchange may answer 400 `throttle_violation`. `fetchJson` puts the first 160 body characters in the ledger note.

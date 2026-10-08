@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/recipe/seams/synthesize.ts
- * Deps:    zod, src/domain/art9
+ * Deps:    zod, src/domain/art9, src/recipe/seams/sections
  * Tested:  src/recipe/__tests__/seams.test.ts
  *
  * Key responsibilities:
@@ -22,6 +22,7 @@
  * - Evidence dedupe ignores trailing "...", "…", "Read more", "See more", "Více" and keeps the longer excerpt
  * - `location_note`: a merged profile names a known Czech city/region and never the anchor (stated, nothing deleted)
  * - Facebook: a Facebook candidate adds a static not_searched line (no collector; public pages need a login)
+ * - `sections`: findings cut by what was found, confidence computed deterministically (seams/sections.ts), never by the model
  */
 import { z } from "zod";
 import { containsArt9Topic } from "@/domain/art9";
@@ -29,6 +30,7 @@ import type { Brief, Candidate, Claim, Coverage, Source } from "@/domain/claim";
 import type { Ports } from "@/domain/ports";
 import { emptyOutcome } from "@/recipe/runner";
 import { PLATFORM_RANK, profileKey } from "@/recipe/seams/resolve";
+import { sectionsOf } from "@/recipe/seams/sections";
 import { platformOf, type StepContext, type StepOutcome } from "@/recipe/sources/types";
 
 const Protected = z.array(z.object({ id: z.string(), protected: z.boolean() }));
@@ -145,8 +147,13 @@ function uniqueRows(sources: readonly Source[]): Brief["evidence"] {
   return [...byKey.values()].slice(0, EVIDENCE_MAX);
 }
 
+/** Merged-identity sources whose profile the manager did not reject: the only ones a brief may present as found. */
+function confirmedSources(ctx: StepContext): Source[] {
+  return ctx.sources.filter(notRejected(ctx)).filter(confirmed);
+}
+
 export function evidenceOf(ctx: StepContext): Brief["evidence"] {
-  return uniqueRows(ctx.sources.filter(notRejected(ctx)).filter(confirmed));
+  return uniqueRows(confirmedSources(ctx));
 }
 
 /** Unverified name-search hits: surfaced for the reader, never fed to the model. */
@@ -283,12 +290,13 @@ export async function synthesizeBrief(ctx: StepContext, ports: Ports): Promise<S
   const fallbackSummary = (cs: readonly Claim[]): string =>
     [`AI summary unavailable: ${degraded ?? "no summary returned"}.`, ...cs.map((c) => c.text)].join(" ");
 
+  const perQuestion: Brief["per_question"] = ctx.questions.map((q) => {
+    const cs = byQ.get(q.id) ?? [];
+    return { question_id: q.id, coverage: coverageOf(cs), claim_ids: cs.map((c) => c.id), summary: summaries.get(q.id)?.summary ?? fallbackSummary(cs) };
+  });
   const brief: Brief = {
     run_id: ctx.runId,
-    per_question: ctx.questions.map((q) => {
-      const cs = byQ.get(q.id) ?? [];
-      return { question_id: q.id, coverage: coverageOf(cs), claim_ids: cs.map((c) => c.id), summary: summaries.get(q.id)?.summary ?? fallbackSummary(cs) };
-    }),
+    per_question: perQuestion,
     interview_questions:
       degraded === null
         ? ctx.questions.map((q) => summaries.get(q.id)?.interview_question ?? null).filter((x): x is string => x !== null)
@@ -305,6 +313,7 @@ export async function synthesizeBrief(ctx: StepContext, ports: Ports): Promise<S
     also_found: alsoFoundOf(ctx),
     headline: headlineOf(ctx.candidates),
     location_note: locationNoteOf(ctx.anchor, ctx.candidates, ctx.sources),
+    sections: sectionsOf(ctx.questions, kept, perQuestion, ctx.sources, confirmedSources(ctx)),
   };
   out.brief = brief;
   out.empty = false;

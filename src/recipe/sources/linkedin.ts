@@ -8,23 +8,38 @@
  *
  * Key responsibilities:
  * - Request all candidate LinkedIn URLs in one actor run; parse each profile into one Source
+ * - `harvestRequest` / `harvestProfiles`: shared with the seed seam (plans/006), which scrapes the manager's profile URL first
+ * - Never scrape a URL twice: profiles already fetched at seed are skipped and reported via `alreadyFetched`
  *
  * Design constraints:
  * - Pure: no network; the runner performs the actor call. Parsing is lenient (unknown fields ignored)
  * - Input fields verified against https://apify.com/harvestapi/linkedin-profile-scraper/input-schema and https://apify.com/apimaestro/linkedin-profile-detail.md
  */
 import { z } from "zod";
+import type { Source } from "@/domain/claim";
+import { normalizeLinkedinProfile } from "@/domain/profile-url";
 import { lines, txt } from "@/recipe/sources/text";
-import type { Collector, StepContext } from "@/recipe/sources/types";
+import type { Collector, CollectorRequest, StepContext } from "@/recipe/sources/types";
 import { clip, identityFor } from "@/recipe/sources/types";
 
 const MODE = "Profile details no email ($4 per 1k)";
+export const HARVEST_ACTOR = "harvestapi/linkedin-profile-scraper";
+
+/** Merged LinkedIn profile sources already in the run (the seed step scraped the manager's profile URL). */
+function fetchedSources(ctx: StepContext): Source[] {
+  return ctx.sources.filter((s) => s.identity === "merged" && s.actor === HARVEST_ACTOR);
+}
 
 function linkedinUrls(ctx: StepContext): string[] {
+  const fetched = new Set(fetchedSources(ctx).map((s) => normalizeLinkedinProfile(s.url)));
   const urls = ctx.candidates
     .filter((c) => c.platform === "linkedin" && (c.decision === "merge" || c.decision === "possibly-same-as"))
-    .flatMap((c) => c.profile_urls.filter((u) => u.includes("linkedin.com/in/")));
+    .flatMap((c) => c.profile_urls.filter((u) => u.includes("linkedin.com/in/") && !fetched.has(normalizeLinkedinProfile(u))));
   return [...new Set(urls)];
+}
+
+export function harvestRequest(urls: string[]): Extract<CollectorRequest, { via: "actor" }> {
+  return { via: "actor", actor: HARVEST_ACTOR, input: { urls, profileScraperMode: MODE }, maxTotalChargeUsd: 0.05, timeoutSecs: 45 };
 }
 
 const Loose = z.unknown().optional();
@@ -51,38 +66,47 @@ function eduLine(school: unknown, degree: unknown, field: unknown): string {
   return [txt(school), txt(degree), txt(field)].filter(Boolean).join(", ");
 }
 
+export type HarvestParsed = {
+  url: string;
+  excerpt: string;
+  raw: unknown;
+  name: string;
+  headline: string;
+  location: string;
+  employer: string;
+};
+
+/** Lenient parse of harvestapi items into excerpt plus the identity fields the seed step needs. */
+export function harvestProfiles(payload: unknown): HarvestParsed[] {
+  const items = z.array(HarvestProfile).safeParse(payload);
+  if (!items.success) return [];
+  return items.data.map((p) => {
+    const name = [p.firstName, p.lastName].filter(Boolean).join(" ");
+    const cur = p.experience[0];
+    const current = cur ? `Current: ${expLine(cur.position ?? cur.title, cur.companyName, "", "")}` : "";
+    const exp = p.experience.slice(0, 5).map((x) => expLine(x.position ?? x.title, x.companyName, x.startDate, x.endDate));
+    const edu = p.education.slice(0, 3).map((x) => eduLine(x.schoolName ?? x.school, x.degree, x.fieldOfStudy ?? x.field));
+    const location = txt(p.location);
+    return {
+      url: p.linkedinUrl,
+      excerpt: clip(lines([name, p.headline ?? "", location, current, ...exp, ...edu, `Skills: ${String(p.skills.length)}`])),
+      raw: p,
+      name,
+      headline: p.headline?.trim() ?? "",
+      location,
+      employer: cur ? txt(cur.companyName) : "",
+    };
+  });
+}
+
 export const linkedinProfile: Collector = {
-  id: "harvestapi/linkedin-profile-scraper",
+  id: HARVEST_ACTOR,
   requests: (ctx) => {
     const urls = linkedinUrls(ctx);
-    if (urls.length === 0) return [];
-    return [
-      {
-        via: "actor",
-        actor: "harvestapi/linkedin-profile-scraper",
-        input: { urls, profileScraperMode: MODE },
-        maxTotalChargeUsd: 0.05,
-        timeoutSecs: 45,
-      },
-    ];
+    return urls.length === 0 ? [] : [harvestRequest(urls)];
   },
-  parse: (payload, ctx) => {
-    const items = z.array(HarvestProfile).safeParse(payload);
-    if (!items.success) return [];
-    return items.data.map((p) => {
-      const name = [p.firstName, p.lastName].filter(Boolean).join(" ");
-      const cur = p.experience[0];
-      const current = cur ? `Current: ${expLine(cur.position ?? cur.title, cur.companyName, "", "")}` : "";
-      const exp = p.experience.slice(0, 5).map((x) => expLine(x.position ?? x.title, x.companyName, x.startDate, x.endDate));
-      const edu = p.education.slice(0, 3).map((x) => eduLine(x.schoolName ?? x.school, x.degree, x.fieldOfStudy ?? x.field));
-      return {
-        url: p.linkedinUrl,
-        excerpt: clip(lines([name, p.headline ?? "", txt(p.location), current, ...exp, ...edu, `Skills: ${String(p.skills.length)}`])),
-        raw: p,
-        identity: identityFor(ctx, p.linkedinUrl),
-      };
-    });
-  },
+  alreadyFetched: fetchedSources,
+  parse: (payload, ctx) => harvestProfiles(payload).map((p) => ({ url: p.url, excerpt: p.excerpt, raw: p.raw, identity: identityFor(ctx, p.url) })),
 };
 
 const MaestroProfile = z.object({

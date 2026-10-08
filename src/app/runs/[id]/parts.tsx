@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/runs/[id]/parts.tsx
- * Deps:    react, src/domain/claim (types), src/domain/run-cost
+ * Deps:    react, src/domain/claim (types), src/domain/run-cost, ./sections, ./state
  * Tested:  n/a
  *
  * Key responsibilities:
@@ -14,6 +14,7 @@
  * - Gap list reads "Searched, nothing confirmed" when any searched gap is a namesake-only one
  * - Confirmed evidence grouped by the URL's platform (evidenceGroup), not by the actor that fetched it
  * - Interview kit buttons (KitActions) under the top line; gap labels come from state.ts (GAP_LABEL, gapLine)
+ * - Findings as sections by confidence (SectionList); briefs stored before sections render per question
  *
  * Design constraints:
  * - No data fetching here; callbacks are passed in by the view
@@ -22,17 +23,10 @@ import type { Brief, Candidate, CandidateDecision } from "@/domain/claim";
 import { formatDuration, type RunCost } from "@/domain/run-cost";
 import { KitActions } from "./kit-actions";
 import { SummaryCard } from "./summary-card";
-import { PLATFORM_LABEL, type RowState, type RunState, evidenceGroup, gapLine, roleCriteria, searchedEmpty, searchedTitle } from "./state";
+import { ClaimList, SectionList } from "./sections";
+import { PLATFORM_LABEL, type RowState, type RunState, briefSections, evidenceGroup, gapLine, host, roleCriteria, searchedEmpty, searchedTitle } from "./state";
 
 const CARD = "rounded-2xl border border-zinc-800 bg-zinc-900/60 p-5";
-
-function host(url: string): string {
-  try {
-    return new URL(url).hostname.replace(/^www\./, "");
-  } catch {
-    return url;
-  }
-}
 
 function Mark({ state }: { state: RowState }): React.JSX.Element {
   if (state === "done") {
@@ -380,6 +374,7 @@ export function BriefView({ state }: { state: RunState }): React.JSX.Element | n
   const urlOf = new Map(state.sources.map((s) => [s.id, s.url]));
   const textOf = new Map(state.questions.map((q) => [q.id, q.text]));
   const allUnavailable = brief.per_question.length > 0 && brief.per_question.every((q) => q.summary.startsWith("AI summary unavailable"));
+  const sections = briefSections(brief);
   return (
     <div id="brief" className="flex scroll-mt-6 flex-col gap-4">
       <SummaryCard state={state} />
@@ -387,38 +382,21 @@ export function BriefView({ state }: { state: RunState }): React.JSX.Element | n
       <KitActions state={state} />
       {brief.degraded !== null && <DegradedNotice reason={brief.degraded} />}
       {brief.degraded !== null && <ConfirmedEvidence items={brief.evidence} />}
+      {sections !== null && <SectionList sections={sections} claims={state.claims} urlOf={urlOf} />}
       {allUnavailable ? (
         <RoleCriteria texts={roleCriteria(state.questions)} />
       ) : (
+        sections === null &&
         brief.per_question.map((q) => (
-        <section key={q.question_id} className={CARD}>
-          <div className="flex items-start justify-between gap-3">
-            <h3 className="font-semibold">{textOf.get(q.question_id) ?? q.question_id}</h3>
-            <span className={`shrink-0 rounded-full px-3 py-1 text-xs ${COVERAGE[q.coverage]}`}>{q.coverage}</span>
-          </div>
-          <p className="mt-2 text-sm text-zinc-300">{q.summary}</p>
-          <ul className="mt-3 flex flex-col gap-3">
-            {state.claims
-              .filter((c) => q.claim_ids.includes(c.id))
-              .map((c) => (
-                <li key={c.id} className="text-sm">
-                  <span className={`mr-2 rounded px-1.5 py-0.5 text-[10px] font-semibold ${c.kind === "INFERENCE" ? "bg-violet-500/15 text-violet-300" : "bg-zinc-800 text-zinc-300"}`}>
-                    {c.kind}
-                  </span>
-                  {c.text}
-                  {c.supports.map((sid) => {
-                    const url = urlOf.get(sid);
-                    return url !== undefined ? (
-                      <a key={sid} href={url} target="_blank" rel="noreferrer" className="ml-2 text-teal-400 underline">
-                        {host(url)}
-                      </a>
-                    ) : null;
-                  })}
-                </li>
-              ))}
-          </ul>
-        </section>
-      ))
+          <section key={q.question_id} className={CARD}>
+            <div className="flex items-start justify-between gap-3">
+              <h3 className="font-semibold">{textOf.get(q.question_id) ?? q.question_id}</h3>
+              <span className={`shrink-0 rounded-full px-3 py-1 text-xs ${COVERAGE[q.coverage]}`}>{q.coverage}</span>
+            </div>
+            <p className="mt-2 text-sm text-zinc-300">{q.summary}</p>
+            <ClaimList claims={state.claims.filter((c) => q.claim_ids.includes(c.id))} urlOf={urlOf} />
+          </section>
+        ))
       )}
       <List title="Interview questions" items={brief.interview_questions} />
       <List title="To verify" items={brief.to_verify} />

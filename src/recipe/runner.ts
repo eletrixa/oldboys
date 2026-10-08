@@ -9,6 +9,8 @@
  * Key responsibilities:
  * - serp/actor/ares steps: collector.requests -> ports (callActor | fetchJson) -> collector.parse -> ports.storeSource
  * - resolve/extract/verify/synthesize: delegate to the LLM seams
+ * - A collector whose sources an earlier step already fetched (`alreadyFetched`) and that has nothing new to request
+ *   returns those sources, not empty, with the note "already fetched at seed" and no request
  * - Budget: refuse a paid (actor) request once calls or USD are exhausted (note + empty); free REST fetches are not gated
  *
  * Design constraints:
@@ -35,6 +37,9 @@ export function emptyOutcome(): StepOutcome {
 
 export async function executeStep(step: Step, ctx: StepContext, ports: Ports): Promise<StepOutcome> {
   switch (step.kind) {
+    case "seed":
+      // Needs the manager's profile URL / CV, which StepContext does not carry: the Workflow's seed_profile step runs it
+      throw new Error(`step ${step.id}: seed runs in the Workflow (seedProfile), not through executeStep`);
     case "serp":
     case "actor":
     case "ares":
@@ -72,6 +77,14 @@ async function collect(step: Step, ctx: StepContext, ports: Ports): Promise<Step
   const collector = collectorFor(step.actor);
   const requests = collector.requests(ctx, step);
   const out = emptyOutcome();
+  const fetched = collector.alreadyFetched?.(ctx) ?? [];
+  if (requests.length === 0 && fetched.length > 0) {
+    // Not a skip: the evidence exists, an earlier step (seed) fetched it. Not empty, so no gap is recorded.
+    out.sources = [...fetched];
+    out.empty = false;
+    out.notes.push("already fetched at seed");
+    return out;
+  }
   if (requests.length === 0) {
     out.notes.push("no confirmed handle or id to look up");
     return out;
