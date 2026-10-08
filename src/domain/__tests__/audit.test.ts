@@ -7,7 +7,8 @@
  * Tested:  n/a (this is the test)
  *
  * Key responsibilities:
- * - Start channel (form / extension / api), legal basis (no "informed" claim) + purpose + notice note, deletion date
+ * - Start channel (form / extension / api), legal basis (no "informed" claim) + purpose + notice note, deletion date,
+ *   retention note (earlier delete on rejection or request; provider transcript retention only after a live call)
  * - Collector status: ok, empty, not searched (budget skip or "not searched:" gap), failed, fallback rows
  * - Reasons are scrubbed (request URLs, e-mails, phone numbers never reach the record)
  * - started_by passes the account name through; processors read Apify / Anthropic / ElevenLabs use from ledger and calls
@@ -17,7 +18,8 @@
  * - Fixtures stay inline
  */
 import { describe, expect, it } from "vitest";
-import { auditRecord, deletionDate, LEGAL_BASIS, NOTICE_NOTE, RETENTION_DAYS, startChannel, type AuditLedgerRow, type AuditRows } from "@/domain/audit";
+import { auditRecord, deletionDate, LEGAL_BASIS, NOTICE_NOTE, RETENTION_DAYS, RETENTION_NOTE, startChannel, type AuditLedgerRow, type AuditRows } from "@/domain/audit";
+import { PROVIDER_RETENTION } from "@/domain/deletion";
 
 const START = "2026-10-08T20:00:00.000Z";
 
@@ -98,7 +100,8 @@ describe("auditRecord", () => {
     expect(a.legal).toEqual({ basis: LEGAL_BASIS, purpose: "Pre-employment screening for the role: Senior backend engineer", notice: NOTICE_NOTE });
     expect(a.legal.basis).not.toContain("informed");
     expect(a.legal.notice).toContain("Not recorded by this tool");
-    expect(a.retention).toEqual({ days: 7, delete_after: "2026-10-15T20:00:00.000Z", note: "Earlier deletion on request (done by hand; no automatic delete on rejection yet)." });
+    expect(a.retention).toEqual({ days: 7, delete_after: "2026-10-15T20:00:00.000Z", note: RETENTION_NOTE });
+    expect(a.retention.note).toContain("rejects the candidate or the candidate asks");
     expect(a.generated_at).toBe("2026-10-08T21:00:00.000Z");
   });
 
@@ -281,6 +284,12 @@ describe("processors", () => {
     expect(live.processors[3]).toMatchObject({ name: "ElevenLabs", used: true, note: "1 call" });
     const mock = auditRecord(rows({ calls: [{ ...call, provider: "mock" }] }));
     expect(mock.processors[3]).toMatchObject({ used: false, note: "mock calls only" });
+  });
+
+  it("adds the call provider's own transcript retention to the retention note only after a live call", () => {
+    const call = { status: "done", created_at: START, finished_at: null };
+    expect(auditRecord(rows({ calls: [{ ...call, provider: "elevenlabs" }] })).retention.note).toBe(`${RETENTION_NOTE} ${PROVIDER_RETENTION}`);
+    expect(auditRecord(rows({ calls: [{ ...call, provider: "mock" }] })).retention.note).toBe(RETENTION_NOTE);
   });
 
   it("never throws on malformed ref_json", () => {

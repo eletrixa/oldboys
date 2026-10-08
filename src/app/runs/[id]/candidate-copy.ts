@@ -8,7 +8,8 @@
  *
  * Key responsibilities:
  * - candidateCopy: who researches (the recruiter's organization when known) and why (role), sources searched and not searched (with scrubbed reasons), links confirmed
- *   as the person's, what the research is used for, "rates the evidence, never you", deletion date, how to object
+ *   as the person's, what the research is used for, "rates the evidence, never you", deletion date (or earlier, once no
+ *   longer considered: the recruiter's "Delete candidate data" on the run page), how to object
  * - Two languages (NoticeLang "en" | "cs", idea #24 part): one NoticeText table per language, same sections and logic;
  *   the Czech table lives in candidate-copy-cs.ts
  * - noticeFileName: candidate-notice-<run id prefix>.md (en) or -cs.md (cs), never the candidate's name
@@ -109,8 +110,8 @@ const EN_TEXT: NoticeText = {
   keepHeading: "How long we keep it",
   keep: (day, days) =>
     day !== null
-      ? `All research data is deleted on ${day} (${String(days)} days after the research).`
-      : `All research data is deleted ${String(days)} days after the research.`,
+      ? `All research data is deleted on ${day} (${String(days)} days after the research), or earlier, as soon as you are no longer considered for the role.`
+      : `All research data is deleted ${String(days)} days after the research, or earlier, as soon as you are no longer considered for the role.`,
   rightsHeading: "Your rights",
   rights: "You can ask us what we found, ask us to correct something, or ask us to delete it now.",
   reply: "Reply to this email",

@@ -9,6 +9,7 @@
  * Key responsibilities:
  * - Server-render the AuditRecord from D1; "Download audit record (.json)" fetches the same data from
  *   GET /api/runs/:id/audit?download=1; "Download data access export" links GET /api/runs/:id/access-export (GDPR Art. 15)
+ * - "Delete candidate data" links to the delete card on the run page (/runs/:id#delete-data), which does the deletion
  *
  * Design constraints:
  * - Missing times are omitted from meta lines, never shown as a dash; lineup answers are Pills
@@ -248,6 +249,9 @@ export default async function AuditPage({ params }: { params: Promise<{ id: stri
         >
           Download data access export (GDPR Art. 15, .json)
         </a>
+        <Link href={`/runs/${id}#delete-data`} className="inline-flex min-h-11 items-center self-start text-sm font-medium text-conflict underline decoration-conflict/40 underline-offset-4 hover:decoration-conflict">
+          Delete candidate data
+        </Link>
       </header>
 
       <section className={CARD}>
