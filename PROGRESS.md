@@ -81,3 +81,8 @@ Each agent appends: what it starts, progress, what it finishes. Newest at the bo
 - Auth: GET /api/roles requires `Authorization: Bearer <RUN_TOKEN>` (a list enumerates every run, so the UUID-only rule of GET /api/runs/:id does not hold); the page asks for the team token once and keeps it in sessionStorage.
 - Finished: 23:20. Pure `roleOverview` + `roleKey`; one small "Roles" link on the start page. No schema change; pnpm check green.
 - Files: src/domain/role-overview.ts, src/domain/__tests__/role-overview.test.ts, src/app/api/roles/route.ts, src/app/roles/{page.tsx,roles-view.tsx,[key]/page.tsx} (new), src/app/page.tsx, PROGRESS.md.
+
+## 2026-10-08 · audit-record agent (Minas)
+- Started: idea #17 "GDPR audit record": one page per run at /runs/:id/audit plus GET /api/runs/:id/audit (same open access as /state, `?download=1` sets the file name).
+- Finished: pure `auditRecord` builds start channel (form = via start, extension = api + source_url, api), legal basis line (Art. 6(1)(f), candidate informed) + purpose (role), every collector step with status ok / empty / failed / not searched + reason, items (ref.sources), time and cost, model calls (runCost), last lineup answer as yes / no / not sure (platform + title only), call status with MOCK flag, deletion date = created_at + 7 days + "deleted earlier on rejection". `RETENTION_DAYS` moved to src/domain/audit.ts and imported by purge.ts. "Download audit record (.json)" button; small "Audit record" link under the run view. No schema change; pnpm check and next build green.
+- Files: src/domain/audit.ts, src/domain/__tests__/audit.test.ts (12 tests), src/app/api/runs/[id]/audit/{route,load}.ts, src/app/runs/[id]/audit/page.tsx (new); src/app/runs/[id]/page.tsx, src/workflow/purge.ts, PROGRESS.md.
