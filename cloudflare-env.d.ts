@@ -20,6 +20,7 @@ interface __BaseEnv_CloudflareEnv {
 	RUN_TOKEN: string;
 	GITHUB_TOKEN?: string;
 	STACKEXCHANGE_KEY?: string;
+	OPENALEX_API_KEY?: string;
 	RESEARCH_RUN: Workflow<Parameters<import("./src/worker").ResearchRunWorkflow['run']>[0]['payload']>;
 	VERIFY_CALL: Workflow /* VerificationCallWorkflow */;
 }

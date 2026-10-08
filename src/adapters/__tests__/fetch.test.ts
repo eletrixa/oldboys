@@ -52,6 +52,28 @@ describe("makeFetchJson", () => {
     expect((fn.mock.calls[1]?.[0] as string)).not.toContain("key=");
   });
 
+  it("appends the OpenAlex api_key only for api.openalex.org", async () => {
+    const fn = stub(Response.json({}), Response.json({}));
+    const f = makeFetchJson({ openAlexKey: "oak" });
+    await f("https://api.openalex.org/authors?search=x");
+    await f("https://api.github.com/users/x");
+    expect(fn.mock.calls[0]?.[0] as string).toContain("api_key=oak");
+    expect(fn.mock.calls[1]?.[0] as string).not.toContain("api_key=");
+  });
+
+  it("does not append api_key when the OpenAlex key is unset", async () => {
+    const fn = stub(Response.json({}));
+    await makeFetchJson()("https://api.openalex.org/authors");
+    expect(fn.mock.calls[0]?.[0] as string).not.toContain("api_key");
+  });
+
+  it("never leaks the OpenAlex key in the error message", async () => {
+    stub(new Response("nope", { status: 400 }));
+    const err = (await makeFetchJson({ openAlexKey: "secret-oak" })("https://api.openalex.org/authors").catch((e: unknown) => e)) as Error;
+    expect(err.message).toContain("api.openalex.org/authors: HTTP 400");
+    expect(err.message).not.toContain("secret-oak");
+  });
+
   it("puts a bounded body snippet in the error", async () => {
     stub(new Response("x".repeat(500), { status: 400 }));
     const err = (await makeFetchJson()("https://api.stackexchange.com/2.3/users").catch((e: unknown) => e)) as Error;
