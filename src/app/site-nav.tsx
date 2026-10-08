@@ -22,7 +22,7 @@ import { BTN_SECONDARY } from "./ui";
 
 export function SiteNav({ user }: { user: SessionUser | null }): React.JSX.Element {
   return (
-    <nav aria-label="Main" className="flex flex-wrap items-center justify-end gap-1">
+    <nav aria-label="Main" className="flex w-full items-center gap-1 sm:w-auto sm:justify-end">
       {user === null ? (
         <>
           <NavLink href="/login">Log in</NavLink>
@@ -36,7 +36,7 @@ export function SiteNav({ user }: { user: SessionUser | null }): React.JSX.Eleme
           <NavLink href="/briefs">My briefs</NavLink>
           <span className="hidden px-2 text-sm text-muted md:inline">{user.organizationName}</span>
           <LogoutButton />
-          <Link href="/" className={BTN_SECONDARY}>New brief</Link>
+          <Link href="/" className={`${BTN_SECONDARY} hidden sm:inline-flex`}>New brief</Link>
         </>
       )}
     </nav>

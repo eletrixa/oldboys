@@ -37,7 +37,7 @@ export function SiteHeader({ nav }: Readonly<{ nav: React.ReactNode }>): React.J
   if (isCandidateRoute(usePathname())) return null;
   return (
     <header className="border-b border-divider bg-canvas/90 backdrop-blur">
-      <div className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-4 py-3">
+      <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-x-4 gap-y-1 px-4 py-3">
         <Link href="/" aria-label="Radar home" className="flex min-h-11 items-center gap-2.5">
           <EchoMark size={28} />
           <span className="font-serif text-[26px] leading-none font-semibold tracking-tight">radar</span>

@@ -43,7 +43,7 @@ function Mark({ state }: { state: RowState }): React.JSX.Element {
   if (state === "failed") return <span className={`${base} bg-conflict text-white`}><span aria-hidden="true">✕</span><span className="sr-only">Failed</span></span>;
   if (state === "active") return <span className={`${base} animate-pulse border-2 border-action bg-canvas`}><span className="sr-only">In progress</span></span>;
   if (state === "skipped") return <span className={`${base} bg-divider text-muted`}><span aria-hidden="true">–</span><span className="sr-only">Skipped</span></span>;
-  return <span className={`${base} border-2 border-divider bg-canvas`}><span className="sr-only">Waiting</span></span>;
+  return <span className={`${base} border-2 border-line/60 bg-canvas`}><span className="sr-only">Waiting</span></span>;
 }
 
 /** Percent of the recipe already in the ledger; never fully empty so the bar reads as alive. */
@@ -104,7 +104,8 @@ export function CostLine({ cost }: { cost: RunCost }): React.JSX.Element {
     `Research cost $${cost.usd.toFixed(2)}`,
     `${String(cost.source_calls)} source ${cost.source_calls === 1 ? "call" : "calls"}`,
     `${String(cost.llm_calls)} AI ${cost.llm_calls === 1 ? "call" : "calls"}`,
-    formatDuration(cost.duration_ms),
+    // Non-breaking spaces keep "3 min 34 s" on one line at phone width.
+    formatDuration(cost.duration_ms).replace(/ /g, "\u00a0"),
   ];
   return <p className="text-sm text-muted tabular-nums">{parts.join(" · ")}</p>;
 }
