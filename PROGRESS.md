@@ -170,6 +170,9 @@ Each agent appends: what it starts, progress, what it finishes. Newest at the bo
 - Started/finished: the web UI no longer asks for the team token (RUN_TOKEN). `POST /api/runs/:id/calls`, `POST /api/calls/:id/approve`, `POST /api/calls/:id/skip` and `GET /api/roles` use `requireSessionOrBearer` (session cookie or bearer; 401 otherwise, 503 only for a bearer while RUN_TOKEN is unset). The call panel drops the token form and the Authorization header; a 401 shows "Your login has expired. Log in again." with a link to `/login`. `POST /api/runs`, intake and webhook routes unchanged; the bearer keeps working for the extension, scripts and curl.
 - Files: src/app/api/{runs/[id]/calls,calls/[id]/approve,calls/[id]/skip,roles}/route.ts, src/app/runs/[id]/call-panel-view.tsx, src/app/run-token.tsx (deleted), scripts/auth-flow.mjs, CLAUDE.md, docs/ops/call-verification.md, plans/005-call-verification/06-elevenlabs-contract.md, CHANGELOG.md, PROGRESS.md.
 
+## 2026-10-09 · delete-on-rejection agent (Minas)
+- Started: 01:46. Idea #17 follow-up: delete a run's data now on rejection or request.
+
 ## 2026-10-09 · phone-verify: US caller number (Minas)
 - `ELEVENLABS_PHONE_NUMBER_ID` now points at the Twilio US number (+1 443 316 2585) after Trust Hub individual KYC was approved; the Czech verified caller ID is kept in ElevenLabs but unused (Czech carriers reject Twilio calls showing a Czech caller ID as spoofed). `RUN_CALL_MAX` 2 → 3. `call_initiation_failure` webhook event enabled so busy/no-answer reaches the app without waiting on the poll fallback.
 - Files: wrangler.jsonc, docs/ops/call-verification.md, CHANGELOG.md, PROGRESS.md.
