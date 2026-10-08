@@ -18,6 +18,7 @@ import { describe, expect, it } from "vitest";
 import { dueDiligenceRecipe } from "@/recipe/goals/due-diligence";
 import { hiringRecipe } from "@/recipe/goals/hiring";
 import { recipeFor } from "@/recipe/goals";
+import { collectorFor } from "@/recipe/sources";
 
 const ids = (steps: readonly { id: string }[]) => steps.map((s) => s.id);
 
@@ -43,6 +44,14 @@ describe("goal recipes diverge", () => {
       const all = ids(recipe.steps);
       expect(new Set(all).size).toBe(all.length);
       expect(recipe.steps.filter((s) => s.kind === "resolve")).toHaveLength(1);
+    }
+  });
+
+  it("every step with an actor resolves to a registered collector", () => {
+    for (const recipe of [hiringRecipe, dueDiligenceRecipe]) {
+      for (const step of recipe.steps) {
+        if (step.actor !== undefined) expect(collectorFor(step.actor).id).toBe(step.actor);
+      }
     }
   });
 

@@ -9,7 +9,7 @@
  * Key responsibilities:
  * - serp/actor/ares steps: collector.requests -> ports (callActor | fetchJson) -> collector.parse -> ports.storeSource
  * - resolve/extract/verify/synthesize: delegate to the LLM seams
- * - Budget: refuse a paid request once calls or USD are exhausted (note + empty), never silently overspend
+ * - Budget: refuse a paid (actor) request once calls or USD are exhausted (note + empty); free REST fetches are not gated
  *
  * Design constraints:
  * - Never mutates ctx; the Workflow persists the outcome and rebuilds ctx for the next step
@@ -75,7 +75,7 @@ async function collect(step: Step, ctx: StepContext, ports: Ports): Promise<Step
     return out;
   }
   for (const req of requests) {
-    if (!budgetLeft(ctx, out.calls, out.cost_usd)) {
+    if (req.via === "actor" && !budgetLeft(ctx, out.calls, out.cost_usd)) {
       out.notes.push("budget exhausted; remaining requests skipped");
       break;
     }
