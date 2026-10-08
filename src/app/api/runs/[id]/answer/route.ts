@@ -14,9 +14,10 @@
  */
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { z } from "zod";
+import { CandidateDecision } from "@/domain/claim";
 import type { LineupAnswer } from "@/workflow/research-run";
 
-const Decision = z.object({ id: z.string().trim().min(1), decision: z.enum(["merge", "possibly-same-as", "rejected"]) });
+const Decision = z.object({ id: z.string().trim().min(1), decision: CandidateDecision });
 /** New shape: explicit decisions per candidate. Legacy `{candidateId}` still accepted (= merge that one). */
 const AnswerBody = z.union([
   z.object({ decisions: z.array(Decision).min(1) }),

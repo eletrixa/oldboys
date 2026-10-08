@@ -4,10 +4,11 @@
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/adapters/apify.ts
  * Deps:    fetch (Workers runtime), zod
- * Tested:  n/a (E1 gate: scripts/e1-apify.ts against a live actor)
+ * Tested:  n/a (exercised by `pnpm preview` runs against a live actor)
  *
  * Key responsibilities:
- * - POST /v2/acts/{id}/run-sync with `timeout` and `maxTotalChargeUsd`, then GET dataset items (clean, limited)
+ * - POST /v2/acts/{id}/runs with `timeout`, `maxTotalChargeUsd` and `waitForFinish` (returns the Run object;
+ *   `run-sync` would return the actor's OUTPUT record instead), then GET dataset items (clean, limited)
  * - Cost comes from the run's `usageTotalUsd`, never estimated
  *
  * Design constraints:
@@ -36,7 +37,7 @@ export function makeActorCall(token: string): ActorCall {
       maxTotalChargeUsd: maxTotalChargeUsd.toFixed(2),
       waitForFinish: String(Math.min(timeoutSecs, 60)),
     });
-    const runRes = await fetch(`https://api.apify.com/v2/acts/${id}/run-sync?${q.toString()}`, {
+    const runRes = await fetch(`https://api.apify.com/v2/acts/${id}/runs?${q.toString()}`, {
       method: "POST",
       headers: { Authorization: `Bearer ${token}`, "content-type": "application/json" },
       body: JSON.stringify(input),

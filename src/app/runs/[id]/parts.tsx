@@ -94,7 +94,7 @@ export function ProfileList({
   );
 }
 
-export type Answer = "merge" | "rejected" | "possibly-same-as";
+export type Answer = CandidateDecision;
 
 export function QuestionCard({
   candidate,

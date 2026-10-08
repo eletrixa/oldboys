@@ -112,6 +112,13 @@ export async function POST(
     },
   });
 
-  await env.VERIFY_CALL.create({ id, params: { callId: id, runId: call.run_id } });
+  try {
+    await env.VERIFY_CALL.create({ id, params: { callId: id, runId: call.run_id } });
+  } catch (error) {
+    // The call is already placed; record why nothing will ingest its result instead of losing that fact.
+    const reason = error instanceof Error ? error.message : String(error);
+    await env.DB.prepare("UPDATE calls SET last_error = ? WHERE id = ?").bind(`workflow not started: ${reason}`, id).run();
+    return Response.json({ error: "call placed but the result workflow could not start", id }, { status: 500 });
+  }
   return Response.json({ id, status, provider: call.provider }, { status: 202 });
 }

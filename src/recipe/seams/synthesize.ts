@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/recipe/seams/synthesize.ts
- * Deps:    zod
+ * Deps:    zod, src/domain/art9
  * Tested:  src/recipe/__tests__/seams.test.ts
  *
  * Key responsibilities:
@@ -15,12 +15,12 @@
  * - LLM failure degrades to concatenated claim texts, never to an empty brief
  */
 import { z } from "zod";
+import { containsArt9Topic } from "@/domain/art9";
 import type { Brief, Claim, Coverage } from "@/domain/claim";
 import type { Ports } from "@/domain/ports";
 import { emptyOutcome } from "@/recipe/runner";
 import type { StepContext, StepOutcome } from "@/recipe/sources/types";
 
-const PROTECTED = /\b(health|illness|disease|pregnan|disab|religio|church|muslim|christian|jewish|politic|party member|vote[ds]?|sexual|gay|lesbian|transgender|ethnic|race|nationality|romani|union member)\w*/i;
 
 const Protected = z.array(z.object({ id: z.string(), protected: z.boolean() }));
 const Summaries = z.array(z.object({ question_id: z.string(), summary: z.string(), interview_question: z.string().nullable() }));
@@ -31,7 +31,8 @@ export function coverageOf(claims: readonly Claim[]): Coverage {
 }
 
 async function dropProtected(claims: readonly Claim[], ports: Ports, out: StepOutcome): Promise<Claim[]> {
-  let flagged = new Set(claims.filter((c) => PROTECTED.test(c.text) || PROTECTED.test(c.quote ?? "")).map((c) => c.id));
+  if (claims.length === 0) return [];
+  let flagged = new Set(claims.filter((c) => containsArt9Topic(c.text) || containsArt9Topic(c.quote ?? "")).map((c) => c.id));
   try {
     const r = await ports.llm({
       model: "verify",

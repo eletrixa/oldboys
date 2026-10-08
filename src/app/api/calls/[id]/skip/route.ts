@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/api/calls/[id]/skip/route.ts
- * Deps:    @opennextjs/cloudflare (getCloudflareContext), src/workflow/ledger, bindings DB
+ * Deps:    @opennextjs/cloudflare (getCloudflareContext), src/adapters/d1, src/workflow/calls, bindings DB
  * Tested:  n/a
  *
  * Key responsibilities:

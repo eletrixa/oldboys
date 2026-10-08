@@ -3,34 +3,25 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/domain/call-brief.ts
- * Deps:    none (types from call.ts, claim.ts and recipe/step.ts)
+ * Deps:    src/domain/art9 (types from call.ts, claim.ts and recipe/step.ts)
  * Tested:  src/domain/__tests__/call-brief.test.ts
  *
  * Key responsibilities:
  * - Pick at most MAX_CALL_QUESTIONS questions: gaps first, then low-confidence or contradicted claims
+ * - A gap keyed by a recipe question asks that question; a gap keyed by a source step asks about its reason
  * - Compose the full script: AI disclosure, purpose, consent, identity question, questions, closing
  * - Drop anything that touches a GDPR Art. 9 topic before it can be asked
  *
  * Design constraints:
  * - Pure and deterministic: no I/O, no LLM, same input gives the same output
- * - Never ask about Art. 9 data; the denylist matches case-insensitively at the start of a word (stems allowed)
+ * - Never ask about Art. 9 data (shared denylist in art9.ts)
  */
+import { containsArt9Topic } from "@/domain/art9";
 import type { CallBrief, CallQuestion } from "@/domain/call";
 import type { Claim, Gap, GoalId } from "@/domain/claim";
 import type { Question } from "@/recipe/step";
 
 export const MAX_CALL_QUESTIONS = 5;
-
-/**
- * GDPR Art. 9 topics the agent must never ask about or record. English stems match whole words
- * (plus suffixes); Czech stems match at word start. Unicode-aware: `\b` is ASCII-only.
- */
-export const ART9_PATTERN =
-  /(?<![\p{L}])(health|medical|illness|disabilit|disabled|religio|politic|political part|ethnic|race|racial|sexual|sexuality|orientation|trade union|union member|biometric|genetic|zdravot|nemoc|nábožen|politick|etnick|sexuál|odbor)\p{L}*/iu;
-
-export function containsArt9Topic(text: string): boolean {
-  return ART9_PATTERN.test(text);
-}
 
 const PURPOSE: Record<GoalId, string> = {
   hiring: "I would like to confirm a few facts for a hiring check.",
@@ -64,7 +55,9 @@ export function buildCallBrief(input: {
   const byId = new Map(input.questions.map((q) => [q.id, q]));
   for (const gap of input.gaps) {
     const q = byId.get(gap.question_id);
-    if (q) add({ question_id: q.id, text: q.text, expected: "" });
+    // The runner keys collector gaps by step id (e.g. github_profile) with a human reason; ask about the reason.
+    const text = q ? q.text : `Our public research found nothing here: ${gap.reason}. Can you confirm that, or tell me what we missed?`;
+    add({ question_id: gap.question_id, text, expected: "" });
   }
   for (const claim of input.claims) {
     if (claim.confidence < 0.6 || claim.contradicts.length > 0) {

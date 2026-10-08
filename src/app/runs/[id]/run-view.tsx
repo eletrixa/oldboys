@@ -8,7 +8,7 @@
  *
  * Key responsibilities:
  * - Poll GET /api/runs/:id/state every 2 s until done or failed
- * - Send lineup answers to POST /api/runs/:id/answer; auto-send the rest once no questions remain
+ * - Send all lineup decisions to POST /api/runs/:id/answer in one event once no question is pending
  *
  * Design constraints:
  * - Client component; no SSE; "I'm not sure" is answered locally and keeps possibly-same-as
@@ -69,27 +69,22 @@ export function RunView({ id }: { id: string }): React.JSX.Element {
 
   const pending = (state?.candidates ?? []).filter((c) => c.decision === "possibly-same-as" && !(c.id in local) && !(c.id in unsure));
 
+  // One answer event resumes the Workflow, so every decision goes in a single send once nothing is pending.
   useEffect(() => {
     if (state?.status !== "paused" || pending.length > 0 || autoSent.current) return;
-    const decisions = state.candidates
-      .filter((c) => !(c.id in local))
-      .map((c) => ({ id: c.id, decision: c.decision }));
+    const decisions = state.candidates.map((c) => ({ id: c.id, decision: local[c.id] ?? c.decision }));
     if (decisions.length === 0) return;
     autoSent.current = true;
     void sendAnswer(id, decisions);
   }, [state, pending.length, local, id]);
 
-  const answer = useCallback(
-    (cid: string, decision: Answer) => {
-      if (decision === "possibly-same-as") {
-        setUnsure((u) => ({ ...u, [cid]: true }));
-        return;
-      }
-      setLocal((l) => ({ ...l, [cid]: decision }));
-      void sendAnswer(id, [{ id: cid, decision }]);
-    },
-    [id],
-  );
+  const answer = useCallback((cid: string, decision: Answer) => {
+    if (decision === "possibly-same-as") {
+      setUnsure((u) => ({ ...u, [cid]: true }));
+      return;
+    }
+    setLocal((l) => ({ ...l, [cid]: decision }));
+  }, []);
 
   if (missing) {
     return (

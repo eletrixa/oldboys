@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/domain/call-ingest.ts
- * Deps:    zod
+ * Deps:    zod, src/domain/art9
  * Tested:  src/domain/__tests__/call-ingest.test.ts
  *
  * Key responsibilities:
@@ -18,7 +18,7 @@
  */
 import { z } from "zod";
 import type { CallBrief, CallResult, TranscriptTurn } from "@/domain/call";
-import { containsArt9Topic } from "@/domain/call-brief";
+import { containsArt9Topic } from "@/domain/art9";
 import { Claim } from "@/domain/claim";
 import type { LlmCall } from "@/domain/ports";
 import { normalizeText, quoteInNormalized } from "@/domain/quote";

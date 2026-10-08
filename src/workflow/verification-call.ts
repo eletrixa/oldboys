@@ -101,7 +101,14 @@ export class VerificationCallWorkflow extends WorkflowEntrypoint<CloudflareEnv, 
     }
     for (let attempt = 1; attempt <= POLL_ATTEMPTS; attempt++) {
       if (attempt > 1) await step.sleep(`poll-wait-${String(attempt)}`, "1 minute");
-      const key = await step.do(`poll-result-${String(attempt)}`, NO_RETRY, async () => this.pollOnce(call));
+      let key: string | null = null;
+      try {
+        key = await step.do(`poll-result-${String(attempt)}`, NO_RETRY, async () => this.pollOnce(call));
+      } catch (error) {
+        // A transient provider error must not end the call; the next attempt (or poll-failed) decides.
+        const reason = error instanceof Error ? error.message : String(error);
+        await this.env.DB.prepare("UPDATE calls SET last_error = ? WHERE id = ?").bind(reason, call.id).run();
+      }
       if (key !== null) return key;
     }
     await step.do("poll-failed", async () => {

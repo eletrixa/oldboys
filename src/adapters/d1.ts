@@ -98,7 +98,8 @@ export async function loadContext(db: D1Database, runId: string, baseQuestions: 
     db.prepare("SELECT * FROM sources WHERE run_id = ?").bind(runId).all<Row>(),
     db.prepare("SELECT * FROM claims WHERE run_id = ?").bind(runId).all<Row>(),
     db.prepare("SELECT * FROM gaps WHERE run_id = ?").bind(runId).all<Row>(),
-    db.prepare("SELECT COUNT(*) AS calls, COALESCE(SUM(cost_usd), 0) AS usd FROM ledger_entries WHERE run_id = ? AND kind IN ('call','llm')").bind(runId).first<{ calls: number; usd: number }>(),
+    // Spent calls = the real request count a step recorded in ref.calls (one row can hold 0..n requests), not the row count.
+    db.prepare("SELECT COALESCE(SUM(COALESCE(json_extract(ref_json, '$.calls'), 1)), 0) AS calls, COALESCE(SUM(cost_usd), 0) AS usd FROM ledger_entries WHERE run_id = ? AND kind IN ('call','llm')").bind(runId).first<{ calls: number; usd: number }>(),
   ]);
   const extra = json<Question[]>(inv.questions_json, []);
   return {

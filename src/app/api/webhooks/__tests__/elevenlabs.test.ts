@@ -34,13 +34,13 @@ function makeEnv(opts: { secret?: string; sendEventError?: Error } = {}) {
   type Rows = { rows: Record<string, unknown>[]; changes: number };
   const byId = (id: unknown): CallRec | undefined => [...calls.values()].find((c) => c.id === id);
   const exec = (sql: string, args: unknown[]): Rows => {
-    if (sql.startsWith("SELECT id, run_id FROM calls")) {
+    if (sql.startsWith("SELECT id, run_id, status FROM calls")) {
       const c = calls.get(args[0] as string);
-      return { rows: c ? [{ id: c.id, run_id: c.run_id }] : [], changes: 0 };
+      return { rows: c ? [{ id: c.id, run_id: c.run_id, status: c.status }] : [], changes: 0 };
     }
-    if (sql.startsWith("SELECT conversation_id AS id, type AS run_id FROM webhook_events")) {
+    if (sql.startsWith("SELECT 1 FROM webhook_events")) {
       const key = `${args[0] as string}|${args[1] as string}`;
-      return { rows: events.has(key) ? [{ id: args[0], run_id: args[1] }] : [], changes: 0 };
+      return { rows: events.has(key) ? [{ 1: 1 }] : [], changes: 0 };
     }
     if (sql.startsWith("INSERT INTO webhook_events")) {
       events.add(`${args[0] as string}|${args[1] as string}`);
@@ -201,13 +201,14 @@ describe("handleElevenLabsWebhook", () => {
   });
 
   it("an illegal transition is recorded as stale and leaves the call untouched", async () => {
-    const { env, calls, events } = makeEnv();
+    const { env, calls, events, puts } = makeEnv();
     const rec = calls.get("conv_1");
     if (rec) rec.status = "done";
     const res = await handleElevenLabsWebhook(signed(transcription), env, NOW);
     expect(await res.json()).toEqual({ ok: true, stale: true });
     expect(calls.get("conv_1")?.status).toBe("done");
     expect(calls.get("conv_1")?.result_r2_key).toBeUndefined();
+    expect(puts).toEqual([]);
     expect(events.has("conv_1|post_call_transcription")).toBe(true);
   });
 });

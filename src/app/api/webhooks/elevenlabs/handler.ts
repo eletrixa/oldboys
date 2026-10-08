@@ -28,7 +28,7 @@ export type WebhookEnv = {
   ELEVENLABS_WEBHOOK_SECRET?: string;
 };
 
-type CallLookup = { id: string; run_id: string };
+type CallLookup = { id: string; run_id: string; status: string };
 
 export async function handleElevenLabsWebhook(
   request: Request,
@@ -58,20 +58,21 @@ export async function handleElevenLabsWebhook(
   if (event.type === "post_call_audio") return Response.json({ ok: true, ignored: true });
 
   const conversationId = event.data.conversation_id;
-  const [lookup, seen] = await env.DB.batch<CallLookup>([
-    env.DB.prepare("SELECT id, run_id FROM calls WHERE provider_conversation_id = ?").bind(conversationId),
-    env.DB.prepare("SELECT conversation_id AS id, type AS run_id FROM webhook_events WHERE conversation_id = ? AND type = ?").bind(conversationId, event.type),
+  const [call, seen] = await Promise.all([
+    env.DB.prepare("SELECT id, run_id, status FROM calls WHERE provider_conversation_id = ?").bind(conversationId).first<CallLookup>(),
+    env.DB.prepare("SELECT 1 FROM webhook_events WHERE conversation_id = ? AND type = ?").bind(conversationId, event.type).first(),
   ]);
-  const call = lookup?.results[0];
   // Deliberate 5xx: ElevenLabs retries, and the approve route may not have committed the conversation id yet.
   if (!call) return Response.json({ error: "unknown conversation" }, { status: 500 });
-  if ((seen?.results.length ?? 0) > 0) return Response.json({ ok: true, duplicate: true });
+  if (seen) return Response.json({ ok: true, duplicate: true });
 
   const result = webhookToResult(event);
   if (result === null) return Response.json({ ok: true, ignored: true });
 
+  // A second event type for an already-terminal call must not overwrite its stored result in R2;
+  // the batch below still records the event and its SQL guard stays the atomic status check.
   const r2Key = callResultR2Key(call.run_id, call.id);
-  await env.SOURCES.put(r2Key, JSON.stringify(result));
+  if (call.status === "dialing") await env.SOURCES.put(r2Key, JSON.stringify(result));
 
   const receivedAt = new Date(nowSecs * 1000).toISOString();
   const [updated] = await env.DB.batch([

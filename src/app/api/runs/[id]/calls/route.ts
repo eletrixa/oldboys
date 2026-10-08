@@ -7,7 +7,7 @@
  * Tested:  n/a
  *
  * Key responsibilities:
- * - Bearer auth; load the run, its gaps and claims; build the deterministic brief
+ * - Bearer auth; load the run, its base + role questions, gaps and claims; build the deterministic brief
  * - Insert a calls row in status 'drafted' (nothing is dialed here)
  *
  * Design constraints:
@@ -23,6 +23,8 @@ import { recipeFor } from "@/recipe/goals";
 import { selectCallProvider } from "@/workflow/calls";
 
 const DraftBody = z.object({ language: z.string().min(2).max(5).optional() });
+/** Role questions appended by the runner (investigations.questions_json); malformed JSON means none. */
+const ExtraQuestions = z.array(z.object({ id: z.string(), text: z.string() }));
 
 type ClaimRow = Omit<Claim, "supports" | "contradicts"> & {
   supports_json: string;
@@ -41,14 +43,15 @@ export async function POST(
   const body = await parseJsonBody(request, DraftBody, { emptyOk: true });
   if (body.error) return body.error;
 
-  const run = await env.DB.prepare("SELECT subject, goal, status FROM investigations WHERE id = ?")
+  const run = await env.DB.prepare("SELECT subject, goal, status, questions_json FROM investigations WHERE id = ?")
     .bind(runId)
-    .first<{ subject: string; goal: string; status: string }>();
+    .first<{ subject: string; goal: string; status: string; questions_json: string | null }>();
   if (!run) return Response.json({ error: "run not found" }, { status: 404 });
   if (run.status === "queued") {
     return Response.json({ error: "run has not started yet" }, { status: 409 });
   }
   const goal = GoalId.parse(run.goal);
+  const extra = ExtraQuestions.safeParse(tryJson(run.questions_json));
 
   const [gapRows, claimRows] = await Promise.all([
     env.DB.prepare("SELECT question_id, reason FROM gaps WHERE run_id = ?").bind(runId).all<Pick<Gap, "question_id" | "reason">>(),
@@ -66,7 +69,7 @@ export async function POST(
   const brief = buildCallBrief({
     goal,
     subject: run.subject,
-    questions: recipeFor(goal).questions,
+    questions: [...recipeFor(goal).questions, ...(extra.success ? extra.data : [])],
     gaps,
     claims,
     language: body.data.language,
@@ -81,4 +84,13 @@ export async function POST(
     .run();
 
   return Response.json({ id: callId, brief }, { status: 201 });
+}
+
+function tryJson(text: string | null): unknown {
+  if (text === null) return null;
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    return null;
+  }
 }

@@ -7,14 +7,14 @@
  * Tested:  n/a (this is the test)
  *
  * Key responsibilities:
- * - Question selection, ordering, cap, dedupe and Art. 9 filtering
+ * - Question selection, ordering, cap, dedupe, step-keyed gaps and Art. 9 filtering
  * - Script content per goal and language handling
  *
  * Design constraints:
  * - Fixtures stay inline
  */
 import { describe, expect, it } from "vitest";
-import { ART9_PATTERN, buildCallBrief, containsArt9Topic, MAX_CALL_QUESTIONS } from "@/domain/call-brief";
+import { buildCallBrief, MAX_CALL_QUESTIONS } from "@/domain/call-brief";
 import { CallBrief } from "@/domain/call";
 import type { Claim, Gap } from "@/domain/claim";
 import type { Question } from "@/recipe/step";
@@ -57,8 +57,15 @@ describe("buildCallBrief", () => {
     expect(b.questions[0]).toEqual({ question_id: "c", text: "What is c?", expected: "" });
   });
 
-  it("ignores gaps without a matching recipe question", () => {
-    expect(buildCallBrief({ ...base, gaps: [gap("zzz")] }).questions).toEqual([]);
+  it("asks about a step-keyed gap through its reason", () => {
+    const b = buildCallBrief({ ...base, gaps: [{ run_id: "r1", question_id: "github_profile", reason: "no public GitHub profile found" }] });
+    expect(b.questions).toEqual([
+      {
+        question_id: "github_profile",
+        text: "Our public research found nothing here: no public GitHub profile found. Can you confirm that, or tell me what we missed?",
+        expected: "",
+      },
+    ]);
   });
 
   it("includes low-confidence and contradicted claims, excludes confident ones", () => {
@@ -140,25 +147,5 @@ describe("buildCallBrief", () => {
     const b = buildCallBrief(input);
     expect(buildCallBrief(input)).toEqual(b);
     expect(CallBrief.parse(b)).toEqual(b);
-  });
-});
-
-describe("containsArt9Topic", () => {
-  it("flags English and Czech topics case-insensitively", () => {
-    expect(containsArt9Topic("Their Religious beliefs")).toBe(true);
-    expect(containsArt9Topic("any medical condition?")).toBe(true);
-    expect(containsArt9Topic("zdravotní stav")).toBe(true);
-    expect(containsArt9Topic("politické názory")).toBe(true);
-    expect(containsArt9Topic("etnický původ")).toBe(true);
-    expect(containsArt9Topic("sexuální orientace")).toBe(true);
-    expect(containsArt9Topic("náboženství")).toBe(true);
-  });
-
-  it("passes neutral text, including words that merely contain a stem", () => {
-    expect(containsArt9Topic("What is the current role and employer?")).toBe(false);
-    expect(containsArt9Topic("Which third party audited the accounts?")).toBe(false);
-    expect(containsArt9Topic("Can you trace the ownership and embrace the deal?")).toBe(false);
-    expect(containsArt9Topic("Is the account disabled?")).toBe(true);
-    expect(ART9_PATTERN.flags).toContain("u");
   });
 });
