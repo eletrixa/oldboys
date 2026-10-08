@@ -10,6 +10,8 @@
  * - Render the transcript as the source excerpt and build the extraction prompt
  * - Run one `primary` LLM extraction and gate each answer on a verbatim quote in a callee (`user`) turn
  * - Cap confidence (a callee statement is never a public fact) and never emit kind FACT
+ * - callAnswers: one CallAnswer per brief question (answered / unclear / declined / no_answer / not_asked),
+ *   with the time in the call of the callee turn that holds the quote
  *
  * Design constraints:
  * - Pure: the only side effect is the injected `llm` port
@@ -17,7 +19,7 @@
  * - Answers for question ids outside the brief, or touching an Art. 9 topic, are dropped silently
  */
 import { z } from "zod";
-import type { CallBrief, CallResult, TranscriptTurn } from "@/domain/call";
+import type { CallAnswer, CallBrief, CallResult, TranscriptTurn } from "@/domain/call";
 import { containsArt9Topic } from "@/domain/art9";
 import { Claim } from "@/domain/claim";
 import type { LlmCall } from "@/domain/ports";
@@ -42,6 +44,8 @@ export const CallExtraction = z.object({
       confidence: z.number().min(0).max(1),
     }),
   ),
+  /** Question ids the callee explicitly declined to answer; defaulted so older fakes and outputs still parse. */
+  declined_question_ids: z.array(z.string()).default([]),
 });
 export type CallExtraction = z.infer<typeof CallExtraction>;
 
@@ -58,6 +62,7 @@ export function buildExtractionPrompt(
     "- If the callee declined to talk or hung up, set refused=true.",
     "- Set identity_confirmed=true only if the callee clearly confirmed the identity question.",
     "- Omit a question when the callee gave no usable answer.",
+    "- List question ids the callee explicitly declined to answer in declined_question_ids.",
   ].join("\n");
   const questions = brief.questions
     .map((q, i) => `${String(i + 1)}. [${q.question_id}] ${q.text}`)
@@ -74,6 +79,38 @@ export function buildExtractionPrompt(
   return { system, prompt };
 }
 
+/** Seconds into the call of the first callee turn that contains the quote; null when none does. */
+function quoteTime(quote: string, transcript: readonly TranscriptTurn[]): number | null {
+  const turn = transcript.find((t) => t.role === "user" && quoteInNormalized(quote, normalizeText(t.message)));
+  return turn ? turn.time_in_call_secs : null;
+}
+
+/**
+ * One result per brief question, in brief order. `ended` (refused, identity not confirmed, not completed)
+ * marks every question not asked; otherwise a STATEMENT is answered, an INFERENCE unclear.
+ */
+export function callAnswers(input: {
+  brief: CallBrief;
+  transcript: readonly TranscriptTurn[];
+  claims: readonly Claim[];
+  declined: readonly string[];
+  ended: boolean;
+}): CallAnswer[] {
+  const byQuestion = new Map(input.claims.map((c) => [c.question_id, c]));
+  const declined = new Set(input.declined);
+  return input.brief.questions.map((q): CallAnswer => {
+    const base = { question_id: q.question_id, question: q.text, ...(q.why === undefined ? {} : { why: q.why }) };
+    const none = { summary: null, quote: null, at_secs: null };
+    if (input.ended) return { ...base, status: "not_asked", ...none };
+    const claim = byQuestion.get(q.question_id);
+    if (claim?.kind === "STATEMENT" && claim.quote !== null) {
+      return { ...base, status: "answered", summary: claim.text, quote: claim.quote, at_secs: quoteTime(claim.quote, input.transcript) };
+    }
+    if (claim) return { ...base, status: "unclear", ...none, summary: claim.text };
+    return { ...base, status: declined.has(q.question_id) ? "declined" : "no_answer", ...none };
+  });
+}
+
 export async function callResultToClaims(input: {
   result: CallResult;
   brief: CallBrief;
@@ -81,9 +118,13 @@ export async function callResultToClaims(input: {
   callId: string;
   sourceId: string;
   llm: LlmCall;
-}): Promise<{ claims: Claim[]; gapReason: string | null }> {
+}): Promise<{ claims: Claim[]; gapReason: string | null; answers: CallAnswer[] }> {
   const { result, brief, runId, callId, sourceId, llm } = input;
-  const none = (gapReason: string): { claims: Claim[]; gapReason: string } => ({ claims: [], gapReason });
+  const none = (gapReason: string): { claims: Claim[]; gapReason: string; answers: CallAnswer[] } => ({
+    claims: [],
+    gapReason,
+    answers: callAnswers({ brief, transcript: result.transcript, claims: [], declined: [], ended: true }),
+  });
   if (result.outcome !== "done") {
     return none(`call not completed: ${result.failure_reason ?? result.outcome}`);
   }
@@ -122,5 +163,12 @@ export async function callResultToClaims(input: {
         rank: 0,
       });
     });
-  return { claims, gapReason: claims.length > 0 ? null : "callee gave no usable answers" };
+  const answers = callAnswers({
+    brief,
+    transcript: result.transcript,
+    claims,
+    declined: extraction.declined_question_ids,
+    ended: false,
+  });
+  return { claims, gapReason: claims.length > 0 ? null : "callee gave no usable answers", answers };
 }

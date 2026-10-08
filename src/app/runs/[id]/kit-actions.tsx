@@ -10,14 +10,17 @@
  * - KitActions: build the kit (generatedAt = now) or the candidate notice at click time, copy it or download it as .md
  * - Copy for ATS: a short plain-text note (atsNote) with the link to this brief, for pasting into any ATS card
  * - Short "Copied" / "Copy failed" label on each copy button
+ * - The kit fetches GET /api/runs/:id/calls at click time for the phone verification section; on any error
+ *   the kit is built without it
  *
  * Design constraints:
- * - Client only; no fetch, both documents are built from the RunState already on the page
+ * - Client only; the only fetch is the run's calls for the kit, everything else comes from the RunState on the page
  * - No alert(); failures show on the button
  */
 "use client";
 
 import { useState } from "react";
+import type { CallView, RunCalls } from "./call-panel";
 import type { RunState } from "./state";
 import { interviewKit, kitFileName } from "./interview-kit";
 import { candidateCopy, noticeFileName } from "./candidate-copy";
@@ -27,13 +30,24 @@ const BTN = "rounded-xl border border-zinc-700 px-4 py-2 text-sm hover:bg-zinc-8
 
 type CopyStatus = "idle" | "copied" | "failed";
 
+/** The run's calls for the kit's phone verification section; [] on any error. */
+async function runCalls(runId: string): Promise<CallView[]> {
+  try {
+    const res = await fetch(`/api/runs/${runId}/calls`, { cache: "no-store" });
+    return res.ok ? (await res.json<RunCalls>()).calls : [];
+  } catch {
+    return [];
+  }
+}
+
 const STATUS_LABEL: Record<Exclude<CopyStatus, "idle">, string> = { copied: "Copied", failed: "Copy failed" };
 
-/** Copies `text` and reports the outcome, then resets to idle after 2 s. */
-async function copyText(text: string | null, setStatus: (s: CopyStatus) => void): Promise<void> {
-  if (text === null) return;
+/** Copies `text` (or what the promise resolves to) and reports the outcome, then resets to idle after 2 s. */
+async function copyText(text: string | null | Promise<string | null>, setStatus: (s: CopyStatus) => void): Promise<void> {
   try {
-    await navigator.clipboard.writeText(text);
+    const value = await text;
+    if (value === null) return;
+    await navigator.clipboard.writeText(value);
     setStatus("copied");
   } catch {
     setStatus("failed");
@@ -64,7 +78,7 @@ export function KitActions({ state }: { state: RunState }): React.JSX.Element | 
   const [atsCopy, setAtsCopy] = useState<CopyStatus>("idle");
   if (state.brief === null) return null;
 
-  const kit = (): string | null => interviewKit(state, new Date().toISOString());
+  const kit = async (): Promise<string | null> => interviewKit(state, new Date().toISOString(), await runCalls(state.id));
   const notice = (): string | null => candidateCopy(state);
   const ats = (): string | null => atsNote(state, `${window.location.origin}/runs/${state.id}`);
 
@@ -73,7 +87,7 @@ export function KitActions({ state }: { state: RunState }): React.JSX.Element | 
       <button type="button" className={BTN} onClick={() => void copyText(kit(), setKitCopy)} aria-live="polite">
         {kitCopy === "idle" ? "Copy interview kit" : STATUS_LABEL[kitCopy]}
       </button>
-      <button type="button" className={BTN} onClick={() => { downloadText(kit(), kitFileName(state)); }}>
+      <button type="button" className={BTN} onClick={() => void kit().then((text) => { downloadText(text, kitFileName(state)); })}>
         Download .md
       </button>
       <button type="button" className={BTN} onClick={() => void copyText(notice(), setNoticeCopy)} aria-live="polite">

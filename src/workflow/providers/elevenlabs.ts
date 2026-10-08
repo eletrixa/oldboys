@@ -9,6 +9,8 @@
  * Key responsibilities:
  * - `elevenLabsPlaceCall` implements PlaceCall; `elevenLabsFetchCallResult` implements FetchCallResult
  * - `parsePostCallWebhook` / `webhookToResult` turn a verified webhook body into a CallResult
+ * - The outbound call overrides the agent's system prompt and first message with the brief's
+ *   `agent_prompt` / `first_message` (older briefs: the script and its first line)
  *
  * Design constraints:
  * - Imports only src/domain and zod; `fetchImpl` is injectable so tests never hit the network
@@ -61,8 +63,9 @@ export function elevenLabsPlaceCall(cfg: ElevenLabsConfig): PlaceCall {
           dynamic_variables: { call_id: callId, subject_language: brief.language },
           conversation_config_override: {
             agent: {
-              prompt: { prompt: brief.script },
-              first_message: brief.script.split("\n")[0],
+              // Briefs drafted before first_message / agent_prompt existed fall back to the script.
+              prompt: { prompt: brief.agent_prompt ?? brief.script },
+              first_message: brief.first_message ?? brief.script.split("\n")[0],
               language: brief.language,
             },
           },
@@ -126,6 +129,21 @@ export function parsePostCallWebhook(json: unknown): PostCallWebhook {
 
 type ConversationData = PostCallWebhook["data"];
 
+/**
+ * A data-collection boolean: ElevenLabs sends `{ data_collection_id, value, rationale }` with a boolean or a
+ * "true"/"false" string as `value`; a bare boolean is accepted too. Anything else is null ("ask the extractor").
+ */
+export function dataCollectionBoolean(raw: unknown): boolean | null {
+  const value = typeof raw === "object" && raw !== null && "value" in raw ? raw.value : raw;
+  if (typeof value === "boolean") return value;
+  if (typeof value === "string") {
+    const v = value.trim().toLowerCase();
+    if (v === "true") return true;
+    if (v === "false") return false;
+  }
+  return null;
+}
+
 /** Shared mapping for a finished conversation (webhook `data` and GET body have the same fields). */
 function finishedToResult(data: ConversationData, costUsd: number): CallResult {
   const identity = data.analysis?.data_collection_results?.identity_confirmed;
@@ -139,7 +157,7 @@ function finishedToResult(data: ConversationData, costUsd: number): CallResult {
       time_in_call_secs: turn.time_in_call_secs ?? 0,
     })),
     call_successful: verdict === "success" ? true : verdict === "failure" ? false : null,
-    identity_confirmed: typeof identity === "boolean" ? identity : null,
+    identity_confirmed: dataCollectionBoolean(identity),
     duration_secs: Math.round(data.metadata?.call_duration_secs ?? 0),
     cost_usd: costUsd,
     failure_reason: null,

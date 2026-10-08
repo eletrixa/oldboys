@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/roles/roles-view.tsx
- * Deps:    react, next/link, src/domain/role-overview
+ * Deps:    react, next/link, src/domain/role-overview, src/app/run-token
  * Tested:  builder in src/domain/__tests__/role-overview.test.ts; view n/a
  *
  * Key responsibilities:
@@ -18,9 +18,9 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { TokenForm, readToken, writeToken } from "@/app/run-token";
 import type { CoverageLabel, RoleGroup } from "@/domain/role-overview";
 
-const TOKEN_KEY = "oldboys.runToken";
 const DISCLAIMER = "This table shows how much public evidence the research found, not how good a candidate is.";
 
 const CELL_STYLE: Readonly<Record<CoverageLabel, string>> = {
@@ -35,52 +35,6 @@ type Load =
   | { kind: "token"; error: string | null }
   | { kind: "error"; message: string }
   | { kind: "ready"; groups: RoleGroup[] };
-
-function readToken(): string | null {
-  try {
-    return sessionStorage.getItem(TOKEN_KEY);
-  } catch {
-    return null;
-  }
-}
-
-function writeToken(token: string | null): void {
-  try {
-    if (token === null) sessionStorage.removeItem(TOKEN_KEY);
-    else sessionStorage.setItem(TOKEN_KEY, token);
-  } catch {
-    // Storage blocked: the user is asked again next time.
-  }
-}
-
-function TokenForm({ error, onSubmit }: { error: string | null; onSubmit: (token: string) => void }): React.JSX.Element {
-  return (
-    <form
-      className="flex flex-col gap-3"
-      onSubmit={(e) => {
-        e.preventDefault();
-        const raw = new FormData(e.currentTarget).get("token");
-        if (typeof raw === "string" && raw.trim() !== "") onSubmit(raw.trim());
-      }}
-    >
-      <label className="flex flex-col gap-1.5 text-sm font-medium">
-        Team access token
-        <input
-          name="token"
-          type="password"
-          required
-          autoComplete="off"
-          className="w-full rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-zinc-100 focus:border-teal-400 focus:outline-none"
-        />
-        <span className="text-xs font-normal text-zinc-400">The list shows every brief, so it needs the team token. Kept only in this tab.</span>
-      </label>
-      {error !== null && <p className="text-sm text-red-300">{error}</p>}
-      <button type="submit" className="self-start rounded-xl bg-teal-500 px-4 py-2 font-medium text-zinc-950 hover:bg-teal-400">
-        Show roles
-      </button>
-    </form>
-  );
-}
 
 function RoleList({ groups }: { groups: RoleGroup[] }): React.JSX.Element {
   if (groups.length === 0) return <p className="text-zinc-400">No briefs with a role yet.</p>;
@@ -191,7 +145,7 @@ export function RolesView({ roleKey }: { roleKey?: string }): React.JSX.Element 
         )}
       </header>
       {load.kind === "loading" && <p className="text-zinc-400">Loading…</p>}
-      {load.kind === "token" && <TokenForm error={load.error} onSubmit={submitToken} />}
+      {load.kind === "token" && <TokenForm error={load.error} hint="The list shows every brief, so it needs the team token. Kept only in this tab." submitLabel="Show roles" onSubmit={submitToken} />}
       {load.kind === "error" && <p className="text-red-300">{load.message}</p>}
       {load.kind === "ready" && roleKey === undefined && <RoleList groups={load.groups} />}
       {load.kind === "ready" && roleKey !== undefined && (group === undefined ? <p className="text-zinc-400">No briefs for this role.</p> : <RoleTable group={group} />)}

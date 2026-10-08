@@ -155,29 +155,52 @@ All routes except the webhook are served by the Worker. `Authorization: Bearer <
 
 | Route | Auth | Purpose |
 |---|---|---|
-| `POST /api/runs/:id/calls` | bearer | Build a brief from the run's gaps and weak claims; create a `drafted` call |
+| `GET /api/runs/:id/calls` | none | Proposal (computed, not stored), provider, call limit and usage, the run's calls with answers |
+| `POST /api/runs/:id/calls` | bearer | Build a brief from the stored brief, gaps and weak claims, or from operator-edited questions; create a `drafted` call |
 | `POST /api/calls/:id/approve` | bearer | Record consent, dial once, start the Workflow |
 | `POST /api/calls/:id/skip` | bearer | Mark `skipped`; writes a `decision` ledger row, existing gaps stay stated |
-| `GET /api/calls/:id` | none | Status, brief, result summary, `last_error` |
+| `GET /api/calls/:id` | none | Status, brief, result summary, `last_error`, per-question `answers` |
 | `POST /api/webhooks/elevenlabs` | HMAC signature | Called by ElevenLabs only, never by the UI |
+
+### `GET /api/runs/:id/calls`
+
+No auth (same as `/state`). `404` unknown run. Response `200`:
+
+```json
+{
+  "provider": "mock|elevenlabs",
+  "max": 2,
+  "used": 1,
+  "proposal": { "language": "en", "identity_question": "...", "questions": [], "script": "...", "first_message": "...", "agent_prompt": "..." },
+  "calls": [{ "id": "...", "status": "done", "answers": [] }]
+}
+```
+
+`proposal` is what `POST` without `questions` would draft now; it is never stored. `used` counts calls that are not `drafted` or `skipped` (the same rule as the approve guard). `calls` are all non-skipped calls of the run, newest first, each in the `GET /api/calls/:id` shape.
 
 ### `POST /api/runs/:id/calls`
 
-Request (bearer): optional body `{"language": "en"}` (2 to 5 chars, default `en`). `404` unknown run, `409` while the run is still `queued`. Response `201`:
+Request (bearer): optional body `{"language": "en", "questions": [{"question_id": "mh-1", "text": "...", "why": "..."}]}` (`language` 2 to 5 chars, default `en`; `questions` optional). `404` unknown run, `409` while the run is still `queued`. Response `201`:
 
 ```json
 {
   "id": "0f3c...-uuid",
   "brief": {
     "language": "en",
-    "identity_question": "Am I speaking with Jane Doe, or with someone who can confirm facts about Jane Doe?",
-    "questions": [{ "question_id": "public-talks", "text": "What public talks, posts or writing show how they think?", "expected": "" }],
-    "script": "I am an automated AI assistant calling on behalf of ...\nThis call may be recorded and transcribed. Do you agree to continue?\n..."
+    "identity_question": "Am I speaking with Jane Doe?",
+    "questions": [{ "question_id": "mh-1", "text": "Can you tell me about your experience with Go backend? We could not find public evidence for it.", "expected": "", "why": "No public evidence: Go backend" }],
+    "script": "I am an automated AI assistant calling on behalf of ...\nThis call may be recorded and transcribed. Do you agree to continue?\n...",
+    "first_message": "Hello, this is an automated AI assistant calling on behalf of the hiring team for the Senior Go engineer role. ...",
+    "agent_prompt": "# Role\n...\n# Steps\n...\n# Questions\n1. ...\n# Rules\n..."
   }
 }
 ```
 
-The brief is deterministic (no LLM): identity question first, one question per gap, then one verification question per claim with confidence under 0.6 or a contradiction, at most 5, never a GDPR Art. 9 topic.
+Without `questions` the brief is deterministic (no LLM): identity question first, then at most 5 of, in order, role must-haves (`mh-*`) with coverage `none`, with coverage `partial`, the brief's `to_verify` items (`tv-<n>`), one question per gap, one verification question per claim with confidence under 0.6 or a contradiction; never a GDPR Art. 9 topic. Without a stored brief it is gaps then weak claims, as before.
+
+With `questions` (the operator edited the proposal): 1 to 5 questions, each 5 to 300 characters after trimming; a question touching an Art. 9 topic, or any invalid one, is `400 {"error": "...", "index": <n|null>}` (never a silent drop). Proposed ids (`mh-…`, `tv-…`) are kept, new questions get `hr-1`, `hr-2`, ….
+
+`first_message` (AI disclosure, purpose, recording, skip/stop, consent question) and `agent_prompt` (role, steps, questions in order, rules: no evaluation, no decision/salary/other candidates, no personal topics, voicemail, `end_call`) go to ElevenLabs as the per-call overrides `agent.first_message` and `agent.prompt.prompt`. Both are optional in the schema: calls drafted before they existed fall back to the script and its first line.
 
 ### `POST /api/calls/:id/approve`
 
@@ -214,9 +237,18 @@ No auth (same as the SSE events route). `404` unknown call. Response `200`:
   "last_error": null,
   "created_at": "2026-10-08T18:00:00.000Z",
   "approved_at": null,
-  "finished_at": null
+  "finished_at": null,
+  "answers": null
 }
 ```
+
+`answers` is `null` until the Workflow wrote its `call:finish` ledger row, then one entry per brief question (`[]` for calls finished before the field existed):
+
+```json
+{ "question_id": "mh-1", "question": "...", "why": "No public evidence: Go backend", "status": "answered|unclear|declined|no_answer|not_asked", "summary": "Uses Go daily.", "quote": "I used it every day", "at_secs": 83 }
+```
+
+`answered` = a STATEMENT claim (verbatim quote in a callee line, `at_secs` = time of that line); `unclear` = an INFERENCE (no quote); `declined` = the extractor listed it in `declined_question_ids`; `not_asked` for every question when the call was refused, not completed or identity was not confirmed. Answers live only in the ledger ref (no column, no migration) and never change the brief or its coverage.
 
 No raw number and no transcript body. Progress also appears as `call` and `decision` rows on `GET /api/runs/:id/events` (SSE). A source labeled "Phone call (AI interviewer)" or MOCK appears when the call completes.
 

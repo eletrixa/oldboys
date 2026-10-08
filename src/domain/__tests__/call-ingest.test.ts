@@ -8,6 +8,7 @@
  *
  * Key responsibilities:
  * - Pin the excerpt format, normalization and the STATEMENT / INFERENCE / gap decisions
+ * - Per-question answers: answered with the time in the call, unclear, declined, no_answer, not_asked
  *
  * Design constraints:
  * - The fake llm is inline and asserts model, question ids and excerpt in the prompt
@@ -57,6 +58,7 @@ function extraction(over: Partial<CallExtraction> = {}): CallExtraction {
     answers: [
       { question_id: "role", text: "Je vedoucí vývoje.", quote: "Jsem vedoucí vývoje", confidence: 0.9 },
     ],
+    declined_question_ids: [],
     ...over,
   };
 }
@@ -108,7 +110,15 @@ describe("callResultToClaims", () => {
       llm,
       result: { ...result, outcome: "no_answer" },
     });
-    expect(out).toEqual({ claims: [], gapReason: "call not completed: no_answer" });
+    const notAsked = { status: "not_asked", summary: null, quote: null, at_secs: null };
+    expect(out).toEqual({
+      claims: [],
+      gapReason: "call not completed: no_answer",
+      answers: [
+        { question_id: "role", question: "Jaká je vaše role?", ...notAsked },
+        { question_id: "tenure", question: "Jak dlouho tam jste?", ...notAsked },
+      ],
+    });
     expect(calls()).toBe(0);
   });
 
@@ -214,5 +224,58 @@ describe("callResultToClaims", () => {
       expect(Claim.safeParse(c).success).toBe(true);
       expect(c.kind).not.toBe("FACT");
     }
+  });
+});
+
+describe("callResultToClaims answers", () => {
+  const statuses = (answers: { status: string }[]): string[] => answers.map((a) => a.status);
+
+  it("marks a verbatim answer answered with its quote and the time of the callee turn", async () => {
+    const { llm } = fakeLlm(extraction());
+    const { answers } = await callResultToClaims({ ...base, llm, result });
+    expect(answers[0]).toEqual({
+      question_id: "role",
+      question: "Jaká je vaše role?",
+      status: "answered",
+      summary: "Je vedoucí vývoje.",
+      quote: "Jsem vedoucí vývoje",
+      at_secs: 9,
+    });
+    expect(answers[1]).toMatchObject({ question_id: "tenure", status: "no_answer", summary: null, quote: null, at_secs: null });
+  });
+
+  it("marks a paraphrase unclear, without a quote", async () => {
+    const { llm } = fakeLlm(
+      extraction({ answers: [{ question_id: "role", text: "Vede vývoj.", quote: "vede tým vývojářů", confidence: 0.8 }] }),
+    );
+    const { answers } = await callResultToClaims({ ...base, llm, result });
+    expect(answers[0]).toMatchObject({ status: "unclear", summary: "Vede vývoj.", quote: null, at_secs: null });
+  });
+
+  it("marks a declined question declined", async () => {
+    const { llm } = fakeLlm(extraction({ declined_question_ids: ["tenure"] }));
+    const { answers } = await callResultToClaims({ ...base, llm, result });
+    expect(statuses(answers)).toEqual(["answered", "declined"]);
+  });
+
+  it("keeps per-question answers when no answer was usable", async () => {
+    const { llm } = fakeLlm(extraction({ answers: [], declined_question_ids: ["role"] }));
+    const out = await callResultToClaims({ ...base, llm, result });
+    expect(out.gapReason).toBe("callee gave no usable answers");
+    expect(statuses(out.answers)).toEqual(["declined", "no_answer"]);
+  });
+
+  it("marks every question not asked when the callee refused or identity is not confirmed", async () => {
+    const refused = await callResultToClaims({ ...base, llm: fakeLlm(extraction({ refused: true })).llm, result });
+    expect(statuses(refused.answers)).toEqual(["not_asked", "not_asked"]);
+    const stranger = await callResultToClaims({ ...base, llm: fakeLlm(extraction()).llm, result: { ...result, identity_confirmed: false } });
+    expect(statuses(stranger.answers)).toEqual(["not_asked", "not_asked"]);
+  });
+
+  it("marks every question not asked when the call did not complete", async () => {
+    const { llm } = fakeLlm(extraction());
+    const out = await callResultToClaims({ ...base, llm, result: { ...result, outcome: "no_answer" } });
+    expect(out.answers.map((a) => a.question_id)).toEqual(["role", "tenure"]);
+    expect(statuses(out.answers)).toEqual(["not_asked", "not_asked"]);
   });
 });
