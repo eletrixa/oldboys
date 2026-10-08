@@ -270,11 +270,11 @@ curl -s $H/api/intake/tags -H "Authorization: Bearer $RUN_TOKEN"
 pnpm exec opennextjs-cloudflare build
 pnpm exec wrangler dev        # second terminal below
 
-curl -X POST 'http://localhost:8787/cdn-cgi/handler/email?from=a@b.cz&to=jobs+senior-be@asajj.cz' \
+curl -X POST 'http://localhost:8787/cdn-cgi/handler/email?from=a@b.cz&to=jobs%2Bsenior-be@asajj.cz' \
   --data-binary @src/domain/__tests__/fixtures/gmail-forward.eml -H 'Content-Type: message/rfc822'
 ```
 
-That fixture carries a LinkedIn URL and a PDF, so with the tag `senior-be` present it starts a run. Other fixtures: `seznam-copy.eml` (plain text, Czech diacritics), `jobs-cz-notification.eml` (HTML only, `incomplete`), `no-tag.eml` (`unmatched`). Use `to=jobs+nosuchtag@asajj.cz` for a spend-free check.
+That fixture carries a LinkedIn URL and a PDF, so with the tag `senior-be` present it starts a run. Other fixtures: `seznam-copy.eml` (plain text, Czech diacritics), `jobs-cz-notification.eml` (HTML only, `incomplete`), `no-tag.eml` (`unmatched`). Use `to=jobs%2Bnosuchtag@asajj.cz` (the plus must be URL-encoded in the query, or wrangler reads it as a space and the Worker answers "no such address") for a spend-free check.
 
 **Email, production.** Send a real mail from any address to `jobs+<tag>@asajj.cz`, then:
 
