@@ -38,35 +38,6 @@ import { BTN_PRIMARY, CARD_PEACH, CARD_SAGE, Chevron, FIELD, LINK, SUMMARY } fro
 
 const CV_MAX = 20_000;
 
-type FieldProps = {
-  name: string;
-  label: string;
-  helper?: string;
-  required?: boolean;
-  defaultValue?: string;
-  autoFocus?: boolean;
-};
-
-function Field({ name, label, helper, required = false, defaultValue, autoFocus = false }: FieldProps): React.JSX.Element {
-  return (
-    <div className="flex flex-col gap-1.5">
-      <label htmlFor={name} className="text-sm font-semibold">{label}</label>
-      <input
-        id={name}
-        name={name}
-        type="text"
-        required={required}
-        maxLength={300}
-        defaultValue={defaultValue}
-        autoFocus={autoFocus}
-        aria-describedby={helper === undefined ? undefined : `${name}-help`}
-        className={FIELD}
-      />
-      {helper !== undefined && <span id={`${name}-help`} className="text-xs text-muted">{helper}</span>}
-    </div>
-  );
-}
-
 type StartFormProps = { initialRole?: string; autoFocusRole?: boolean; roleOptions?: readonly RoleOption[] };
 
 function StartFormInner({ initialRole, autoFocusRole = false, roleOptions = [] }: StartFormProps): React.JSX.Element {
