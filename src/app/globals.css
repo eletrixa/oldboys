@@ -1,1 +1,142 @@
+/**
+ * Global styles: Radar brand theme (Radar Design Kit V2 tokens + Visual Guideline UX rules) on Tailwind 4.
+ *
+ * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
+ * Module:  src/app/globals.css
+ * Deps:    tailwindcss 4, public/fonts (Public Sans, Newsreader; SIL OFL, notices beside the files)
+ * Tested:  n/a (visual)
+ *
+ * Key responsibilities:
+ * - Semantic Radar tokens (canvas, surface, ink, muted, action, sage, peach, divider, focus, evidence states)
+ * - Remaps the zinc / teal / amber / red / emerald / violet scales that the existing UI classes use, so the
+ *   former dark theme renders as Radar's warm light theme without touching the component files
+ * - Self-hosted fonts, serif headings, focus ring, reduced motion
+ *
+ * Design constraints:
+ * - Class names now lie on purpose: zinc-950 is the light canvas, zinc-100 is the ink, teal-* is the rust action
+ *   colour. New code should use the semantic names (bg-canvas, text-ink, bg-action, text-muted, border-divider).
+ * - Text pairs stay at WCAG AA: muted #59635D on canvas 5.8:1, white on action #A44732 6.0:1.
+ * - No network fonts: files are served from /fonts, so nothing is fetched at build or from a third party.
+ */
 @import "tailwindcss";
+
+@font-face {
+  font-family: "Public Sans";
+  src: url("/fonts/PublicSans-Variable.ttf") format("truetype");
+  font-weight: 100 900;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Newsreader";
+  src: url("/fonts/Newsreader-Variable.ttf") format("truetype");
+  font-weight: 200 800;
+  font-display: swap;
+}
+
+@theme {
+  --font-sans: "Public Sans", Arial, system-ui, sans-serif;
+  --font-serif: "Newsreader", Georgia, serif;
+
+  /* Radar semantic tokens (design kit V2) */
+  --color-canvas: #faf7f2;
+  --color-surface: #ffffff;
+  --color-ink: #282d2b;
+  --color-muted: #59635d;
+  --color-action: #a44732;
+  --color-action-hover: #873a29;
+  --color-peach: #f1d4bf;
+  --color-sage: #dce4d7;
+  --color-line: #7a827c;
+  --color-divider: #daddd7;
+  --color-focus: #2359c4;
+  --color-ok: #35604a;
+  --color-ok-bg: #e5eee8;
+  --color-unsure: #795514;
+  --color-unsure-bg: #fff1d5;
+  --color-conflict: #913e47;
+  --color-conflict-bg: #f7e6e8;
+
+  /* Former dark neutrals, inverted to Radar's light theme (950 = canvas ... 100 = ink) */
+  --color-zinc-950: #faf7f2;
+  --color-zinc-900: #ffffff;
+  --color-zinc-800: #daddd7;
+  --color-zinc-700: #c9ccc5;
+  --color-zinc-600: #7a827c;
+  --color-zinc-500: #59635d;
+  --color-zinc-400: #59635d;
+  --color-zinc-300: #3f4642;
+  --color-zinc-200: #323835;
+  --color-zinc-100: #282d2b;
+
+  /* Former teal accent becomes the rust action colour */
+  --color-teal-950: #f8ece7;
+  --color-teal-800: #e3bfb3;
+  --color-teal-500: #a44732;
+  --color-teal-400: #873a29;
+  --color-teal-300: #a44732;
+
+  /* Evidence states: amber = unverified / partial, red = conflict or failure, emerald = supported, violet = statement */
+  --color-amber-950: #fff1d5;
+  --color-amber-700: #e2c58c;
+  --color-amber-500: #c9952e;
+  --color-amber-400: #a8771e;
+  --color-amber-300: #795514;
+  --color-amber-200: #694a11;
+  --color-red-950: #f7e6e8;
+  --color-red-900: #e7c3c8;
+  --color-red-800: #d9a8af;
+  --color-red-500: #913e47;
+  --color-red-300: #913e47;
+  --color-red-200: #7c333b;
+  --color-emerald-950: #e5eee8;
+  --color-emerald-900: #b9cfc1;
+  --color-emerald-100: #35604a;
+  --color-violet-500: #5b4f8f;
+  --color-violet-300: #4c4280;
+}
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  body {
+    font-family: var(--font-sans);
+    background-color: var(--color-canvas);
+    color: var(--color-ink);
+  }
+  h1,
+  h2 {
+    font-family: var(--font-serif);
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    text-wrap: balance;
+  }
+  p,
+  li {
+    text-wrap: pretty;
+  }
+  ::selection {
+    background-color: var(--color-peach);
+    color: var(--color-ink);
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 2px;
+  }
+  button,
+  [role="button"],
+  summary {
+    cursor: pointer;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 1ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 1ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
