@@ -9,7 +9,9 @@
  * Key responsibilities:
  * - ProgressSteps, ProfileList, QuestionCard, BriefView, CostLine
  * - Pure rendering from props; all fetching and state lives in run-view.tsx
- * - Brief top line: "Confirmed profile: <headline>" next to "Hiring for: <role>" (both quoted, no model needed)
+ * - Brief top line: "Confirmed profile: <headline>" next to "Hiring for: <role>" (both quoted, no model needed),
+ *   with the location note (confirmed profile names another city than the anchor) under the profile line
+ * - Gap list reads "Searched, nothing confirmed" when any searched gap is a namesake-only one
  * - Confirmed evidence grouped by the URL's platform (evidenceGroup), not by the actor that fetched it
  *
  * Design constraints:
@@ -17,7 +19,7 @@
  */
 import type { Brief, Candidate, CandidateDecision } from "@/domain/claim";
 import { formatDuration, type RunCost } from "@/domain/run-cost";
-import { PLATFORM_LABEL, type RowState, type RunState, evidenceGroup, roleCriteria } from "./state";
+import { PLATFORM_LABEL, type RowState, type RunState, evidenceGroup, roleCriteria, searchedTitle } from "./state";
 
 const CARD = "rounded-2xl border border-zinc-800 bg-zinc-900/60 p-5";
 
@@ -318,7 +320,7 @@ function DegradedNotice({ reason }: { reason: string }): React.JSX.Element {
 }
 
 /** Who this is (quoted from a confirmed profile) next to what they are being screened for. */
-function TopLine({ headline, role }: { headline: string | null; role: string | null }): React.JSX.Element | null {
+function TopLine({ headline, locationNote, role }: { headline: string | null; locationNote: string | null; role: string | null }): React.JSX.Element | null {
   if (headline === null && role === null) return null;
   return (
     <section className={CARD}>
@@ -327,6 +329,7 @@ function TopLine({ headline, role }: { headline: string | null; role: string | n
           <div>
             <dt className="text-zinc-500">Confirmed profile</dt>
             <dd className="font-medium">{headline}</dd>
+            {locationNote !== null && <dd className="mt-1 text-amber-300">{locationNote}</dd>}
           </div>
         )}
         {role !== null && (
@@ -367,6 +370,7 @@ const GAP_LABEL: Record<string, string> = {
   bluesky_profile: "Bluesky",
   personal_site_crawl: "Personal website",
   talks_serp: "Talks and posts",
+  facebook_profile: "Facebook",
 };
 
 type Gap = Brief["not_searched"][number];
@@ -404,7 +408,7 @@ export function BriefView({ state }: { state: RunState }): React.JSX.Element | n
   const allUnavailable = brief.per_question.length > 0 && brief.per_question.every((q) => q.summary.startsWith("AI summary unavailable"));
   return (
     <div id="brief" className="flex scroll-mt-6 flex-col gap-4">
-      <TopLine headline={brief.headline ?? null} role={state.role} />
+      <TopLine headline={brief.headline ?? null} locationNote={brief.location_note ?? null} role={state.role} />
       {brief.degraded !== null && <DegradedNotice reason={brief.degraded} />}
       {brief.degraded !== null && <ConfirmedEvidence items={brief.evidence} />}
       {allUnavailable ? (
@@ -442,7 +446,7 @@ export function BriefView({ state }: { state: RunState }): React.JSX.Element | n
       )}
       <List title="Interview questions" items={brief.interview_questions} />
       <List title="To verify" items={brief.to_verify} />
-      <List title="Searched, nothing found" items={searchedEmpty(brief).map(gapLine)} />
+      <List title={searchedTitle(searchedEmpty(brief))} items={searchedEmpty(brief).map(gapLine)} />
       <List title="Not searched, and why" items={brief.not_searched.map(gapLine)} />
       <AlsoFound items={brief.also_found} />
       {brief.removed_protected > 0 ? (

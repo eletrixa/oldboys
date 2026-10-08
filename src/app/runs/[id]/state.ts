@@ -11,7 +11,8 @@
  * - stepRows: map the ledger step + status to the five human progress rows
  * - sortLineup: confirmed first, social platforms before web hits
  * - questionsToAsk: one open profile per platform; roleCriteria: role must-haves (mh-) only
- * - evidenceGroup: the heading a confirmed source sits under, from its URL's platform (LinkedIn, X), not the actor
+  * - evidenceGroup: the heading a confirmed source sits under, from its URL's platform (LinkedIn, X), not the actor
+ * - searchedTitle: "Searched, nothing confirmed" when a gap is namesake-only, else "nothing found"
  *
  * Design constraints:
  * - Pure (types plus the pure platformOf), so both the route handler and client code can use it
@@ -120,4 +121,9 @@ export function stepRows(state: Pick<RunState, "status" | "step" | "mentions" | 
   let current = state.step === null ? 0 : rowOf(state.step);
   if (current === 0 && state.mentions > 0) current = 1;
   return Array.from({ length: 5 }, (_, i) => (i < current ? "done" : i === current ? "active" : "todo"));
+}
+
+/** Gap list heading: "nothing confirmed" once any searched source returned only namesakes, else "nothing found". */
+export function searchedTitle(gaps: readonly { reason: string }[]): string {
+  return gaps.some((g) => g.reason.includes("none confirmed")) ? "Searched, nothing confirmed" : "Searched, nothing found";
 }

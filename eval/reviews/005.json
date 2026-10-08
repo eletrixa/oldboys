@@ -1,0 +1,46 @@
+{
+  "iteration": 5,
+  "stars": 4.1,
+  "weighted_mean": 4.08,
+  "ceiling_without_key": 4.3,
+  "weights": {"screen1": 0.10, "screen2": 0.20, "breadth": 0.15, "identity": 0.20, "honesty": 0.15, "judge_value": 0.20},
+  "scores": {"screen1": 4.5, "screen2": 4.5, "breadth": 3.5, "identity": 4.5, "honesty": 4.0, "judge_value": 3.5},
+  "deltas": {"screen1": 0, "screen2": 0.5, "breadth": 0, "identity": 0.5, "honesty": 0, "judge_value": 0.5},
+  "previous": {"iteration": 4, "stars": 3.8, "scores": {"screen1": 4.5, "screen2": 4.0, "breadth": 3.5, "identity": 4.0, "honesty": 4.0, "judge_value": 3.0}},
+  "claimed_not_real": [
+    "Evidence dedupe: exact text only; Buryan's confirmed card shows the same snippet twice ('...' vs '...Read more' variants)",
+    "Identity questions: named by title (real), but not one per platform; Pokorny's interview card asks about two more LinkedIn profiles after a LinkedIn was confirmed",
+    "Facebook limit: documented in README only; no Facebook line in the brief's 'Not searched, and why'",
+    "Still open from 004 and untouched: start-route brake (Turnstile, atomic cap), hits-found-none-confirmed gap, visible MOCK label in the UI"
+  ],
+  "fixes": [
+    {"rank": 1, "file": "src/recipe/seams/synthesize.ts", "change": "searched_empty gap for every collector step whose hits are all unconfirmed ('GitHub: 3 hits for the name, none linked to the confirmed profile'); Pokorny's brief is silent on 8 searched sources."},
+    {"rank": 2, "file": "src/recipe/seams/synthesize.ts", "change": "templatedQuestions: skip open candidates on platforms that already have a merged candidate; at most one per platform."},
+    {"rank": 3, "file": "src/recipe/seams/synthesize.ts, src/app/runs/[id]/parts.tsx", "change": "Deterministic anchor contradiction: confirmed profile names a different region/city than the city anchor (Jihomoravsky vs Liberec) -> warning in TopLine, stated not deleted."},
+    {"rank": 4, "file": "src/recipe/seams/resolve.ts", "change": "pickDrafts and questionsToAsk: within a platform, anchor-mentioning candidates rank first."},
+    {"rank": 5, "file": "src/recipe/seams/synthesize.ts", "change": "uniqueRows: strip trailing 'Read more', '...', '…', 'See more' and compare first 120 chars; test with Buryan's duplicate pairs."},
+    {"rank": 6, "file": "src/app/runs/[id]/parts.tsx", "change": "EvidenceGroups: profile row plus three posts per platform, rest collapsed (Buryan shows 15 LinkedIn rows)."},
+    {"rank": 7, "file": "src/recipe/goals/hiring.ts", "change": "Not-searched gap 'Facebook: not collected, public profiles need a login' so the limit reaches the reader, not only README."},
+    {"rank": 8, "file": "src/app/api/start/route.ts, src/app/api/runs/route.ts", "change": "Carried from 004: Turnstile before attaching RUN_TOKEN, atomic conditional insert for the cap, jury path outside the anonymous 6/hour."},
+    {"rank": 9, "file": "src/app/runs/[id]/run-view.tsx, src/app/runs/[id]/parts.tsx", "change": "Visible MOCK badge on mock call results; degraded notice 'AI is off for this run, so this brief shows confirmed sources only.'"},
+    {"rank": 10, "file": "wrangler.jsonc, CLAUDE.md, plans/001-deep-research-arch/00-SYNTHESIS.md", "change": "Reconcile the call budget: var says 16, runs show 15 source calls, binding decision says 12."}
+  ],
+  "to_reach_4_5_with_key": [
+    "Fixes 1-3 with tests: every source ends in a row or a gap; anchor-contradicting confirmed profile is flagged",
+    "Keyed run on both demo subjects: FACT claims with verbatim quotes from merged sources only, INFERENCE labelled, one contradiction by rank",
+    "Each role must-have shows evidence or 'no evidence found'; 3-5 interview questions built from that evidence",
+    "E3 goal delta >= 50% shown live",
+    "End-to-end <= 4 min with Opus on both subjects",
+    "Fix 8: jury cannot be locked out by the anonymous cap"
+  ],
+  "demo_script": [
+    "Prep: re-record Pokorny with honest answers (No to the South Moravia LinkedIn, Not sure to the rest) as the CACHED run; check start-cap headroom",
+    "0:00 Screen 1: Jozef Buryan / Praha / Senior Data Engineer, Prague, hybrid; point at 'deleted after 7 days'; start",
+    "0:15 Progress: 47 mentions, live cost line, '0 AI calls' stated openly",
+    "0:45 Lineup: Josef matched to Jozef, one row per platform; Yes to LinkedIn CMO, Not sure to X and Instagram",
+    "1:05 Brief top line: 'Confirmed profile: CMO, Groupon' next to 'Hiring for: Senior Data Engineer'",
+    "1:20 Amber notice, criteria 'not checked', interview questions; do not scroll the 15 LinkedIn rows",
+    "1:35 Pokorny CACHED tab: namesakes and the Liberec footballer with 'mentions Liberec'; tool asks instead of guessing",
+    "1:50 Close: what the key adds (FACT/INFERENCE with quotes), 7-day deletion; claim nothing unshown"
+  ]
+}

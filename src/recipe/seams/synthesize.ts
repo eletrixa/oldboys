@@ -17,7 +17,11 @@
  * - Gaps split: `not_searched` (no request made, prefix stripped) vs `searched_empty`; `source` is the step id
  * - Confirmed = identity "merged" only; SERP hits on namesakes stay in `also_found`; both deduped by excerpt text
  * - `headline`: the title line of the best merged profile (LinkedIn first), quoted, so a keyless brief still says who this is
- * - Identity questions name the profile by its title line, never by URL slug; profiles without a handle are not asked
+ * - Identity questions name the profile by its title line, never by URL slug; profiles without a handle are not asked;
+ *   at most one per platform, none for a platform that already has a merged profile
+ * - Evidence dedupe ignores trailing "...", "…", "Read more", "See more", "Více" and keeps the longer excerpt
+ * - `location_note`: a merged profile names a known Czech city/region and never the anchor (stated, nothing deleted)
+ * - Facebook: a Facebook candidate adds a static not_searched line (no collector; public pages need a login)
  */
 import { z } from "zod";
 import { containsArt9Topic } from "@/domain/art9";
@@ -25,7 +29,7 @@ import type { Brief, Candidate, Claim, Coverage, Source } from "@/domain/claim";
 import type { Ports } from "@/domain/ports";
 import { emptyOutcome } from "@/recipe/runner";
 import { PLATFORM_RANK, profileKey } from "@/recipe/seams/resolve";
-import type { StepContext, StepOutcome } from "@/recipe/sources/types";
+import { platformOf, type StepContext, type StepOutcome } from "@/recipe/sources/types";
 
 const Protected = z.array(z.object({ id: z.string(), protected: z.boolean() }));
 const Summaries = z.array(z.object({ question_id: z.string(), summary: z.string(), interview_question: z.string().nullable() }));
@@ -125,18 +129,20 @@ function row(s: Source): Brief["evidence"][number] {
   return { step: s.actor, url: s.url, excerpt: s.excerpt.slice(0, 300) };
 }
 
-/** One row per excerpt text (case and whitespace ignored): the same snippet from two hosts reads as one fact. */
+/** Excerpt as a dedupe key: case, whitespace and trailing "...", "…", "Read more", "See more", "Více" ignored. */
+export function excerptKey(excerpt: string): string {
+  return excerpt.toLowerCase().replace(/(?:\s|\.{3}|…|read more|see more|více)+$/u, "").replace(/\s+/g, " ").trim();
+}
+
+/** One row per excerpt key, the longer excerpt wins: the same snippet from two hosts or cut two ways reads as one fact. */
 function uniqueRows(sources: readonly Source[]): Brief["evidence"] {
-  const seen = new Set<string>();
-  return sources
-    .map(row)
-    .filter((r) => {
-      const k = r.excerpt.toLowerCase().replace(/\s+/g, " ").trim();
-      if (seen.has(k)) return false;
-      seen.add(k);
-      return true;
-    })
-    .slice(0, EVIDENCE_MAX);
+  const byKey = new Map<string, Brief["evidence"][number]>();
+  for (const r of sources.map(row)) {
+    const k = excerptKey(r.excerpt);
+    const prev = byKey.get(k);
+    if (prev === undefined || r.excerpt.length > prev.excerpt.length) byKey.set(k, r);
+  }
+  return [...byKey.values()].slice(0, EVIDENCE_MAX);
 }
 
 export function evidenceOf(ctx: StepContext): Brief["evidence"] {
@@ -157,19 +163,81 @@ export function headlineOf(candidates: readonly Candidate[]): string | null {
   return best === undefined ? null : cut(best.snippet, HEADLINE_MAX);
 }
 
+/** 20 largest Czech cities plus their regions, as folded word prefixes (declension: Liberci, Brně, Praze). */
+// ponytail: fixed list, prefix match; a small town anchor outside it only warns when a listed place appears
+const PLACES: readonly (readonly string[])[] = [
+  ["praha", "praze", "prahy", "prague"],
+  ["brno", "brne", "brna", "jihomoravsk", "south moravia"],
+  ["ostrav", "moravskoslezsk", "moravian-silesian"],
+  ["plzen", "plzn", "pilsen"],
+  ["liberec", "liberci", "liberc"],
+  ["olomouc", "olomouck"],
+  ["ceske budejovice", "ceskych budejovic", "jihocesk", "south bohemia"],
+  ["hradec kralove", "hradci kralove", "kralovehradeck"],
+  ["usti nad", "usteck"],
+  ["pardubic"],
+  ["zlin", "zlinsk"],
+  ["havirov"],
+  ["kladno", "kladne", "kladna", "stredocesk", "central bohemia"],
+  ["opav"],
+  ["frydek"],
+  ["karvin"],
+  ["jihlav", "vysocin"],
+  ["teplic"],
+  ["karlovy vary", "karlovych varech", "karlovarsk"],
+  ["chomutov"],
+];
+
+const fold = (text: string): string => text.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
+
+/** Words (and word pairs) of the text, as written and folded, so a match can be quoted back. */
+function phrases(text: string): { raw: string; folded: string }[] {
+  const words = text.split(/[^\p{L}-]+/u).filter(Boolean);
+  return words.flatMap((w, i) => {
+    const pair = words[i + 1] === undefined ? [] : [`${w} ${words[i + 1] ?? ""}`];
+    return [w, ...pair].map((raw) => ({ raw, folded: fold(raw) }));
+  });
+}
+
+const placeOf = (folded: string): number => PLACES.findIndex((stems) => stems.some((st) => folded.startsWith(st)));
+
+/**
+ * "Confirmed profile mentions Jihomoravský, you entered Liberec": merged candidate titles and merged LinkedIn
+ * excerpts never name the anchor but name another listed place. Null for URL or IČO anchors.
+ */
+export function locationNoteOf(anchor: string, candidates: readonly Candidate[], sources: readonly Source[]): string | null {
+  const a = anchor.trim();
+  if (a === "" || /[.@/]/.test(a) || /^\d+$/.test(a)) return null;
+  const texts = [
+    ...candidates.filter((c) => c.decision === "merge").map((c) => c.snippet),
+    ...sources.filter((s) => confirmed(s) && platformOf(s.url) === "linkedin").map((s) => s.excerpt),
+  ];
+  const found = phrases(texts.join("\n"));
+  const anchorPlace = placeOf(fold(a));
+  const isAnchor = (f: string): boolean => (anchorPlace >= 0 ? placeOf(f) === anchorPlace : f === fold(a));
+  if (found.some((p) => isAnchor(p.folded)) || (anchorPlace < 0 && fold(texts.join(" ")).includes(fold(a)))) return null;
+  const other = found.find((p) => placeOf(p.folded) >= 0);
+  return other === undefined ? null : `Confirmed profile mentions ${other.raw}, you entered ${a}`;
+}
+
 const PROFILE_PLATFORMS = new Set(Object.keys(PLATFORM_LABEL));
 const IDENTITY_MAX = 2;
+const FACEBOOK_GAP = { source: "facebook_profile", reason: "not collected: public Facebook pages need a login" };
 
 /**
  * Degraded mode: at most two identity questions about open social profiles (never plain web pages a candidate
- * cannot speak to), then the role must-haves (mh-) still without evidence, in the second person. Base research
+ * cannot speak to; one per platform, none where a profile is already merged), then the role must-haves (mh-) still without evidence, in the second person. Base research
  * prompts are never turned into interview questions.
  */
 function templatedQuestions(ctx: StepContext, byQ: ReadonlyMap<string, readonly Claim[]>): string[] {
-  const open = ctx.candidates
-    .filter((c) => c.decision === "possibly-same-as" && PROFILE_PLATFORMS.has(c.platform) && c.handle !== null)
-    .sort((a, b) => b.score - a.score)
-    .slice(0, IDENTITY_MAX);
+  const done = new Set(ctx.candidates.filter((c) => c.decision === "merge").map((c) => c.platform));
+  const open: Candidate[] = [];
+  const byScore = ctx.candidates.filter((c) => c.decision === "possibly-same-as" && PROFILE_PLATFORMS.has(c.platform) && c.handle !== null).sort((a, b) => b.score - a.score);
+  for (const c of byScore) {
+    if (open.length >= IDENTITY_MAX || done.has(c.platform)) continue;
+    done.add(c.platform);
+    open.push(c);
+  }
   const mustHaves = ctx.questions
     .filter((q) => q.id.startsWith("mh-") && coverageOf(byQ.get(q.id) ?? []) === "none")
     .map((q) => askCandidate(q.text))
@@ -228,13 +296,15 @@ export async function synthesizeBrief(ctx: StepContext, ports: Ports): Promise<S
     to_verify: kept.filter((c) => c.kind === "INFERENCE").slice(0, 8).map((c) => c.text),
     not_searched: ctx.gaps
       .filter((g) => g.reason.startsWith(NOT_SEARCHED))
-      .map((g) => ({ source: g.question_id, reason: g.reason.slice(NOT_SEARCHED.length).trim() || "no reason recorded" })),
+      .map((g) => ({ source: g.question_id, reason: g.reason.slice(NOT_SEARCHED.length).trim() || "no reason recorded" }))
+      .concat(ctx.candidates.some((c) => c.platform === "facebook") ? [FACEBOOK_GAP] : []),
     searched_empty: ctx.gaps.filter((g) => !g.reason.startsWith(NOT_SEARCHED)).map((g) => ({ source: g.question_id, reason: g.reason })),
     removed_protected: removed,
     degraded,
     evidence: evidenceOf(ctx),
     also_found: alsoFoundOf(ctx),
     headline: headlineOf(ctx.candidates),
+    location_note: locationNoteOf(ctx.anchor, ctx.candidates, ctx.sources),
   };
   out.brief = brief;
   out.empty = false;

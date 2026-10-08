@@ -9,9 +9,9 @@
 import { describe, expect, it } from "vitest";
 import type { Candidate, Claim, Source } from "@/domain/claim";
 import { extractClaims } from "@/recipe/seams/extract";
-import { canonicalProfile, decisionFor, fallbackScores, isNoise, namesSubject, pickDrafts, profileKey, resolveCandidates, sourceIdentityUpdates } from "@/recipe/seams/resolve";
+import { canonicalProfile, decisionFor, fallbackScores, isNoise, namesSubject, noneConfirmed, pickDrafts, profileKey, resolveCandidates, sourceIdentityUpdates, UNCONFIRMED_GAP } from "@/recipe/seams/resolve";
 import { verifyClaims } from "@/recipe/seams/verify";
-import { askCandidate, coverageOf, headlineOf, profileQuestion, synthesizeBrief } from "@/recipe/seams/synthesize";
+import { askCandidate, coverageOf, excerptKey, headlineOf, locationNoteOf, profileQuestion, synthesizeBrief } from "@/recipe/seams/synthesize";
 import { baseContext, fakeLlm, fakePorts } from "@/recipe/__tests__/fakes";
 
 const s = (id: string, url: string, excerpt: string): Source => ({ id, run_id: "run-1", url, actor: "apify/google-search-scraper", fetched_at: "t", excerpt, r2_key: "k", expires_at: "e", identity: "unverified" });
@@ -445,5 +445,71 @@ describe("Facebook as a profile platform", () => {
     expect(brief?.interview_questions[0]).toBe("Is the Facebook profile 'Josef Buryan | Facebook' yours?");
     expect(brief?.evidence).toEqual([]);
     expect(brief?.also_found.map((e) => e.url)).toEqual([src.url]);
+  });
+});
+
+describe("review 005: unconfirmed gaps, one question per platform, location note, dedupe, Facebook", () => {
+  const merged = (id: string, url: string, platform: string, snippet: string): Candidate => ({ ...cand(id, url, "merge", platform, id), snippet });
+  const pokornyLi = merged("l", "https://cz.linkedin.com/in/lukas-pokorny-tech", "linkedin", "Lukáš Pokorný - technik - Lokalita: Jihomoravský | LinkedIn");
+
+  it("flags a collector whose hits are all namesakes; a hit on a merged profile or an empty result is not flagged", () => {
+    const gh = { ...s("g", "https://github.com/lpokorny", "lpokorny"), actor: "rest/github" };
+    expect(noneConfirmed([gh], [pokornyLi])).toBe(true);
+    expect(noneConfirmed([{ ...gh, identity: "merged" }], [pokornyLi])).toBe(false);
+    expect(noneConfirmed([s("l2", "https://www.linkedin.com/in/lukas-pokorny-tech/cs", "x")], [pokornyLi])).toBe(false);
+    expect(noneConfirmed([], [pokornyLi])).toBe(false);
+  });
+
+  it("lists every namesake-only collector of a Pokorný-shaped run under searched_empty", async () => {
+    const steps = ["github_profile", "orcid_search", "openalex_author", "stackexchange_profile", "bluesky_profile", "youtube_channel", "personal_site_crawl", "talks_serp"];
+    const gaps = [...steps.map((id) => ({ run_id: "run-1", question_id: id, reason: UNCONFIRMED_GAP })), { run_id: "run-1", question_id: "huggingface_profile", reason: "no Hugging Face models or datasets found" }];
+    const brief = (await synthesizeBrief(baseContext({ subject: "Lukáš Pokorný", anchor: "Liberec", candidates: [pokornyLi], gaps }), fakePorts())).brief;
+    expect(brief?.searched_empty.filter((g) => g.reason === UNCONFIRMED_GAP).map((g) => g.source)).toEqual(steps);
+    expect(brief?.searched_empty).toHaveLength(9);
+  });
+
+  it("asks at most one identity question per platform and none where a profile is already merged", async () => {
+    const open = (id: string, platform: string, score: number, snippet: string): Candidate => ({ ...cand(id, `https://${platform}.com/${id}`, "possibly-same-as", platform, id), score, snippet });
+    const candidates = [
+      pokornyLi,
+      open("li2", "linkedin", 0.6, "Lukáš Pokorný - sales director at Übersetzungen Deutsch"),
+      open("gh1", "github", 0.55, "lpokorny (Lukas Pokorny)"),
+      open("gh2", "github", 0.5, "lukaspokorny (Lukáš Pokorný)"),
+      open("ig1", "instagram", 0.45, "Lukáš Pokorný (@lukas.pokorny)"),
+    ];
+    const qs = (await synthesizeBrief(baseContext({ candidates }), fakePorts())).brief?.interview_questions ?? [];
+    const identity = qs.filter((q) => q.includes("profile"));
+    expect(identity).toEqual(["Is the GitHub profile 'lpokorny (Lukas Pokorny)' yours?", "Is the Instagram profile 'Lukáš Pokorný (@lukas.pokorny)' yours?"]);
+  });
+
+  it("notes a confirmed profile in another region than the anchor, and stays quiet when the anchor appears", async () => {
+    expect(locationNoteOf("Liberec", [pokornyLi], [])).toBe("Confirmed profile mentions Jihomoravský, you entered Liberec");
+    expect(locationNoteOf("Brno", [pokornyLi], [])).toBeNull();
+    expect(locationNoteOf("Liberec", [merged("x", "https://x.com/lp", "x", "Lukáš Pokorný, Liberec")], [])).toBeNull();
+    const liSrc = { ...s("ls", "https://cz.linkedin.com/in/lp", "Lukáš Pokorný\nPraha, Hlavní město Praha"), identity: "merged" as const };
+    expect(locationNoteOf("Liberec", [merged("m", "https://cz.linkedin.com/in/lp", "linkedin", "Lukáš Pokorný - Developer")], [liSrc])).toBe("Confirmed profile mentions Praha, you entered Liberec");
+    expect(locationNoteOf("Liberci", [pokornyLi], [{ ...liSrc, excerpt: "v Liberci" }])).toBeNull();
+    expect(locationNoteOf("27082440", [pokornyLi], [])).toBeNull();
+    expect(locationNoteOf("kiwi.com", [pokornyLi], [])).toBeNull();
+    expect(locationNoteOf("Liberec", [{ ...pokornyLi, decision: "possibly-same-as" }], [])).toBeNull();
+    const brief = (await synthesizeBrief(baseContext({ anchor: "Liberec", candidates: [pokornyLi] }), fakePorts())).brief;
+    expect(brief?.location_note).toBe("Confirmed profile mentions Jihomoravský, you entered Liberec");
+    expect((await synthesizeBrief(baseContext(), fakePorts())).brief?.location_note).toBeNull();
+  });
+
+  it("dedupes Buryan's '...' and '...Read more' pairs and keeps the longer excerpt", async () => {
+    const text = "Josef Buryan - CMO, Groupon. Marketing leader with 15 years in e-commerce";
+    expect(excerptKey(`${text}...`)).toBe(excerptKey(`${text} ...Read more`));
+    expect(excerptKey(`${text}…`)).toBe(excerptKey(`${text} Více`));
+    const m = (id: string, excerpt: string): Source => ({ ...s(id, `https://www.linkedin.com/in/jb/${id}`, excerpt), identity: "merged" });
+    const brief = (await synthesizeBrief(baseContext({ sources: [m("a", `${text}...`), m("b", `${text} ...Read more`), m("c", `${text}…`), m("d", "Other post")] }), fakePorts())).brief;
+    expect(brief?.evidence.map((e) => e.excerpt)).toEqual([`${text} ...Read more`, "Other post"]);
+  });
+
+  it("adds a Facebook line under not_searched only when a Facebook candidate exists", async () => {
+    const fb = { ...cand("f", "https://www.facebook.com/josefburyan", "possibly-same-as", "facebook", "josefburyan"), snippet: "Josef Buryan | Facebook" };
+    const brief = (await synthesizeBrief(baseContext({ candidates: [fb] }), fakePorts())).brief;
+    expect(brief?.not_searched).toContainEqual({ source: "facebook_profile", reason: "not collected: public Facebook pages need a login" });
+    expect((await synthesizeBrief(baseContext(), fakePorts())).brief?.not_searched).toEqual([]);
   });
 });

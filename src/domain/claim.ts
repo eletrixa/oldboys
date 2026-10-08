@@ -159,5 +159,7 @@ export const Brief = z.object({
   also_found: z.array(z.object({ step: z.string(), url: z.string(), excerpt: z.string().max(300) })).default([]),
   /** Title line of the best confirmed profile (LinkedIn first), max 160 chars: a quote, never an inference. Defaulted for older briefs. */
   headline: z.string().max(160).nullable().default(null),
+  /** "Confirmed profile mentions <place>, you entered <anchor>": deterministic anchor contradiction, null when none. Defaulted for older briefs. */
+  location_note: z.string().nullable().default(null),
 });
 export type Brief = z.infer<typeof Brief>;

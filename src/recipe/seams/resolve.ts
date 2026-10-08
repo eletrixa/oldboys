@@ -20,6 +20,7 @@
  *   get no handle (never a post code or a path word)
  * - `sourceIdentityUpdates`: after the lineup, sources whose profile key equals a merged candidate's become
  *   "merged", sources under a rejected candidate "unverified"; extract and synthesize trust only "merged"
+ * - `noneConfirmed`: a collector found hits but none sits on a merged profile; the Workflow records UNCONFIRMED_GAP
  *
  * Design constraints:
  * - Never merges on name alone (plans/001 case studies §B); below ASK_FLOOR the UI asks the manager
@@ -145,6 +146,15 @@ export function sourceIdentityUpdates(
     if (next !== null && next !== s.identity) out.push({ id: s.id, identity: next });
   }
   return out;
+}
+
+/** Gap reason for a post-lineup collector whose hits are all namesakes or unverified. */
+export const UNCONFIRMED_GAP = "hits found, none confirmed (same name, identity not verified)";
+
+/** True when there are hits and none is merged, by collector identity or by profile key of a merged candidate. */
+export function noneConfirmed(sources: readonly Pick<Source, "url" | "identity">[], candidates: readonly Pick<Candidate, "decision" | "profile_urls">[]): boolean {
+  const merged = new Set(candidates.filter((c) => c.decision === "merge").flatMap((c) => c.profile_urls.map(profileKey)));
+  return sources.length > 0 && !sources.some((s) => s.identity === "merged" || merged.has(profileKey(s.url)));
 }
 
 /** Titles of people-search and directory listings: one page, many different people. */

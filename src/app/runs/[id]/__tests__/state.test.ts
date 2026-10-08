@@ -10,13 +10,14 @@
  * - questionsToAsk: one question per platform, web hits only as filler
  * - roleCriteria: mh- questions only
  * - evidenceGroup: platform label from the URL, step label or "Web search" for plain pages
+ * - searchedTitle: "nothing confirmed" once a namesake-only gap is present
  *
  * Design constraints:
  * - Pure: no React, no fetch
  */
 import { describe, expect, it } from "vitest";
 import type { Candidate } from "@/domain/claim";
-import { evidenceGroup, questionsToAsk, roleCriteria } from "../state";
+import { evidenceGroup, questionsToAsk, roleCriteria, searchedTitle } from "../state";
 
 const cand = (id: string, platform: string, score: number, decision: Candidate["decision"] = "possibly-same-as"): Candidate => ({
   id, run_id: "r", name: "x", profile_urls: [`https://${id}`], anchor_match: null, score, decision, platform, handle: id, snippet: "", reasons: [],
@@ -63,5 +64,12 @@ describe("facebook", () => {
     const picked = questionsToAsk([cand("w", "web", 0.9), cand("fb", "facebook", 0.5), cand("bs", "bluesky", 0.5)], 2);
     expect(picked.map((c) => c.id)).toEqual(["bs", "fb"]);
     expect(evidenceGroup({ step: "apify/google-search-scraper", url: "https://www.facebook.com/jb" })).toBe("Facebook");
+  });
+});
+
+describe("searchedTitle", () => {
+  it("reads 'nothing confirmed' once any gap is namesake-only, else 'nothing found'", () => {
+    expect(searchedTitle([{ reason: "no ORCID record found" }])).toBe("Searched, nothing found");
+    expect(searchedTitle([{ reason: "no ORCID record found" }, { reason: "hits found, none confirmed (same name, identity not verified)" }])).toBe("Searched, nothing confirmed");
   });
 });
