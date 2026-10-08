@@ -218,15 +218,24 @@ const COVERAGE = {
   none: "bg-zinc-800 text-zinc-400",
 } as const;
 
-function List({ title, items }: { title: string; items: string[] }): React.JSX.Element | null {
+/** A gap as a list item: the plain line, with the full reason on hover. */
+const gapItem = (g: Brief["not_searched"][number]): { text: string; hint: string } => ({ text: gapLine(g), hint: g.reason });
+
+function List({ title, items }: { title: string; items: (string | { text: string; hint: string })[] }): React.JSX.Element | null {
   if (items.length === 0) return null;
   return (
     <section className={CARD}>
       <h3 className="mb-2 font-semibold">{title}</h3>
       <ul className="list-disc space-y-1 pl-5 text-sm text-zinc-300">
-        {items.map((t) => (
-          <li key={t}>{t}</li>
-        ))}
+        {items.map((t) =>
+          typeof t === "string" ? (
+            <li key={t}>{t}</li>
+          ) : (
+            <li key={t.text} title={t.hint}>
+              {t.text}
+            </li>
+          ),
+        )}
       </ul>
     </section>
   );
@@ -400,8 +409,8 @@ export function BriefView({ state }: { state: RunState }): React.JSX.Element | n
       )}
       <List title="Interview questions" items={brief.interview_questions} />
       <List title="To verify" items={brief.to_verify} />
-      <List title={searchedTitle(searchedEmpty(brief))} items={searchedEmpty(brief).map(gapLine)} />
-      <List title="Not searched, and why" items={brief.not_searched.map(gapLine)} />
+      <List title={searchedTitle(searchedEmpty(brief))} items={searchedEmpty(brief).map(gapItem)} />
+      <List title="Not searched, and why" items={brief.not_searched.map(gapItem)} />
       <AlsoFound items={brief.also_found} />
       {brief.removed_protected > 0 ? (
         <p className="text-xs text-zinc-500">{String(brief.removed_protected)} items removed (protected categories)</p>

@@ -43,6 +43,19 @@ describe("roleQuestions", () => {
     expect(r.notes[0]).toContain("fallback");
     expect(r.calls).toBe(0);
     expect(r.questions[2]?.text).toBe("Location compatible with Prague (profile location)");
+    expect(r.questions.map((q) => q.title)).toEqual(["Role experience", "Public work", "Location fit"]);
+  });
+
+  it("keeps the model's short title and omits a blank one", async () => {
+    const ports = fakePorts({
+      llm: fakeLlm(() => [
+        { ...m("mh-org", "Has built or led a multi-function marketing organization?"), title: " Marketing org leadership " },
+        { ...m("mh-x", "Has x?"), title: "  " },
+      ]),
+    });
+    const r = await roleQuestions("CMO", ports);
+    expect(r.questions[0]?.title).toBe("Marketing org leadership");
+    expect(r.questions[1]).not.toHaveProperty("title");
   });
 
   it("takes the role's place, skipping work modes, else a plain-city anchor, never the whole role string", () => {

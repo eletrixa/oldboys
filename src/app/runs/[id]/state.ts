@@ -13,7 +13,7 @@
  * - questionsToAsk: one open profile per platform; roleCriteria: role must-haves (mh-) only
   * - evidenceGroup: the heading a confirmed source sits under, from its URL's platform (LinkedIn, X), not the actor
  * - searchedTitle: "Searched, nothing confirmed" when a gap is namesake-only, else "nothing found"
- * - GAP_LABEL, gapLine, searchedEmpty: human gap lines, shared by BriefView and the interview kit
+ * - GAP_LABEL, gapText, gapLine, searchedEmpty: human gap lines (raw request errors turned into plain words), shared by BriefView and the interview kit
  * - briefSections (confidence descending, null for briefs stored before sections), confidenceBand, host
  * - headerText / firstName: the run page title; "the candidate" until the seed step derived a name (plans/006)
  * - seedHeadline: the headline the seed_profile ledger row recorded
@@ -43,7 +43,7 @@ export type RunState = {
   candidates: Candidate[];
   claims: Claim[];
   sources: { id: string; url: string }[];
-  questions: { id: string; text: string }[];
+  questions: { id: string; text: string; title?: string }[];
   brief: Brief | null;
   /** Reason recorded by the Workflow when status is failed; null otherwise. */
   failure: string | null;
@@ -190,8 +190,17 @@ export function searchedEmpty(brief: Brief): Gap[] {
   return typeof b === "object" && b !== null && "searched_empty" in b && Array.isArray(b.searched_empty) ? (b.searched_empty as Gap[]) : [];
 }
 
-/** "LinkedIn: no public profile" — step id replaced by its human label. */
-export const gapLine = (g: Gap): string => `${GAP_LABEL[g.source] ?? g.source}: ${g.reason}`;
+/** A gap reason in plain words: request errors lose their URL and JSON, a missing handle reads as a missing profile. */
+export function gapText(reason: string): string {
+  if (reason.startsWith("request failed:")) {
+    const code = /\bHTTP (\d{3})\b/.exec(reason)?.[1];
+    return code === undefined ? "the service did not answer" : `the service refused our request (HTTP ${code})`;
+  }
+  return reason === "no confirmed handle or id to look up" ? "no confirmed profile to look up" : reason;
+}
+
+/** "LinkedIn: no public profile" — step id replaced by its human label, reason in plain words. */
+export const gapLine = (g: Gap): string => `${GAP_LABEL[g.source] ?? g.source}: ${gapText(g.reason)}`;
 
 /** Sections by confidence, highest first; null when the stored brief predates sections (render per question instead). */
 export function briefSections(brief: Brief): BriefSection[] | null {

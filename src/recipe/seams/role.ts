@@ -12,7 +12,7 @@
  * - `profileFor`: ordered keyword rules mapping a role to an evidence profile
  *
  * Design constraints:
- * - Never emit ids that collide with the base hiring question ids; cap at 5; text under 160 chars
+ * - Never emit ids that collide with the base hiring question ids; cap at 5; text under 160 chars, title under 48
  * - `profileFor` is pure and order-sensitive: first matching rule wins (credentialed, audience, makers, track-record)
  */
 import { z } from "zod";
@@ -22,8 +22,9 @@ import type { Question } from "@/recipe/step";
 const BASE_IDS = new Set(["current-role", "career-history", "public-code", "public-talks", "location-match", "contradictions"]);
 const MAX_QUESTIONS = 5;
 const MAX_TEXT = 160;
+const MAX_TITLE = 48;
 
-const MustHaves = z.array(z.object({ id: z.string(), text: z.string().min(1), accepted_evidence: z.array(z.string()) }));
+const MustHaves = z.array(z.object({ id: z.string(), text: z.string().min(1), title: z.string().optional(), accepted_evidence: z.array(z.string()) }));
 
 export type RoleProfile = "makers" | "audience" | "credentialed" | "track-record" | "verify-only";
 
@@ -69,9 +70,9 @@ function fallback(role: string, anchor: string): Question[] {
   const label = title === "" ? "this role" : title;
   const where = roleLocation(role, anchor);
   return [
-    { id: "mh-title-experience", text: fit(`Has held a ${label} position or equivalent`, ["job history", "profile"]) },
-    { id: "mh-public-work", text: fit(`Has public work showing ${label} skills`, ["repo", "talk", "article", "portfolio"]) },
-    { id: "mh-location-fit", text: fit(`Location compatible with ${where ?? "the role"}`, ["profile location"]) },
+    { id: "mh-title-experience", title: "Role experience", text: fit(`Has held a ${label} position or equivalent`, ["job history", "profile"]) },
+    { id: "mh-public-work", title: "Public work", text: fit(`Has public work showing ${label} skills`, ["repo", "talk", "article", "portfolio"]) },
+    { id: "mh-location-fit", title: "Location fit", text: fit(`Location compatible with ${where ?? "the role"}`, ["profile location"]) },
   ];
 }
 
@@ -84,7 +85,7 @@ export async function roleQuestions(
     const r = await ports.llm({
       model: "primary",
       system:
-        "Turn a hiring role into 3 to 5 must-have questions about a candidate. Each question must be observable: answerable from public web evidence (repos, talks, job history, profiles). `id` is kebab-case starting with \"mh-\". `accepted_evidence` lists short evidence types. No questions about health, religion, politics, ethnicity or sexuality.",
+        "Turn a hiring role into 3 to 5 must-have questions about a candidate. Each question must be observable: answerable from public web evidence (repos, talks, job history, profiles). `id` is kebab-case starting with \"mh-\". `title` is a 2 to 5 word label for the criterion, e.g. \"Marketing org leadership\". `accepted_evidence` lists short evidence types. No questions about health, religion, politics, ethnicity or sexuality.",
       prompt: `Role: ${role}`,
       schema: MustHaves,
     });
@@ -94,7 +95,8 @@ export async function roleQuestions(
       const id = kebab(m.id);
       if (!id.startsWith("mh-") || BASE_IDS.has(id) || seen.has(id)) continue;
       seen.add(id);
-      questions.push({ id, text: fit(m.text, m.accepted_evidence) });
+      const title = m.title?.trim().slice(0, MAX_TITLE).trim();
+      questions.push({ id, text: fit(m.text, m.accepted_evidence), ...(title !== undefined && title !== "" ? { title } : {}) });
       if (questions.length === MAX_QUESTIONS) break;
     }
     if (questions.length > 0) return { questions, cost_usd: r.cost_usd, calls: 1, notes: [] };

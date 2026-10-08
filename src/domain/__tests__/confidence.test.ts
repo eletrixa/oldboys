@@ -26,9 +26,9 @@ describe("sectionConfidence", () => {
     expect(sectionConfidence(counts())).toEqual({ confidence: 0.9, confidence_reason: "2 facts from 2 confirmed sources, no contradictions" });
   });
 
-  it("raises with a third source and never passes 1", () => {
-    expect(sectionConfidence(counts({ sources: 3, confirmed_sources: 3 })).confidence).toBe(1);
-    expect(sectionConfidence(counts({ sources: 9, confirmed_sources: 9 })).confidence).toBe(1);
+  it("raises with a third source and never passes 0.95", () => {
+    expect(sectionConfidence(counts({ sources: 3, confirmed_sources: 3 })).confidence).toBe(0.95);
+    expect(sectionConfidence(counts({ sources: 9, confirmed_sources: 9 })).confidence).toBe(0.95);
   });
 
   it("caps a single source at 0.6", () => {

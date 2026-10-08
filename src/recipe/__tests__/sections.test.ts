@@ -74,8 +74,33 @@ describe("sectionsOf", () => {
 });
 
 describe("sectionTitle", () => {
-  it("cuts a long must-have text", () => {
-    expect(sectionTitle({ id: "mh-x", text: "a".repeat(120) })).toHaveLength(90);
+  it("prefers the model title, then shortens the text without an ellipsis", () => {
+    const text = "Has the candidate built or led a multi-function marketing organization (e.g., brand, demand gen, product marketing)?";
+    expect(sectionTitle({ id: "mh-x", text, title: "Marketing org leadership" })).toBe("Marketing org leadership");
+    expect(sectionTitle({ id: "mh-x", text })).toBe("Has the candidate built or led a multi-function");
+    expect(sectionTitle({ id: "mh-x", text: "Has led teams, such as growth, in B2B" })).toBe("Has led teams");
+    expect(sectionTitle({ id: "mh-x", text: "Hands-on experience such as SQL" })).toBe("Hands-on experience");
+    expect(sectionTitle({ id: "mh-x", text: "a".repeat(120) }).length).toBeLessThanOrEqual(48);
+  });
+
+  it("titles the contradictions question 'Where sources disagree'", () => {
+    expect(sectionTitle({ id: "contradictions", text: "Do sources disagree?" })).toBe("Where sources disagree");
+  });
+});
+
+describe("sectionsOf sources", () => {
+  it("counts two spellings of one profile as one source", () => {
+    const dup = src("s-li2", "https://www.linkedin.com/in/jana/?locale=cs_CZ");
+    const sections = sectionsOf(questions, [claim("c1", "current-role", ["s-li", "s-li2"])], perQuestion, [li, dup], [li, dup]);
+    expect(sections[0]?.source_ids).toEqual(["s-li"]);
+    expect(sections[0]?.confidence).toBe(0.6);
+    expect(sections[0]?.confidence_reason).toBe("1 fact from 1 confirmed source, no contradictions");
+  });
+
+  it("treats a support id outside the run's sources as no source and says so", () => {
+    const sections = sectionsOf(questions, [claim("c1", "current-role", ["9b6ea47"], { kind: "INFERENCE", quote: null })], perQuestion, all, confirmedOnly);
+    expect(sections[0]?.source_ids).toEqual([]);
+    expect(sections[0]?.confidence_reason).toBe("1 inference from no source, no contradictions; source missing for 1 claim");
   });
 });
 

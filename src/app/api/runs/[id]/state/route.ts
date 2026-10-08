@@ -87,7 +87,7 @@ export async function GET(
   const base = recipe?.questions ?? [];
   const recipeSteps = recipe?.steps ?? [];
   const stepIndex = last === undefined ? 0 : recipeSteps.findIndex((s) => s.id === last.step) + 1;
-  const extra = parseList<{ id: string; text: string }>(head.questions_json);
+  const extra = parseList<{ id: string; text: string; title?: string }>(head.questions_json);
 
   const state: RunState = {
     id: head.id,

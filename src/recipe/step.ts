@@ -16,7 +16,8 @@
  */
 import type { GoalId } from "@/domain/claim";
 
-export type Question = { id: string; text: string };
+/** `title`: short section title (2 to 5 words); runs from before titles have none. */
+export type Question = { id: string; text: string; title?: string };
 
 export type StepKind = "seed" | "serp" | "actor" | "ares" | "resolve" | "extract" | "verify" | "synthesize";
 
