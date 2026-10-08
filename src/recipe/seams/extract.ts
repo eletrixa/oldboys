@@ -10,6 +10,9 @@
  * - Feed only identity-merged sources (fetched for, or SERP hits on, a merged profile); never rejected profiles,
  *   namesake SERP hits or unverified name-search hits. Rejected profiles compare by profile key, not raw URL
  * - Validate every returned claim with the Claim schema; drop invalid ones with a note
+ * - A claim without a quote is capped at NO_QUOTE_MAX (0.6) confidence
+ * - Prompt: FACT text states only its quote (numbers kept, no hedges); no meta-claims about snippets, no ratings,
+ *   nothing about unrelated content; contradictions only for incompatible statements on the same measure, aliases excluded
  * - LLM failure returns an empty outcome with a note (never throws), so the run degrades instead of failing
  *
  * Design constraints:
@@ -24,6 +27,7 @@ import { profileKey } from "@/recipe/seams/resolve";
 import type { StepContext, StepOutcome } from "@/recipe/sources/types";
 
 const PROMPT_CHARS = 60_000;
+export const NO_QUOTE_MAX = 0.6;
 
 const Extracted = z.array(
   z.object({
@@ -59,7 +63,15 @@ export async function extractClaims(ctx: StepContext, ports: Ports): Promise<Ste
     r = await ports.llm({
       model: "primary",
       system:
-        "Extract claims that answer the questions, from the sources only. For a FACT, `quote` must be a verbatim substring of one listed source and `source_ids` must list that source. Anything you conclude rather than read is an INFERENCE (quote may be null). Never infer health, religion, politics, ethnicity or sexuality. No claims about questions that no source answers.",
+        [
+          "Extract claims that answer the questions, from the sources only. For a FACT, `quote` must be a verbatim substring of one listed source and `source_ids` must list that source. `source_ids` may only contain ids shown in [brackets] below, copied exactly.",
+          "A FACT states only what its quote states: add nothing the quote does not say, keep its specific numbers (write '$150M+ Google Ads spend', not 'large budgets'), and attribute exactly as the quote does (what the person credited, not a paraphrase). No hedges in a FACT ('likely', 'probably', 'may'); put any speculation (e.g. which company an unnamed employer was) into a separate INFERENCE claim.",
+          "Anything you conclude rather than read is an INFERENCE (quote may be null).",
+          "Claims are about the subject, never about the sources: no claims that a snippet is truncated, unclear or ambiguous, and no ratings or judgements of the person (reputation, visibility, seniority level, quality).",
+          "Ignore content you judge unrelated to the subject or misattributed: emit no claim about it at all.",
+          "For the `contradictions` question: emit a claim only when two sources make incompatible statements about the same measure or fact (same metric, same period, same role). Different measures (marketplace spend vs media budget) or different granularity are not contradictions. Names joined by '|', 'formerly', 'now', 'dříve', 'nyní' or appearing together in one title line are aliases of one organisation, not a contradiction.",
+          "Never infer health, religion, politics, ethnicity or sexuality. No claims about questions that no source answers.",
+        ].join("\n"),
       prompt: `Subject: ${ctx.subject}\nAnchor: ${ctx.anchor}\n\nQuestions:\n${ctx.questions.map((q) => `- ${q.id}: ${q.text}`).join("\n")}\n\nSources:\n${body}`,
       schema: Extracted,
     });
@@ -79,7 +91,8 @@ export async function extractClaims(ctx: StepContext, ports: Ports): Promise<Ste
       candidate_id: accepted?.id ?? null,
       text: e.text,
       kind: e.kind,
-      confidence: e.confidence,
+      // A claim without a quote is our reading, not a citation: its confidence never exceeds NO_QUOTE_MAX
+      confidence: e.quote === null || e.quote.trim() === "" ? Math.min(e.confidence, NO_QUOTE_MAX) : e.confidence,
       quote: e.quote,
       supports: e.source_ids,
       contradicts: [],
