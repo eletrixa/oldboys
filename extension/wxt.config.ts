@@ -36,7 +36,7 @@ export default defineConfig({
             gecko: {
               id: "oldboys@soulfire.cz",
               strict_min_version: "140.0",
-              data_collection_permissions: { required: ["personalInfo"] },
+              data_collection_permissions: { required: ["personallyIdentifyingInfo"] },
             },
           },
         }

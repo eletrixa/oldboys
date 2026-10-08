@@ -43,7 +43,12 @@ function renderRuns(list: HTMLUListElement, runs: readonly TrackedRun[]): void {
     ...runs.map((run) => {
       const li = document.createElement("li");
       const text = document.createElement("div");
-      text.innerHTML = `<div>${run.subject} <small>(${run.goal})</small></div><div class="status${needsUser(run) ? " needs" : ""}">${statusLine(run)}</div>`;
+      const name = document.createElement("div");
+      name.textContent = `${run.subject} (${run.goal})`;
+      const status = document.createElement("div");
+      status.className = needsUser(run) ? "status needs" : "status";
+      status.textContent = statusLine(run);
+      text.append(name, status);
       const open = document.createElement("button");
       open.type = "button";
       open.textContent = "Open";
