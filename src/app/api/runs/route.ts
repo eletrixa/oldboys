@@ -3,12 +3,13 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/api/runs/route.ts
- * Deps:    @opennextjs/cloudflare (getCloudflareContext), src/app/api/_lib/{auth,body,run-body}, bindings DB + RESEARCH_RUN, secret RUN_TOKEN
- * Tested:  body contract in src/app/api/_lib/__tests__/run-body.test.ts; handler n/a
+ * Deps:    @opennextjs/cloudflare (getCloudflareContext), src/app/api/_lib/{auth,body,run-body}, src/app/api/runs/start, bindings DB + RESEARCH_RUN, secret RUN_TOKEN
+ * Tested:  body contract in src/app/api/_lib/__tests__/run-body.test.ts; insert in src/app/api/runs/__tests__/start-from-position.test.ts; handler n/a
  *
  * Key responsibilities:
  * - Bearer auth against secret RUN_TOKEN (401 when missing or wrong, 503 when the secret is unset)
  * - Body validation (StartRunBody, plans/006): profileUrl or cvText or subject + anchor; 400 on bad input
+ * - Optional positionId (hiring): 404 "unknown position" when absent from D1; the INSERT lives in start.ts (specs/positions-start)
  * - Profile-first runs insert subject "" / anchor ""; the Workflow's seed_profile step fills them
  * - Optional sourceUrl (browser extension): same page + goal within 24 h returns the earlier run (200)
  * - Shared-token cap: more than RUNS_PER_HOUR_CAP runs in the last hour → 429; START_PER_HOUR_CAP for the public form
@@ -22,6 +23,7 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { requireBearer } from "@/app/api/_lib/auth";
 import { parseJsonBody } from "@/app/api/_lib/body";
 import { StartRunBody } from "@/app/api/_lib/run-body";
+import { insertRun } from "@/app/api/runs/start";
 import { dedupeSince, RUNS_PER_HOUR_CAP, START_PER_HOUR_CAP } from "@/domain/run-status";
 
 export async function POST(request: Request): Promise<Response> {
@@ -66,25 +68,8 @@ export async function POST(request: Request): Promise<Response> {
   const budgetUsd = Number(env.RUN_BUDGET_USD);
   const budgetCalls = Number(env.RUN_BUDGET_CALLS);
 
-  await env.DB.prepare(
-    `INSERT INTO investigations (id, subject, anchor, goal, status, budget_usd, budget_calls, created_at, source_url, role, via, profile_url, cv_text)
-     VALUES (?, ?, ?, ?, 'queued', ?, ?, ?, ?, ?, ?, ?, ?)`,
-  )
-    .bind(
-      id,
-      parsed.data.subject ?? "",
-      parsed.data.anchor ?? "",
-      parsed.data.goal,
-      budgetUsd,
-      budgetCalls,
-      now.toISOString(),
-      parsed.data.sourceUrl ?? null,
-      parsed.data.role ?? null,
-      via,
-      parsed.data.profileUrl ?? null,
-      parsed.data.cvText ?? null,
-    )
-    .run();
+  const inserted = await insertRun(env.DB, { id, body: parsed.data, now, budgetUsd, budgetCalls, via });
+  if (!inserted.ok) return Response.json({ error: inserted.error }, { status: inserted.status });
 
   await env.RESEARCH_RUN.create({ id, params: { runId: id } });
 

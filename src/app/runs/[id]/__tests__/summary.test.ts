@@ -51,6 +51,7 @@ const run = (over: Partial<RunState> = {}): RunState => ({
   subject: "Jan Novak",
   headline: null,
   role: "Senior Data Engineer",
+  position: null,
   created_at: "2026-10-08T21:00:00.000Z",
   status: "done",
   step: null,

@@ -12,7 +12,7 @@ Turn a pasted posting or a posting URL into a stored `Position` with at most 5 e
 ## Contract
 Files and tests:
 - `src/recipe/seams/posting-plan.ts` / `src/recipe/__tests__/posting-plan.test.ts`
-- `src/recipe/seams/posting-parse.ts` / `src/recipe/__tests__/posting-parse.test.ts` (fixtures under `src/recipe/__tests__/fixtures/postings/`)
+- `src/recipe/seams/posting-parse.ts` (+ `posting-parse-jobscz.ts`, `posting-html.ts`) / `src/recipe/__tests__/posting-parse.test.ts` (fixtures under `src/recipe/__tests__/fixtures/postings/`)
 - `src/recipe/seams/posting-strip.ts` (`stripBoilerplate`, tested in `posting-parse.test.ts`)
 - `src/recipe/seams/position-extract.ts` / `src/recipe/__tests__/position-extract.test.ts`
 - `src/workflow/ingest-position.ts` / `src/workflow/__tests__/ingest-position.test.ts` (fake D1, fake R2, injected `fetch`)
@@ -33,7 +33,8 @@ Returns `{ method, request?: { url: string }, board?: string, externalId?: strin
 
 ### parsePosting(method, payload, externalId?)
 Returns `{ title?: string, company?: string, location?: string, text: string }`; never throws, an unreadable payload gives `{ text: "" }`.
-- `jobs-cz` and `jsonld`: payload is an HTML string (checked 2026-10-08: live Jobs.cz `/rpd/<id>` pages carried no JSON-LD, so `jobs-cz` currently yields `{ text: "" }` and ingest falls back to paste; the parser contract is tested on a synthesized fixture); read every `<script type="application/ld+json">`, find a `JobPosting` (also inside `@graph` or an array); `title`, `hiringOrganization.name`, `jobLocation.address.addressLocality` (or `jobLocation[0]`), `description` (HTML to text: tags removed, entities decoded, block tags become newlines).
+- `jobs-cz`: payload is an HTML string (checked 2026-10-09: live `/rpd/<id>` pages carry no JSON-LD). `title` and `company` come from `<meta property="og:title" content="<title> – <company>">` (split at the last en dash with spaces), `location` from the text of the element with `data-test="jd-info-location"`, `text` from the HTML inside the element with `data-test="jd-body-richtext"` (HTML to text as below). Without the description marker the JSON-LD path below is tried; with neither the result is `{ text: "" }` and ingest falls back to paste.
+- `jsonld` (and the Jobs.cz fallback): payload is an HTML string; read every `<script type="application/ld+json">`, find a `JobPosting` (also inside `@graph` or an array); `title`, `hiringOrganization.name`, `jobLocation.address.addressLocality` (or `jobLocation[0]`), `description` (HTML to text: tags removed, entities decoded, block tags become newlines).
 - `greenhouse`: JSON `{ title, location.name, company_name?, content }`; `content` is HTML-escaped HTML, unescape then to text.
 - `lever`: JSON `{ text, categories.location, descriptionPlain, lists[] }`; `text` field of the result = `descriptionPlain` plus each list as `heading` line and items.
 - `ashby`: JSON `{ jobs: [...] }`; choose the entry whose `id` equals `externalId`; use `title`, `location`, `descriptionPlain` (else `descriptionHtml` to text). No match gives `{ text: "" }`.
@@ -56,10 +57,10 @@ Order: `postingFetchPlan(postingUrl ?? null)` -> dedupe check -> fetch -> `parse
 2. Dedupe: when the plan has `board` and `externalId` and a row with that pair exists, return `{ ok: true, id: existing, reused: true }` before any fetch or LLM call.
 3. Fetch with a 20 s abort. Non-2xx, timeout, throw, or parsed `text` shorter than 200 chars counts as a fetch failure. On failure with `postingText` present: continue as `pasted` and add a note naming the failed method. On failure without `postingText`: return `{ ok: false, status: 422, error }` with a plain reason (`could not read the posting at <host>: <why>; paste the posting text instead`).
 4. If both `postingText` and a fetchable URL are given, the fetched text wins and `postingText` is the fallback; the URL stays as `posting_url`.
-5. Cost cap: when `estimateUsd(text) > capUsd`, `extractPosition` is not called; the fallback is used with a note `position extract: estimated cost over POSITION_INGEST_USD, used generic fallback`. `capUsd` comes from var `POSITION_INGEST_USD`, default 0.05 when unset or not a number. `estimateUsd` is a module function (characters / 4 tokens times a conservative input price plus a fixed output allowance); tests inject it.
-6. Row: `id = newId()`, `excerpt` = first 1000 chars of the stripped text, `must_haves_json` = JSON of the must-haves, `ingest_method` = the method actually used, `ingest_cost_usd = cost_usd`, `created_at = now`, `expires_at = now + RETENTION_DAYS`, `r2_key = positions/<id>.json`, `board`/`external_id`/`posting_url` from the plan. Notes are stored in the R2 object, not in D1.
+5. Cost cap: when `estimateUsd(text) > capUsd`, `extractPosition` is not called; the fallback is used with a note `position extract: estimated cost over POSITION_INGEST_USD, used generic fallback`. `capUsd` comes from var `POSITION_INGEST_USD`, default 0.05 when unset or not a number. `estimateUsd` is the exported `estimatePositionUsd` (characters / 4 tokens at $5 per million plus 800 output tokens at $20 per million, so 20000 chars stays under the 0.05 default); `ingestCapUsd(raw)` parses the var. Tests inject both. Over the cap, `extractPosition` is run with an LLM port that rejects, so the fallback path is the one code path.
+6. Row: `id = newId()`, `excerpt` = first 1000 chars of the stripped text, `must_haves_json` = JSON of the must-haves, `ingest_method` = the method actually used, `ingest_cost_usd = cost_usd`, `created_at = now`, `expires_at = now + RETENTION_DAYS`, `r2_key = positions/<id>.json`, `posting_url` is the given URL; `board`/`external_id` come from the plan only when the fetch path served the text (a failed fetch that fell back to paste stores them as null, so a retry is not answered with the degraded row). Parsed text is cut to 20000 chars before extraction and the raw payload to 500000 chars before the R2 put. Notes are stored in the R2 object, not in D1.
 7. R2 object `positions/<id>.json` = `{ method, url, fetched_at, raw (payload or pasted text), notes }`. A failed R2 put must not fail the ingest: the row is kept with `r2_key = null` and the failure goes into the returned `notes`.
-8. Return `{ ok: true, id, reused: false, notes }`.
+8. Return `{ ok: true, id, reused: false, notes }`; the reused returns also carry `notes: []`.
 9. A concurrent insert that violates the `(board, external_id)` unique index returns the existing id with `reused: true`.
 
 ## Invariants
@@ -79,7 +80,7 @@ posting-plan
 - [ ] P6: `jobs.ashbyhq.com/acme/<uuid>` gives the job-board API URL with externalId `<uuid>`.
 - [ ] P7: `https://example.com/careers/dev` gives `jsonld`; `javascript:alert(1)` and `file:///etc/passwd` give `pasted`.
 posting-parse
-- [ ] R1: Jobs.cz fixture HTML gives title, company, locality and a text containing the description with tags removed.
+- [ ] R1: Jobs.cz fixture HTML (`jobs-cz.html`, markers) gives title, company, location and a text containing the description with tags removed; R1b: a page with JSON-LD only (synthetic fixture) still parses through the fallback.
 - [ ] R2: a JSON-LD `JobPosting` inside `@graph` is found; a page with no JobPosting gives `{ text: "" }`.
 - [ ] R3: Greenhouse fixture JSON gives title, location and unescaped text.
 - [ ] R4: Lever fixture JSON includes the list headings and items in `text`.

@@ -15,15 +15,25 @@ const fixture = (name: string) => readFileSync(new URL(`./fixtures/postings/${na
 const json = (name: string): unknown => JSON.parse(fixture(name));
 
 describe("parsePosting", () => {
-  it("R1: Jobs.cz HTML gives title, company, locality and description text without tags", () => {
-    const r = parsePosting("jobs-cz", fixture("jobs-cz-2001471225.html"));
+  it("R1: Jobs.cz page gives title and company from og:title, location link text and the description body as text", () => {
+    const r = parsePosting("jobs-cz", fixture("jobs-cz.html"));
+    expect(r.title).toBe("Senior Python / AI Technical Lead pro farmaceutickou společnost");
+    expect(r.company).toBe("Profinit EU, s.r.o.");
+    expect(r.location).toBe("Praha");
+    expect(r.text).toContain("Hledáme zkušeného Technical / Delivery Leada");
+    expect(r.text).toContain("- Povedeš technický rozvoj platformy");
+    expect(r.text).not.toMatch(/<[a-z]|&amp;|&nbsp;|class=/);
+    expect(r.text).not.toContain("Poslat na e-mail");
+  });
+
+  it("R1b: a Jobs.cz page without the markers falls back to JSON-LD, and a page with neither gives empty text", () => {
+    const r = parsePosting("jobs-cz", fixture("jobs-cz-jsonld-synthetic.html"));
     expect(r.title).toBe("Solution Architect pro AI & RAG platformu pro bankovní projekt");
     expect(r.company).toBe("Profinit EU, s.r.o.");
     expect(r.location).toBe("Praha");
-    expect(r.text).toContain("Hledáme zkušeného Solution Architekta & mentora.");
     expect(r.text).toContain("5+ let zkušeností s návrhem řešení");
-    expect(r.text).not.toMatch(/<[a-z]|&amp;|&nbsp;/);
     expect(r.text).toContain("Požadujeme:\n");
+    expect(parsePosting("jobs-cz", "<html><body>nothing</body></html>")).toEqual({ text: "" });
   });
 
   it("R2: JobPosting inside @graph or an array is found, a page without one gives empty text", () => {

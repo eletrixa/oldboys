@@ -12,6 +12,7 @@
  * - step_index/step_count from the recipe; failed_step = first recipe step without a ledger row on a failed run
  * - role = investigations.role (the brief's "Hiring for" line); subject is "" until the seed step derived it;
  *   headline = what the seed_profile ledger row recorded (plans/006); sources carry identity_reason (migration 0008)
+ * - position = LEFT JOIN positions on investigations.position_id ({id, title}); null without one or once purged (migration 0009)
  * - cost = runCost over the ledger rows (seq order) from investigations.created_at
  *
  * Design constraints:
@@ -32,6 +33,8 @@ type HeadRow = {
   status: RunStatus;
   questions_json: string | null;
   created_at: string;
+  position_id: string | null;
+  position_title: string | null;
 };
 type CandidateRow = Omit<Candidate, "profile_urls" | "reasons"> & { profile_urls_json: string; reasons_json: string };
 type ClaimRow = Omit<Claim, "supports" | "contradicts"> & { supports_json: string; contradicts_json: string };
@@ -54,7 +57,8 @@ export async function GET(
   const { env } = getCloudflareContext();
 
   const head = await env.DB.prepare(
-    "SELECT id, subject, goal, role, status, questions_json, created_at FROM investigations WHERE id = ?",
+    `SELECT i.id, i.subject, i.goal, i.role, i.status, i.questions_json, i.created_at, p.id AS position_id, p.title AS position_title
+     FROM investigations i LEFT JOIN positions p ON p.id = i.position_id WHERE i.id = ?`,
   )
     .bind(id)
     .first<HeadRow>();
@@ -94,6 +98,7 @@ export async function GET(
     subject: head.subject,
     headline: seedHeadline(ledger.results),
     role: head.role,
+    position: head.position_id !== null && head.position_title !== null ? { id: head.position_id, title: head.position_title } : null,
     created_at: head.created_at,
     status: head.status,
     step: last?.step ?? null,

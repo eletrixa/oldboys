@@ -3,18 +3,19 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/recipe/seams/posting-parse.ts
- * Deps:    src/recipe/seams/posting-plan.ts (PostingMethod)
- *
+ * Deps:    src/recipe/seams/{posting-plan,posting-html,posting-parse-jobscz}.ts
  * Tested:  src/recipe/__tests__/posting-parse.test.ts
  *
  * Key responsibilities:
  * - `parsePosting`: per-method extraction, never throws, unreadable payload gives `{ text: "" }`
- * - `htmlToText`: tags removed, entities decoded, block tags become newlines
+ * - Jobs.cz pages go to `parseJobsCz` first (no JSON-LD there), JSON-LD is the fallback and the `jsonld` method
  *
  * Design constraints:
  * - Pure; no I/O. Ashby needs the externalId to pick one job from the board listing
  * - Text only: the caller strips boilerplate and decides the 200-char fetch-failure threshold
  */
+import { decode, htmlToText } from "@/recipe/seams/posting-html";
+import { parseJobsCz } from "@/recipe/seams/posting-parse-jobscz";
 import type { PostingMethod } from "@/recipe/seams/posting-plan";
 
 export type ParsedPosting = {
@@ -26,33 +27,12 @@ export type ParsedPosting = {
 
 type Obj = Record<string, unknown>;
 const EMPTY: ParsedPosting = { text: "" };
-const NAMED: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " " };
-
 const isObj = (v: unknown): v is Obj => typeof v === "object" && v !== null && !Array.isArray(v);
 const str = (v: unknown): string | undefined => (typeof v === "string" && v.trim() ? v.trim() : undefined);
 const first = (v: unknown): unknown => (Array.isArray(v) ? v[0] : v);
 
-function decode(s: string): string {
-  return s.replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (m, e: string) => {
-    if (e.startsWith("#")) {
-      const code = e[1]?.toLowerCase() === "x" ? parseInt(e.slice(2), 16) : parseInt(e.slice(1), 10);
-      return Number.isFinite(code) && code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : m;
-    }
-    return NAMED[e.toLowerCase()] ?? m;
-  });
-}
-
 /** Some feeds ship HTML entity-escaped (`&lt;p&gt;`); decode once so the tags can be removed. */
 const unescapeHtml = (s: string) => (/&lt;[a-z/]/i.test(s) ? decode(s) : s);
-
-export function htmlToText(html: string): string {
-  const withBreaks = html
-    .replace(/<(script|style)[\s\S]*?<\/\1>/gi, "")
-    .replace(/<\/(p|div|h[1-6]|li|ul|ol|tr|section)>|<br\s*\/?>/gi, "\n")
-    .replace(/<li[^>]*>/gi, "- ")
-    .replace(/<[^>]+>/g, "");
-  return decode(withBreaks).replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
-}
 
 function json(payload: unknown): unknown {
   if (isObj(payload) || Array.isArray(payload)) return payload;
@@ -119,7 +99,11 @@ function parseAshby(data: unknown, externalId?: string): ParsedPosting {
 export function parsePosting(method: PostingMethod, payload: unknown, externalId?: string): ParsedPosting {
   try {
     if (method === "pasted") return typeof payload === "string" ? { text: payload.trim() } : EMPTY;
-    if (method === "jobs-cz" || method === "jsonld") return typeof payload === "string" ? parseJsonLd(payload) : EMPTY;
+    if (method === "jobs-cz" || method === "jsonld") {
+      if (typeof payload !== "string") return EMPTY;
+      const page = method === "jobs-cz" ? parseJobsCz(payload) : EMPTY;
+      return page.text === "" ? parseJsonLd(payload) : page;
+    }
     const data = json(payload);
     if (method === "greenhouse") return parseGreenhouse(data);
     if (method === "lever") return parseLever(data);

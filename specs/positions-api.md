@@ -12,7 +12,7 @@ Bearer-protected JSON routes to create, list, read and edit positions. Handlers 
 ## Contract
 Files:
 - `src/app/api/_lib/position-body.ts`: Zod `CreatePositionBody`, `PatchPositionBody`. Test `src/app/api/_lib/__tests__/position-body.test.ts`.
-- `src/app/api/positions/handler.ts`: `listPositions(db)`, `getPosition(db, id)`, `patchPosition(db, id, body)`; creation is `ingestPosition` from `positions-ingest`. Test `src/app/api/positions/__tests__/handler.test.ts` with a fake D1.
+- `src/app/api/positions/handler.ts`: `listPositions(db)`, `getPosition(db, id)`, `patchPosition(db, id, body)`; creation is `ingestPosition` from `positions-ingest`. It also exports the route functions `createPositionRoute(request, env, over?)`, `listPositionsRoute(request, env)`, `getPositionRoute(request, env, id)`, `patchPositionRoute(request, env, id)` (bearer check, body parse, tested function, no-store); `route.ts` files only pass `getCloudflareContext().env`. Test `src/app/api/positions/__tests__/handler.test.ts` with a fake D1.
 - `src/domain/position-overview.ts`: `positionOverview(rows: RoleRunRow[], position: { id: string; title: string }): RoleGroup | null`. It reuses the group builder of `role-overview.ts` (export it; no copy) with `key = position.id` and `role = position.title`; `null` when `rows` is empty. Test `src/domain/__tests__/position-overview.test.ts`.
 - `src/app/api/positions/route.ts` (`POST`, `GET`) and `src/app/api/positions/[id]/route.ts` (`GET`, `PATCH`): bearer check with `requireBearer(request, env.RUN_TOKEN)` first, body parse with `parseJsonBody`, then the tested function. No `runtime = "edge"`.
 
@@ -23,7 +23,7 @@ Files:
 ### Routes
 | Route | Success | Errors |
 |---|---|---|
-| `POST /api/positions` | 201 `{ id }`; 200 `{ id, reused: true }` when ingest returns reused | 400 bad body, 401/503 bearer, 422 `{ error }` from ingest |
+| `POST /api/positions` | 201 `{ id, notes }` (notes from ingest, may be empty); 200 `{ id, reused: true }` when ingest returns reused | 400 bad body, 401/503 bearer, 422 `{ error }` from ingest |
 | `GET /api/positions` | 200 `{ positions: [...] }` newest first by `created_at` | 401/503 |
 | `GET /api/positions/:id` | 200 `{ position, runs, group }` | 404 `{ error }`, 401/503 |
 | `PATCH /api/positions/:id` | 200 `{ position }` (the updated row) | 400, 404, 401/503 |
