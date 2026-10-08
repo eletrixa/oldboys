@@ -8,7 +8,7 @@
  *
  * Key responsibilities:
  * - Name the seams between pure recipe logic and the outside world
- * - Name the two verification-call seams (plans/004): place a call, fetch its result
+ * - Name the two verification-call seams (plans/005): place a call, fetch its result
  *
  * Design constraints:
  * - Plain function types only; no interfaces with a single implementation, no DI container

@@ -71,7 +71,7 @@ function fakeLlm(canned: CallExtraction): { llm: LlmCall; calls: () => number } 
     expect(input.prompt).toContain("role");
     expect(input.prompt).toContain("tenure");
     expect(input.prompt).toContain(excerpt);
-    return Promise.resolve(canned as never);
+    return Promise.resolve({ value: canned as never, cost_usd: 0 });
   };
   return { llm, calls: () => n };
 }

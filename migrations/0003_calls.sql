@@ -1,11 +1,11 @@
 -- Verification Call tables, webhook idempotency, and a wider claims.kind CHECK (STATEMENT).
 --
 -- Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
--- Module:  migrations/0002_calls.sql
--- Deps:    D1 (SQLite); depends on 0001_init.sql
+-- Module:  migrations/0003_calls.sql
+-- Deps:    D1 (SQLite); depends on 0001_init.sql and 0002_source_url.sql
 -- Tested:  n/a (applied by pnpm db:migrate:local in dev)
 --
--- 0002_calls: plans/004-call-verification. calls mirrors src/domain/call.ts (booleans are INTEGER 0/1).
+-- 0003_calls: plans/005-call-verification. calls mirrors src/domain/call.ts (booleans are INTEGER 0/1).
 -- webhook_events makes ElevenLabs webhook delivery idempotent per (conversation_id, type).
 -- claims is rebuilt because SQLite cannot alter a CHECK constraint in place.
 

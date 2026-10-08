@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/workflow/verification-call.ts
- * Deps:    cloudflare:workers (WorkflowEntrypoint), D1 DB, R2 SOURCES, src/domain/call*, src/workflow/{calls,ledger,adapters/llm}
+ * Deps:    cloudflare:workers (WorkflowEntrypoint), D1 DB, R2 SOURCES, src/domain/call*, src/workflow/{calls,ledger}, src/adapters/llm
  * Tested:  n/a (pure parts covered in src/workflow/__tests__/calls.test.ts and src/domain/__tests__/call-ingest.test.ts)
  *
  * Key responsibilities:
@@ -25,7 +25,7 @@ import { type Call, CallResult, transitionCall } from "@/domain/call";
 import { callResultToClaims, transcriptToExcerpt } from "@/domain/call-ingest";
 import type { Claim } from "@/domain/claim";
 import type { LlmCall } from "@/domain/ports";
-import { createLlm } from "@/workflow/adapters/llm";
+import { makeLlmCall } from "@/adapters/llm";
 import { callResultR2Key, callSourceUrl, loadCall, selectCallProvider } from "@/workflow/calls";
 import { appendLedger } from "@/workflow/ledger";
 
@@ -170,24 +170,23 @@ export class VerificationCallWorkflow extends WorkflowEntrypoint<CloudflareEnv, 
     const call = await loadCall(this.env.DB, callId);
     if (!call) throw new Error(`call ${callId} not found`);
     const result = await this.readResult(key);
-    const { llmWithCost } = createLlm({
-      apiKey: this.env.ANTHROPIC_API_KEY,
-      models: { primary: this.env.LLM_MODEL_PRIMARY, verify: this.env.LLM_MODEL_VERIFY },
+    const inner = makeLlmCall(this.env.ANTHROPIC_API_KEY, {
+      primary: this.env.LLM_MODEL_PRIMARY,
+      verify: this.env.LLM_MODEL_VERIFY,
     });
     let costUsd = 0;
-    let ms = 0;
+    const started = Date.now();
     const llm: LlmCall = async (input) => {
-      const out = await llmWithCost(input);
+      const out = await inner(input);
       costUsd += out.cost_usd;
-      ms += out.ms;
-      return out.value;
+      return out;
     };
     const { claims, gapReason } = await callResultToClaims({ result, brief: call.brief, runId, callId, sourceId, llm });
     await appendLedger(this.env.DB, runId, {
       step: "call:extract",
       kind: "llm",
       cost_usd: costUsd,
-      ms,
+      ms: Date.now() - started,
       ref: { type: "phone", callId, claims: claims.length, gap: gapReason },
     });
     await this.writeClaims(runId, claims);

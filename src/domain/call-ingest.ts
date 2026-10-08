@@ -106,7 +106,7 @@ export async function callResultToClaims(input: {
   if (!result.transcript.some((t) => t.role === "user")) return none("callee said nothing");
 
   const excerpt = transcriptToExcerpt(result.transcript);
-  const extraction = await llm({
+  const { value: extraction } = await llm({
     model: "primary",
     ...buildExtractionPrompt(brief, excerpt),
     schema: CallExtraction,

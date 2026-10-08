@@ -4,7 +4,7 @@
 Hackathon Case 01 (Apify): social media deep research. Input: a person or organization, one anchor (city, website or IČO) and a goal. Output: a report where every claim links to a source, FACT is split from INFERENCE, gaps are stated, namesakes are handled, and a different goal yields different substance. Judging: value 35, originality 25, e2e 20, tech 10, honesty 10. Brief: `docs/brief.md`.
 
 ## Binding decisions
-001 (`plans/001-deep-research-arch/00-SYNTHESIS.md`) domain, 002 (`plans/002-cloudflare-platform/`) platform, 004 (`plans/004-call-verification/`) verification calls. Where they conflict, 002 wins. Ops runbook for calls: `docs/ops/call-verification.md`.
+001 (`plans/001-deep-research-arch/00-SYNTHESIS.md`) domain, 002 (`plans/002-cloudflare-platform/`) platform, 005 (`plans/005-call-verification/`) verification calls. Where they conflict, 002 wins. Ops runbook for calls: `docs/ops/call-verification.md`.
 
 | Topic | Decision |
 |---|---|
@@ -20,7 +20,7 @@ Hackathon Case 01 (Apify): social media deep research. Input: a person or organi
 | Raw payloads | R2 `SOURCES` (`oldboys-sources/<run>/<source>.json`), only `{sourceId, excerpt}` returned from steps (1 MiB cap) |
 | Streaming | SSE route polls D1 `seq > last` every 1s, replays whole ledger on connect, events idempotent by `seq` |
 | Replay | serve old ledger, labeled CACHED |
-| Verification calls (004) | Operator-approved, operator-entered numbers with recorded consent only; dialed once in `POST /api/calls/:id/approve`, never in a Workflow step; `VerificationCallWorkflow` (binding `VERIFY_CALL`) waits for the ElevenLabs webhook, ingests the transcript as a Source and writes `STATEMENT` claims (never FACT); `CALL_PROVIDER=mock` is labeled MOCK; max `RUN_CALL_MAX` calls per run |
+| Verification calls (005) | Operator-approved, operator-entered numbers with recorded consent only; dialed once in `POST /api/calls/:id/approve`, never in a Workflow step; `VerificationCallWorkflow` (binding `VERIFY_CALL`) waits for the ElevenLabs webhook, ingests the transcript as a Source and writes `STATEMENT` claims (never FACT); `CALL_PROVIDER=mock` is labeled MOCK; max `RUN_CALL_MAX` calls per run |
 
 ## Stack and bindings
 Next.js 16 on Workers via `@opennextjs/cloudflare`; `ai` + `@ai-sdk/anthropic`; `apify-client`; Zod; Vitest; pnpm; Node 26 locally, 22 in CI.
