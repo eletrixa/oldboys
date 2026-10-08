@@ -1,0 +1,293 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Proof, not vibes</title>
+<meta name="description" content="Plan for the Social Media Deep Research hackathon build: what we build, why it wins, what could kill it, how it's wired.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/11.12.0/mermaid.min.js"></script>
+<style>
+:root{
+  --bg:#f7f6f2;--panel:#ffffff;--ink:#1a1a1a;--muted:#5c5c57;--line:#e3e1d9;
+  --accent:#b8441f;--accent-ink:#ffffff;--fact:#1f6f4a;--infer:#8a5a00;--gap:#8b1d1d;--soft:#efede6;
+  --mono:'JetBrains Mono',ui-monospace,monospace;--sans:'Inter',system-ui,sans-serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#141412;--panel:#1d1d1a;--ink:#ecebe6;--muted:#a3a29b;--line:#2d2d29;
+  --accent:#e8703f;--accent-ink:#141412;--fact:#4fb785;--infer:#d9a441;--gap:#e06b6b;--soft:#23231f;
+}}
+:root[data-theme="dark"]{
+  --bg:#141412;--panel:#1d1d1a;--ink:#ecebe6;--muted:#a3a29b;--line:#2d2d29;
+  --accent:#e8703f;--accent-ink:#141412;--fact:#4fb785;--infer:#d9a441;--gap:#e06b6b;--soft:#23231f;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.55;font-size:17px}
+a{color:var(--accent)}
+.wrap{max-width:960px;margin:0 auto;padding:0 16px}
+header{padding:64px 0 40px;border-bottom:1px solid var(--line)}
+.kicker{font-family:var(--mono);font-size:13px;color:var(--muted);letter-spacing:.04em;text-transform:uppercase}
+h1{font-size:clamp(34px,6vw,56px);line-height:1.05;margin:12px 0 16px;letter-spacing:-.02em}
+.lede{font-size:20px;color:var(--muted);max-width:720px;margin:0 0 24px}
+.cta{display:inline-block;background:var(--accent);color:var(--accent-ink);padding:12px 18px;border-radius:8px;font-weight:600;text-decoration:none}
+.cta.ghost{background:transparent;color:var(--accent);border:1px solid var(--accent);margin-left:8px}
+nav{position:sticky;top:0;background:var(--bg);border-bottom:1px solid var(--line);z-index:5}
+nav .wrap{display:flex;gap:18px;overflow-x:auto;padding:10px 16px;font-size:14px}
+nav a{white-space:nowrap;text-decoration:none;color:var(--muted)}
+nav a:hover{color:var(--ink)}
+section{padding:48px 0;border-bottom:1px solid var(--line)}
+h2{font-size:28px;margin:0 0 8px;letter-spacing:-.01em}
+h3{font-size:19px;margin:28px 0 8px}
+.sub{color:var(--muted);margin:0 0 24px;max-width:720px}
+.grid{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px}
+.card h4{margin:0 0 6px;font-size:16px}
+.card p{margin:0;color:var(--muted);font-size:15px}
+.num{font-family:var(--mono);color:var(--accent);font-size:13px}
+table{width:100%;border-collapse:collapse;font-size:15px;background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-weight:600;background:var(--soft)}
+tr:last-child td{border-bottom:0}
+.tag{display:inline-block;font-family:var(--mono);font-size:12px;padding:2px 8px;border-radius:999px;border:1px solid currentColor}
+.fact{color:var(--fact)}.infer{color:var(--infer)}.gap{color:var(--gap)}
+.claim{background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--fact);border-radius:8px;padding:14px 16px;margin:10px 0}
+.claim.infer{border-left-color:var(--infer)}.claim.gap{border-left-color:var(--gap)}
+.claim .src{font-family:var(--mono);font-size:13px;color:var(--muted);margin-top:6px}
+.steps{counter-reset:s;list-style:none;padding:0;margin:0}
+.steps li{counter-increment:s;padding:14px 0 14px 48px;position:relative;border-bottom:1px dashed var(--line)}
+.steps li:before{content:counter(s);position:absolute;left:0;top:12px;width:32px;height:32px;border-radius:50%;background:var(--accent);color:var(--accent-ink);display:grid;place-items:center;font-family:var(--mono);font-weight:600}
+.steps li strong{display:block}
+.mermaid{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px;overflow-x:auto;margin:12px 0}
+.score{display:flex;flex-wrap:wrap;gap:10px}
+.score div{flex:1 1 150px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px}
+.score b{font-size:26px;display:block;color:var(--accent)}
+.score span{font-size:14px;color:var(--muted)}
+.rules{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
+.rules div{background:var(--soft);border-radius:8px;padding:12px;font-size:15px}
+footer{padding:40px 0;color:var(--muted);font-size:14px}
+code{font-family:var(--mono);font-size:.92em;background:var(--soft);padding:1px 5px;border-radius:4px}
+.toggle{float:right;font-size:13px;background:none;border:1px solid var(--line);color:var(--muted);border-radius:6px;padding:4px 8px;cursor:pointer}
+@media (max-width:600px){.cta.ghost{margin:8px 0 0;display:block;text-align:center}}
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <button class="toggle" onclick="toggleTheme()">theme</button>
+    <div class="kicker">Hackathon · Case 01 · Social Media Deep Research · Apify</div>
+    <h1>Proof, not vibes.</h1>
+    <p class="lede">A research agent that tells you who someone is, shows the source for every sentence, and says out loud what it could not find. Change the goal and the report changes with it.</p>
+    <a class="cta" href="#how">See how it works</a>
+    <a class="cta ghost" href="#kill">What could kill it</a>
+  </div>
+</header>
+
+<nav><div class="wrap">
+  <a href="#problem">Problem</a><a href="#bet">The bet</a><a href="#how">How it works</a><a href="#different">What's different</a><a href="#goals">Goals</a><a href="#kill">Risks</a><a href="#arch">Architecture</a><a href="#night">The night</a><a href="#honest">Limits</a>
+</div></nav>
+
+<section id="problem"><div class="wrap">
+  <h2>The problem we picked</h2>
+  <p class="sub">Recruiters, salespeople and investors spend hours stitching one person together from scattered profiles and registries, then act on a hunch with no sources.</p>
+  <div class="grid">
+    <div class="card"><div class="num">01</div><h4>Which hits are the same person?</h4><p>Search returns four people called Jan Novák. Three are the wrong one. Most tools quietly merge them.</p></div>
+    <div class="card"><div class="num">02</div><h4>What matters for this goal?</h4><p>A recruiter needs tenure and public work. An investor needs the registry and who else sits on the board. Same person, different questions.</p></div>
+    <div class="card"><div class="num">03</div><h4>What is actually proven?</h4><p>In a 2026 study, 3 to 13 percent of citation URLs produced by deep-research agents never existed. None of the four main open-source agents check their own citations.</p></div>
+  </div>
+</div></section>
+
+<section id="bet"><div class="wrap">
+  <h2>The bet</h2>
+  <p class="sub">The jury does not score scraping or summarising. It scores four things: identity resolution, goal logic, provenance, and whether a person can follow how the report was built. Everything we build lands on one of those.</p>
+  <div class="score">
+    <div><b>35%</b><span>value and track relevance</span></div>
+    <div><b>25%</b><span>originality</span></div>
+    <div><b>20%</b><span>works end to end</span></div>
+    <div><b>10%</b><span>technical execution</span></div>
+    <div><b>10%</b><span>honest limitations</span></div>
+  </div>
+  <h3>So the product is a claim card, repeated.</h3>
+  <p>Every sentence in the report is one card. It says whether it is a fact or an inference, how confident we are, which source it came from, and what contradicts it. Goals pick which cards exist. Gaps are cards too.</p>
+  <div class="claim"><span class="tag fact">FACT · high</span> &nbsp;Jednatel of Navěky s.r.o. since 2019-03-12.<div class="src">ares.gov.cz /ekonomicke-subjekty-vr/… · quote matched in excerpt · verified by second model</div></div>
+  <div class="claim infer"><span class="tag infer">INFERENCE · medium</span> &nbsp;Same person as the LinkedIn profile "Robert V., Prague": city matches anchor, website in bio links to the company domain.<div class="src">2 cross-links · avatar hash match · scored 0.91 · you confirmed in the lineup</div></div>
+  <div class="claim gap"><span class="tag gap">GAP</span> &nbsp;Public work samples: nothing found.<div class="src">GitHub search returned 0 for the matched handle · LinkedIn returned a partial profile (authwall) · not inferred</div></div>
+</div></section>
+
+<section id="how"><div class="wrap">
+  <h2>How it works</h2>
+  <p class="sub">One subject, one anchor, one goal in. The run streams its decisions to the screen as it goes, so the person watching can see why the report says what it says.</p>
+  <ol class="steps">
+    <li><strong>Find candidates</strong>Google search through an Apify actor, with the anchor (city, website or IČO) in the query. Every hit becomes a candidate, not a fact.</li>
+    <li><strong>Line them up</strong>Each candidate gets a score from anchor match, cross-links between profiles and avatar similarity. Above the threshold we merge. Below it, the run pauses and asks you to pick. Uncertain ones stay separate as "possibly the same person" instead of being merged.</li>
+    <li><strong>Fetch what the goal needs</strong>Each goal is a fixed recipe of steps. Due diligence calls the Czech business registry for statutory bodies. Hiring calls GitHub. If a source comes back empty, the recipe runs its declared fallback and records a gap. It never silently moves on.</li>
+    <li><strong>Extract claims with a quote</strong>The model has to attach an exact quote from the stored excerpt to every claim. No quote, no fact.</li>
+    <li><strong>Verify, then verify again</strong>A plain string check confirms the quote is really in the excerpt and the URL really came from a fetch we logged. Whatever survives goes to a second model that can only downgrade. It cannot promote.</li>
+    <li><strong>Answer the goal's questions</strong>The report is the goal's question list, answered card by card. Unanswered questions appear as gaps with the reason.</li>
+  </ol>
+</div></section>
+
+<section id="different"><div class="wrap">
+  <h2>What's different</h2>
+  <p class="sub">Three things the case studies show nobody ships by default.</p>
+  <div class="grid">
+    <div class="card"><h4>Citations are checked before they are shown</h4><p>Commercial enrichment tools give you a confidence number. Open-source research agents give you links that sometimes do not exist. We check the quote against the fetched text and refuse the claim otherwise.</p></div>
+    <div class="card"><h4>Namesakes are a visible step, not hidden magic</h4><p>You see the lineup. You see the score and the evidence behind it. When the system is not sure, it asks instead of guessing. Borrowed from how Sayari handles entity graphs.</p></div>
+    <div class="card"><h4>The goal changes the investigation, not the headings</h4><p>Hiring and due diligence share fewer than half their steps and none of their questions. Run both on the same person and the diff view shows which claims appeared, disappeared or changed.</p></div>
+    <div class="card"><h4>Gaps are a feature</h4><p>A recruiter trusts a tool that says "no evidence" more than one that fills the space. The gap card says what we looked for, where, and why it came back empty.</p></div>
+    <div class="card"><h4>Czech registry as the anchor</h4><p>ARES v3 gives us the company, its seat, and its statutory bodies as JSON, free, no key. Most teams will stop at LinkedIn. The jury is Czech.</p></div>
+    <div class="card"><h4>Every call is on the ledger</h4><p>Each actor run and model call is logged with cost and time. The cached demo run for the video is a replay of that ledger, labelled CACHED. You can open it.</p></div>
+  </div>
+</div></section>
+
+<section id="goals"><div class="wrap">
+  <h2>Four goals, four question sets</h2>
+  <p class="sub">The report is the answer to these questions. Nothing else.</p>
+  <table>
+    <tr><th>Goal</th><th>Who uses it</th><th>Questions the report must answer</th><th>Extra sources</th></tr>
+    <tr><td>Hiring</td><td>Recruiter</td><td>Right person, not a namesake? Public history matches the CV? Public work, talks, repos? Tenure gaps? Claims contradicted elsewhere?</td><td>GitHub</td></tr>
+    <tr><td>Sales</td><td>SDR / AE</td><td>Current role and company? What the company sells and to whom? Recent public activity? Who else there matters? What would a credible first line reference?</td><td>website crawl, X</td></tr>
+    <tr><td>Due diligence</td><td>Investor, partner</td><td>Legal entity confirmed? Person linked to company by registry? Other boards? Insolvency or liquidation flags? Website claims vs registry?</td><td>ARES subjekty + statutory bodies</td></tr>
+    <tr><td>Fake account</td><td>Trust and safety, journalist</td><td>Exists on 2+ platforms with consistent identity? Account age vs claimed history? Follower pattern? Avatar reused elsewhere? Bio claims verifiable?</td><td>Instagram, X metadata</td></tr>
+  </table>
+  <p style="margin-top:14px;color:var(--muted);font-size:15px">Fake-account detection never collapses to a score. The brief bans trust scores of a person, and the evidence says nobody can calibrate one from public signals anyway. We show the evidence table and stop.</p>
+</div></section>
+
+<section id="kill"><div class="wrap">
+  <h2>What could kill it</h2>
+  <p class="sub">We ran a pre-mortem: it is sunrise, the repo is frozen, the demo flopped. These are the six ways that happens, and what we do about each before it can.</p>
+  <table>
+    <tr><th>#</th><th>Failure at sunrise</th><th>What we do</th><th>By</th></tr>
+    <tr><td>1</td><td>LinkedIn returns nothing from the cloud (authwall). Demo subject only has LinkedIn.</td><td>Test three no-cookie actors in the first 20 minutes. If dead, LinkedIn becomes a search-snippet source labelled PARTIAL and we pick subjects with Instagram, X, a website and a registry entry.</td><td>T+1h</td></tr>
+    <tr><td>2</td><td>Jury flips the goal and sees the same claims under different headers.</td><td>Goal is a hard question list that filters the claim graph. Before anyone touches the UI we diff hiring vs due diligence on a fixed claim set and require at least half the claims to differ.</td><td>T+3h</td></tr>
+    <tr><td>3</td><td>Wrong namesake merged on stage.</td><td>Lineup always shown. Auto-pick only above threshold. Rehearse on three subjects, one with known namesakes.</td><td>T+6h</td></tr>
+    <tr><td>4</td><td>No end-to-end run by T+5h. Three tracks, zero product.</td><td>Walking skeleton first: a hand-written claims file renders as cards on screen by T+2h. Every track plugs into that contract.</td><td>T+2h</td></tr>
+    <tr><td>5</td><td>Live run stalls over two minutes. Audience watches a spinner.</td><td>First claim streams in under 20 seconds. Each actor call times out at 45 seconds and becomes a gap. Ledger replay as backup, labelled CACHED.</td><td>T+7h</td></tr>
+    <tr><td>6</td><td>A fact with a made-up URL. Jury finds it in ten seconds.</td><td>URLs come only from the ledger, never from the model. Quote must appear in the stored excerpt. Second model can only downgrade.</td><td>T+7h</td></tr>
+  </table>
+  <h3>The uncomfortable ones</h3>
+  <div class="rules">
+    <div>Nobody has tested the actors yet. The first hour is a source reality check, not a Next.js scaffold.</div>
+    <div>A dynamic tool-calling loop is cooler and riskier. We ship a fixed recipe per goal with two real branches, and add re-planning only if there is time at T+7h.</div>
+    <div>The UI will eat the night if we let it. UI work waits until the goal-diff test passes.</div>
+    <div>Ten percent of the score is a README section that would otherwise get written at 5am. It starts now.</div>
+  </div>
+</div></section>
+
+<section id="arch"><div class="wrap">
+  <h2>Architecture</h2>
+  <p class="sub">We compared three shapes. A fixed recipe in one process, a dynamic agent loop over the Apify MCP server with Postgres, and a CLI that writes a folder. Six independent reviewers argued for and against each. The fixed recipe won, built with the CLI option's ledger-first discipline.</p>
+  <table>
+    <tr><th></th><th>A · Recipe</th><th>B · Agent loop</th><th>C · CLI + folder</th></tr>
+    <tr><td>Planner</td><td>declared steps per goal, model at four seams</td><td>model picks tools each turn</td><td>declared steps, no UI pause</td></tr>
+    <tr><td>Actors</td><td>apify-client, cost cap per call</td><td>Apify MCP: returns status, not output, no cost cap</td><td>apify-client</td></tr>
+    <tr><td>Replay</td><td>deterministic from ledger</td><td>one lucky trajectory</td><td>serve the old folder</td></tr>
+    <tr><td>Weighted score</td><td><b>4.15</b></td><td>2.65</td><td>4.05</td></tr>
+  </table>
+  <p style="margin-top:14px;font-size:15px;color:var(--muted)">A and C are closer than the numbers say. Swap two weights and C wins on paper. C's whole advantage is how it stores evidence, which A can copy. C's disadvantages, no mid-run question and no real streaming, cannot be copied without turning C into A. B's defence conceded that a safe B is "A with a model choosing step order".</p>
+
+  <h3>The run, end to end</h3>
+  <div class="mermaid">
+flowchart LR
+  UI[Browser<br/>lineup · claim cards · decisions · diff] -- SSE --> EV[GET /api/runs/:id/events]
+  UI -- POST --> START[POST /api/runs]
+  UI -- POST --> ANS[POST /api/runs/:id/answer]
+  START --> RUN[Recipe runner<br/>steps · onEmpty · pause]
+  ANS --> RUN
+  RUN --> LLM[Model seams<br/>score · extract · verify · synthesize]
+  RUN --> LED[Ledger<br/>runs/id/ledger.jsonl · claims.json]
+  EV -- tail --> LED
+  RUN -- apify-client, 45s timeout, USD cap --> AP[(Apify actors)]
+  RUN -- JSON --> ARES[(ARES v3 registry)]
+  LLM --> ANT[(Anthropic)]
+  </div>
+
+  <h3>Where a namesake pause and an empty source show up</h3>
+  <div class="mermaid">
+sequenceDiagram
+  participant U as Browser
+  participant R as Runner
+  participant A as Apify
+  participant M as Model
+  U->>R: start (subject, anchor, goal)
+  R->>A: search subject + anchor
+  R->>M: score candidates
+  M-->>R: c1 0.91 merge, c2 0.55 possibly same
+  R-->>U: lineup, paused
+  U->>R: pick c1
+  R->>A: linkedin(c1)
+  A-->>R: empty
+  R-->>U: decision: fallback to snippet, PARTIAL
+  R->>A: instagram, x, website, ARES
+  R->>M: extract claims with quotes
+  R->>R: quote in excerpt? url in ledger?
+  R->>M: second model: downgrade only
+  R-->>U: claims, gaps, report
+  </div>
+
+  <h3>Decisions in one table</h3>
+  <table>
+    <tr><th>Decision</th><th>Choice</th><th>Because</th></tr>
+    <tr><td>Planner</td><td>Fixed recipe per goal. Branches are declared: fallback on empty source, pause on uncertain identity.</td><td>Every infinite-loop failure in the literature is an unbounded path. Anthropic's own guidance: simplest pattern that passes evals.</td></tr>
+    <tr><td>Actor access</td><td>apify-client, not the MCP server</td><td>MCP call-actor waits up to 45 s and returns run status, not output. No per-call cost cap. The client has both.</td></tr>
+    <tr><td>State</td><td>Append-only ledger file plus a claims projection, per run</td><td>Replay is free. Golden-file tests. Node 26 ships SQLite in the standard library if we ever need cross-run queries.</td></tr>
+    <tr><td>Streaming</td><td>Vercel AI SDK message stream over SSE, tailing the ledger</td><td>Validated claim objects stream one by one. Survives a page reload.</td></tr>
+    <tr><td>Verification</td><td>String check first, second model only on what survives</td><td>Separate citation agent is what Anthropic's research system converged on. A string check cannot hallucinate.</td></tr>
+    <tr><td>Identity</td><td>Merge, possibly-same-as, or ask</td><td>Copied from Sayari's entity graph. Merging on name alone is the documented way to get it wrong.</td></tr>
+    <tr><td>Demo</td><td>next build and next start, never the dev server</td><td>Hot reload kills a two-minute run.</td></tr>
+  </table>
+</div></section>
+
+<section id="night"><div class="wrap">
+  <h2>The night</h2>
+  <p class="sub">Ten hours. Tests gate the work, not the other way round.</p>
+  <table>
+    <tr><th>When</th><th>What</th><th>Gate</th></tr>
+    <tr><td>T+0 to 1h</td><td>Run the actors against known profiles. Run ARES for a team member's company. Lock the source list. Decide the LinkedIn fallback.</td><td>At least one LinkedIn actor returns experience for 2 of 3 profiles, or we demote it.</td></tr>
+    <tr><td>T+1 to 3h</td><td>Claim schema in one file. Goal question sets. Recipe runner with fake ports. Claim card and board against a hand-written claims file.</td><td>Hiring vs due diligence differ in at least half their claims on a fixed set.</td></tr>
+    <tr><td>T+3 to 7h</td><td>Candidate scoring and lineup pause. Actor adapters. Verify pass. Streaming.</td><td>Full run under three minutes, first claim under 20 s. Three planted bad facts all downgraded.</td></tr>
+    <tr><td>T+7 to 9h</td><td>Three demo subjects rehearsed. Ledger replay for the video. ElevenLabs reads only the FACT cards, if time.</td><td>A stranger in the lobby can say how the system picked which Jan Novák.</td></tr>
+    <tr><td>T+9 to 10h</td><td>Video under 90 s with LIVE and CACHED labels. README with limits. Purge button. Freeze.</td><td>Submitted 30 minutes before sunrise, not 30 seconds.</td></tr>
+  </table>
+  <h3>If something slips</h3>
+  <p>No end-to-end run by T+5h means we freeze scope to one goal, due diligence, and one subject. A working narrow demo scores more than a wide broken one. A fixed recipe that finishes beats a clever loop that does not.</p>
+</div></section>
+
+<section id="honest"><div class="wrap">
+  <h2>What we will say out loud</h2>
+  <p class="sub">The honesty criterion is ten percent of the score and the cheapest ten percent to earn.</p>
+  <div class="rules">
+    <div>LinkedIn coverage depends on actor availability that night. The README will say which runs were live and which were cached.</div>
+    <div>Avatar matching compares hashes across the profiles we fetched. It is not a web-wide reverse image search.</div>
+    <div>Registry coverage is Czech only. Other countries come through search results.</div>
+    <div>We do not infer health, politics, religion, ethnicity or sexuality. The filter is a classifier plus a post-check, not a proof.</div>
+    <div>Confidence levels are rule-based: high means two independent sources agree, medium means one source, low means inference. They are not calibrated.</div>
+    <div>Raw scraped data has a time to live and a purge button. It is deleted after judging.</div>
+  </div>
+</div></section>
+
+<footer><div class="wrap">
+  Plan files: <code>docs/brief.md</code> · <code>docs/01-brainstorm.md</code> · <code>docs/02-discovery.md</code> · <code>docs/03-pre-mortem.md</code> · <code>plans/001-deep-research-arch/00-SYNTHESIS.md</code>. Research dated 2026-10-08.
+</div></footer>
+
+<script>
+function toggleTheme(){
+  const r=document.documentElement;
+  const cur=r.getAttribute('data-theme')|| (matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light');
+  const next=cur==='dark'?'light':'dark';
+  r.setAttribute('data-theme',next);
+  try{localStorage.setItem('theme',next)}catch(e){}
+  renderMermaid();
+}
+try{const t=localStorage.getItem('theme');if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}
+const srcs=[];
+function renderMermaid(){
+  const dark=(document.documentElement.getAttribute('data-theme')||(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light'))==='dark';
+  document.querySelectorAll('.mermaid').forEach((el,i)=>{ if(srcs[i]===undefined) srcs[i]=el.textContent; el.removeAttribute('data-processed'); el.innerHTML=srcs[i]; });
+  mermaid.initialize({startOnLoad:false,theme:dark?'dark':'neutral',securityLevel:'loose'});
+  mermaid.run({querySelector:'.mermaid'});
+}
+renderMermaid();
+</script>
+</body>
+</html>
