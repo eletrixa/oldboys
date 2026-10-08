@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/workflow/research-run.ts
- * Deps:    cloudflare:workers (WorkflowEntrypoint), D1 binding DB
+ * Deps:    cloudflare:workers (WorkflowEntrypoint), D1 binding DB, src/workflow/ledger (appendLedger)
  * Tested:  n/a (skeleton; runner logic will be tested through src/recipe with fake ports)
  *
  * Key responsibilities:
@@ -19,20 +19,13 @@
 import { WorkflowEntrypoint, type WorkflowEvent, type WorkflowStep } from "cloudflare:workers";
 import type { GoalId, LedgerKind } from "@/domain/claim";
 import { recipeFor } from "@/recipe/goals";
+import { appendLedger } from "@/workflow/ledger";
 
 export type ResearchRunParams = { runId: string };
 
 export type LineupAnswer = { candidateId: string };
 
 type InvestigationRow = { subject: string; anchor: string; goal: GoalId };
-
-type LedgerRowInput = {
-  step: string;
-  kind: LedgerKind;
-  cost_usd: number;
-  ms: number;
-  ref: unknown;
-};
 
 export class ResearchRunWorkflow extends WorkflowEntrypoint<CloudflareEnv, ResearchRunParams> {
   async run(event: Readonly<WorkflowEvent<ResearchRunParams>>, step: WorkflowStep): Promise<void> {
@@ -45,7 +38,7 @@ export class ResearchRunWorkflow extends WorkflowEntrypoint<CloudflareEnv, Resea
         await this.env.DB.prepare("UPDATE investigations SET status = 'failed' WHERE id = ?")
           .bind(runId)
           .run();
-        return this.appendLedger(runId, {
+        return appendLedger(this.env.DB, runId, {
           step: "run",
           kind: "decision",
           cost_usd: 0,
@@ -80,7 +73,7 @@ export class ResearchRunWorkflow extends WorkflowEntrypoint<CloudflareEnv, Resea
           await this.env.DB.prepare("UPDATE investigations SET status = 'paused' WHERE id = ?")
             .bind(runId)
             .run();
-          return this.appendLedger(runId, {
+          return appendLedger(this.env.DB, runId, {
             step: recipeStep.id,
             kind: "pause",
             cost_usd: 0,
@@ -98,7 +91,7 @@ export class ResearchRunWorkflow extends WorkflowEntrypoint<CloudflareEnv, Resea
           await this.env.DB.prepare("UPDATE investigations SET status = 'running' WHERE id = ?")
             .bind(runId)
             .run();
-          return this.appendLedger(runId, {
+          return appendLedger(this.env.DB, runId, {
             step: recipeStep.id,
             kind: "decision",
             cost_usd: 0,
@@ -115,7 +108,7 @@ export class ResearchRunWorkflow extends WorkflowEntrypoint<CloudflareEnv, Resea
         // and run the step body; apply `onEmpty` (fallbackStep or Gap) when the result is empty.
         // TODO: enforce RUN_BUDGET_USD / RUN_BUDGET_CALLS before each paid call.
         const kind: LedgerKind = recipeStep.actor === undefined ? "llm" : "call";
-        return this.appendLedger(runId, {
+        return appendLedger(this.env.DB, runId, {
           step: recipeStep.id,
           kind,
           cost_usd: 0,
@@ -131,26 +124,5 @@ export class ResearchRunWorkflow extends WorkflowEntrypoint<CloudflareEnv, Resea
         .run();
       return { runId, status: "done" };
     });
-  }
-
-  /** Append one ledger row; seq is assigned atomically inside the INSERT. Returns the new seq. */
-  private async appendLedger(runId: string, row: LedgerRowInput): Promise<{ seq: number }> {
-    const result = await this.env.DB.prepare(
-      `INSERT INTO ledger_entries (run_id, seq, ts, step, kind, cost_usd, ms, ref_json)
-       VALUES (?1, (SELECT COALESCE(MAX(seq), 0) + 1 FROM ledger_entries WHERE run_id = ?1), ?2, ?3, ?4, ?5, ?6, ?7)
-       RETURNING seq`,
-    )
-      .bind(
-        runId,
-        new Date().toISOString(),
-        row.step,
-        row.kind,
-        row.cost_usd,
-        row.ms,
-        JSON.stringify(row.ref ?? null),
-      )
-      .first<{ seq: number }>();
-    if (!result) throw new Error("ledger insert returned no row");
-    return { seq: result.seq };
   }
 }

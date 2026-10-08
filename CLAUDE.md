@@ -4,7 +4,7 @@
 Hackathon Case 01 (Apify): social media deep research. Input: a person or organization, one anchor (city, website or IČO) and a goal. Output: a report where every claim links to a source, FACT is split from INFERENCE, gaps are stated, namesakes are handled, and a different goal yields different substance. Judging: value 35, originality 25, e2e 20, tech 10, honesty 10. Brief: `docs/brief.md`.
 
 ## Binding decisions
-001 (`plans/001-deep-research-arch/00-SYNTHESIS.md`) domain, 002 (`plans/002-cloudflare-platform/`) platform. Where they conflict, 002 wins.
+001 (`plans/001-deep-research-arch/00-SYNTHESIS.md`) domain, 002 (`plans/002-cloudflare-platform/`) platform, 004 (`plans/004-call-verification/`) verification calls. Where they conflict, 002 wins. Ops runbook for calls: `docs/ops/call-verification.md`.
 
 | Topic | Decision |
 |---|---|
@@ -16,15 +16,16 @@ Hackathon Case 01 (Apify): social media deep research. Input: a person or organi
 | Claims | claim + references + rank; contradictions via rank, never delete |
 | Budget | enforced in runner, never by the LLM: $0.50 and 12 calls per run |
 | Runner | Cloudflare Workflow `ResearchRunWorkflow` (binding `RESEARCH_RUN`), one `step.do` per recipe step, `step.waitForEvent` for lineup |
-| Ledger | D1 `DB`: `ledger_entries` (append-only, `seq`), `claims`, `gaps`, `candidates`, `investigations` |
+| Ledger | D1 `DB`: `ledger_entries` (append-only, `seq`), `claims`, `gaps`, `candidates`, `investigations`, `calls`, `webhook_events` |
 | Raw payloads | R2 `SOURCES` (`oldboys-sources/<run>/<source>.json`), only `{sourceId, excerpt}` returned from steps (1 MiB cap) |
 | Streaming | SSE route polls D1 `seq > last` every 1s, replays whole ledger on connect, events idempotent by `seq` |
 | Replay | serve old ledger, labeled CACHED |
+| Verification calls (004) | Operator-approved, operator-entered numbers with recorded consent only; dialed once in `POST /api/calls/:id/approve`, never in a Workflow step; `VerificationCallWorkflow` (binding `VERIFY_CALL`) waits for the ElevenLabs webhook, ingests the transcript as a Source and writes `STATEMENT` claims (never FACT); `CALL_PROVIDER=mock` is labeled MOCK; max `RUN_CALL_MAX` calls per run |
 
 ## Stack and bindings
 Next.js 16 on Workers via `@opennextjs/cloudflare`; `ai` + `@ai-sdk/anthropic`; `apify-client`; Zod; Vitest; pnpm; Node 26 locally, 22 in CI.
-Bindings in `wrangler.jsonc`: `DB` (D1), `SOURCES` (R2), `RESEARCH_RUN` (Workflow), `ASSETS`. Vars: `LLM_MODEL_PRIMARY=claude-opus-5-5`, `LLM_MODEL_VERIFY=claude-sonnet-5-5`, `RUN_BUDGET_USD`, `RUN_BUDGET_CALLS`. Secrets: `ANTHROPIC_API_KEY`, `APIFY_TOKEN`, `RUN_TOKEN` (bearer for POST /api/runs), `ELEVENLABS_API_KEY` (optional).
-Worker entry `src/worker.ts` re-exports the OpenNext `fetch` and exports `ResearchRunWorkflow`. The Workflow imports only `src/domain/*` and `src/recipe/*`, never Next.js.
+Bindings in `wrangler.jsonc`: `DB` (D1), `SOURCES` (R2), `RESEARCH_RUN` and `VERIFY_CALL` (Workflows), `ASSETS`. Vars: `LLM_MODEL_PRIMARY=claude-opus-5-5`, `LLM_MODEL_VERIFY=claude-sonnet-5-5`, `RUN_BUDGET_USD`, `RUN_BUDGET_CALLS`, `CALL_PROVIDER` (`mock`|`elevenlabs`), `CALL_BUDGET_USD`, `RUN_CALL_MAX`, `ELEVENLABS_AGENT_ID`, `ELEVENLABS_PHONE_NUMBER_ID`. Secrets: `ANTHROPIC_API_KEY`, `APIFY_TOKEN`, `RUN_TOKEN` (bearer for POST /api/runs and the call routes), `ELEVENLABS_API_KEY` and `ELEVENLABS_WEBHOOK_SECRET` (live calls only).
+Worker entry `src/worker.ts` re-exports the OpenNext `fetch` and exports `ResearchRunWorkflow` and `VerificationCallWorkflow`. The Workflow imports only `src/domain/*` and `src/recipe/*`, never Next.js.
 
 ## Scripts (pnpm)
 `dev`, `build`, `preview`, `deploy`, `cf-typegen`, `typecheck`, `lint`, `test`, `test:watch`, `db:migrate:local`, `db:migrate:remote`, `check` (= typecheck && lint && test). Do not rename.

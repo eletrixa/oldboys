@@ -54,6 +54,10 @@ function global:cheatoldboys {
     Write-Host "Set Apify token in prod" -ForegroundColor White
     Write-Host "    wrangler secret put RUN_TOKEN          " -NoNewline -ForegroundColor Green
     Write-Host "Bearer token required by POST /api/runs" -ForegroundColor White
+    Write-Host "    wrangler secret put ELEVENLABS_API_KEY " -NoNewline -ForegroundColor Green
+    Write-Host "ElevenLabs API key (verification calls)" -ForegroundColor White
+    Write-Host "    wrangler secret put ELEVENLABS_WEBHOOK_SECRET " -NoNewline -ForegroundColor Green
+    Write-Host "HMAC secret for POST /api/webhooks/elevenlabs" -ForegroundColor White
     Write-Host "    pnpm db:migrate:remote                 " -NoNewline -ForegroundColor Green
     Write-Host "Apply migrations to prod D1 (before pnpm deploy)" -ForegroundColor White
     Write-Host "    pnpm cf-typegen                        " -NoNewline -ForegroundColor Green
@@ -66,6 +70,22 @@ function global:cheatoldboys {
     Write-Host "Apply migrations to local D1" -ForegroundColor White
     Write-Host "    pnpm db:migrate:remote                 " -NoNewline -ForegroundColor Green
     Write-Host "Apply migrations to remote D1" -ForegroundColor White
+    Write-Host ""
+    Write-Host "  ┌─────────────────────────────────────────────────────────────────┐" -ForegroundColor DarkGray
+    Write-Host "  │  VERIFICATION CALLS                                            │" -ForegroundColor Yellow
+    Write-Host "  └─────────────────────────────────────────────────────────────────┘" -ForegroundColor DarkGray
+    Write-Host "    CALL_PROVIDER=mock|elevenlabs          " -NoNewline -ForegroundColor Green
+    Write-Host "wrangler.jsonc var" -ForegroundColor White
+    Write-Host "    POST /api/runs/:id/calls               " -NoNewline -ForegroundColor Green
+    Write-Host "Draft a verification call" -ForegroundColor White
+    Write-Host "    POST /api/calls/:id/approve            " -NoNewline -ForegroundColor Green
+    Write-Host "Approve and dial" -ForegroundColor White
+    Write-Host "    POST /api/calls/:id/skip               " -NoNewline -ForegroundColor Green
+    Write-Host "Skip a drafted call" -ForegroundColor White
+    Write-Host "    GET /api/calls/:id                     " -NoNewline -ForegroundColor Green
+    Write-Host "Call status and result" -ForegroundColor White
+    Write-Host "    node scripts/call-smoke.mjs            " -NoNewline -ForegroundColor Green
+    Write-Host "live smoke; needs SMOKE_TO_NUMBER + RUN_TOKEN env" -ForegroundColor White
     Write-Host ""
     Write-Host "  ┌─────────────────────────────────────────────────────────────────┐" -ForegroundColor DarkGray
     Write-Host "  │  NAVIGATION                                                    │" -ForegroundColor Yellow

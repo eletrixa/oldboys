@@ -7,7 +7,7 @@
  * Tested:  src/domain/__tests__/call.test.ts
  *
  * Key responsibilities:
- * - Single source of truth for the call shapes (plans/003-call-verification); routes, Workflow and
+ * - Single source of truth for the call shapes (plans/004-call-verification); routes, Workflow and
  *   providers import from here
  * - `transitionCall` is the only place that knows which status changes are legal
  *
