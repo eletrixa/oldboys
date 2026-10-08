@@ -24,7 +24,7 @@ Hackathon Case 01 (Apify): social media deep research. Input: a person or organi
 
 ## Stack and bindings
 Next.js 16 on Workers via `@opennextjs/cloudflare`; `ai` + `@ai-sdk/anthropic`; `apify-client`; Zod; Vitest; pnpm; Node 26 locally, 22 in CI.
-Bindings in `wrangler.jsonc`: `DB` (D1), `SOURCES` (R2), `RESEARCH_RUN` and `VERIFY_CALL` (Workflows), `ASSETS`. Vars: `LLM_MODEL_PRIMARY=claude-opus-5-5`, `LLM_MODEL_VERIFY=claude-sonnet-5-5`, `RUN_BUDGET_USD`, `RUN_BUDGET_CALLS`, `CALL_PROVIDER` (`mock`|`elevenlabs`), `CALL_BUDGET_USD`, `RUN_CALL_MAX`, `ELEVENLABS_AGENT_ID`, `ELEVENLABS_PHONE_NUMBER_ID`. Secrets: `ANTHROPIC_API_KEY`, `APIFY_TOKEN`, `RUN_TOKEN` (bearer for POST /api/runs and the call routes), `ELEVENLABS_API_KEY` and `ELEVENLABS_WEBHOOK_SECRET` (live calls only).
+Bindings in `wrangler.jsonc`: `DB` (D1), `SOURCES` (R2), `RESEARCH_RUN` and `VERIFY_CALL` (Workflows), `ASSETS`. Vars: `LLM_MODEL_PRIMARY=claude-opus-5-5`, `LLM_MODEL_VERIFY=claude-sonnet-5-5`, `RUN_BUDGET_USD`, `RUN_BUDGET_CALLS`, `CALL_PROVIDER` (`mock`|`elevenlabs`), `CALL_BUDGET_USD`, `RUN_CALL_MAX`, `ELEVENLABS_AGENT_ID`, `ELEVENLABS_PHONE_NUMBER_ID`. Secrets: `ANTHROPIC_API_KEY`, `APIFY_TOKEN`, `RUN_TOKEN` (bearer for POST /api/runs and the call routes), `ELEVENLABS_API_KEY` and `ELEVENLABS_WEBHOOK_SECRET` (live calls only); optional `GITHUB_TOKEN` and `STACKEXCHANGE_KEY` (added by `makeFetchJson` for api.github.com / api.stackexchange.com only).
 Worker entry `src/worker.ts` re-exports the OpenNext `fetch` and exports `ResearchRunWorkflow` and `VerificationCallWorkflow`. The Workflow imports only `src/domain/*` and `src/recipe/*`, never Next.js.
 
 ## Scripts (pnpm)
@@ -85,3 +85,4 @@ Every change to `src/`, `migrations/`, `scripts/` or any root config must pass `
 - `typescript` stays on 6.x: typescript-eslint's peer range is `<6.1.0`, and `pnpm lint` (strictTypeChecked) is part of the gate.
 - ESLint runs typescript-eslint `strictTypeChecked` + `stylisticTypeChecked` with no `warn` level; every finding fails `pnpm check`.
 - `POST /api/runs` needs `Authorization: Bearer <RUN_TOKEN>`; the value lives in `~/s/oldboys/.env` and in the Worker secret.
+- Without `GITHUB_TOKEN` the Worker gets HTTP 403 from api.github.com (anonymous limit shared by all Workers egress IPs); without `STACKEXCHANGE_KEY` Stack Exchange may answer 400 `throttle_violation`. `fetchJson` puts the first 160 body characters in the ledger note.

@@ -18,6 +18,8 @@ interface __BaseEnv_CloudflareEnv {
 	APIFY_TOKEN: string;
 	ELEVENLABS_API_KEY: string;
 	RUN_TOKEN: string;
+	GITHUB_TOKEN?: string;
+	STACKEXCHANGE_KEY?: string;
 	RESEARCH_RUN: Workflow<Parameters<import("./src/worker").ResearchRunWorkflow['run']>[0]['payload']>;
 	VERIFY_CALL: Workflow /* VerificationCallWorkflow */;
 }
