@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/runs/[id]/kit-actions.tsx
- * Deps:    react, ../../ui (Radar tokens), ./call-panel (types), ./interview-kit, ./candidate-copy, ./ats-note, ./reference-check, ./kit-review-card
+ * Deps:    react, ../../ui (Radar tokens), ./call-panel (types), ./interview-kit, ./candidate-copy, ./ats-note, ./reference-check, ./kit-review-card, ./invite-form
  * Tested:  n/a (the texts are tested in __tests__/{interview-kit,candidate-copy,ats-note,reference-check}.test.ts)
  *
  * Key responsibilities:
@@ -12,6 +12,7 @@
  * - Copy for ATS: a short plain-text note (atsNote) with the link to this brief, for pasting into any ATS card
  * - Copy reference questions: research gaps as plain-text questions for a former manager or colleague (idea #18)
  * - KitReviewCard below the row: paste the filled kit back after the interview to see the open points (idea #23, client only)
+ * - InviteForm below it: download the interview as a calendar invite (.ics) with the brief inside (idea #22, client only)
  * - One top-aligned row: primary copy button + "More exports" disclosure (group/chevron from ui.tsx); opening it never moves the button
  * - One sr-only role="status" span reports "Copied" / "Copy failed" for the last copy that ran; that button's label shows it too for 2 s
  * - EN/CZ buttons are 44px targets (BTN_QUIET, aria-pressed = font-semibold text-ink); the row carries the brief tail's divider
@@ -33,6 +34,7 @@ import { candidateCopy, noticeFileName, type NoticeLang } from "./candidate-copy
 import { atsNote } from "./ats-note";
 import { referenceQuestions } from "./reference-check";
 import { KitReviewCard } from "./kit-review-card";
+import { InviteForm } from "./invite-form";
 
 const LANG_BTN = `${BTN_QUIET} min-h-11 px-3 aria-pressed:font-semibold aria-pressed:text-ink`;
 const LANGS: readonly { lang: NoticeLang; label: string; title: string }[] = [
@@ -152,6 +154,7 @@ export function KitActions({ state }: { state: RunState }): React.JSX.Element | 
         </details>
       </div>
       <KitReviewCard />
+      <InviteForm state={state} />
       <span role="status" className="sr-only">
         {status === "idle" ? "" : STATUS_LABEL[status]}
       </span>
