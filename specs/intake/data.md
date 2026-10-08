@@ -63,10 +63,15 @@ export const IntakeInput = z.object({
 });
 export type Application = { id, source, externalId, tag: string|null, name.., status, runId: string|null, note: string|null, receivedAt: string };  // row shape, camelCase
 export function candidateInput(app: Pick<IntakeInput,"linkedinUrl"|"cvText">): { profileUrl?: string; cvText?: string; notes: string[] }
-  // profileUrl via normalizeLinkedinProfile (src/domain/profile-url.ts); an invalid URL adds a note and is dropped
+  // profileUrl via normalizeLinkedinProfile (src/domain/profile-url.ts); an invalid URL adds the note
+  // "not a LinkedIn profile URL: <first 120 chars>" and is dropped
 export function decideStatus(args: { tagKnown: boolean; senderAllowed: boolean; candidate: {profileUrl?: string; cvText?: string}; capped: boolean }): { status: Exclude<ApplicationStatus,"received">; note: string | null }
-  // order: !tagKnown → unmatched("unknown tag") ; !senderAllowed → unmatched("sender not allowed") ; no profileUrl && no cvText → incomplete ; capped → capped ; else run-started
-export function safeFilename(name: string): string   // basename, [A-Za-z0-9._-] only, ≤ 80 chars, default "cv.pdf"
+  // order: !tagKnown → unmatched("unknown tag") ; !senderAllowed → unmatched("sender not allowed") ;
+  // no profileUrl && no cvText → incomplete("no LinkedIn profile URL and no readable CV text") ;
+  // capped → capped("intake run cap reached for this hour") ; else run-started (note null)
+export function safeFilename(name: string): string
+  // basename (/ and \ separators), runs of chars outside [A-Za-z0-9._-] become one "_", leading "." / "_" stripped,
+  // ≤ 80 chars keeping the extension, default "cv.pdf" when nothing is left
 export function cvR2Key(applicationId: string, filename: string): string  // `intake/${applicationId}/${safeFilename(filename)}`
 ```
 
