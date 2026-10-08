@@ -23,7 +23,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { buildStartBody, positionIdParam } from "./start-body";
 import { PositionBanner, usePositionSummary } from "./start-position";
-import { BTN_PRIMARY, CARD_SAGE, FIELD } from "./ui";
+import { BTN_PRIMARY, CARD_PEACH, CARD_SAGE, FIELD } from "./ui";
 
 const CV_MAX = 20_000;
 
@@ -108,7 +108,7 @@ function StartFormInner(): React.JSX.Element {
     >
       {position.status === "ready" && <PositionBanner summary={position.summary} />}
       {position.status === "error" && (
-        <p role="status" className="text-sm text-amber-300">
+        <p role="status" className={`${CARD_PEACH} text-sm`}>
           We could not load that position, so you can name the role yourself.
         </p>
       )}

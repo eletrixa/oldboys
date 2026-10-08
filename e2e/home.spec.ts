@@ -19,5 +19,5 @@ test("home page renders the start form", async ({ page }) => {
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
   await expect(page.locator("input[name=profileUrl]")).toBeVisible();
   await expect(page.getByRole("button", { name: /\S/ }).first()).toBeVisible();
-  await expect(page.getByRole("link", { name: /roles|positions/i })).toBeVisible();
+  await expect(page.getByRole("link", { name: /see positions/i })).toBeVisible();
 });

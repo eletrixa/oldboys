@@ -14,7 +14,8 @@
  */
 import { describe, expect, it, vi } from "vitest";
 import type { Ports } from "@/domain/ports";
-import { ingestPosition, type IngestBody, type IngestDeps, ingestCapUsd, estimatePositionUsd } from "@/workflow/ingest-position";
+import type { CreatePositionBody } from "@/app/api/_lib/position-body";
+import { ingestPosition, type IngestDeps, ingestCapUsd, estimatePositionUsd } from "@/workflow/ingest-position";
 import { fakeLlm } from "@/recipe/__tests__/fakes";
 
 type Row = Record<string, unknown>;
@@ -74,6 +75,7 @@ function makeEnv(opts: { putError?: Error; insertError?: Error } = {}) {
   const db = { prepare: (q: string) => stmt(q) } as unknown as D1Database;
   const bucket = {
     put: (key: string, value: string) => (opts.putError ? Promise.reject(opts.putError) : (puts.set(key, value), Promise.resolve({}))),
+    delete: (key: string) => (puts.delete(key), Promise.resolve()),
   } as unknown as R2Bucket;
   return { db, bucket, rows, puts, sql };
 }
@@ -95,7 +97,7 @@ function deps(env: ReturnType<typeof makeEnv>, over: Partial<IngestDeps> = {}): 
 
 const ghPayload = JSON.stringify({ title: "Data Engineer", company_name: "Acme", location: { name: "Brno" }, content: `<p>${LONG}</p>` });
 const okFetch = (payload = ghPayload) => vi.fn((_url: string) => Promise.resolve(new Response(payload, { status: 200 })));
-const run = (d: IngestDeps, body: IngestBody) => ingestPosition(d, body);
+const run = (d: IngestDeps, body: CreatePositionBody) => ingestPosition(d, body);
 
 describe("ingestPosition", () => {
   it("I1: pasted text with a working LLM inserts a pasted row, stores the raw object and expires in 7 days", async () => {
@@ -161,18 +163,17 @@ describe("ingestPosition", () => {
     expect(env.rows.get("pos-1")).toMatchObject({ ingest_method: "pasted", posting_url: GH_URL, board: null, external_id: null });
   });
 
-  it("I7: a fetch that never resolves is aborted at 20 s and treated as a failure", async () => {
-    vi.useFakeTimers();
+  it("I7: a fetch gets a 20 s abort signal and its timeout is treated as a failure", async () => {
+    const timeout = vi.spyOn(AbortSignal, "timeout").mockReturnValue(AbortSignal.abort(new DOMException("The operation was aborted due to timeout", "TimeoutError")));
     try {
       const env = makeEnv();
-      const fetchFn = vi.fn(() => new Promise<Response>(() => undefined));
-      const pending = run(deps(env, { fetchFn: fetchFn as unknown as typeof fetch }), { postingUrl: GH_URL });
-      await vi.advanceTimersByTimeAsync(20_000);
-      const r = await pending;
+      const fetchFn = vi.fn((_url: string, init?: RequestInit) => Promise.reject(init?.signal?.reason as Error));
+      const r = await run(deps(env, { fetchFn: fetchFn as unknown as typeof fetch }), { postingUrl: GH_URL });
+      expect(timeout).toHaveBeenCalledWith(20_000);
       expect(r).toMatchObject({ ok: false, status: 422 });
-      expect(!r.ok && r.error).toContain("timed out");
+      expect(!r.ok && r.error).toContain("timeout");
     } finally {
-      vi.useRealTimers();
+      timeout.mockRestore();
     }
   });
 
@@ -198,6 +199,7 @@ describe("ingestPosition", () => {
     const env = makeEnv({ insertError: new Error("D1_ERROR: UNIQUE constraint failed: positions.board, positions.external_id") });
     const r = await run(deps(env, { fetchFn: okFetch() as unknown as typeof fetch }), { postingUrl: GH_URL });
     expect(r).toMatchObject({ ok: true, id: "race", reused: true });
+    expect(env.puts.size).toBe(0);
   });
 
   it("I11: the title in the body overrides the extracted title", async () => {

@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/runs/[id]/run-view.tsx
- * Deps:    react, next/link, ../../ui, ./parts, ./state, ./identity-map-card, ./position-header
+ * Deps:    react, next/link, ../../ui, ./parts, ./state, ./identity-map-card
  * Tested:  n/a
  *
  * Key responsibilities:
@@ -26,7 +26,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { Candidate, CandidateDecision } from "@/domain/claim";
 import { BTN_PRIMARY, BTN_QUIET, BTN_SECONDARY, CARD, Eyebrow, LINK, Pill } from "../../ui";
 import { IdentityMapCard } from "./identity-map-card";
-import { positionHeader } from "./position-header";
 import { type Answer, BriefView, CostLine, ProfileList, ProgressSteps, QuestionCard } from "./parts";
 import { type RunState, firstName, headerText, questionsToAsk, sortLineup, stepRows } from "./state";
 
@@ -153,7 +152,7 @@ export function RunView({ id }: { id: string }): React.JSX.Element {
   }
 
   const first = firstName(state.subject) ?? "the candidate";
-  const forPosition = positionHeader(state);
+  const forPosition = state.position ?? null;
   const created = Date.parse(state.created_at);
   const cached = state.status === "done" && !Number.isNaN(created) && openedAt - created > CACHED_AFTER_MS;
   const degraded = state.brief !== null && state.brief.degraded !== null;
@@ -175,7 +174,7 @@ export function RunView({ id }: { id: string }): React.JSX.Element {
         {state.headline !== null && <p className="text-lg text-muted">{state.headline}</p>}
         {forPosition !== null && (
           <p className="text-sm text-muted">
-            <Link href={forPosition.href} className={LINK}>{forPosition.label}</Link>
+            <Link href={`/positions/${encodeURIComponent(forPosition.id)}`} className={LINK}>Researched for: {forPosition.title}</Link>
           </p>
         )}
         {state.status !== "done" && (

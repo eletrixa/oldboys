@@ -2,9 +2,9 @@
  * Hook: GET one bearer-protected JSON route with the stored operator token.
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
- * Module:  src/app/positions/use-authed-json.ts
+ * Module:  src/app/_components/use-authed-json.ts
  * Deps:    react, src/app/_components/token
- * Tested:  n/a (covered by e2e/positions.spec.ts)
+ * Tested:  n/a (covered by e2e/positions.spec.ts and the roles page)
  *
  * Key responsibilities:
  * - States loading / token / notfound / error / ready; 401 clears the token and asks again
@@ -16,7 +16,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { authFetch, readToken, writeToken } from "@/app/_components/token";
+import { authFetch, readToken, writeToken } from "./token";
 
 export type AuthedLoad<T> =
   | { kind: "loading" }

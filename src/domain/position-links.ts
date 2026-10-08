@@ -1,5 +1,5 @@
 /**
- * Pure helpers for the positions pages: grouping, search, outbound links, request bodies, must-have editing.
+ * Pure helpers for the positions pages: grouping, search, ingest label, must-have editing.
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/domain/position-links.ts
@@ -7,9 +7,9 @@
  * Tested:  src/domain/__tests__/position-links.test.ts
  *
  * Key responsibilities:
- * - groupByFamily / filterPositions for the list, linkedinPeopleSearchUrl / researchHref for the detail actions
+ * - groupByFamily / indexPositions / filterPositions for the list
  * - ingestLabel for the ingest method chip
- * - buildCreateBody for /positions/new, addMustHave / removeMustHave for the inline editor
+ * - addMustHave / removeMustHave for the inline editor
  *
  * Design constraints:
  * - Pure, no I/O, no React
@@ -34,38 +34,30 @@ export function ingestLabel(method: string): string {
 
 export type FamilyGroup = { family: Family; items: PositionListItem[] };
 
-/** Sections in FAMILIES order (other last), empty ones skipped, newest first inside. */
+/** Sections in FAMILIES order (other last), empty ones skipped, newest first inside; one pass over the items. */
 export function groupByFamily(items: readonly PositionListItem[]): FamilyGroup[] {
-  return FAMILIES.map((family) => ({
-    family,
-    items: items.filter((i) => i.family === family).sort((a, b) => b.created_at.localeCompare(a.created_at)),
-  })).filter((g) => g.items.length > 0);
+  const buckets = new Map<Family, PositionListItem[]>();
+  for (const i of items) {
+    const bucket = buckets.get(i.family);
+    if (bucket) bucket.push(i);
+    else buckets.set(i.family, [i]);
+  }
+  return FAMILIES.flatMap((family) => {
+    const list = buckets.get(family);
+    return list ? [{ family, items: list.sort((a, b) => b.created_at.localeCompare(a.created_at)) }] : [];
+  });
 }
 
-export function filterPositions(items: readonly PositionListItem[], query: string): PositionListItem[] {
+export type IndexedPosition = { item: PositionListItem; haystack: string };
+
+/** Folds title and company once, so typing in the search box does not refold every row. */
+export function indexPositions(items: readonly PositionListItem[]): IndexedPosition[] {
+  return items.map((item) => ({ item, haystack: fold(`${item.title} ${item.company ?? ""}`) }));
+}
+
+export function filterPositions(index: readonly IndexedPosition[], query: string): PositionListItem[] {
   const q = fold(query.trim());
-  if (q === "") return [...items];
-  return items.filter((i) => fold(`${i.title} ${i.company ?? ""}`).includes(q));
-}
-
-export function linkedinPeopleSearchUrl(title: string, location?: string | null): string {
-  const keywords = `${title} ${location ?? ""}`.trim();
-  return `https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(keywords)}`;
-}
-
-export function researchHref(id: string): string {
-  return `/?positionId=${encodeURIComponent(id)}`;
-}
-
-export type CreateInput = { postingText: string; postingUrl: string; title: string };
-
-/** Trimmed body without empty fields; null when there is neither text nor URL to send. */
-export function buildCreateBody(input: CreateInput): Record<string, string> | null {
-  const text = input.postingText.trim();
-  const url = input.postingUrl.trim();
-  const title = input.title.trim();
-  if (text === "" && url === "") return null;
-  return { ...(text !== "" ? { postingText: text } : {}), ...(url !== "" ? { postingUrl: url } : {}), ...(title !== "" ? { title } : {}) };
+  return index.filter((e) => q === "" || e.haystack.includes(q)).map((e) => e.item);
 }
 
 function slug(s: string): string {

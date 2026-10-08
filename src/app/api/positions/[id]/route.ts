@@ -3,8 +3,8 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/api/positions/[id]/route.ts
- * Deps:    @opennextjs/cloudflare (getCloudflareContext), ../handler, binding DB, secret RUN_TOKEN
- * Tested:  src/app/api/positions/__tests__/handler.test.ts (via handler.ts)
+ * Deps:    @opennextjs/cloudflare (getCloudflareContext), ../routes, binding DB, secret RUN_TOKEN
+ * Tested:  src/app/api/positions/__tests__/handler.test.ts (via routes.ts)
  *
  * Key responsibilities:
  * - Pass the request, bindings and the path id to the tested route functions
@@ -13,7 +13,7 @@
  * - No runtime = "edge"; no logic here
  */
 import { getCloudflareContext } from "@opennextjs/cloudflare";
-import { getPositionRoute, patchPositionRoute } from "../handler";
+import { getPositionRoute, patchPositionRoute } from "../routes";
 
 type Ctx = { params: Promise<{ id: string }> };
 

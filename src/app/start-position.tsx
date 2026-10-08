@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/start-position.tsx
- * Deps:    react, ./api/positions/[id]/summary/summary (type only)
+ * Deps:    react, ./ui, ./api/positions/[id]/summary/summary (type only)
  * Tested:  n/a (the body builder is tested in src/app/__tests__/start-body.test.ts; the summary route in its own test)
  *
  * Key responsibilities:
@@ -17,8 +17,9 @@
 
 import { useEffect, useState } from "react";
 import type { PositionSummary } from "./api/positions/[id]/summary/summary";
+import { CARD_SAGE } from "./ui";
 
-export type PositionState =
+type PositionState =
   | { status: "none" }
   | { status: "loading" }
   | { status: "ready"; summary: PositionSummary }
@@ -52,12 +53,12 @@ export function usePositionSummary(positionId: string | null): PositionState {
 
 export function PositionBanner({ summary }: { summary: PositionSummary }): React.JSX.Element {
   return (
-    <section aria-label="Position" className="flex flex-col gap-2 rounded-xl border border-zinc-800 bg-zinc-900/60 p-4">
-      <p className="text-sm text-zinc-400">
-        Researching for: <strong className="font-semibold text-zinc-100">{summary.title}</strong>
+    <section aria-label="Position" className={`${CARD_SAGE} flex flex-col gap-2`}>
+      <p className="text-sm text-muted">
+        Researching for: <strong className="font-semibold text-ink">{summary.title}</strong>
       </p>
       {summary.must_haves.length > 0 && (
-        <ul className="list-disc space-y-1 pl-5 text-sm text-zinc-300">
+        <ul className="list-disc space-y-1 pl-5 text-sm text-ink">
           {summary.must_haves.map((m) => (
             <li key={m.id}>{m.title !== undefined && m.title !== "" ? `${m.title}: ${m.text}` : m.text}</li>
           ))}

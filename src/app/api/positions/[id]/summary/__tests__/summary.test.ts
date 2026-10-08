@@ -55,10 +55,9 @@ describe("getPositionSummary", () => {
     });
   });
 
-  it("selects only the three columns it exposes", async () => {
-    const { db, seen } = makeDb([stored()]);
-    await getPositionSummary(db, "pos-1");
-    expect(seen).toEqual(["SELECT id, title, must_haves_json FROM positions WHERE id = ?"]);
+  it("exposes only id, title and must-haves although the shared read loads the whole row", async () => {
+    const { db } = makeDb([stored({ company: "Acme", posting_url: "https://x.test", excerpt: "secret" })]);
+    expect(Object.keys((await getPositionSummary(db, "pos-1")) ?? {}).sort()).toEqual(["id", "must_haves", "title"]);
   });
 
   it("returns null for an unknown id and for an id over 64 characters, without querying the long one", async () => {

@@ -3,11 +3,11 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/roles/roles-view.tsx
- * Deps:    react, next/link, src/domain/role-overview, src/app/ui, src/app/_components (token, TokenForm, RoleTable)
+ * Deps:    next/link, src/domain/role-overview, src/app/ui, src/app/_components (useAuthedJson, AuthStates, RoleTable)
  * Tested:  builder in src/domain/__tests__/role-overview.test.ts; view n/a
  *
  * Key responsibilities:
- * - Ask once for the operator token (RUN_TOKEN), keep it in sessionStorage, GET /api/roles with it
+ * - Ask once for the operator token (RUN_TOKEN), keep it in sessionStorage, GET /api/roles with it (useAuthedJson)
  * - No roleKey: roles with run counts; roleKey: rows = runs newest first, columns = must-haves + sources confirmed
  *
  * Design constraints:
@@ -18,18 +18,13 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { AuthStates } from "@/app/_components/auth-states";
 import { DISCLAIMER, RoleTable } from "@/app/_components/role-table";
-import { readToken, writeToken } from "@/app/_components/token";
-import { TokenForm } from "@/app/_components/token-form";
+import { useAuthedJson } from "@/app/_components/use-authed-json";
 import type { RoleGroup } from "@/domain/role-overview";
 import { BTN_QUIET, Eyebrow } from "../ui";
 
-type Load =
-  | { kind: "loading" }
-  | { kind: "token"; error: string | null }
-  | { kind: "error"; message: string }
-  | { kind: "ready"; groups: RoleGroup[] };
+const ROLES_HINT = "The list shows every brief, so it needs the team token. Kept only in this tab.";
 
 function RoleList({ groups }: { groups: RoleGroup[] }): React.JSX.Element {
   if (groups.length === 0) return <p className="text-muted">No briefs with a role yet.</p>;
@@ -49,43 +44,10 @@ function RoleList({ groups }: { groups: RoleGroup[] }): React.JSX.Element {
   );
 }
 
-/** GET /api/roles; without a token the request still goes out and its 401 shows the token form. */
-async function loadRoles(token: string | null): Promise<Load> {
-  try {
-    const headers: HeadersInit = token === null ? {} : { Authorization: `Bearer ${token}` };
-    const res = await fetch("/api/roles", { headers, cache: "no-store" });
-    if (res.status === 401) {
-      writeToken(null);
-      return { kind: "token", error: token === null ? null : "That token did not work. Please try again." };
-    }
-    if (!res.ok) return { kind: "error", message: "We could not load the roles. Please try again." };
-    const { groups } = await res.json<{ groups: RoleGroup[] }>();
-    if (token !== null) writeToken(token);
-    return { kind: "ready", groups };
-  } catch {
-    return { kind: "error", message: "We could not reach the service. Please try again." };
-  }
-}
-
 export function RolesView({ roleKey }: { roleKey?: string }): React.JSX.Element {
-  const [load, setLoad] = useState<Load>({ kind: "loading" });
+  const { state, submitToken } = useAuthedJson<{ groups: RoleGroup[] }>("/api/roles");
 
-  useEffect(() => {
-    let live = true;
-    void loadRoles(readToken()).then((next) => {
-      if (live) setLoad(next);
-    });
-    return () => {
-      live = false;
-    };
-  }, []);
-
-  function submitToken(token: string): void {
-    setLoad({ kind: "loading" });
-    void loadRoles(token).then(setLoad);
-  }
-
-  const group = load.kind === "ready" && roleKey !== undefined ? load.groups.find((g) => g.key === roleKey) : undefined;
+  const group = state.kind === "ready" && roleKey !== undefined ? state.data.groups.find((g) => g.key === roleKey) : undefined;
 
   return (
     <main className="mx-auto flex max-w-5xl flex-col gap-8 px-4 py-10 md:py-14">
@@ -97,16 +59,9 @@ export function RolesView({ roleKey }: { roleKey?: string }): React.JSX.Element 
           <Link href="/roles" className={BTN_QUIET}>All roles</Link>
         )}
       </header>
-      {load.kind === "loading" && (
-        <div role="status" aria-label="Loading" className="flex animate-pulse flex-col gap-3">
-          <div className="h-8 w-1/3 rounded bg-divider" />
-          <div className="h-4 w-1/2 rounded bg-divider" />
-        </div>
-      )}
-      {load.kind === "token" && <TokenForm error={load.error} onSubmit={submitToken} />}
-      {load.kind === "error" && <p className="text-conflict">{load.message}</p>}
-      {load.kind === "ready" && roleKey === undefined && <RoleList groups={load.groups} />}
-      {load.kind === "ready" && roleKey !== undefined && (group === undefined ? <p className="text-muted">No briefs for this role.</p> : <RoleTable group={group} />)}
+      <AuthStates state={state} onToken={submitToken} hint={ROLES_HINT} submitLabel="Show roles" />
+      {state.kind === "ready" && roleKey === undefined && <RoleList groups={state.data.groups} />}
+      {state.kind === "ready" && roleKey !== undefined && (group === undefined ? <p className="text-muted">No briefs for this role.</p> : <RoleTable group={group} />)}
     </main>
   );
 }

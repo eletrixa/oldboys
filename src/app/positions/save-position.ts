@@ -2,7 +2,7 @@
  * Client call: PATCH /api/positions/:id with the stored token.
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
- * Module:  src/app/positions/patch-position.ts
+ * Module:  src/app/positions/save-position.ts
  * Deps:    src/app/_components/token, src/domain/position
  * Tested:  n/a (covered by e2e/positions.spec.ts)
  *
@@ -18,7 +18,7 @@ import type { Position } from "@/domain/position";
 export type PatchBody = Partial<Pick<Position, "title" | "family" | "must_haves">>;
 export type PatchResult = { ok: true; position: Position } | { ok: false; message: string };
 
-export async function patchPosition(id: string, body: PatchBody): Promise<PatchResult> {
+export async function savePosition(id: string, body: PatchBody): Promise<PatchResult> {
   try {
     const res = await authFetch(`/api/positions/${encodeURIComponent(id)}`, readToken(), {
       method: "PATCH",

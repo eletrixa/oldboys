@@ -7,23 +7,15 @@
  * Tested:  n/a (this is the test)
  *
  * Key responsibilities:
- * - Cover B3-B10, B13 and B14 of specs/positions-api.md (B1-B2 live in position-body.test.ts, B11-B12 in position-overview.test.ts)
+ * - Cover B3-B10, B13 and B14 of specs/positions-api.md (B1-B2 live in position-body.test.ts, B11-B12 are folded in here through getPosition)
  *
  * Design constraints:
  * - No module mocks; the fake matches SQL prefixes and throws on anything unexpected
  */
 import { describe, expect, it } from "vitest";
 import { fakeLlm } from "@/recipe/__tests__/fakes";
-import {
-  createPositionRoute,
-  getPosition,
-  getPositionRoute,
-  listPositions,
-  listPositionsRoute,
-  patchPosition,
-  patchPositionRoute,
-  type PositionsEnv,
-} from "../handler";
+import { getPosition, listPositions, patchPosition } from "../handler";
+import { createPositionRoute, getPositionRoute, listPositionsRoute, patchPositionRoute, type PositionsEnv } from "../routes";
 
 type Row = Record<string, unknown>;
 const mh = (id: string) => ({ id, text: "Has shipped X", accepted_evidence: ["repo"] });
@@ -50,8 +42,7 @@ function makeDb(positions: Row[], runs: Row[] = []) {
       return { rows: hit ? [Object.fromEntries(Object.entries(hit).filter(([k]) => k !== "r2_key"))] : [], changes: 0 };
     }
     const mine = () => runs.filter((r) => r.position_id === a[0]).sort((x, y) => String(y.created_at).localeCompare(String(x.created_at)));
-    if (q.startsWith("SELECT id, subject, status, created_at FROM investigations")) return { rows: mine(), changes: 0 };
-    if (q.startsWith("SELECT i.id")) return { rows: mine().map((r) => ({ ...r, role: "x", questions_json: null, brief_json: null, sources_confirmed: 0 })), changes: 0 };
+    if (q.startsWith("SELECT i.id")) return { rows: mine().map((r) => ({ role: "x", questions_json: null, brief_json: null, sources_confirmed: 0, ...r })), changes: 0 };
     if (q.startsWith("SELECT id FROM positions WHERE board")) {
       const hit = positions.find((p) => p.board === a[0] && p.external_id === a[1]);
       return { rows: hit ? [{ id: hit.id }] : [], changes: 0 };
@@ -108,6 +99,25 @@ describe("positions functions", () => {
     expect(detail?.group?.key).toBe("p1");
   });
 
+  it("B11: a position with no runs has a null group and no runs; with runs the group is titled by the position, newest first, with brief labels", async () => {
+    expect((await getPosition(makeDb([position("p1")]), "p1"))).toMatchObject({ runs: [], group: null });
+    const questions_json = JSON.stringify([{ id: "mh-a", text: "Has shipped X" }]);
+    const brief = (coverage: string) => JSON.stringify({ run_id: "x", per_question: [{ question_id: "mh-a", coverage, claim_ids: [], summary: "" }], degraded: null });
+    const db = makeDb([position("p1", { title: "Staff Engineer" })], [
+      { id: "old", position_id: "p1", subject: "A", status: "done", created_at: "2026-10-07T10:00:00.000Z", questions_json, brief_json: brief("none") },
+      { id: "new", position_id: "p1", subject: "B", status: "done", created_at: "2026-10-08T10:00:00.000Z", questions_json, brief_json: brief("evidenced"), role: null },
+    ]);
+    const { group } = (await getPosition(db, "p1")) ?? {};
+    expect(group).toMatchObject({ key: "p1", role: "Staff Engineer", run_count: 2, questions: ["Has shipped X"] });
+    expect(group?.runs.map((r) => [r.id, r.cells])).toEqual([["new", ["documented"]], ["old", ["no evidence"]]]);
+  });
+
+  it("B12: a run without a brief is not checked in every cell", async () => {
+    const questions_json = JSON.stringify([{ id: "mh-a", text: "Has shipped X" }]);
+    const db = makeDb([position("p1")], [{ id: "r1", position_id: "p1", subject: "A", status: "done", created_at: "2026-10-07T10:00:00.000Z", questions_json }]);
+    expect((await getPosition(db, "p1"))?.group?.runs[0]?.cells).toEqual(["not checked"]);
+  });
+
   it("B6: getPosition of an unknown or implausible id returns null", async () => {
     const db = makeDb([position("p1")]);
     expect(await getPosition(db, "nope")).toBeNull();
@@ -125,6 +135,7 @@ describe("positions functions", () => {
     const updated = await patchPosition(makeDb(rows), "p1", { title: "Renamed" });
     expect(updated).toMatchObject({ title: "Renamed", family: "data" });
     expect(updated?.must_haves).toHaveLength(2);
+    expect(updated?.extraction).not.toBe("edited");
   });
 
   it("B9: patchPosition with must_haves stores JSON that parses back and keeps expires_at", async () => {
@@ -134,6 +145,7 @@ describe("positions functions", () => {
     expect(JSON.parse(rows[0]?.must_haves_json as string)).toEqual(next);
     expect(updated?.must_haves).toEqual(next);
     expect(updated?.expires_at).toBe("2026-10-15T10:00:00.000Z");
+    expect(updated?.extraction).toBe("edited");
   });
 
   it("B10: patchPosition on an unknown id returns null", async () => {

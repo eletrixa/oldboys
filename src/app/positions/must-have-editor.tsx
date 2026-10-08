@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/positions/must-have-editor.tsx
- * Deps:    react, src/domain/position-links, ./patch-position
+ * Deps:    react, src/app/ui, src/domain/position-links, ./save-position
  * Tested:  add/remove rules in src/domain/__tests__/position-links.test.ts; view by e2e/positions.spec.ts
  *
  * Key responsibilities:
@@ -15,14 +15,12 @@
 "use client";
 
 import { useState } from "react";
-import { addMustHave, removeMustHave } from "@/domain/position-links";
+import { BTN_PRIMARY, BTN_QUIET, BTN_SECONDARY, FIELD } from "@/app/ui";
 import type { MustHave, Position } from "@/domain/position";
-import { patchPosition } from "./patch-position";
+import { addMustHave, removeMustHave } from "@/domain/position-links";
+import { savePosition } from "./save-position";
 
 type MustHaveEditorProps = { position: Position; onSaved: (p: Position) => void };
-
-const FIELD = "w-full rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2 text-zinc-100 focus:border-teal-400 focus:outline-none";
-const GHOST = "rounded-xl border border-zinc-700 px-3 py-1.5 text-sm text-zinc-200 hover:bg-zinc-900 focus-visible:ring-2 focus-visible:ring-teal-300 focus-visible:outline-none disabled:opacity-50";
 
 export function MustHaveEditor({ position, onSaved }: MustHaveEditorProps): React.JSX.Element {
   const [items, setItems] = useState<MustHave[]>(position.must_haves);
@@ -36,7 +34,7 @@ export function MustHaveEditor({ position, onSaved }: MustHaveEditorProps): Reac
   async function save(): Promise<void> {
     setStatus({ kind: "saving" });
     const cleaned = items.filter((m) => m.text.trim() !== "").map((m) => ({ ...m, text: m.text.trim(), title: m.title?.trim() === "" ? undefined : m.title?.trim() }));
-    const result = await patchPosition(position.id, { must_haves: cleaned });
+    const result = await savePosition(position.id, { must_haves: cleaned });
     if (!result.ok) {
       setStatus({ kind: "error", message: result.message });
       return;
@@ -48,34 +46,34 @@ export function MustHaveEditor({ position, onSaved }: MustHaveEditorProps): Reac
 
   return (
     <section aria-labelledby="mh-heading" className="flex flex-col gap-3">
-      <h2 id="mh-heading" className="text-xl font-semibold">Must-haves</h2>
-      <ul aria-label="Must-haves" className="flex flex-col gap-3">
+      <h2 id="mh-heading" className="font-serif text-2xl">Must-haves</h2>
+      <ul aria-label="Must-haves" className="flex flex-col divide-y divide-divider">
         {items.map((m, i) => (
-          <li key={m.id} className="flex flex-col gap-2 rounded-xl border border-zinc-800 p-3">
-            <label className="flex flex-col gap-1 text-xs text-zinc-400">
+          <li key={m.id} className="flex flex-col gap-2 py-4">
+            <label className="flex flex-col gap-1 text-xs text-muted">
               Title {String(i + 1)}
-              <input className={FIELD} value={m.title ?? ""} maxLength={48} onChange={(e) => { edit(m.id, { title: e.target.value }); }} />
+              <input className={`${FIELD} px-3 py-2`} value={m.title ?? ""} maxLength={48} onChange={(e) => { edit(m.id, { title: e.target.value }); }} />
             </label>
-            <label className="flex flex-col gap-1 text-xs text-zinc-400">
+            <label className="flex flex-col gap-1 text-xs text-muted">
               Must-have {String(i + 1)}
-              <textarea className={FIELD} rows={2} value={m.text} onChange={(e) => { edit(m.id, { text: e.target.value }); }} />
+              <textarea className={`${FIELD} px-3 py-2`} rows={2} value={m.text} onChange={(e) => { edit(m.id, { text: e.target.value }); }} />
             </label>
-            <button type="button" className={`${GHOST} self-start`} disabled={items.length <= 1} onClick={() => { setItems((l) => removeMustHave(l, m.id)); setStatus({ kind: "idle" }); }}>
+            <button type="button" className={`${BTN_QUIET} self-start`} disabled={items.length <= 1} onClick={() => { setItems((l) => removeMustHave(l, m.id)); setStatus({ kind: "idle" }); }}>
               Remove
             </button>
           </li>
         ))}
       </ul>
       <div className="flex flex-wrap items-center gap-3">
-        <button type="button" className={GHOST} disabled={items.length >= 5} onClick={() => { setItems((l) => addMustHave(l, "", "New must-have")); setStatus({ kind: "idle" }); }}>
+        <button type="button" className={BTN_SECONDARY} disabled={items.length >= 5} onClick={() => { setItems((l) => addMustHave(l, "", "New must-have")); setStatus({ kind: "idle" }); }}>
           Add must-have
         </button>
-        <button type="button" className="rounded-xl bg-teal-500 px-4 py-2 font-medium text-zinc-950 hover:bg-teal-400 disabled:opacity-50" disabled={status.kind === "saving"} onClick={() => void save()}>
+        <button type="button" className={BTN_PRIMARY} disabled={status.kind === "saving"} onClick={() => void save()}>
           Save
         </button>
-        <span role="status" className="text-sm text-zinc-400">
+        <span role="status" className="text-sm text-muted">
           {status.kind === "saved" && "Saved"}
-          {status.kind === "error" && <span className="text-red-300">{status.message}</span>}
+          {status.kind === "error" && <span className="text-conflict">{status.message}</span>}
         </span>
       </div>
     </section>

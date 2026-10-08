@@ -9,7 +9,7 @@
  * Key responsibilities:
  * - Backs the privacy line on Screen 1 ("deleted after 7 days"): raw payloads in R2, sources, claims, candidates,
  *   gaps, briefs, calls (with their R2 result objects and webhook events) and the ledger all go, then the run row
- * - Positions (plans/007) go at their own `expires_at`: R2 object, `investigations.position_id` set NULL, then the row
+ * - Positions (plans/007) go at their own `expires_at`: R2 objects, then one `db.batch` per batch of ids that sets `investigations.position_id` NULL and deletes the rows
  *
  * Design constraints:
  * - Batches of 20 runs, then 20 positions; the UPDATE of `position_id` comes before the position DELETE so the foreign key never blocks
@@ -51,23 +51,24 @@ async function purgeRuns(db: D1Database, bucket: R2Bucket, now: Date): Promise<n
 }
 
 async function purgePositions(db: D1Database, bucket: R2Bucket, now: Date): Promise<number> {
+  const table = await db.prepare("SELECT 1 AS present FROM sqlite_master WHERE type = 'table' AND name = 'positions'").first();
+  if (!table) return 0;
   let positions = 0;
   for (;;) {
-    let batch: { id: string; r2_key: string | null }[];
-    try {
-      batch = (await db.prepare("SELECT id, r2_key FROM positions WHERE expires_at < ? LIMIT ?").bind(now.toISOString(), BATCH).all<{ id: string; r2_key: string | null }>()).results;
-    } catch (error) {
-      if (error instanceof Error && error.message.includes("no such table")) return positions;
-      throw error;
-    }
-    if (batch.length === 0) return positions;
-    const keys = batch.flatMap((p) => (p.r2_key === null ? [] : [p.r2_key]));
+    const { results } = await db
+      .prepare("SELECT id, r2_key FROM positions WHERE expires_at < ? LIMIT ?")
+      .bind(now.toISOString(), BATCH)
+      .all<{ id: string; r2_key: string | null }>();
+    if (results.length === 0) return positions;
+    const keys = results.flatMap((p) => (p.r2_key === null ? [] : [p.r2_key]));
     if (keys.length > 0) await bucket.delete(keys);
-    for (const { id } of batch) {
-      await db.prepare("UPDATE investigations SET position_id = NULL WHERE position_id = ?").bind(id).run();
-      await db.prepare("DELETE FROM positions WHERE id = ?").bind(id).run();
-      positions += 1;
-    }
+    const ids = results.map((p) => p.id);
+    const marks = ids.map(() => "?").join(", ");
+    await db.batch([
+      db.prepare(`UPDATE investigations SET position_id = NULL WHERE position_id IN (${marks})`).bind(...ids),
+      db.prepare(`DELETE FROM positions WHERE id IN (${marks})`).bind(...ids),
+    ]);
+    positions += ids.length;
   }
 }
 

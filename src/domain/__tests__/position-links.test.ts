@@ -7,7 +7,7 @@
  * Tested:  n/a (this is the test)
  *
  * Key responsibilities:
- * - G1 groupByFamily, G2 filterPositions, G3-G5 link builders, G12 create body, G13 must-have editor
+ * - G1 groupByFamily, G2 filterPositions, G13 must-have editor
  *
  * Design constraints:
  * - Fixtures stay inline
@@ -15,13 +15,11 @@
 import { describe, expect, it } from "vitest";
 import {
   addMustHave,
-  buildCreateBody,
   filterPositions,
   groupByFamily,
+  indexPositions,
   ingestLabel,
-  linkedinPeopleSearchUrl,
   removeMustHave,
-  researchHref,
 } from "@/domain/position-links";
 import type { MustHave } from "@/domain/position";
 
@@ -44,47 +42,14 @@ describe("groupByFamily", () => {
 
 describe("filterPositions", () => {
   const all = [item("1", "data", "x", "Senior Data Engineer", "Acme"), item("2", "sales", "x", "AE", "Škoda")];
+  const indexed = indexPositions(all);
   it("matches title and company, ignoring case and diacritics", () => {
-    expect(filterPositions(all, "data").map((i) => i.id)).toEqual(["1"]);
-    expect(filterPositions(all, "skoda").map((i) => i.id)).toEqual(["2"]);
+    expect(filterPositions(indexed, "data").map((i) => i.id)).toEqual(["1"]);
+    expect(filterPositions(indexed, "skoda").map((i) => i.id)).toEqual(["2"]);
   });
   it("returns all for empty or whitespace", () => {
-    expect(filterPositions(all, "")).toHaveLength(2);
-    expect(filterPositions(all, "   ")).toHaveLength(2);
-  });
-});
-
-describe("links", () => {
-  it("builds the LinkedIn people search url", () => {
-    expect(linkedinPeopleSearchUrl("Senior Data Engineer", "Prague")).toBe(
-      "https://www.linkedin.com/search/results/people/?keywords=Senior%20Data%20Engineer%20Prague",
-    );
-    expect(linkedinPeopleSearchUrl("Senior Data Engineer")).toBe(
-      "https://www.linkedin.com/search/results/people/?keywords=Senior%20Data%20Engineer",
-    );
-    expect(linkedinPeopleSearchUrl("Dev", "  ")).toMatch(/Dev$/);
-  });
-  it("round-trips special characters", () => {
-    const url = linkedinPeopleSearchUrl("C#/.NET & Azure", "Brno");
-    expect(decodeURIComponent(url.split("keywords=")[1] ?? "")).toBe("C#/.NET & Azure Brno");
-    expect(url).not.toContain("&A");
-  });
-  it("builds the research href", () => {
-    expect(researchHref("abc-1")).toBe("/?positionId=abc-1");
-    expect(researchHref("a&b")).toBe("/?positionId=a%26b");
-  });
-});
-
-describe("buildCreateBody", () => {
-  it("trims and omits empty fields", () => {
-    expect(buildCreateBody({ postingText: "  hi ", postingUrl: " ", title: "" })).toEqual({ postingText: "hi" });
-    expect(buildCreateBody({ postingText: "", postingUrl: " https://x.cz/a ", title: " T " })).toEqual({
-      postingUrl: "https://x.cz/a",
-      title: "T",
-    });
-  });
-  it("returns null when text and url are empty", () => {
-    expect(buildCreateBody({ postingText: " ", postingUrl: "", title: "T" })).toBeNull();
+    expect(filterPositions(indexed, "")).toHaveLength(2);
+    expect(filterPositions(indexed, "   ")).toHaveLength(2);
   });
 });
 

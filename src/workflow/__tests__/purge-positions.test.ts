@@ -19,12 +19,13 @@ type Pos = { id: string; r2_key: string | null; expires_at: string };
 const NOW = new Date("2026-10-09T10:00:00.000Z");
 const PAST = "2026-10-09T09:00:00.000Z";
 
-function makeEnv(opts: { positions?: Pos[]; runIds?: string[]; positionsError?: Error } = {}) {
+function makeEnv(opts: { positions?: Pos[]; runIds?: string[]; noTable?: boolean; positionsError?: Error } = {}) {
   const positions = [...(opts.positions ?? [])];
   const runs = [...(opts.runIds ?? [])];
   const log: string[] = [];
   const selects: number[] = [];
   const deleted: string[][] = [];
+  const batches: number[] = [];
   const exec = (q: string, a: unknown[]): Record<string, unknown>[] => {
     if (q.startsWith("SELECT id, r2_key FROM positions")) {
       if (opts.positionsError) throw opts.positionsError;
@@ -32,13 +33,14 @@ function makeEnv(opts: { positions?: Pos[]; runIds?: string[]; positionsError?: 
       selects.push(rows.length);
       return rows;
     }
-    if (q.startsWith("UPDATE investigations SET position_id = NULL")) {
-      log.push(`update:${a[0] as string}`);
+    if (q.startsWith("SELECT 1 AS present FROM sqlite_master")) return opts.noTable === true ? [] : [{ present: 1 }];
+    if (q.startsWith("UPDATE investigations SET position_id = NULL WHERE position_id IN")) {
+      log.push(`update:${a.join(",")}`);
       return [];
     }
-    if (q.startsWith("DELETE FROM positions WHERE id")) {
-      log.push(`delete:${a[0] as string}`);
-      positions.splice(positions.findIndex((p) => p.id === a[0]), 1);
+    if (q.startsWith("DELETE FROM positions WHERE id IN")) {
+      log.push(`delete:${a.join(",")}`);
+      for (const id of a) positions.splice(positions.findIndex((p) => p.id === id), 1);
       return [];
     }
     if (q.startsWith("SELECT id FROM investigations")) return runs.splice(0, 20).map((id) => ({ id }));
@@ -47,6 +49,7 @@ function makeEnv(opts: { positions?: Pos[]; runIds?: string[]; positionsError?: 
   };
   const stmt = (q: string, a: unknown[] = []) => ({
     bind: (...b: unknown[]) => stmt(q, b),
+    first: () => Promise.resolve(exec(q, a)[0] ?? null),
     all: () => {
       try {
         return Promise.resolve({ results: exec(q, a) });
@@ -58,10 +61,13 @@ function makeEnv(opts: { positions?: Pos[]; runIds?: string[]; positionsError?: 
   });
   const db = {
     prepare: (q: string) => stmt(q),
-    batch: (s: { run: () => Promise<unknown> }[]) => Promise.all(s.map((x) => x.run())),
+    batch: (s: { run: () => Promise<unknown> }[]) => {
+      batches.push(s.length);
+      return Promise.all(s.map((x) => x.run()));
+    },
   } as unknown as D1Database;
   const bucket = { delete: (keys: string[]) => (deleted.push(keys), Promise.resolve()) } as unknown as R2Bucket;
-  return { db, bucket, positions, log, selects, deleted };
+  return { db, bucket, positions, log, selects, deleted, batches };
 }
 
 describe("purgeExpired positions", () => {
@@ -92,6 +98,7 @@ describe("purgeExpired positions", () => {
     const env = makeEnv({ positions: [{ id: "p1", r2_key: null, expires_at: PAST }] });
     await purgeExpired(env.db, env.bucket, NOW);
     expect(env.log).toEqual(["update:p1", "delete:p1"]);
+    expect(env.batches).toEqual([2]);
   });
 
   it("U5: 45 expired positions run in batches of 20 and the result reports 45", async () => {
@@ -101,6 +108,7 @@ describe("purgeExpired positions", () => {
     expect(r.positions).toBe(45);
     expect(env.selects).toEqual([20, 20, 5, 0]);
     expect(env.deleted.map((k) => k.length)).toEqual([20, 20, 5]);
+    expect(env.batches).toEqual([2, 2, 2]);
   });
 
   it("U6: a second sweep deletes nothing and returns positions 0", async () => {
@@ -117,9 +125,9 @@ describe("purgeExpired positions", () => {
     expect(r).toEqual({ runs: 2, positions: 0 });
   });
 
-  it("U8: no such table yields positions 0, any other error rejects", async () => {
-    const missing = makeEnv({ positionsError: new Error("D1_ERROR: no such table: positions: SQLITE_ERROR") });
-    await expect(purgeExpired(missing.db, missing.bucket, NOW)).resolves.toEqual({ runs: 0, positions: 0 });
+  it("U8: a missing positions table yields positions 0 and the runs purge still runs, any other error rejects", async () => {
+    const missing = makeEnv({ noTable: true, runIds: ["r1"] });
+    await expect(purgeExpired(missing.db, missing.bucket, NOW)).resolves.toEqual({ runs: 1, positions: 0 });
     const broken = makeEnv({ positionsError: new Error("D1_ERROR: disk I/O error") });
     await expect(purgeExpired(broken.db, broken.bucket, NOW)).rejects.toThrow("disk I/O");
   });

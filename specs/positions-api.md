@@ -13,7 +13,8 @@ Bearer-protected JSON routes to create, list, read and edit positions. Handlers 
 Files:
 - `src/app/api/_lib/position-body.ts`: Zod `CreatePositionBody`, `PatchPositionBody`. Test `src/app/api/_lib/__tests__/position-body.test.ts`.
 - `src/app/api/positions/handler.ts`: `listPositions(db)`, `getPosition(db, id)`, `patchPosition(db, id, body)`; creation is `ingestPosition` from `positions-ingest`. It also exports the route functions `createPositionRoute(request, env, over?)`, `listPositionsRoute(request, env)`, `getPositionRoute(request, env, id)`, `patchPositionRoute(request, env, id)` (bearer check, body parse, tested function, no-store); `route.ts` files only pass `getCloudflareContext().env`. Test `src/app/api/positions/__tests__/handler.test.ts` with a fake D1.
-- `src/domain/position-overview.ts`: `positionOverview(rows: RoleRunRow[], position: { id: string; title: string }): RoleGroup | null`. It reuses the group builder of `role-overview.ts` (export it; no copy) with `key = position.id` and `role = position.title`; `null` when `rows` is empty. Test `src/domain/__tests__/position-overview.test.ts`.
+- The overview group is built inline in `getPosition` with the exported `buildGroup` of `role-overview.ts` (`key = position.id`, `role = position.title`); `null` when the position has no hiring runs. There is no separate `position-overview` module; B11-B12 live in `handler.test.ts`.
+- Files: D1 functions and the shared `loadPosition` read path in `handler.ts`; the bearer-guarded `*Route` functions in `routes.ts` (one no-store wrapper); the role-run SELECT shared with `GET /api/roles` in `_lib/role-rows.ts`. The public `[id]/summary` route reads through `loadPosition`.
 - `src/app/api/positions/route.ts` (`POST`, `GET`) and `src/app/api/positions/[id]/route.ts` (`GET`, `PATCH`): bearer check with `requireBearer(request, env.RUN_TOKEN)` first, body parse with `parseJsonBody`, then the tested function. No `runtime = "edge"`.
 
 ### Bodies
@@ -29,8 +30,8 @@ Files:
 | `PATCH /api/positions/:id` | 200 `{ position }` (the updated row) | 400, 404, 401/503 |
 
 - List item: `{ id, title, family, company, location, posting_url, ingest_method, created_at, expires_at, runs }`, `runs` = count of investigations with that `position_id` (LEFT JOIN, 0 when none). `must_haves` and `excerpt` are not in the list.
-- Detail: `position` is the full `Position` shape of `positions-domain` (`must_haves` parsed into an array, never the JSON string). `runs` = `[{ id, subject, status, created_at }]` newest first (cap 200). `group` = `positionOverview(rows, position)` over the position's hiring runs (rows read like `GET /api/roles`: questions_json, brief_json, sources_confirmed), or `null`.
-- PATCH writes only the given columns, stores `must_haves` as JSON, and does not touch `expires_at`. It does not change `questions_json` of runs that already exist (runs keep the copy they started with).
+- Detail: `position` is the full `Position` shape of `positions-domain` (`must_haves` parsed into an array, never the JSON string). `runs` = `[{ id, subject, status, created_at }]` newest first, derived from the same role-run rows as `group` (so hiring runs only, cap 500). `group` = the overview over the position's hiring runs (rows read like `GET /api/roles`: questions_json, brief_json, sources_confirmed), or `null`.
+- PATCH writes only the given columns, stores `must_haves` as JSON (and then sets `extraction = 'edited'`), and does not touch `expires_at`. It does not change `questions_json` of runs that already exist (runs keep the copy they started with).
 - Every response, including errors, carries `Cache-Control: no-store`.
 - `:id` that is not found, or is not a plausible id (longer than 64 chars), is 404, never 500.
 
@@ -50,7 +51,7 @@ Files:
 - [ ] B8: `patchPosition` updates title only and leaves family and must-haves unchanged.
 - [ ] B9: `patchPosition` with `must_haves` stores valid JSON that parses back to the same array; `expires_at` unchanged.
 - [ ] B10: `patchPosition` on an unknown id returns null (404).
-- [ ] B11: `positionOverview` returns null for no rows; for rows of one position it returns one group with `role` = position title, `run_count` = rows, runs newest first, and cell labels from the briefs (reuse the fixtures style of `role-overview.test.ts`).
-- [ ] B12: `positionOverview` shows a run without a brief as `not checked` in every cell.
+- [ ] B11: `getPosition` gives `group: null` for no runs; for runs of one position it returns one group with `role` = position title, `run_count` = rows, runs newest first, and cell labels from the briefs (reuse the fixtures style of `role-overview.test.ts`).
+- [ ] B12: `getPosition` shows a run without a brief as `not checked` in every cell.
 - [ ] B13: route-level (call the exported handlers with a stub env): each of the four routes returns 401 without the bearer and 503 when `RUN_TOKEN` is unset; success responses have `Cache-Control: no-store`.
 - [ ] B14: `POST` maps ingest `{ reused: true }` to status 200 and a new id to 201; `{ ok: false, status: 422 }` to 422 with the error text.
