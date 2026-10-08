@@ -50,4 +50,4 @@
 Dropped on purpose: #11 side panel (duplicates the app), #5 batch (after per-run flow works), #6 per-user keys (viability, not value; token paste is enough for the demo).
 
 ## Next steps
-Assumptions and experiments: `docs/05-extension-discovery.md`. Risks: `docs/06-extension-pre-mortem.md`. Architecture: `plans/003-browser-extension/`.
+Assumptions and experiments: `docs/05-extension-discovery.md`. Risks: `docs/06-extension-pre-mortem.md`. Architecture: `plans/004-browser-extension/`.

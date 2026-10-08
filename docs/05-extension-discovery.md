@@ -57,4 +57,4 @@ Leap-of-faith: A2, A3, A4, A11.
 - E5: core not e2e by T+5h → extension demo = Chrome, cached run, 15 seconds of video, nothing more.
 
 ## Next steps
-Pre-mortem: `docs/06-extension-pre-mortem.md`. Architecture decision: `plans/003-browser-extension/00-SYNTHESIS.md`.
+Pre-mortem: `docs/06-extension-pre-mortem.md`. Architecture decision: `plans/004-browser-extension/00-SYNTHESIS.md`.
