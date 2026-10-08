@@ -114,7 +114,7 @@ describe("orcid", () => {
 describe("openalex", () => {
   it("builds the author search URL", () => {
     expect(urls(openalex.requests(baseContext({ subject: "Jana Novak" }), step))).toEqual([
-      "https://api.openalex.org/authors?search=Jana%20Novak&per-page=5",
+      "https://api.openalex.org/authors?search=Jana%20Novak&per-page=5&mailto=robert@soulfire.cz",
     ]);
   });
   it("parses authors", () => {

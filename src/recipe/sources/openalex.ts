@@ -7,7 +7,7 @@
  * Tested:  src/recipe/__tests__/sources-makers.test.ts
  *
  * Key responsibilities:
- * - `rest/openalex`: one Source per matching author
+ * - `rest/openalex`: one Source per matching author; `mailto` puts the Worker in the polite pool (shared egress IPs hit 429 otherwise)
  *
  * Design constraints:
  * - Pure: no fetch here; unknown payload shapes parse to []
@@ -34,7 +34,7 @@ export const openalex: Collector = {
   requests: (ctx) =>
     ctx.subject.trim().length === 0
       ? []
-      : [{ via: "fetch", url: `https://api.openalex.org/authors?search=${encodeURIComponent(ctx.subject)}&per-page=5` }],
+      : [{ via: "fetch", url: `https://api.openalex.org/authors?search=${encodeURIComponent(ctx.subject)}&per-page=5&mailto=robert@soulfire.cz` }],
   parse: (payload, ctx) => {
     const r = Authors.safeParse(payload);
     if (!r.success) return [];

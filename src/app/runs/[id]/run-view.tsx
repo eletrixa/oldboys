@@ -10,7 +10,8 @@
  * - Poll GET /api/runs/:id/state every 2 s until done or failed
  * - Show the run cost and research time line (ledger projection) while running and when done
  * - On failure keep the progress rows, mark the failed one, show the reason, sources so far and a retry link
- * - Show the lineup, then one question at a time (at most MAX_QUESTIONS); send every decision in one answer event
+ * - Show one question at a time (at most MAX_QUESTIONS) above the lineup, so it is never below the fold; send every
+ *   decision in one answer event
  *
  * Design constraints:
  * - Client component; no SSE; "I'm not sure" is answered locally and keeps possibly-same-as
@@ -141,7 +142,7 @@ export function RunView({ id }: { id: string }): React.JSX.Element {
   const cached = state.status === "done" && !Number.isNaN(created) && openedAt - created > CACHED_AFTER_MS;
   const degraded = state.brief !== null && state.brief.degraded !== null;
   const labels = [
-    state.mentions === 0 ? "Searching public sources" : `Found ${String(state.mentions)} public ${state.mentions === 1 ? "mention" : "mentions"}`,
+    state.mentions === 0 ? "Searching public sources (Google can take up to 2 minutes)" : `Found ${String(state.mentions)} public ${state.mentions === 1 ? "mention" : "mentions"}`,
     `Making sure we have the right ${first}`,
     degraded ? "Reading their work history and projects (skipped: AI unavailable)" : "Reading their work history and projects",
     degraded ? "Double-checking facts against each other (skipped: AI unavailable)" : "Double-checking facts against each other",
@@ -168,8 +169,8 @@ export function RunView({ id }: { id: string }): React.JSX.Element {
           <Link href="/" className="font-semibold text-teal-400 underline">Try again</Link>
         </div>
       )}
-      {state.candidates.length > 0 && <ProfileList candidates={sortLineup(state.candidates, decisionOf)} decisionOf={decisionOf} />}
       {question !== undefined && <QuestionCard key={question.id} candidate={question} first={first} onAnswer={answer} />}
+      {state.candidates.length > 0 && <ProfileList candidates={sortLineup(state.candidates, decisionOf)} decisionOf={decisionOf} />}
       {sendFailed && (
         <p role="alert" className="flex items-center gap-3 text-sm text-red-300">
           We could not send your answers.
