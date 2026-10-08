@@ -16,7 +16,7 @@
 import { z } from "zod";
 import type { Candidate } from "@/domain/claim";
 import type { Collector } from "@/recipe/sources/types";
-import { clip } from "@/recipe/sources/types";
+import { clip, identityFor } from "@/recipe/sources/types";
 
 const Profile = z.object({
   username: z.string(),
@@ -50,7 +50,7 @@ export const instagram: Collector = {
       },
     ];
   },
-  parse: (payload) => {
+  parse: (payload, ctx) => {
     const items = z.array(Profile).safeParse(payload);
     if (!items.success) return [];
     return items.data.map((p) => {
@@ -66,7 +66,8 @@ export const instagram: Collector = {
         `Link: ${p.externalUrl ?? ""}`,
         ...captions.map((c, i) => `Post ${String(i + 1)}: ${c}`),
       ];
-      return { url: `https://www.instagram.com/${p.username}/`, excerpt: clip(lines.join("\n")), raw: p };
+      const url = `https://www.instagram.com/${p.username}/`;
+      return { url, excerpt: clip(lines.join("\n")), raw: p, identity: identityFor(ctx, url) };
     });
   },
 };

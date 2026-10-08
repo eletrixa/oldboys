@@ -15,7 +15,9 @@
  */
 import { z } from "zod";
 import type { Collector } from "@/recipe/sources/types";
-import { clip, platformOf } from "@/recipe/sources/types";
+import type { Candidate } from "@/domain/claim";
+import type { StepContext } from "@/recipe/sources/types";
+import { clip, identityFor, platformOf } from "@/recipe/sources/types";
 
 const Video = z.object({
   url: z.string(),
@@ -26,28 +28,38 @@ const Video = z.object({
   text: z.string().nullish(),
 });
 
+/** The channel requests() scrapes; undefined means a name search. */
+function channel(ctx: StepContext): { url: string; candidate: Candidate } | undefined {
+  for (const c of ctx.candidates) {
+    if (c.platform !== "youtube" || c.decision === "rejected") continue;
+    const url = c.profile_urls.find((u) => platformOf(u) === "youtube");
+    if (url !== undefined) return { url, candidate: c };
+  }
+  return undefined;
+}
+
 export const youtube: Collector = {
   id: "streamers/youtube-scraper",
   requests: (ctx) => {
-    const url = ctx.candidates
-      .filter((c) => c.platform === "youtube" && c.decision !== "rejected")
-      .flatMap((c) => c.profile_urls)
-      .find((u) => platformOf(u) === "youtube");
+    const url = channel(ctx)?.url;
     const input: Record<string, unknown> =
       url === undefined
         ? { searchQueries: [ctx.subject], maxResults: 5 }
         : { startUrls: [{ url }], maxResults: 5 };
     return [{ via: "actor", actor: "streamers/youtube-scraper", input, maxTotalChargeUsd: 0.03, timeoutSecs: 45 }];
   },
-  parse: (payload) => {
+  parse: (payload, ctx) => {
     const items = z.array(Video).safeParse(payload);
     if (!items.success) return [];
+    // Video urls (watch?v=) carry no handle: a merged channel vouches for its own videos.
+    const merged = channel(ctx)?.candidate.decision === "merge";
     return items.data.map((v) => ({
       url: v.url,
       excerpt: clip(
         `${v.title ?? ""}\nChannel: ${v.channelName ?? "?"} · views: ${String(v.viewCount ?? "?")} · ${v.date ?? ""}\n${clip(v.text ?? "", 500)}`.trim(),
       ),
       raw: v,
+      identity: merged ? ("merged" as const) : identityFor(ctx, v.url),
     }));
   },
 };

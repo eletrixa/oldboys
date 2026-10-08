@@ -15,7 +15,7 @@
  */
 import { z } from "zod";
 import type { Collector } from "@/recipe/sources/types";
-import { clip } from "@/recipe/sources/types";
+import { clip, identityFor } from "@/recipe/sources/types";
 
 const Author = z.object({
   userName: z.string().nullish(),
@@ -48,13 +48,14 @@ export const x: Collector = {
       },
     ];
   },
-  parse: (payload) => {
+  parse: (payload, ctx) => {
     const items = z.array(Tweet).safeParse(payload);
     if (!items.success) return [];
     const tweets = items.data.map((t) => ({
       url: t.url,
       excerpt: clip(`${t.text ?? ""}\n${t.createdAt ?? ""} · ${String(t.likeCount ?? 0)} likes`.trim()),
       raw: t,
+      identity: identityFor(ctx, t.url),
     }));
     const a = items.data[0]?.author;
     if (a?.userName === undefined || a.userName === null) return tweets;
@@ -64,6 +65,7 @@ export const x: Collector = {
         `${a.name ?? ""} (@${a.userName})\n${a.description ?? ""}\nFollowers: ${String(a.followers ?? "?")}, joined: ${a.createdAt ?? "?"}`,
       ),
       raw: a,
+      identity: identityFor(ctx, `https://x.com/${a.userName}`),
     };
     return [profile, ...tweets];
   },

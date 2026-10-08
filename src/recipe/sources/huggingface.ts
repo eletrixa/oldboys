@@ -15,7 +15,7 @@
  */
 import { z } from "zod";
 import type { Collector } from "@/recipe/sources/types";
-import { acceptedCandidates, clip } from "@/recipe/sources/types";
+import { acceptedCandidates, clip, identityFor } from "@/recipe/sources/types";
 
 const Models = z.array(
   z.object({
@@ -36,7 +36,7 @@ export const huggingface: Collector = {
     if (author.length === 0) return [];
     return [{ via: "fetch", url: `https://huggingface.co/api/models?author=${encodeURIComponent(author)}&limit=10` }];
   },
-  parse: (payload) => {
+  parse: (payload, ctx) => {
     const r = Models.safeParse(payload);
     if (!r.success) return [];
     return r.data.map((m) => ({
@@ -45,6 +45,7 @@ export const huggingface: Collector = {
         `${m.id} · ${String(m.downloads ?? 0)} downloads · ${String(m.likes ?? 0)} likes · modified ${m.lastModified ?? "?"}`,
       ),
       raw: m,
+      identity: identityFor(ctx, `https://huggingface.co/${m.id}`),
     }));
   },
 };

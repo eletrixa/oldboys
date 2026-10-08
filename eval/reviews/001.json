@@ -1,0 +1,18 @@
+{
+  "iteration": 1,
+  "stars": 2.3,
+  "weights": {"screen1": 0.10, "screen2": 0.20, "breadth": 0.15, "identity": 0.20, "honesty": 0.15, "judge_value": 0.20},
+  "scores": {"screen1": 4.0, "screen2": 2.5, "breadth": 3.0, "identity": 1.5, "honesty": 2.5, "judge_value": 1.5},
+  "fixes": [
+    {"rank": 1, "file": "src/recipe/seams/extract.ts, src/recipe/seams/synthesize.ts, src/workflow/research-run.ts", "change": "Catch LLM errors in extract; synthesize an evidence-only brief (confirmed sources by step, gaps, 'AI summary unavailable' label); mark run done+degraded instead of failed."},
+    {"rank": 2, "file": "src/recipe/seams/resolve.ts", "change": "Fallback must not merge on anchor substring (cap 0.6); merge only on hard cross-links, URL or IČO match; drop or group non-profile web hits; dedupe by host+path."},
+    {"rank": 3, "file": "src/recipe/sources/{github,stackexchange,orcid,openalex,huggingface,bluesky}.ts, src/recipe/seams/extract.ts", "change": "No name-search results attributed to subject without a merged handle: skip with truthful gap or emit as lineup candidates; extract only SERP + merged-candidate sources, never possibly-same-as."},
+    {"rank": 4, "file": "src/workflow/research-run.ts, src/recipe/runner.ts", "change": "Budget skip and 'nothing to request' record 'not searched: <reason>' instead of the onEmpty 'no X found' text; brief separates searched-empty from not-searched."},
+    {"rank": 5, "file": "src/adapters/d1.ts", "change": "Count only paid actor calls toward RUN_BUDGET_CALLS; free REST fetches currently exhaust the 12-call cap and silently skip website crawl and talks search. Add a test that the full hiring recipe reaches talks_serp."},
+    {"rank": 6, "file": "src/app/runs/[id]/run-view.tsx, src/app/runs/[id]/parts.tsx", "change": "Ask questions only about profile platforms, highest value first (LinkedIn, X, GitHub); platform marks instead of initials; show one-line match reason per row."},
+    {"rank": 7, "file": "src/app/api/runs/[id]/state/route.ts, src/app/runs/[id]/run-view.tsx", "change": "Expose failure {step, reason} from the ledger; keep progress rows with the failed row marked, plain-words reason, sources found so far, and a Try again action."},
+    {"rank": 8, "file": "src/app/runs/[id]/run-view.tsx", "change": "Row 1 'Searching public sources' until mentions>0; bar advances per collector step; remove false 'we will let you know'; 'Thanks, continuing' after answers; check res.ok in sendAnswer."},
+    {"rank": 9, "file": "src/workflow/research-run.ts", "change": "Run post-resolve collectors concurrently (Promise.all over step.do, batches of 4-6); sequential collectors alone take ~3 min and break the 2-4 minute promise."},
+    {"rank": 10, "file": "src/app/start-form.tsx, src/app/page.tsx, src/worker.ts", "change": "Remove NEXT_PUBLIC_RUN_TOKEN (server-side token attach); distinct 400/401/429/503 messages; privacy copy 'deleted after 30 days' backed by a scheduled purge of expired sources (D1+R2); drop the dev footer."}
+  ]
+}

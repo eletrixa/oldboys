@@ -14,7 +14,7 @@
  * - Fixtures stay inline; no shared fixture module until a second test needs one
  */
 import { describe, expect, it } from "vitest";
-import { Candidate, Claim, Gap, Investigation, LedgerEntry, Source } from "@/domain/claim";
+import { Brief, Candidate, Claim, Gap, Investigation, LedgerEntry, Source } from "@/domain/claim";
 
 const investigation: Investigation = {
   id: "run-1",
@@ -53,6 +53,7 @@ const source: Source = {
   excerpt: "Jane Doe is a staff engineer at Acme in Prague.",
   r2_key: "run-1/src-1.json",
   expires_at: "2026-10-12T00:00:00.000Z",
+  identity: "merged",
 };
 
 const fact: Claim = {
@@ -95,6 +96,15 @@ describe("domain schemas round-trip", () => {
   });
 });
 
+describe("Source identity", () => {
+  it("is required and limited to merged | unverified", () => {
+    const { identity: _omit, ...missing } = source;
+    expect(Source.safeParse(missing).success).toBe(false);
+    expect(Source.safeParse({ ...source, identity: "maybe" }).success).toBe(false);
+    expect(Source.parse({ ...source, identity: "unverified" }).identity).toBe("unverified");
+  });
+});
+
 describe("Claim invariants", () => {
   it("rejects a FACT without a quote", () => {
     const result = Claim.safeParse({ ...fact, quote: null });
@@ -124,5 +134,17 @@ describe("Claim invariants", () => {
   it("rejects an unknown kind and an out-of-range confidence", () => {
     expect(Claim.safeParse({ ...fact, kind: "GUESS" }).success).toBe(false);
     expect(Claim.safeParse({ ...fact, confidence: 1.5 }).success).toBe(false);
+  });
+});
+
+describe("Brief degraded + evidence", () => {
+  const base = { run_id: "r", per_question: [], interview_questions: [], to_verify: [], not_searched: [], removed_protected: 0 };
+  it("defaults degraded and evidence for briefs stored before the fields existed", () => {
+    const b = Brief.parse(base);
+    expect(b.degraded).toBeNull();
+    expect(b.evidence).toEqual([]);
+  });
+  it("caps evidence excerpts at 300 chars", () => {
+    expect(Brief.safeParse({ ...base, degraded: "x", evidence: [{ step: "s", url: "u", excerpt: "a".repeat(301) }] }).success).toBe(false);
   });
 });

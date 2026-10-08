@@ -15,7 +15,7 @@
  */
 import { z } from "zod";
 import type { Collector } from "@/recipe/sources/types";
-import { clip } from "@/recipe/sources/types";
+import { clip, identityFor } from "@/recipe/sources/types";
 
 const Expanded = z.object({
   "expanded-result": z
@@ -46,7 +46,7 @@ export const orcid: Collector = {
       },
     ];
   },
-  parse: (payload) => {
+  parse: (payload, ctx) => {
     const r = Expanded.safeParse(payload);
     if (!r.success) return [];
     return (r.data["expanded-result"] ?? []).map((h) => ({
@@ -57,6 +57,7 @@ export const orcid: Collector = {
           .join(" · "),
       ),
       raw: h,
+      identity: identityFor(ctx, `https://orcid.org/${h["orcid-id"]}`),
     }));
   },
 };

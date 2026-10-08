@@ -15,7 +15,7 @@
  */
 import { z } from "zod";
 import type { Collector } from "@/recipe/sources/types";
-import { clip } from "@/recipe/sources/types";
+import { clip, identityFor } from "@/recipe/sources/types";
 
 const Authors = z.object({
   results: z.array(
@@ -35,7 +35,7 @@ export const openalex: Collector = {
     ctx.subject.trim().length === 0
       ? []
       : [{ via: "fetch", url: `https://api.openalex.org/authors?search=${encodeURIComponent(ctx.subject)}&per-page=5` }],
-  parse: (payload) => {
+  parse: (payload, ctx) => {
     const r = Authors.safeParse(payload);
     if (!r.success) return [];
     return r.data.results.map((a) => ({
@@ -49,6 +49,7 @@ export const openalex: Collector = {
         ].join(" · "),
       ),
       raw: a,
+      identity: identityFor(ctx, a.id),
     }));
   },
 };

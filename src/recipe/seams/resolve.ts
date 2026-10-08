@@ -8,7 +8,9 @@
  *
  * Key responsibilities:
  * - Draft one candidate per profile-like source; LLM scores each vs subject + anchor; thresholds decide
- * - Deterministic fallback when the LLM call fails: anchor substring match, never above ASK range (no silent merge)
+ * - Deterministic fallback when the LLM call fails: anchor substring caps at 0.6, name only 0.5; merge only on
+ *   hard links (anchor URL itself, or cross-linked drafts with the anchor in one of them)
+ * - Drops PDF and genealogy/translation noise; dedupes candidates by host + path keeping the best score
  *
  * Design constraints:
  * - Never merges on name alone (plans/001 case studies §B); below ASK_FLOOR the UI asks the manager
@@ -42,6 +44,54 @@ function handleOf(url: string): string | null {
   }
 }
 
+/** Directory, genealogy and translation noise: never a profile of the subject. */
+const NOISE_HOSTS = ["myheritage.", "geni.com", "ancestry.", "familysearch.", "translate.google."];
+
+/** host (no www) + pathname without trailing slash, lowercased: the identity of a page for dedupe and link checks. */
+export function pageKey(url: string): string | null {
+  try {
+    const u = new URL(url.includes("://") ? url : `https://${url}`);
+    return `${u.hostname.replace(/^www\./, "")}${u.pathname.replace(/\/+$/, "")}`.toLowerCase();
+  } catch {
+    return null;
+  }
+}
+
+function isNoise(url: string): boolean {
+  const key = pageKey(url) ?? "";
+  return key.endsWith(".pdf") || NOISE_HOSTS.some((h) => key.includes(h));
+}
+
+/** The anchor as a page key when it is a URL or bare domain (contains a dot, no spaces); null for a city or IČO. */
+function anchorKey(anchor: string): string | null {
+  const a = anchor.trim();
+  return a.includes(".") && !/\s/.test(a) ? pageKey(a) : null;
+}
+
+type Draft = { id: string; url: string; excerpt: string };
+
+/**
+ * No-model scoring. Never merges on text: anchor substring caps at 0.6, name only at 0.5.
+ * Merge (0.85) only on hard links: the URL is the anchor URL, or two drafts cross-link and one mentions the anchor.
+ */
+export function fallbackScores(drafts: readonly Draft[], anchor: string): { id: string; score: number; reasons: string[] }[] {
+  const aKey = anchorKey(anchor);
+  const anchorLc = anchor.toLowerCase();
+  const keys = new Map(drafts.map((d) => [d.id, pageKey(d.url)]));
+  const linked = (from: Draft, to: Draft): boolean => {
+    const k = keys.get(to.id);
+    return k !== null && k !== undefined && from.id !== to.id && from.excerpt.toLowerCase().includes(k);
+  };
+  return drafts.map((d) => {
+    const inAnchor = d.excerpt.toLowerCase().includes(anchorLc);
+    if (aKey !== null && keys.get(d.id) === aKey) return { id: d.id, score: 0.85, reasons: ["fallback: this is the anchor URL"] };
+    // ponytail: substring link check; misses shortened or redirected links, fine for profile cross-links
+    const partner = drafts.find((o) => (linked(d, o) || linked(o, d)) && (inAnchor || o.excerpt.toLowerCase().includes(anchorLc)));
+    if (partner) return { id: d.id, score: 0.85, reasons: [`fallback: cross-linked with ${partner.url}`] };
+    return inAnchor ? { id: d.id, score: 0.6, reasons: ["fallback: anchor found in text, please confirm"] } : { id: d.id, score: 0.5, reasons: ["fallback: name match only"] };
+  });
+}
+
 function surname(subject: string): string {
   return subject.trim().split(/\s+/).at(-1)?.toLowerCase() ?? subject.toLowerCase();
 }
@@ -50,7 +100,7 @@ export async function resolveCandidates(ctx: StepContext, ports: Ports): Promise
   const out = emptyOutcome();
   const known = new Set(ctx.candidates.flatMap((c) => c.profile_urls));
   const drafts = ctx.sources
-    .filter((s) => !known.has(s.url))
+    .filter((s) => !known.has(s.url) && !isNoise(s.url))
     .filter((s) => PROFILE_PLATFORMS.has(platformOf(s.url)) || s.excerpt.toLowerCase().includes(surname(ctx.subject)))
     .slice(0, 12)
     .map((s) => ({ id: ports.newId(), url: s.url, platform: platformOf(s.url), handle: handleOf(s.url), snippet: s.excerpt.split("\n")[0] ?? "" , excerpt: s.excerpt }));
@@ -73,15 +123,10 @@ export async function resolveCandidates(ctx: StepContext, ports: Ports): Promise
     scores = r.value;
   } catch (error) {
     out.notes.push(`llm scoring failed, deterministic fallback: ${error instanceof Error ? error.message : String(error)}`);
-    scores = drafts.map((d) => ({
-      id: d.id,
-      // Without a model we never merge on our own: anchor in excerpt is a strong hint, still asked (below MERGE_FLOOR)
-      score: d.excerpt.toLowerCase().includes(ctx.anchor.toLowerCase()) ? 0.75 : 0.5,
-      reasons: [d.excerpt.toLowerCase().includes(ctx.anchor.toLowerCase()) ? "fallback: anchor found in text, please confirm" : "fallback: name match only"],
-    }));
+    scores = fallbackScores(drafts, ctx.anchor);
   }
   const byId = new Map(scores.map((s) => [s.id, s]));
-  out.candidates = drafts.map((d) => {
+  const all = drafts.map((d) => {
     const s = byId.get(d.id) ?? { score: 0.5, reasons: ["unscored"] };
     return {
       id: d.id,
@@ -97,6 +142,14 @@ export async function resolveCandidates(ctx: StepContext, ports: Ports): Promise
       reasons: s.reasons,
     };
   });
+  // Dedupe by host + path (query strings and www differ between SERP runs); keep the highest score
+  const best = new Map<string, Candidate>();
+  for (const c of all) {
+    const key = pageKey(c.profile_urls[0] ?? "") ?? c.id;
+    const prev = best.get(key);
+    if (prev === undefined || c.score > prev.score) best.set(key, c);
+  }
+  out.candidates = [...best.values()];
   out.empty = out.candidates.length === 0;
   return out;
 }

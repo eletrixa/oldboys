@@ -32,12 +32,17 @@ export type RunState = {
   brief: Brief | null;
   /** Reason recorded by the Workflow when status is failed; null otherwise. */
   failure: string | null;
+  /** Recipe step that was running when the run failed (the first one without a ledger row); null otherwise. */
+  failed_step: string | null;
+  /** Recipe steps already in the ledger, and the recipe length; drives the progress bar. */
+  step_index: number;
+  step_count: number;
   cost: RunCost;
 };
 
-export type RowState = "done" | "active" | "todo";
+export type RowState = "done" | "active" | "todo" | "failed";
 
-const PLATFORM_RANK: Record<string, number> = { linkedin: 0, github: 1, x: 2, instagram: 3, tiktok: 4, youtube: 5, bluesky: 6 };
+export const PLATFORM_RANK: Record<string, number> = { linkedin: 0, github: 1, x: 2, instagram: 3, tiktok: 4, youtube: 5, bluesky: 6 };
 const DECISION_RANK: Record<Candidate["decision"], number> = { merge: 0, "possibly-same-as": 1, rejected: 2 };
 
 /** Lineup order: confirmed first, then open questions, social platforms before plain web hits. */
@@ -59,8 +64,26 @@ function rowOf(step: string): number {
   return 2;
 }
 
-export function stepRows(state: Pick<RunState, "status" | "step" | "mentions">): RowState[] {
+/**
+ * Candidates worth a question: profile platforms first (by platform value, then score);
+ * plain web hits only fill up to `max` when fewer platform profiles are open.
+ */
+export function questionsToAsk(candidates: readonly Candidate[], max: number): Candidate[] {
+  const open = sortLineup(
+    candidates.filter((c) => c.decision === "possibly-same-as"),
+    (c) => c.decision,
+  );
+  const profiles = open.filter((c) => c.platform !== "web");
+  const web = open.filter((c) => c.platform === "web");
+  return (profiles.length < max ? [...profiles, ...web] : profiles).slice(0, max);
+}
+
+export function stepRows(state: Pick<RunState, "status" | "step" | "mentions" | "failed_step">): RowState[] {
   if (state.status === "done") return Array.from({ length: 5 }, () => "done");
+  if (state.status === "failed") {
+    const at = rowOf(state.failed_step ?? state.step ?? "");
+    return Array.from({ length: 5 }, (_, i) => (i < at ? "done" : i === at ? "failed" : "todo"));
+  }
   let current = state.step === null ? 0 : rowOf(state.step);
   if (current === 0 && state.mentions > 0) current = 1;
   return Array.from({ length: 5 }, (_, i) => (i < current ? "done" : i === current ? "active" : "todo"));

@@ -16,7 +16,7 @@
 import { z } from "zod";
 import { lines, txt } from "@/recipe/sources/text";
 import type { Collector } from "@/recipe/sources/types";
-import { clip } from "@/recipe/sources/types";
+import { clip, identityFor } from "@/recipe/sources/types";
 
 const Loose = z.unknown().optional();
 
@@ -40,7 +40,7 @@ export const linkedinCompany: Collector = {
     const input = urls.length > 0 ? { companies: urls } : { searches: [ctx.subject] };
     return [{ via: "actor", actor: "harvestapi/linkedin-company", input, maxTotalChargeUsd: 0.05, timeoutSecs: 45 }];
   },
-  parse: (payload) => {
+  parse: (payload, ctx) => {
     const items = z.array(Company).safeParse(payload);
     if (!items.success) return [];
     return items.data.map((c) => {
@@ -60,6 +60,7 @@ export const linkedinCompany: Collector = {
           ]),
         ),
         raw: c,
+        identity: identityFor(ctx, c.linkedinUrl),
       };
     });
   },

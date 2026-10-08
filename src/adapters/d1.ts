@@ -60,9 +60,9 @@ export function makeSourceStore(db: D1Database, bucket: R2Bucket): SourceStore {
     const full = Source.parse({ ...source, r2_key });
     await db
       .prepare(
-        `INSERT OR REPLACE INTO sources (id, run_id, url, actor, fetched_at, excerpt, r2_key, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT OR REPLACE INTO sources (id, run_id, url, actor, fetched_at, excerpt, r2_key, expires_at, identity) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
-      .bind(full.id, full.run_id, full.url, full.actor, full.fetched_at, full.excerpt, full.r2_key, full.expires_at)
+      .bind(full.id, full.run_id, full.url, full.actor, full.fetched_at, full.excerpt, full.r2_key, full.expires_at, full.identity)
       .run();
     return full;
   };
@@ -98,8 +98,8 @@ export async function loadContext(db: D1Database, runId: string, baseQuestions: 
     db.prepare("SELECT * FROM sources WHERE run_id = ?").bind(runId).all<Row>(),
     db.prepare("SELECT * FROM claims WHERE run_id = ?").bind(runId).all<Row>(),
     db.prepare("SELECT * FROM gaps WHERE run_id = ?").bind(runId).all<Row>(),
-    // Spent calls = the real request count a step recorded in ref.calls (one row can hold 0..n requests), not the row count.
-    db.prepare("SELECT COALESCE(SUM(COALESCE(json_extract(ref_json, '$.calls'), 1)), 0) AS calls, COALESCE(SUM(cost_usd), 0) AS usd FROM ledger_entries WHERE run_id = ? AND kind IN ('call','llm')").bind(runId).first<{ calls: number; usd: number }>(),
+    // Spent calls = paid actor runs a step recorded in ref.calls (free REST fetches and LLM calls are not counted); USD sums both.
+    db.prepare("SELECT COALESCE(SUM(CASE WHEN kind = 'call' THEN COALESCE(json_extract(ref_json, '$.calls'), 1) ELSE 0 END), 0) AS calls, COALESCE(SUM(cost_usd), 0) AS usd FROM ledger_entries WHERE run_id = ? AND kind IN ('call','llm')").bind(runId).first<{ calls: number; usd: number }>(),
   ]);
   const extra = json<Question[]>(inv.questions_json, []);
   return {

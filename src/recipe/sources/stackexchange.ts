@@ -15,7 +15,7 @@
  */
 import { z } from "zod";
 import type { Collector } from "@/recipe/sources/types";
-import { clip } from "@/recipe/sources/types";
+import { clip, identityFor } from "@/recipe/sources/types";
 
 const Users = z.object({
   items: z.array(
@@ -40,7 +40,7 @@ export const stackexchange: Collector = {
             url: `https://api.stackexchange.com/2.3/users?order=desc&sort=reputation&inname=${encodeURIComponent(ctx.subject)}&site=stackoverflow`,
           },
         ],
-  parse: (payload) => {
+  parse: (payload, ctx) => {
     const r = Users.safeParse(payload);
     if (!r.success) return [];
     return r.data.items.map((u) => ({
@@ -56,6 +56,7 @@ export const stackexchange: Collector = {
           .join(" · "),
       ),
       raw: u,
+      identity: identityFor(ctx, u.link),
     }));
   },
 };

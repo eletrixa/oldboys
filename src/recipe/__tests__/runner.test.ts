@@ -35,7 +35,14 @@ describe("executeStep collection", () => {
     const ports = fakePorts();
     const out = await executeStep(serp, baseContext({ spent: { usd: 0, calls: 12 } }), ports);
     expect(ports.calls.actor).toHaveLength(0);
-    expect(out.notes.join()).toContain("budget exhausted");
+    expect(out.notes.join()).toContain("run budget reached");
+  });
+
+  it("marks a collector with nothing to look up as skipped: zero calls plus a note", async () => {
+    const vr: Step = { id: "ares_vr", kind: "ares", actor: "ares/ekonomicke-subjekty-vr" };
+    const out = await executeStep(vr, baseContext(), fakePorts());
+    expect(out.calls).toBe(0);
+    expect(out.notes).toEqual(["no confirmed handle or id to look up"]);
   });
 
   it("turns a thrown request into a note, not a crash", async () => {
@@ -60,7 +67,7 @@ describe("executeStep collection", () => {
     const none = await executeStep(vr, baseContext(), fakePorts());
     expect(none.empty).toBe(true);
     const ctx = baseContext({
-      sources: [{ id: "s1", run_id: "run-1", url: "https://ares.gov.cz/ekonomicke-subjekty?ico=12345678", actor: "ares", fetched_at: "x", excerpt: "", r2_key: "k", expires_at: "y" }],
+      sources: [{ id: "s1", run_id: "run-1", url: "https://ares.gov.cz/ekonomicke-subjekty?ico=12345678", actor: "ares", fetched_at: "x", excerpt: "", r2_key: "k", expires_at: "y", identity: "merged" }],
     });
     const ports = fakePorts({
       fetchJson: () => Promise.resolve({ zaznamy: [{ ico: "12345678", obchodniJmeno: "Navěky s.r.o.", statutarniOrgany: [{ clenoveOrganu: [{ fyzickaOsoba: { jmeno: "Robert", prijmeni: "Vojáček" }, clenstvi: { funkce: { nazev: "jednatel" } }, datumZapisu: "2019-03-12", datumVymazu: null }] }] }] }),

@@ -152,6 +152,8 @@ export class VerificationCallWorkflow extends WorkflowEntrypoint<CloudflareEnv, 
         fetched_at: new Date(now).toISOString(),
         excerpt: transcriptToExcerpt(result.transcript),
         expires_at: new Date(now + SOURCE_TTL_MS).toISOString(),
+        // Operator-entered number with recorded consent: the transcript is about the subject by construction.
+        identity: "merged",
       },
       result,
     );

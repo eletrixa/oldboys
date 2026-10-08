@@ -35,7 +35,9 @@ const StartRunBody = z.object({
 
 export async function POST(request: Request): Promise<Response> {
   const { env } = getCloudflareContext();
-  const denied = requireBearer(request, env.RUN_TOKEN);
+  // The start form on our own pages needs no bearer: browsers set Sec-Fetch-Site themselves and cross-origin
+  // scripts cannot forge "same-origin". Every other client (CLI, extension, curl) must present RUN_TOKEN.
+  const denied = request.headers.get("Sec-Fetch-Site") === "same-origin" ? null : requireBearer(request, env.RUN_TOKEN);
   if (denied) return denied;
 
   const parsed = await parseJsonBody(request, StartRunBody);

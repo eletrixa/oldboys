@@ -16,7 +16,7 @@
 import { z } from "zod";
 import { lines, txt } from "@/recipe/sources/text";
 import type { Collector, StepContext } from "@/recipe/sources/types";
-import { clip } from "@/recipe/sources/types";
+import { clip, identityFor } from "@/recipe/sources/types";
 
 const MODE = "Profile details no email ($4 per 1k)";
 
@@ -66,7 +66,7 @@ export const linkedinProfile: Collector = {
       },
     ];
   },
-  parse: (payload) => {
+  parse: (payload, ctx) => {
     const items = z.array(HarvestProfile).safeParse(payload);
     if (!items.success) return [];
     return items.data.map((p) => {
@@ -79,6 +79,7 @@ export const linkedinProfile: Collector = {
         url: p.linkedinUrl,
         excerpt: clip(lines([name, p.headline ?? "", txt(p.location), current, ...exp, ...edu, `Skills: ${String(p.skills.length)}`])),
         raw: p,
+        identity: identityFor(ctx, p.linkedinUrl),
       };
     });
   },
@@ -105,7 +106,7 @@ export const linkedinProfileDetail: Collector = {
         maxTotalChargeUsd: 0.05,
         timeoutSecs: 45,
       })),
-  parse: (payload) => {
+  parse: (payload, ctx) => {
     const items = z.array(MaestroProfile).safeParse(payload);
     if (!items.success) return [];
     return items.data.flatMap((p) => {
@@ -115,7 +116,7 @@ export const linkedinProfileDetail: Collector = {
       const exp = p.experience.slice(0, 5).map((x) => expLine(x.title, x.company, x.start_date, x.is_current === true ? "present" : x.end_date));
       const edu = p.education.slice(0, 3).map((x) => eduLine(x.school, x.degree, x.field_of_study));
       const current = txt(b.current_company) ? `Current: ${txt(b.current_company)}` : "";
-      return [{ url, excerpt: clip(lines([b.fullname ?? "", b.headline ?? "", txt(b.location), current, ...exp, ...edu])), raw: p }];
+      return [{ url, excerpt: clip(lines([b.fullname ?? "", b.headline ?? "", txt(b.location), current, ...exp, ...edu])), raw: p, identity: identityFor(ctx, url) }];
     });
   },
 };

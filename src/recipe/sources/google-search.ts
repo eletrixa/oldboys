@@ -41,6 +41,8 @@ export const googleSearch: Collector = {
         url: hit.url,
         excerpt: clip(`${hit.title ?? ""}\n${hit.description ?? ""}`.trim()),
         raw: hit,
+        // Discovery: a serp hit names the subject but is not tied to a confirmed profile.
+        identity: "unverified" as const,
       })),
     );
   },

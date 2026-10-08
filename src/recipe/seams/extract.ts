@@ -7,8 +7,9 @@
  * Tested:  src/recipe/__tests__/seams.test.ts
  *
  * Key responsibilities:
- * - Feed only sources that are not profiles of rejected candidates
+ * - Feed only SERP hits and identity-merged sources; never rejected profiles or unverified name-search hits
  * - Validate every returned claim with the Claim schema; drop invalid ones with a note
+ * - LLM failure returns an empty outcome with a note (never throws), so the run degrades instead of failing
  *
  * Design constraints:
  * - Quotes must be verbatim substrings; verify.ts enforces it afterwards, this seam only asks for it
@@ -17,6 +18,8 @@
 import { z } from "zod";
 import { Claim } from "@/domain/claim";
 import type { Ports } from "@/domain/ports";
+
+const SERP_ACTOR = "apify/google-search-scraper";
 import { emptyOutcome } from "@/recipe/runner";
 import type { StepContext, StepOutcome } from "@/recipe/sources/types";
 
@@ -36,7 +39,9 @@ const Extracted = z.array(
 export async function extractClaims(ctx: StepContext, ports: Ports): Promise<StepOutcome> {
   const out = emptyOutcome();
   const rejectedUrls = new Set(ctx.candidates.filter((c) => c.decision === "rejected").flatMap((c) => c.profile_urls));
-  const sources = ctx.sources.filter((s) => !rejectedUrls.has(s.url));
+  // Only confirmed material reaches the model: discovery SERP hits (anchored by name + city) and sources fetched
+  // for a merged profile. Name-search hits stay identity "unverified" and are listed as "also found", never claimed.
+  const sources = ctx.sources.filter((s) => !rejectedUrls.has(s.url) && (s.identity === "merged" || s.actor === SERP_ACTOR));
   if (sources.length === 0) {
     out.notes.push("no usable sources");
     return out;
@@ -49,13 +54,20 @@ export async function extractClaims(ctx: StepContext, ports: Ports): Promise<Ste
   }
   const accepted = ctx.candidates.find((c) => c.decision === "merge");
   const questionIds = new Set(ctx.questions.map((q) => q.id));
-  const r = await ports.llm({
-    model: "primary",
-    system:
-      "Extract claims that answer the questions, from the sources only. For a FACT, `quote` must be a verbatim substring of one listed source and `source_ids` must list that source. Anything you conclude rather than read is an INFERENCE (quote may be null). Never infer health, religion, politics, ethnicity or sexuality. No claims about questions that no source answers.",
-    prompt: `Subject: ${ctx.subject}\nAnchor: ${ctx.anchor}\n\nQuestions:\n${ctx.questions.map((q) => `- ${q.id}: ${q.text}`).join("\n")}\n\nSources:\n${body}`,
-    schema: Extracted,
-  });
+  let r: { value: z.infer<typeof Extracted>; cost_usd: number };
+  try {
+    r = await ports.llm({
+      model: "primary",
+      system:
+        "Extract claims that answer the questions, from the sources only. For a FACT, `quote` must be a verbatim substring of one listed source and `source_ids` must list that source. Anything you conclude rather than read is an INFERENCE (quote may be null). Never infer health, religion, politics, ethnicity or sexuality. No claims about questions that no source answers.",
+      prompt: `Subject: ${ctx.subject}\nAnchor: ${ctx.anchor}\n\nQuestions:\n${ctx.questions.map((q) => `- ${q.id}: ${q.text}`).join("\n")}\n\nSources:\n${body}`,
+      schema: Extracted,
+    });
+  } catch (error) {
+    // Degrade, never fail the run: synthesize builds an evidence-only brief from sources and gaps
+    out.notes.push(`extract model failed: ${error instanceof Error ? error.message : String(error)}`);
+    return out;
+  }
   out.calls += 1;
   out.cost_usd += r.cost_usd;
   for (const e of r.value) {

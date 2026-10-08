@@ -9,6 +9,7 @@
  * Key responsibilities:
  * - Read investigation, candidates, claims, sources, brief and last ledger step from D1
  * - Questions = recipe base questions + investigations.questions_json; mentions = COUNT(sources)
+ * - step_index/step_count from the recipe; failed_step = first recipe step without a ledger row on a failed run
  * - cost = runCost over the ledger rows (seq order) from investigations.created_at
  *
  * Design constraints:
@@ -65,7 +66,8 @@ export async function GET(
       .bind(id)
       .all<CostRow & { step: string; ref_json: string | null }>(),
   ]);
-  const last = ledger.results.at(-1);
+  // The failure row is written under step "run"; the step that broke is the first recipe step with no row yet.
+  const last = ledger.results.findLast((row) => row.step !== "run");
   const failure = ledger.results
     .map((row) => {
       try {
@@ -78,7 +80,10 @@ export async function GET(
     .find((r): r is string => r !== null);
 
   const goal = GoalId.safeParse(head.goal);
-  const base = goal.success ? recipeFor(goal.data).questions : [];
+  const recipe = goal.success ? recipeFor(goal.data) : null;
+  const base = recipe?.questions ?? [];
+  const recipeSteps = recipe?.steps ?? [];
+  const stepIndex = last === undefined ? 0 : recipeSteps.findIndex((s) => s.id === last.step) + 1;
   const extra = parseList<{ id: string; text: string }>(head.questions_json);
 
   const state: RunState = {
@@ -102,6 +107,9 @@ export async function GET(
     brief: brief ? (JSON.parse(brief.brief_json) as Brief) : null,
     cost: runCost(ledger.results, head.created_at),
     failure: failure ?? null,
+    failed_step: head.status === "failed" ? (recipeSteps[stepIndex]?.id ?? last?.step ?? null) : null,
+    step_index: stepIndex,
+    step_count: recipeSteps.length,
   };
   return Response.json(state, { headers: { "Cache-Control": "no-store" } });
 }

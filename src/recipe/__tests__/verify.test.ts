@@ -11,7 +11,7 @@ import type { Claim, Source } from "@/domain/claim";
 import { normalise, quoteSupported, verifyClaims } from "@/recipe/seams/verify";
 import { baseContext, fakeLlm, fakePorts } from "@/recipe/__tests__/fakes";
 
-const src: Source = { id: "s1", run_id: "run-1", url: "https://github.com/jdvorakova", actor: "x", fetched_at: "t", excerpt: "Jana Dvořáková — Data Engineer at Kiwi.com, Brno. Maintains dbt-airflow-kit.", r2_key: "k", expires_at: "e" };
+const src: Source = { id: "s1", run_id: "run-1", url: "https://github.com/jdvorakova", actor: "x", fetched_at: "t", excerpt: "Jana Dvořáková — Data Engineer at Kiwi.com, Brno. Maintains dbt-airflow-kit.", r2_key: "k", expires_at: "e", identity: "merged" };
 const fact = (id: string, quote: string | null, supports = ["s1"]): Claim => ({ id, run_id: "run-1", question_id: "current-role", candidate_id: null, text: "Works at Kiwi.com", kind: "FACT", confidence: 0.9, quote, supports, contradicts: [], rank: 1 });
 
 describe("quoteSupported", () => {
@@ -38,6 +38,13 @@ describe("verifyClaims", () => {
     const kind = Object.fromEntries(out.claims.map((c) => [c.id, c.kind]));
     expect(kind).toEqual({ good: "FACT", bad1: "INFERENCE", bad2: "INFERENCE", bad3: "INFERENCE", "llm-reject": "INFERENCE" });
     expect(out.claims.find((c) => c.id === "bad1")?.confidence).toBeLessThanOrEqual(0.5);
+  });
+
+  it("returns at once with no model call when there are no claims", async () => {
+    const ports = fakePorts();
+    const out = await verifyClaims(baseContext({ sources: [src] }), ports);
+    expect(ports.calls.llm).toHaveLength(0);
+    expect(out.empty).toBe(true);
   });
 
   it("keeps the deterministic result when the second model fails", async () => {

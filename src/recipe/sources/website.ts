@@ -15,7 +15,7 @@
  */
 import { z } from "zod";
 import type { Collector, StepContext } from "@/recipe/sources/types";
-import { acceptedCandidates, clip, platformOf } from "@/recipe/sources/types";
+import { acceptedCandidates, clip, identityFor, platformOf } from "@/recipe/sources/types";
 
 const LINK = /https?:\/\/[^\s<>"')\]]+/g;
 
@@ -47,9 +47,9 @@ export const websiteCrawler: Collector = {
       },
     ];
   },
-  parse: (payload) => {
+  parse: (payload, ctx) => {
     const pages = z.array(Page).safeParse(payload);
     if (!pages.success) return [];
-    return pages.data.map((p) => ({ url: p.url, excerpt: clip(`${p.metadata.title ?? ""}\n${p.text.slice(0, 1800)}`.trim()), raw: p }));
+    return pages.data.map((p) => ({ url: p.url, excerpt: clip(`${p.metadata.title ?? ""}\n${p.text.slice(0, 1800)}`.trim()), raw: p, identity: identityFor(ctx, p.url) }));
   },
 };

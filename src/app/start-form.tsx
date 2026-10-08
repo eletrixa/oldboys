@@ -11,7 +11,7 @@
  * - Inline humane error on 4xx/5xx or network failure
  *
  * Design constraints:
- * - Client component; token comes from NEXT_PUBLIC_RUN_TOKEN and is omitted when unset
+ * - Client component; posts same-origin, so no bearer token is shipped to the browser
  * - Copy stays short and calm; no emoji
  */
 "use client";
@@ -49,16 +49,12 @@ export function StartForm(): React.JSX.Element {
       const raw = data.get(key);
       return typeof raw === "string" ? raw.trim() : "";
     };
-    const token = process.env.NEXT_PUBLIC_RUN_TOKEN;
     setBusy(true);
     setError(null);
     try {
       const res = await fetch("/api/runs", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token !== undefined && token !== "" ? { Authorization: `Bearer ${token}` } : {}),
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ subject: text("name"), anchor: text("anchor"), goal: "hiring", role: text("role") }),
       });
       if (res.status === 201) {

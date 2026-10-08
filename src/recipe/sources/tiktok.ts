@@ -15,7 +15,7 @@
  */
 import { z } from "zod";
 import type { Collector } from "@/recipe/sources/types";
-import { clip } from "@/recipe/sources/types";
+import { clip, identityFor } from "@/recipe/sources/types";
 
 const Item = z.object({
   webVideoUrl: z.string().nullish(),
@@ -46,7 +46,7 @@ export const tiktok: Collector = {
       },
     ];
   },
-  parse: (payload) => {
+  parse: (payload, ctx) => {
     const items = z.array(Item).safeParse(payload);
     if (!items.success) return [];
     return items.data.flatMap((i) => {
@@ -56,7 +56,7 @@ export const tiktok: Collector = {
       const excerpt = clip(
         `${name ?? ""} · fans: ${String(i.authorMeta?.fans ?? "?")}\n${i.authorMeta?.signature ?? ""}\n${i.text ?? ""}`.trim(),
       );
-      return [{ url, excerpt, raw: i }];
+      return [{ url, excerpt, raw: i, identity: identityFor(ctx, url) }];
     });
   },
 };

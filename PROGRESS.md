@@ -32,3 +32,13 @@ Each agent appends: what it starts, progress, what it finishes. Newest at the bo
 - Started: idea #25 "Cena a čas u každého reportu": cost and research time on the run page from the ledger.
 - Finished: pure `runCost` + `formatDuration` (pause time excluded, open pause stops the clock), `cost` field on RunState filled by GET /api/runs/:id/state, muted `CostLine` under the run header; stale verify TODO removed from claim.ts header. No schema change, no new endpoint.
 - Files: src/domain/run-cost.ts, src/domain/__tests__/run-cost.test.ts, src/app/api/runs/[id]/state/route.ts, src/app/runs/[id]/{state.ts,parts.tsx,run-view.tsx}, src/domain/claim.ts.
+
+## fix: review 001 (screen 2 UX, fixes 6-8)
+- Screen 2: questions ask profile platforms only (web fills up to 3), platform marks + match reason, failed row marked with plain-words reason and Try again, honest progress copy and bar (step_index/step_count/failed_step in state), answer errors retried, degraded brief notice; start page footer removed.
+- Files: src/app/runs/[id]/{run-view,parts,state}.ts(x), src/app/api/runs/[id]/state/route.ts, src/app/page.tsx. Lead wires: Brief `degraded`/`evidence` fields (read defensively), `identity` type errors from others block full pnpm check.
+
+## 2026-10-08 · fix: review 001
+- Fixes 1, 2, 4: extract/synthesize degrade instead of failing (evidence-only Brief with `degraded` + `evidence`, run ends `done`); resolve fallback never merges on text (anchor 0.6, name 0.5, merge only on anchor URL or cross-link), drops PDF/genealogy noise, dedupes by host+path.
+- Collectors that made no request record "not searched: <why>" gaps (budget or no confirmed handle), listed first in `not_searched`; pnpm check green.
+- Fix 3: `Source.identity` (merged | unverified, migration 0005, applied locally); every collector sets it via `identityFor` (url under a merged candidate profile url or handle segment), serp always unverified, ARES merged only for the IČO anchor, YouTube videos merged when the scraped channel is a merged candidate.
+- Name-search hits (github/stackexchange/orcid/openalex/huggingface/bluesky/youtube search, website crawl of excerpt links) stay unverified; tests in src/recipe/__tests__/sources-identity.test.ts; pnpm check green.

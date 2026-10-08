@@ -14,7 +14,7 @@ Hackathon Case 01 (Apify): social media deep research. Input: a person or organi
 | Verify | deterministic quote-in-excerpt and URL-in-ledger first, second model on residue |
 | Identity | merge / `possibly-same-as` / ask below threshold |
 | Claims | claim + references + rank; contradictions via rank, never delete |
-| Budget | enforced in runner, never by the LLM: $0.50 and 12 calls per run |
+| Budget | enforced in runner, never by the LLM: $0.50 and 16 paid actor runs per run (free REST fetches and LLM calls count USD only) |
 | Runner | Cloudflare Workflow `ResearchRunWorkflow` (binding `RESEARCH_RUN`), one `step.do` per recipe step, `step.waitForEvent` for lineup |
 | Ledger | D1 `DB`: `ledger_entries` (append-only, `seq`), `claims`, `gaps`, `candidates`, `investigations`, `calls`, `webhook_events` |
 | Raw payloads | R2 `SOURCES` (`oldboys-sources/<run>/<source>.json`), only `{sourceId, excerpt}` returned from steps (1 MiB cap) |

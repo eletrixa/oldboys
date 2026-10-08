@@ -15,7 +15,7 @@
  */
 import { z } from "zod";
 import type { Collector } from "@/recipe/sources/types";
-import { clip } from "@/recipe/sources/types";
+import { clip, identityFor } from "@/recipe/sources/types";
 
 const Result = z.object({
   actors: z
@@ -42,6 +42,7 @@ export const bluesky: Collector = {
     const surname = fold(ctx.subject.trim().split(/\s+/).at(-1) ?? "");
     return r.data.actors.filter((a) => surname.length === 0 || fold(`${a.displayName ?? ""} ${a.handle}`).includes(surname)).map((a) => ({
       url: `https://bsky.app/profile/${a.handle}`,
+      identity: identityFor(ctx, `https://bsky.app/profile/${a.handle}`),
       excerpt: clip(`${a.displayName ?? ""} (@${a.handle})\n${a.description ?? ""}`.trim()),
       raw: a,
     }));

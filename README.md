@@ -31,7 +31,7 @@ pnpm dev                      # UI + API on :3141 (Workflows are NOT available h
 pnpm preview                  # full stack incl. the research Workflow on :8787 (use this for a real run)
 ```
 
-Put `APIFY_TOKEN`, `ANTHROPIC_API_KEY` and `RUN_TOKEN` into `.dev.vars`; `NEXT_PUBLIC_RUN_TOKEN=<same RUN_TOKEN>` into `.env` so the start form can call the API.
+Put `APIFY_TOKEN`, `ANTHROPIC_API_KEY` and `RUN_TOKEN` into `.dev.vars`. The start form calls `POST /api/runs` same-origin without a token; every other client sends `Authorization: Bearer <RUN_TOKEN>`.
 
 Live checks (spend real Apify money, never in CI):
 ```sh

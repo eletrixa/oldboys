@@ -28,10 +28,15 @@ const Subjekt = z.object({
 });
 const Search = z.object({ pocetCelkem: z.number().optional(), ekonomickeSubjekty: z.array(Subjekt).default([]) });
 
+/** The IČO anchor is the identity: a record carrying it is the subject, a name search hit is not. */
+function anchorIco(anchor: string): string | null {
+  return /^\d{8}$/.test(anchor.trim()) ? anchor.trim() : null;
+}
+
 export const aresSearch: Collector = {
   id: "ares/ekonomicke-subjekty/vyhledat",
   requests: (ctx) => {
-    const ico = /^\d{8}$/.test(ctx.anchor.trim()) ? ctx.anchor.trim() : null;
+    const ico = anchorIco(ctx.anchor);
     return [
       {
         via: "fetch",
@@ -44,7 +49,7 @@ export const aresSearch: Collector = {
       },
     ];
   },
-  parse: (payload) => {
+  parse: (payload, ctx) => {
     const r = Search.safeParse(payload);
     if (!r.success) return [];
     return r.data.ekonomickeSubjekty.map((s) => ({
@@ -53,6 +58,7 @@ export const aresSearch: Collector = {
         `${s.obchodniJmeno ?? ""} · IČO ${s.ico} · ${s.pravniForma ?? ""} · vznik ${s.datumVzniku ?? "?"} · ${s.sidlo?.textovaAdresa ?? ""}`,
       ),
       raw: s,
+      identity: s.ico === anchorIco(ctx.anchor) ? ("merged" as const) : ("unverified" as const),
     }));
   },
 };
@@ -86,7 +92,7 @@ export const aresVr: Collector = {
       via: "fetch" as const,
       url: `${BASE}/ekonomicke-subjekty-vr/${ico}`,
     })),
-  parse: (payload) => {
+  parse: (payload, ctx) => {
     const r = Vr.safeParse(payload);
     if (!r.success) return [];
     return r.data.zaznamy.flatMap((z) => {
@@ -101,6 +107,7 @@ export const aresVr: Collector = {
           url: `https://or.justice.cz/ias/ui/rejstrik-$firma?ico=${z.ico ?? ""}`,
           excerpt: clip(`${z.obchodniJmeno ?? ""} statutory bodies:\n${lines.join("\n")}`),
           raw: z,
+          identity: z.ico !== undefined && z.ico === anchorIco(ctx.anchor) ? ("merged" as const) : ("unverified" as const),
         },
       ];
     });

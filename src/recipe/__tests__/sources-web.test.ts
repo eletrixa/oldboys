@@ -41,7 +41,7 @@ function cand(over: Partial<Candidate>): Candidate {
 }
 
 function src(url: string, excerpt = ""): Source {
-  return { id: "s1", run_id: "run-1", url, actor: "x", fetched_at: "t", excerpt, r2_key: "k", expires_at: "t" };
+  return { id: "s1", run_id: "run-1", url, actor: "x", fetched_at: "t", excerpt, r2_key: "k", expires_at: "t", identity: "unverified" };
 }
 
 const withCands = (c: Candidate[]): StepContext => baseContext({ candidates: c });

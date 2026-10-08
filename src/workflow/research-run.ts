@@ -12,6 +12,9 @@
  * - resolve: persist candidates; pause with `step.waitForEvent('lineup-answer')` when any candidate is
  *   possibly-same-as or none merged; apply the manager's decisions on resume
  * - Budget (RUN_BUDGET_USD / RUN_BUDGET_CALLS) enforced here for collector steps, never by the LLM
+ * - Truthful gaps: a collector that made no request records "not searched: <why>", not its onEmpty text
+ * - Model failures degrade (evidence-only brief, ledger `{degraded}`) and the run still ends `done`;
+ *   `failed` is only for unexpected throws
  *
  * Design constraints:
  * - Imports only src/domain, src/recipe and src/adapters, never Next.js
@@ -97,7 +100,10 @@ export class ResearchRunWorkflow extends WorkflowEntrypoint<CloudflareEnv, Resea
       }
       const result = await this.doStep(runId, recipeStep, recipe.questions, step);
       ran.add(recipeStep.id);
-      if (result.empty && recipeStep.onEmpty !== undefined) {
+      if (result.skipped !== null) {
+        // Never claim a search that did not happen: the gap says why it was skipped
+        await this.recordGap(runId, recipeStep, `not searched: ${result.skipped}`, step);
+      } else if (result.empty && recipeStep.onEmpty !== undefined) {
         if ("gap" in recipeStep.onEmpty) {
           await this.recordGap(runId, recipeStep, recipeStep.onEmpty.gap, step);
         } else {
@@ -120,13 +126,14 @@ export class ResearchRunWorkflow extends WorkflowEntrypoint<CloudflareEnv, Resea
     });
   }
 
-  private async doStep(runId: string, recipeStep: Step, questions: ReturnType<typeof recipeFor>["questions"], step: WorkflowStep): Promise<{ empty: boolean }> {
+  /** `skipped` is the reason a collector made no request at all (budget, nothing to look up); null when it ran. */
+  private async doStep(runId: string, recipeStep: Step, questions: ReturnType<typeof recipeFor>["questions"], step: WorkflowStep): Promise<{ empty: boolean; skipped: string | null }> {
     return step.do(recipeStep.id, { retries: { limit: 1, delay: "5 seconds" } }, async () => {
       const started = Date.now();
       const ctx = await loadContext(this.env.DB, runId, questions);
       if (COLLECTOR_KINDS.has(recipeStep.kind) && (ctx.spent.calls >= ctx.budget.calls || ctx.spent.usd >= ctx.budget.usd)) {
-        await this.ledger(runId, recipeStep.id, "decision", 0, 0, { skipped: "budget exceeded", spent: ctx.spent });
-        return { empty: true };
+        await this.ledger(runId, recipeStep.id, "decision", 0, 0, { skipped: "run budget reached", spent: ctx.spent });
+        return { empty: true, skipped: "run budget reached" };
       }
       const out: StepOutcome = await executeStep(recipeStep, ctx, this.ports());
       await persistOutcome(this.env.DB, runId, out);
@@ -140,7 +147,10 @@ export class ResearchRunWorkflow extends WorkflowEntrypoint<CloudflareEnv, Resea
         empty: out.empty,
         notes: out.notes,
       });
-      return { empty: out.empty };
+      const degraded = out.brief?.degraded ?? null;
+      if (degraded !== null) await this.ledger(runId, recipeStep.id, "decision", 0, 0, { degraded });
+      const skipped = COLLECTOR_KINDS.has(recipeStep.kind) && out.calls === 0 && out.notes.length > 0 ? out.notes.join("; ") : null;
+      return { empty: out.empty, skipped };
     });
   }
 

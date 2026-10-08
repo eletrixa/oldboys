@@ -15,7 +15,7 @@
  */
 import { z } from "zod";
 import type { Collector } from "@/recipe/sources/types";
-import { acceptedCandidates, clip } from "@/recipe/sources/types";
+import { acceptedCandidates, clip, identityFor } from "@/recipe/sources/types";
 
 const User = z.object({
   login: z.string(),
@@ -56,7 +56,7 @@ export const github: Collector = {
     if (ctx.subject.trim().length === 0) return [];
     return [{ via: "fetch", url: `${API}/search/users?q=${encodeURIComponent(ctx.subject)}+in:name` }];
   },
-  parse: (payload) => {
+  parse: (payload, ctx) => {
     const repos = z.array(Repo).safeParse(payload);
     if (repos.success) {
       return repos.data.map((r) => ({
@@ -67,10 +67,11 @@ export const github: Collector = {
             .join(" · "),
         ),
         raw: r,
+        identity: identityFor(ctx, r.html_url),
       }));
     }
     const search = Search.safeParse(payload);
-    if (search.success) return search.data.items.map((i) => ({ url: i.html_url, excerpt: clip(i.login), raw: i }));
+    if (search.success) return search.data.items.map((i) => ({ url: i.html_url, excerpt: clip(i.login), raw: i, identity: identityFor(ctx, i.html_url) }));
     const user = User.safeParse(payload);
     if (user.success) {
       const u = user.data;
@@ -84,7 +85,7 @@ export const github: Collector = {
         u.created_at === undefined ? null : `joined ${u.created_at}`,
       ];
       return [
-        { url: u.html_url, excerpt: clip(parts.filter((x): x is string => typeof x === "string" && x.length > 0).join(" · ")), raw: u },
+        { url: u.html_url, excerpt: clip(parts.filter((x): x is string => typeof x === "string" && x.length > 0).join(" · ")), raw: u, identity: identityFor(ctx, u.html_url) },
       ];
     }
     return [];

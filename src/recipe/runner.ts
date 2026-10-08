@@ -14,6 +14,8 @@
  * Design constraints:
  * - Never mutates ctx; the Workflow persists the outcome and rebuilds ctx for the next step
  * - `onEmpty` is interpreted by the caller (Workflow), not here; runner only reports `empty`
+ * - A collector that made no request (`calls === 0`) with a note was skipped, not searched: the Workflow
+ *   turns that note into a "not searched: <note>" gap instead of the recipe's onEmpty text
  */
 import type { Source } from "@/domain/claim";
 import type { Ports } from "@/domain/ports";
@@ -71,22 +73,22 @@ async function collect(step: Step, ctx: StepContext, ports: Ports): Promise<Step
   const requests = collector.requests(ctx, step);
   const out = emptyOutcome();
   if (requests.length === 0) {
-    out.notes.push("nothing to request (no handles or ids known yet)");
+    out.notes.push("no confirmed handle or id to look up");
     return out;
   }
   for (const req of requests) {
     if (req.via === "actor" && !budgetLeft(ctx, out.calls, out.cost_usd)) {
-      out.notes.push("budget exhausted; remaining requests skipped");
+      out.notes.push("run budget reached");
       break;
     }
     let parsed: ParsedSource[];
     try {
       const { payload, cost_usd } = await perform(req, ports);
-      out.calls += 1;
+      if (req.via === "actor") out.calls += 1; // only paid actor runs count toward RUN_BUDGET_CALLS
       out.cost_usd += cost_usd;
       parsed = collector.parse(payload, ctx, step);
     } catch (error) {
-      out.calls += 1;
+      if (req.via === "actor") out.calls += 1;
       out.notes.push(`request failed: ${error instanceof Error ? error.message : String(error)}`);
       continue;
     }
@@ -100,6 +102,7 @@ async function collect(step: Step, ctx: StepContext, ports: Ports): Promise<Step
         fetched_at: fetched,
         excerpt: p.excerpt,
         expires_at: new Date(Date.parse(fetched) + SOURCE_TTL_MS).toISOString(),
+        identity: p.identity ?? "unverified",
       };
       out.sources.push(await ports.storeSource(source, p.raw));
     }

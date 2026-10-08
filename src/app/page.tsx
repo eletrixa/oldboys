@@ -24,7 +24,6 @@ export default function HomePage(): React.JSX.Element {
         </p>
       </header>
       <StartForm />
-      <footer className="text-xs text-zinc-500">Sample content only during development.</footer>
     </main>
   );
 }
