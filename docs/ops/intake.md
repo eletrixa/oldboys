@@ -26,7 +26,7 @@ POST /api/intake/startupjobs/<token>  (StartupJobs webhook)                     
 | Var | Default | Meaning |
 |---|---|---|
 | `INTAKE_PER_HOUR_CAP` | `"10"` | Max runs started from applications per rolling hour |
-| `INTAKE_FORWARD_TO` | `""` | Verified Email Routing destination that gets a copy of every inbound mail. Set to `robert@soulfire.cz` after the destination is verified (see below) and redeploy. Empty = no copy. |
+| `INTAKE_FORWARD_TO` | `"robert@soulfire.cz"` | Verified Email Routing destination that gets a copy of every inbound mail, including Gmail's forwarding confirmation. Empty = no copy. |
 | `INTAKE_FROM_ALLOW` | `""` | Comma list of sender domains or addresses allowed to start runs by email. Empty = any sender. Leave empty until real Gmail/Seznam/Jobs.cz mails have shown which envelope sender they carry; the tag is the main brake. |
 
 **Wrangler secrets** (`pnpm exec wrangler secret put <name>`, only when Robert asks for it in the current task):
@@ -71,11 +71,10 @@ pnpm exec wrangler d1 execute oldboys --local --command \
 
 ### Cloudflare Email Routing (done)
 
-- Email Routing is enabled on the `asajj.cz` zone (it uses Cloudflare DNS; Cloudflare added its MX and SPF records, and the zone had no MX before, so adding a mailbox provider on this domain later would conflict).
-- Rule `jobs@asajj.cz` -> Worker `oldboys`, plus a catch-all rule to the same Worker. Plus-addressing (`jobs+senior-be@asajj.cz`) matches the `jobs@` rule.
-- The Worker rejects any recipient other than `jobs@` and `jobs+<tag>@`, so the catch-all cannot be used to probe other mailboxes. A mail to `jobs@` with no tag is stored as `unmatched`.
-- Destination address for the human copy: `robert@soulfire.cz`. Cloudflare sent a verification mail to it; **Robert must click the link once**. Until then `message.forward()` fails; the failure is logged and the application is still stored.
-- After the click: set `INTAKE_FORWARD_TO` to `robert@soulfire.cz` in `wrangler.jsonc` and deploy. Do this **before** adding Gmail forwarding addresses, because Gmail's confirmation mail reaches Robert only through this copy.
+- Email Routing is enabled on the `asajj.cz` zone and verified. It uses Cloudflare DNS; Cloudflare added its MX, SPF and DKIM records. The zone had no MX before, so adding a mailbox provider on this domain later would conflict.
+- Subaddressing is enabled. Rule `jobs@asajj.cz` -> Worker `oldboys`, plus a catch-all rule to the same Worker.
+- The Worker rejects any recipient whose local part is not `jobs` or `jobs+<tag>`; catch-all mail to other addresses bounces "no such address". A mail to `jobs@` with no tag is stored as `unmatched`.
+- Destination address for the human copy: `robert@soulfire.cz`, already verified. `INTAKE_FORWARD_TO` is set to it, so every inbound mail is stored and copied there. If the forward ever fails, it is logged and the application is still stored.
 - Limits: Cloudflare accepts 25 MiB per message; the Worker rejects anything over 10 MiB with "message too large".
 
 Check the state (dashboard: asajj.cz -> Email -> Email Routing -> Routing rules, Destination addresses, Activity log), or by API:
@@ -87,7 +86,7 @@ curl -s -H "Authorization: Bearer $CF_API_TOKEN" "https://api.cloudflare.com/cli
 
 ### Gmail: forward a mailbox to a position
 
-1. Set `INTAKE_FORWARD_TO` and deploy (above), so the confirmation reaches you.
+1. `INTAKE_FORWARD_TO` is already set (above), so the confirmation reaches `robert@soulfire.cz`.
 2. Gmail -> Settings (gear) -> See all settings -> **Forwarding and POP/IMAP** -> **Add a forwarding address** -> `jobs+<tag>@asajj.cz` -> Next -> Proceed.
 3. Gmail sends a confirmation mail to that address. The Worker stores it as an application (`incomplete`, harmless) and forwards it to `INTAKE_FORWARD_TO`. Open it in `robert@soulfire.cz`, click the link or copy the code back into Gmail's Verify field.
 4. Settings -> **Filters and Blocked Addresses** -> **Create a new filter**. Use narrow criteria, for example the sender (`jobs.cz`, `linkedin.com`), a subject phrase, or the alias the ad uses. Next -> tick **Forward it to** -> `jobs+<tag>@asajj.cz` -> Create filter.
@@ -313,7 +312,7 @@ Also check the Cloudflare dashboard Activity log under Email Routing: it shows d
 | `capped` | `INTAKE_PER_HOUR_CAP` reached when the application arrived | Start the run by hand from the start form with the row's LinkedIn URL, or raise the cap. Re-sending does not retry, because duplicates return the first row |
 | `received` that never moves | R2, D1 or Workflow create threw after the insert | `wrangler tail oldboys`, fix the cause, then delete the row (`DELETE FROM applications WHERE id = '<id>'` via `wrangler d1 execute oldboys --remote`) and re-send the source |
 | No row for a sent mail | Mail never reached the Worker: wrong address, recipient rejected, destination or rule disabled, over 10 MiB | Email Routing Activity log; rule `jobs@` and catch-all point to Worker `oldboys`; recipient must be `jobs@` or `jobs+<tag>@` |
-| Gmail "forwarding address" confirmation never arrives | `INTAKE_FORWARD_TO` empty or destination not verified | Click the Cloudflare verification mail for `robert@soulfire.cz`, set the var, deploy, resend the confirmation |
-| Log line "forward failed" | Destination unverified or removed | Verify it in Email Routing -> Destination addresses; the application was stored anyway |
+| Gmail "forwarding address" confirmation never arrives | `INTAKE_FORWARD_TO` was emptied, or the destination was removed in Email Routing | Restore the var and deploy, check Destination addresses shows `robert@soulfire.cz` verified, resend the confirmation |
+| Log line "forward failed" | Destination removed or unverified | Verify it in Email Routing -> Destination addresses; the application was stored anyway |
 | Seznam copy never arrives | Rule condition does not match, or `+` target refused | Test with a mail to the exact seznam address; if `+` is refused, a copy to plain `jobs@` is stored as `unmatched`, so give the candidates the apply page link instead |
 | Migration errors "no such table: applications" | Intake migration not applied to this D1 | `pnpm db:migrate:local` / Robert runs `pnpm db:migrate:remote` |

@@ -15,7 +15,7 @@ interface __BaseEnv_CloudflareEnv {
 	ELEVENLABS_AGENT_ID: "";
 	ELEVENLABS_PHONE_NUMBER_ID: "";
 	INTAKE_PER_HOUR_CAP: "10";
-	INTAKE_FORWARD_TO: "";
+	INTAKE_FORWARD_TO: "robert@soulfire.cz";
 	INTAKE_FROM_ALLOW: "";
 	ANTHROPIC_API_KEY: string;
 	APIFY_TOKEN: string;
