@@ -55,12 +55,12 @@ flowchart LR
 3. The data model is the stable part; the risky fetch paths are additive and each one is gated by a probe, so the demo path (paste) never depends on them.
 
 **Top 3 risks** (from the prosecution; full register in `13-steelman.md`)
-1. migration 0009 before deploy: `position_id` is nullable and the INSERT names it only when present, so an un-migrated remote keeps serving runs without positions; Robert runs `pnpm db:migrate:remote` before merge.
+1. migration 0010 before deploy: `position_id` is nullable and the INSERT names it only when present, so an un-migrated remote keeps serving runs without positions; Robert runs `pnpm db:migrate:remote` before merge.
 2. One bad extraction poisons every run for that position: must-haves are shown and editable on the position page before the first run; `ingest_method` and the quote-bearing excerpt are visible.
 3. Two lists confuse the demo: the home page links `/positions` only; `/roles` stays as legacy grouping behind the same projection code, not a second product.
 
 ## Contracts
-- Migration `0009_positions.sql`: `positions(id TEXT PK, title, family, company, location, board, posting_url, external_id, must_haves_json NOT NULL, excerpt, r2_key, ingest_method NOT NULL, ingest_cost_usd REAL NOT NULL DEFAULT 0, created_at, expires_at NOT NULL)`, `UNIQUE(board, external_id)` where both non-null; `ALTER TABLE investigations ADD COLUMN position_id TEXT REFERENCES positions(id)`.
+- Migration `0010_positions.sql`: `positions(id TEXT PK, title, family, company, location, board, posting_url, external_id, must_haves_json NOT NULL, excerpt, r2_key, ingest_method NOT NULL, ingest_cost_usd REAL NOT NULL DEFAULT 0, created_at, expires_at NOT NULL)`, `UNIQUE(board, external_id)` where both non-null; `ALTER TABLE investigations ADD COLUMN position_id TEXT REFERENCES positions(id)`.
 - `POST /api/positions` (bearer): `{postingText?, postingUrl?, title?}` → 201 `{id}`; `PATCH /api/positions/:id` (bearer): `{title?, family?, must_haves?}`; `GET /api/positions` (bearer, like `/api/roles`).
 - `StartRunBody.positionId?: string`; when present the insert sets `position_id`, `role = positions.title`, `questions_json = positions.must_haves_json`.
 - Family enum: `engineering | data | product | design | marketing | sales | operations | finance | people | other`.
@@ -72,10 +72,10 @@ flowchart LR
 2. `src/recipe/seams/posting-plan.ts` + test: `postingFetchPlan(url | null) → {method, request?}` (pure); fixtures for jobs.cz `/rpd/<id>`, Greenhouse `gh_jid`, Lever, Ashby, LinkedIn `/jobs/view/<id>`, unknown host → `pasted`.
 3. `src/recipe/seams/posting-parse.ts` + test: `parsePosting(method, payload) → {title?, company?, location?, text}` with saved fixtures (Jobs.cz JSON-LD, Greenhouse JSON, Ashby JSON); `stripBoilerplate(text)`.
 4. `src/recipe/seams/position-extract.ts` + test with `fakeLlm`: `extractPosition(text, ports)` → `{title, company, location, family, must_haves}`; deterministic fallback = `roleQuestions.fallback` when the model is off.
-5. migration 0009; `src/app/api/positions/route.ts` as a thin handler around a tested `ingestPosition(db, r2, ports, body)` function (handler pattern of `webhooks/elevenlabs/handler.ts`); cost written to the row.
+5. migration 0010; `src/app/api/positions/route.ts` as a thin handler around a tested `ingestPosition(db, r2, ports, body)` function (handler pattern of `webhooks/elevenlabs/handler.ts`); cost written to the row.
 6. `StartRunBody.positionId` + schema test; `POST /api/runs` copies must-haves; `research-run.ts` unchanged (the `questions_json IS NULL` guard already skips `role_questions`).
 7. `src/domain/position-overview.ts`: generalise `roleOverview` to group by `position_id` first, `roleKey` second; test both paths. `/positions`, `/positions/[id]`, `/positions/new` pages reuse `roles-view.tsx` parts; home page link switches to `/positions`.
-8. `purge.ts` positions sweep + test; `docs/cli/cheat/oldboys.ps1` for the new var; PR text says "adds migration 0009".
+8. `purge.ts` positions sweep + test; `docs/cli/cheat/oldboys.ps1` for the new var; PR text says "adds migration 0010".
 9. Gate E3 (docs/08): same candidate, two positions, ≥ 30 % claim delta; otherwise the selector stays out of the 90 s video.
 10. After freeze candidates: LinkedIn guest probe from the Worker (E1), extension capture on `linkedin.com/jobs/view/*`, Apify memo23 behind `POSITION_INGEST_USD`.
 
