@@ -164,6 +164,8 @@ export class ResearchRunWorkflow extends WorkflowEntrypoint<CloudflareEnv, Resea
       }
     };
     for (const recipeStep of recipe.steps) {
+      // The seed step already ran above (or was skipped without a profile / CV); executeStep rejects it.
+      if (recipeStep.kind === "seed") continue;
       if (recipeStep.kind === "resolve") {
         await this.resolveWithPause(runId, recipeStep, recipe.questions, step);
         afterResolve = true;
