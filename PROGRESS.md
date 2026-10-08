@@ -120,3 +120,8 @@ Each agent appends: what it starts, progress, what it finishes. Newest at the bo
 - Started: 00:12. Idea #18 "Reference-check questions": "Copy reference questions" turns research gaps (role criteria with no or partial evidence, or unchecked criteria when AI was off, plus to-verify items) into at most 8 plain-text questions for a former manager or colleague, with a consent and private-topics reminder; export buttons grouped by audience (Interview, Candidate, ATS, References).
 - Finished: 00:13. Pure `referenceQuestions`, Art. 9 filter as defense in depth, never also_found or claims. No schema change, no new endpoint; pnpm check green, wrangler dry-run bundles.
 - Files: src/app/runs/[id]/{reference-check.ts,__tests__/reference-check.test.ts} (new), src/app/runs/[id]/kit-actions.tsx, src/app/runs/[id]/summary.ts (export aiOff), PROGRESS.md.
+
+## 2026-10-09 · candidate-notice-cs agent (Minas)
+- Started: 00:23. Idea #24 (part) for the candidate notice (#7): Czech version with an EN | CZ switch next to "Copy candidate notice" / "Download candidate notice (.md)"; formal, gender-neutral Czech, Czech date format, generic source labels and known "not searched" reasons translated (unknown ones pass through scrubbed), file name candidate-notice-<id>-cs.md.
+- Finished: 00:28. English output unchanged. No schema change, no new endpoint; pnpm check green, wrangler dry-run bundles.
+- Files: src/app/runs/[id]/{candidate-copy.ts,candidate-copy-cs.ts,kit-actions.tsx,__tests__/candidate-copy.test.ts}, PROGRESS.md.
