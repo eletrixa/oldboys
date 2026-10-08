@@ -25,6 +25,7 @@
  * - `sourceIdentityUpdates`: after the lineup, sources whose profile key equals a merged candidate's become
  *   "merged", sources under a rejected candidate "unverified"; then (rule 2) a still-unverified source naming the
  *   subject in full plus a confirmed employer token becomes "merged" with a reason; extract and synthesize trust only "merged"
+ * - `confirmedSources`: merged and not under a rejected profile, the one filter extract, verify and synthesize share
  * - `noneConfirmed`: a collector found hits but none sits on a merged profile; the Workflow records UNCONFIRMED_GAP
  * - `lineupNeedsAnswer`: pause for the manager only on possibly-same-as, or when nothing is merged (a seed merge counts)
  *
@@ -35,7 +36,7 @@ import { z } from "zod";
 import type { Candidate, Source, SourceIdentity } from "@/domain/claim";
 import type { Ports } from "@/domain/ports";
 import { emptyOutcome } from "@/recipe/runner";
-import { corroborationReason, employerHit, fold, mentionsPlace, orgTokens, professionalReasons, professionalSnippet } from "@/domain/corroborate";
+import { corroborationReason, employerHit, fold, mentionsPlace, orgTokens, professionalReasons, professionalSnippet, type OrgToken } from "@/domain/corroborate";
 import { experienceCompanies, LINKEDIN_PROFILE_ACTORS } from "@/recipe/sources/linkedin";
 import { clip, platformOf, type StepContext, type StepOutcome } from "@/recipe/sources/types";
 
@@ -136,6 +137,12 @@ export function profileKey(url: string): string | null {
   // profile.php?id= keys by id (pageKey drops the query); m./web./www. hosts already collapse in canonicalProfile
   if (p.handle !== null && p.url.startsWith("https://www.facebook.com/")) return `facebook.com/${p.handle}`;
   return pageKey(p.url);
+}
+
+/** Sources trusted as the subject: identity "merged" and not under a rejected candidate's profile key (extract, verify, synthesize). */
+export function confirmedSources(ctx: Pick<StepContext, "sources" | "candidates">): Source[] {
+  const rejected = new Set(ctx.candidates.filter((c) => c.decision === "rejected").flatMap((c) => c.profile_urls.map(profileKey)));
+  return ctx.sources.filter((s) => s.identity === "merged" && !rejected.has(profileKey(s.url)));
 }
 
 export type IdentitySource = Pick<Source, "id" | "url" | "identity"> & Partial<Pick<Source, "excerpt" | "actor">>;
@@ -328,14 +335,18 @@ const LOCATION_REASON = /\b(?:location|located|based in|lives in)\b/i;
  * What besides the name ties a hit to the subject: the anchor link or text, the anchor's place, a token of a merged
  * LinkedIn profile's employer, or a cross-link to or from a merged profile. Null when it is name/handle only.
  */
-export function corroboration(d: { url: string; excerpt: string }, ctx: Pick<StepContext, "subject" | "anchor" | "candidates" | "sources">): string | null {
+export function corroboration(
+  d: { url: string; excerpt: string },
+  ctx: Pick<StepContext, "subject" | "anchor" | "candidates" | "sources">,
+  tokens: readonly OrgToken[] = orgTokens(mergedProfileOrgs(ctx.sources), ctx.subject),
+): string | null {
   const text = `${d.excerpt}\n${d.url}`;
   const lc = text.toLowerCase();
   const aKey = anchorKey(ctx.anchor);
   if (aKey !== null && pageKey(d.url) === aKey) return "anchor link";
   if (ctx.anchor.trim() !== "" && lc.includes(ctx.anchor.trim().toLowerCase())) return "anchor";
   if (mentionsPlace(ctx.anchor, text)) return "location";
-  const employer = employerHit(text, orgTokens(mergedProfileOrgs(ctx.sources), ctx.subject));
+  const employer = employerHit(text, tokens);
   if (employer !== null) return `employer (${employer})`;
   const mergedKeys = ctx.candidates.filter((c) => c.decision === "merge").flatMap((c) => c.profile_urls.map(pageKey)).filter((k): k is string => k !== null);
   // ponytail: substring link check, like fallbackScores; misses shortened or redirected links
@@ -387,9 +398,10 @@ export async function resolveCandidates(ctx: StepContext, ports: Ports): Promise
     scores = fallbackScores(drafts, ctx.anchor);
   }
   const byId = new Map(scores.map((s) => [s.id, s]));
+  const tokens = orgTokens(mergedProfileOrgs(ctx.sources), ctx.subject);
   const all = drafts.map((d) => {
     const s = byId.get(d.id) ?? { score: 0.5, reasons: ["unscored"] };
-    const why = corroboration(d, ctx);
+    const why = corroboration(d, ctx, tokens);
     // fallbackScores already merges only on hard links; a model merge also needs a deterministic corroboration
     const capped = byModel && s.score >= MERGE_FLOOR && why === null;
     const score = capped ? UNCORROBORATED_CAP : s.score;

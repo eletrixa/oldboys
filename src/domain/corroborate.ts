@@ -11,6 +11,7 @@
  * - `corroborationReason`: a page names the subject in full (either order, diacritics-insensitive) AND carries a
  *   distinctive token of a confirmed employer -> "name and employer match (<Org>)"; null otherwise
  * - `orgTokens`: organisation names -> folded whole-word tokens (4+ chars, no generic words, no name parts)
+ * - `fold` / `hasWord` / `escape`: shared text helpers (verify's alias screen reuses them)
  * - `placeOf` / `mentionsPlace`: the anchor's place ("Prague" from "Prague, Czechia") as a whole word
  * - `professionalReasons` / `professionalSnippet`: drop personal-life details (check-ins, profile pictures,
  *   family words, hobbies) from what the lineup shows
@@ -24,10 +25,10 @@ export function fold(text: string): string {
   return text.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
 }
 
-const escape = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+export const escape = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 /** Whole-word (letters/digits) test on already folded text. */
-function hasWord(hay: string, word: string): boolean {
+export function hasWord(hay: string, word: string): boolean {
   return new RegExp(`(?<![\\p{L}\\p{N}])${escape(word)}(?![\\p{L}\\p{N}])`, "u").test(hay);
 }
 

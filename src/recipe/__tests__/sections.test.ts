@@ -10,7 +10,8 @@
  * - A question gets a section only when it has claims; titles are short, must-haves keep their text
  * - Uncited social profiles get no section; other uncited platforms one section each
  * - Mirror sites do not count as confirmation; the candidate's own site counts as self-reported
- * - Confidence follows the sources' identity (merged) and contradictions; the degraded brief carries the same sections
+ * - Confidence follows the sources' identity (merged) and contradictions (explicit, or a contradictions claim citing a
+ *   section's source); the degraded brief carries the same sections
  *
  * Design constraints:
  * - Fake ports only; no network
@@ -80,6 +81,20 @@ describe("sectionsOf", () => {
     const contradicted = sectionsOf(questions, [claim("c1", "current-role", ["s-li", "s-press"], { contradicts: ["s-gh"] })], perQuestion, all, confirmedOnly);
     expect(contradicted[0]?.confidence).toBe(0.65);
     expect(contradicted[0]?.confidence_reason).toBe("Self-reported, plus one independent source; sources disagree");
+  });
+
+  it("lowers a section whose source a surviving contradiction claim cites, and says sources disagree", () => {
+    const cs = [
+      claim("c1", "current-role", ["s-li", "s-press"]),
+      claim("c2", "contradictions", ["s-press", "s-pod"], { kind: "INFERENCE", quote: null }),
+      claim("c3", "mh-sql", ["s-pod"]),
+    ];
+    const qs = [...questions, { id: "contradictions", text: "Which sources disagree?" }];
+    const sections = sectionsOf(qs, cs, perQuestion, all, confirmedOnly);
+    const byId = new Map(sections.map((s) => [s.id, s]));
+    expect(byId.get("current-role")).toMatchObject({ confidence: 0.65, confidence_reason: "Self-reported, plus one independent source; sources disagree" });
+    expect(byId.get("mh-sql")?.confidence_reason).toBe("Single independent source, not corroborated; sources disagree");
+    expect(byId.get("contradictions")?.confidence_reason).not.toContain("sources disagree");
   });
 
   it("has no sections when nothing was found", () => {
