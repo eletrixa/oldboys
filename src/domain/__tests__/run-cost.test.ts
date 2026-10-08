@@ -21,7 +21,7 @@ import { formatDuration, runCost, type CostRow } from "@/domain/run-cost";
 const START = "2026-10-08T20:00:00.000Z";
 
 function row(kind: string, ts: string, cost_usd = 0, ms = 0): CostRow {
-  return { ts: `2026-10-08T${ts}.000Z`, kind, cost_usd, ms };
+  return { ts: `2026-10-08T${ts}.000Z`, kind, cost_usd, ms, ref_json: kind === "llm" ? '{"calls":1}' : null };
 }
 
 describe("runCost", () => {
@@ -37,7 +37,13 @@ describe("runCost", () => {
   it("counts model calls from ref.calls, so a failed model adds none", () => {
     const llm = (ts: string, ref: string | null): CostRow => ({ ...row("llm", ts), ref_json: ref });
     const cost = runCost([llm("20:00:10", '{"calls":0}'), llm("20:00:20", '{"calls":3}'), llm("20:00:30", null), llm("20:00:40", "{oops")], START);
-    expect(cost.llm_calls).toBe(5);
+    expect(cost.llm_calls).toBe(3);
+  });
+
+  it("projects 0 AI calls for a keyless run (role, resolve, extract, synthesize all degraded)", () => {
+    const refs = ['{"questions":3,"calls":0}', '{"candidates":[],"calls":0}', '{"claims":0,"calls":0}', '{"brief":true,"calls":0}', null];
+    const rows = refs.map((ref, i): CostRow => ({ ...row("llm", `20:00:1${String(i)}`), ref_json: ref }));
+    expect(runCost([...rows, row("call", "20:00:30")], START)).toMatchObject({ source_calls: 1, llm_calls: 0 });
   });
 
   it("sums and rounds mixed call, llm and decision rows", () => {
@@ -77,7 +83,7 @@ describe("runCost", () => {
 
   it("clamps negative costs and rows before createdAt to zero", () => {
     const cost = runCost([{ ts: "2026-10-08T19:00:00.000Z", kind: "llm", cost_usd: -1, ms: -5 }], START);
-    expect(cost).toEqual({ usd: 0, source_calls: 0, llm_calls: 1, duration_ms: 0 });
+    expect(cost).toEqual({ usd: 0, source_calls: 0, llm_calls: 0, duration_ms: 0 });
   });
 });
 

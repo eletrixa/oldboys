@@ -15,7 +15,7 @@
  */
 import type { Brief, Candidate, CandidateDecision } from "@/domain/claim";
 import { formatDuration, type RunCost } from "@/domain/run-cost";
-import type { RowState, RunState } from "./state";
+import { type RowState, type RunState, roleCriteria } from "./state";
 
 const CARD = "rounded-2xl border border-zinc-800 bg-zinc-900/60 p-5";
 
@@ -364,6 +364,23 @@ function searchedEmpty(brief: Brief): Gap[] {
 
 const gapLine = (g: Gap): string => `${GAP_LABEL[g.source] ?? g.source}: ${g.reason}`;
 
+function RoleCriteria({ texts }: { texts: string[] }): React.JSX.Element {
+  return (
+    <section className={CARD}>
+      <h3 className="font-semibold">Role criteria (not checked, AI unavailable)</h3>
+      {texts.length === 0 ? (
+        <p className="mt-2 text-sm text-zinc-400">No role criteria yet</p>
+      ) : (
+        <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-zinc-300">
+          {texts.map((t) => (
+            <li key={t}>{t}</li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
 export function BriefView({ state }: { state: RunState }): React.JSX.Element | null {
   const { brief } = state;
   if (!brief) return null;
@@ -375,14 +392,7 @@ export function BriefView({ state }: { state: RunState }): React.JSX.Element | n
       {brief.degraded !== null && <DegradedNotice reason={brief.degraded} />}
       {brief.degraded !== null && <ConfirmedEvidence items={brief.evidence} />}
       {allUnavailable ? (
-        <section className={CARD}>
-          <h3 className="font-semibold">Role criteria: no verified evidence yet</h3>
-          <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-zinc-300">
-            {brief.per_question.map((q) => (
-              <li key={q.question_id}>{textOf.get(q.question_id) ?? q.question_id}</li>
-            ))}
-          </ul>
-        </section>
+        <RoleCriteria texts={roleCriteria(state.questions)} />
       ) : (
         brief.per_question.map((q) => (
         <section key={q.question_id} className={CARD}>

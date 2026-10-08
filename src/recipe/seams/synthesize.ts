@@ -13,7 +13,7 @@
  * Design constraints:
  * - Never scores or ranks the person; summaries restate evidence per question
  * - Always returns a Brief: model failure or zero claims gives an evidence-only brief with `degraded` set,
- *   confirmed source links (`evidence`) and templated interview questions (open profiles, unevidenced questions)
+ *   confirmed source links (`evidence`) and templated interview questions (open social profiles, unevidenced role must-haves)
  * - Gaps split: `not_searched` (no request made, prefix stripped) vs `searched_empty`; `source` is the step id
  * - Confirmed = identity "merged" only; SERP hits on namesakes stay in `also_found`
  */
@@ -95,8 +95,9 @@ export function profileQuestion(c: Pick<Candidate, "platform" | "handle" | "prof
 export function askCandidate(text: string): string | null {
   if (/\b(anchor|sources?)\b/i.test(text)) return null;
   let q = text.replace(/\s*\([^)]*\)\s*$/, "").trim();
-  q = q.replace(/\bthe subject's\b/gi, "your").replace(/\btheir\b/gi, "your").replace(/\bthey\b/gi, "you");
-  q = q.replace(/^Has held\b/, "Have you held").replace(/^Has\b/, "Do you have").replace(/^Is\b/, "Are you");
+  q = q.replace(/\bthe subject's stated location\b/gi, "your location").replace(/\bthe subject's\b/gi, "your").replace(/\btheir\b/gi, "your").replace(/\bthey\b/gi, "you");
+  q = q.replace(/^Has held\b/, "Have you held").replace(/^Has\b/, "Do you have").replace(/^Is (?!your\b)/, "Are you ");
+  q = q.replace(/^Location compatible with\b:?\s*/i, "Is your location compatible with ");
   if (q.length === 0) return null;
   return q.endsWith("?") ? q : `${q}?`;
 }
@@ -114,15 +115,24 @@ export function alsoFoundOf(ctx: StepContext): Brief["also_found"] {
   return ctx.sources.filter(notRejected(ctx)).filter((s) => !confirmed(s)).slice(0, EVIDENCE_MAX).map(row);
 }
 
-/** Degraded mode: ask about profiles still open, then mh- role questions, then recipe questions, with no evidence. */
+const PROFILE_PLATFORMS = new Set(Object.keys(PLATFORM_LABEL));
+const IDENTITY_MAX = 2;
+
+/**
+ * Degraded mode: at most two identity questions about open social profiles (never plain web pages a candidate
+ * cannot speak to), then the role must-haves (mh-) still without evidence, in the second person. Base research
+ * prompts are never turned into interview questions.
+ */
 function templatedQuestions(ctx: StepContext, byQ: ReadonlyMap<string, readonly Claim[]>): string[] {
-  const open = ctx.candidates.filter((c) => c.decision === "possibly-same-as").sort((a, b) => Number(a.platform === "web") - Number(b.platform === "web"));
-  const unevidenced = ctx.questions
-    .filter((q) => coverageOf(byQ.get(q.id) ?? []) === "none")
-    .sort((a, b) => Number(b.id.startsWith("mh-")) - Number(a.id.startsWith("mh-")))
+  const open = ctx.candidates
+    .filter((c) => c.decision === "possibly-same-as" && PROFILE_PLATFORMS.has(c.platform))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, IDENTITY_MAX);
+  const mustHaves = ctx.questions
+    .filter((q) => q.id.startsWith("mh-") && coverageOf(byQ.get(q.id) ?? []) === "none")
     .map((q) => askCandidate(q.text))
     .filter((x): x is string => x !== null);
-  return [...new Set([...open.map(profileQuestion), ...unevidenced])].slice(0, INTERVIEW_MAX);
+  return [...new Set([...open.map(profileQuestion), ...mustHaves])].slice(0, INTERVIEW_MAX);
 }
 
 export async function synthesizeBrief(ctx: StepContext, ports: Ports): Promise<StepOutcome> {

@@ -9,7 +9,8 @@
 import { describe, expect, it } from "vitest";
 import type { Candidate, Claim, Source } from "@/domain/claim";
 import { extractClaims } from "@/recipe/seams/extract";
-import { canonicalProfile, decisionFor, fallbackScores, profileKey, resolveCandidates, sourceIdentityUpdates } from "@/recipe/seams/resolve";
+import { canonicalProfile, decisionFor, fallbackScores, isNoise, pickDrafts, profileKey, resolveCandidates, sourceIdentityUpdates } from "@/recipe/seams/resolve";
+import { verifyClaims } from "@/recipe/seams/verify";
 import { askCandidate, coverageOf, synthesizeBrief } from "@/recipe/seams/synthesize";
 import { baseContext, fakeLlm, fakePorts } from "@/recipe/__tests__/fakes";
 
@@ -206,7 +207,8 @@ describe("synthesize", () => {
     expect(out.brief?.removed_protected).toBe(1);
     expect(out.brief?.per_question.find((p) => p.question_id === "current-role")?.coverage).toBe("evidenced");
     expect(out.brief?.per_question.find((p) => p.question_id === "public-code")?.coverage).toBe("none");
-    expect(out.brief?.interview_questions.join()).toContain("Public code");
+    // degraded: base research prompts never become interview questions
+    expect(out.brief?.interview_questions).toEqual([]);
     expect(out.brief?.searched_empty).toEqual([{ source: "public-code", reason: "no public GitHub profile found" }]);
     expect(out.brief?.not_searched).toEqual([]);
     expect(out.brief?.degraded).toContain("summary model failed");
@@ -241,10 +243,10 @@ describe("synthesize", () => {
     expect(brief?.also_found.map((e) => e.url)).toEqual([sources[0]?.url, "https://api.github.com/users/someone"]);
     expect(brief?.not_searched).toEqual([{ source: "tiktok_profile", reason: "no confirmed handle or id to look up" }]);
     expect(brief?.searched_empty).toEqual([{ source: "github_profile", reason: "no public GitHub profile found" }]);
-    expect(brief?.interview_questions).toEqual(["Is the X account jdvorakova yours?", "Current role and employer?", "Public code?"]);
+    expect(brief?.interview_questions).toEqual(["Is the X account jdvorakova yours?"]);
   });
 
-  it("templates degraded interview questions in the second person, never research prompts or step ids, capped at 6", async () => {
+  it("templates degraded interview questions: two social identity checks, then role must-haves, never web pages or base prompts", async () => {
     const ctx = baseContext({
       questions: [
         { id: "current-role", text: "What is the subject's current role and employer?" },
@@ -252,21 +254,31 @@ describe("synthesize", () => {
         { id: "location-match", text: "Does their stated location match the anchor?" },
         { id: "contradictions", text: "Which sources disagree with each other?" },
         { id: "mh-title-experience", text: "Has held a Senior Data Engineer position or equivalent (job history, profile)" },
+        { id: "mh-public-work", text: "Has public work showing Senior Data Engineer skills (repo, talk)" },
+        { id: "mh-location-fit", text: "Location compatible with Prague (profile location)" },
+        { id: "mh-where", text: "Is the subject's stated location in the Prague area?" },
       ],
       candidates: [
-        cand("w", "https://www.firma.cz/tym", "possibly-same-as", "web"),
-        cand("l", "https://www.linkedin.com/in/josef-buryan/", "possibly-same-as", "linkedin", "josef-buryan"),
-        ...["a", "b", "c"].map((h) => cand(h, `https://x.com/${h}`, "possibly-same-as", "x", h)),
+        cand("w", "https://www.fiba.basketball/player/x", "possibly-same-as", "web"),
+        cand("b", "https://www.bloomberg.com/profile/person/1", "possibly-same-as", "web"),
+        { ...cand("l", "https://www.linkedin.com/in/josef-buryan/", "possibly-same-as", "linkedin", "josef-buryan"), score: 0.7 },
+        ...["a", "b2", "c"].map((h) => cand(h, `https://x.com/${h}`, "possibly-same-as", "x", h)),
       ],
       gaps: [{ run_id: "run-1", question_id: "huggingface_profile", reason: "no Hugging Face models or datasets found" }],
     });
     const qs = (await synthesizeBrief(ctx, fakePorts())).brief?.interview_questions ?? [];
-    expect(qs).toHaveLength(6);
-    expect(qs[0]).toBe("Is the LinkedIn account josef-buryan yours?");
-    expect(qs.slice(4)).toEqual(["Is the page on firma.cz about you?", "Have you held a Senior Data Engineer position or equivalent?"]);
-    expect(qs.join(" ")).not.toMatch(/Ask about|Confirm with|huggingface_profile/);
+    expect(qs).toEqual([
+      "Is the LinkedIn account josef-buryan yours?",
+      "Is the X account a yours?",
+      "Have you held a Senior Data Engineer position or equivalent?",
+      "Do you have public work showing Senior Data Engineer skills?",
+      "Is your location compatible with Prague?",
+      "Is your location in the Prague area?",
+    ]);
+    expect(qs.join(" ")).not.toMatch(/fiba|bloomberg|the subject|anchor|huggingface_profile/);
     expect(askCandidate("What is the subject's current role and employer?")).toBe("What is your current role and employer?");
     expect(askCandidate("What public talks, posts or writing show how they think?")).toBe("What public talks, posts or writing show how you think?");
+    expect(askCandidate("Does the subject's stated location fit?")).toBe("Does your location fit?");
     expect(askCandidate("Which sources disagree with each other?")).toBeNull();
   });
 });
@@ -284,5 +296,72 @@ describe("canonicalProfile", () => {
     expect(canonicalProfile("https://x.com/josefburyan/status/123")).toEqual({ url: "https://x.com/josefburyan", handle: "josefburyan" });
     expect(canonicalProfile("https://www.instagram.com/p/abc/")).toEqual({ url: "https://www.instagram.com/p/abc/", handle: "abc" });
     expect(canonicalProfile("https://www.linkedin.com/pub/dir/Lukas/Pokorny")).toEqual({ url: "https://www.linkedin.com/pub/dir/Lukas/Pokorny", handle: null });
+  });
+});
+
+describe("directory and listing pages are never candidates", () => {
+  const pokornyDir = "https://cz.linkedin.com/pub/dir/Luk%C3%A1%C5%A1/Pokorn%C3%BD";
+  it("flags LinkedIn directories, non-profile LinkedIn paths, Facebook /public/ and listing titles", () => {
+    expect(isNoise(pokornyDir, "30+ profilů „Lukáš Pokorný“ | LinkedIn")).toBe(true);
+    expect(isNoise("https://www.linkedin.com/directory/people-p")).toBe(true);
+    expect(isNoise("https://www.linkedin.com/search/results/people/?keywords=x")).toBe(true);
+    expect(isNoise("https://www.facebook.com/public/Lukas-Pokorny")).toBe(true);
+    expect(isNoise("https://example.com/x", '100+ "Lukas Pokorny" profiles')).toBe(true);
+    expect(isNoise("https://example.com/x", "People named Lukas Pokorny")).toBe(true);
+    expect(isNoise("https://example.com/x", "Results for Lukas Pokorny")).toBe(true);
+    expect(isNoise("https://cz.linkedin.com/in/lukas-pokorny-1", "Lukáš Pokorný - Liberec | LinkedIn")).toBe(false);
+    expect(isNoise("https://www.linkedin.com/company/groupon")).toBe(false);
+    expect(isNoise("https://www.facebook.com/josefburyan")).toBe(false);
+  });
+  it("never drafts the Pokorný directory page", () => {
+    const ctx = baseContext({ subject: "Lukáš Pokorný", sources: [s("d", pokornyDir, "30+ profilů „Lukáš Pokorný“"), s("p", "https://cz.linkedin.com/in/lukas-pokorny-1", "Lukáš Pokorný")] });
+    expect(pickDrafts(ctx).map((d) => d.url)).toEqual(["https://cz.linkedin.com/in/lukas-pokorny-1"]);
+  });
+});
+
+describe("canonicalProfile: Facebook and YouTube", () => {
+  it("maps Facebook profiles to a handle and leaves listings, groups and pages without one", () => {
+    expect(canonicalProfile("https://m.facebook.com/josefburyan/posts/123")).toEqual({ url: "https://www.facebook.com/josefburyan", handle: "josefburyan" });
+    expect(canonicalProfile("https://www.facebook.com/profile.php?id=1000123")).toEqual({ url: "https://www.facebook.com/profile.php?id=1000123", handle: "1000123" });
+    for (const u of ["https://www.facebook.com/public/Josef-Buryan", "https://www.facebook.com/people/x/1", "https://www.facebook.com/groups/abc", "https://www.facebook.com/pages/x/1"]) {
+      expect(canonicalProfile(u).handle).toBeNull();
+    }
+    expect(profileKey("https://www.facebook.com/profile.php?id=1")).not.toBe(profileKey("https://www.facebook.com/profile.php?id=2"));
+  });
+  it("maps YouTube @handle, /channel/ and /c/ to a handle; a watch link has none (never 'watch')", () => {
+    expect(canonicalProfile("https://www.youtube.com/@JosefBuryan/videos")).toEqual({ url: "https://www.youtube.com/@JosefBuryan", handle: "josefburyan" });
+    expect(canonicalProfile("https://www.youtube.com/channel/UC123").handle).toBe("UC123");
+    expect(canonicalProfile("https://www.youtube.com/c/groupon").handle).toBe("groupon");
+    expect(canonicalProfile("https://www.youtube.com/watch?v=abc")).toEqual({ url: "https://www.youtube.com/watch?v=abc", handle: null });
+  });
+  it("collapses the two facebook.com/josefburyan rows seen in the Buryan run into one draft", () => {
+    const ctx = baseContext({
+      subject: "Josef Buryan",
+      sources: [
+        s("f1", "https://www.facebook.com/josefburyan/", "Josef Buryan (@josefburyan)"),
+        s("f2", "https://cs-cz.facebook.com/josefburyan", "Josef Buryan (@josefburyan)"),
+        s("f3", "https://m.facebook.com/josefburyan/photos", "Josef Buryan"),
+      ],
+    });
+    expect(pickDrafts(ctx)).toHaveLength(1);
+  });
+});
+
+describe("AI call counts are truthful", () => {
+  const merged = sources.map((x) => ({ ...x, identity: "merged" as const }));
+  const fact: Claim = { id: "c1", run_id: "run-1", question_id: "current-role", candidate_id: null, text: "Data Engineer", kind: "FACT", confidence: 0.9, quote: "Data Engineer at Kiwi.com", supports: ["s1"], contradicts: [], rank: 1 };
+  it("counts 0 when the model throws (keyless run)", async () => {
+    expect((await resolveCandidates(baseContext({ sources }), fakePorts())).calls).toBe(0);
+    expect((await extractClaims(baseContext({ sources: merged }), fakePorts())).calls).toBe(0);
+    expect((await verifyClaims(baseContext({ sources: merged, claims: [fact] }), fakePorts())).calls).toBe(0);
+    expect((await synthesizeBrief(baseContext({ sources: merged, claims: [fact] }), fakePorts())).calls).toBe(0);
+  });
+  it("counts each successful model call", async () => {
+    const ok = fakePorts({ llm: fakeLlm(() => []) });
+    expect((await resolveCandidates(baseContext({ sources }), ok)).calls).toBe(1);
+    expect((await extractClaims(baseContext({ sources: merged }), ok)).calls).toBe(1);
+    expect((await verifyClaims(baseContext({ sources: merged, claims: [fact] }), ok)).calls).toBe(1);
+    // protected-category check + summary
+    expect((await synthesizeBrief(baseContext({ sources: merged, claims: [fact] }), ok)).calls).toBe(2);
   });
 });

@@ -89,11 +89,11 @@ export class ResearchRunWorkflow extends WorkflowEntrypoint<CloudflareEnv, Resea
     if (head.role !== null && head.role.length > 0 && head.questions_json === null) {
       await step.do("role_questions", async () => {
         const started = Date.now();
-        const r = await roleQuestions(head.role ?? "", this.ports());
+        const r = await roleQuestions(head.role ?? "", this.ports(), head.anchor);
         await this.env.DB.prepare("UPDATE investigations SET questions_json = ? WHERE id = ?")
           .bind(JSON.stringify(r.questions), runId)
           .run();
-        await this.ledger(runId, "role_questions", "llm", r.cost_usd, Date.now() - started, { questions: r.questions.length, notes: r.notes });
+        await this.ledger(runId, "role_questions", "llm", r.cost_usd, Date.now() - started, { questions: r.questions.length, calls: r.calls, notes: r.notes });
         return r.questions.length;
       });
     }
@@ -199,6 +199,7 @@ export class ResearchRunWorkflow extends WorkflowEntrypoint<CloudflareEnv, Resea
       const ask = all.some((c) => c.decision === "possibly-same-as") || !all.some((c) => c.decision === "merge");
       await this.ledger(runId, recipeStep.id, "llm", out.cost_usd, Date.now() - started, {
         candidates: out.candidates.map((c) => ({ id: c.id, platform: c.platform, url: c.profile_urls[0], score: c.score, decision: c.decision, snippet: c.snippet, reasons: c.reasons })),
+        calls: out.calls,
         notes: out.notes,
         ask,
       });

@@ -83,3 +83,5 @@ export function dedupeSince(now: Date): string {
 
 /** Runs started per hour across the shared token before the API answers 429. */
 export const RUNS_PER_HOUR_CAP = 20;
+/** Runs started from the public start form (no bearer of its own) in any rolling hour. */
+export const START_PER_HOUR_CAP = 6;

@@ -97,7 +97,7 @@ export function StartForm(): React.JSX.Element {
       <Field name="role" label="Role you are hiring for" helper="The brief focuses on what matters for this role." />
       <p className="rounded-xl border border-emerald-900 bg-emerald-950/50 p-4 text-sm text-emerald-100">
         <strong>Privacy:</strong> Public information only. We never look at private accounts, and we do not judge
-        personality, health, religion or politics. Collected data is deleted after judging.
+        personality, health, religion or politics. Everything we collect is deleted after 7 days.
       </p>
       {error !== null && (
         <p role="alert" className="text-sm text-red-300">

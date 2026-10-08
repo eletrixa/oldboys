@@ -10,7 +10,8 @@
  * - Draft one candidate per profile-like source; LLM scores each vs subject + anchor; thresholds decide
  * - Deterministic fallback when the LLM call fails: anchor substring caps at 0.6, name only 0.5; merge only on
  *   hard links (anchor URL itself, or cross-linked drafts with the anchor in one of them)
- * - Drops PDF and genealogy/translation noise; ranks profile platforms before web and dedupes by profile key
+ * - Drops PDF, genealogy/translation noise and directory/listing pages (LinkedIn /pub/dir/, Facebook /public/,
+ *   "N profiles" titles), so one "Yes" can never confirm a page that lists several people; ranks profile platforms before web and dedupes by profile key
  *   BEFORE the 12-draft cap (web hits capped at 6), so a LinkedIn hit deep in the SERP still becomes a candidate
  * - `sourceIdentityUpdates`: after the lineup, sources whose profile key equals a merged candidate's become
  *   "merged", sources under a rejected candidate "unverified"; extract and synthesize trust only "merged"
@@ -69,12 +70,26 @@ export function canonicalProfile(url: string): { url: string; handle: string | n
       return { url: `https://www.tiktok.com/${seg[0]}`, handle: clean(seg[0]) };
     }
     if (host === "github.com" && seg[0] !== undefined) return { url: `https://github.com/${seg[0]}`, handle: seg[0] };
+    if (host.endsWith("facebook.com")) {
+      const id = u.searchParams.get("id");
+      if (seg[0] === "profile.php" && id !== null) return { url: `https://www.facebook.com/profile.php?id=${id}`, handle: id };
+      if (seg[0] === undefined || FB_NOT_PROFILE.has(seg[0].toLowerCase()) || seg[0].includes(".")) return { url, handle: null };
+      return { url: `https://www.facebook.com/${clean(seg[0])}`, handle: clean(seg[0]) };
+    }
+    if (host.endsWith("youtube.com")) {
+      if (seg[0]?.startsWith("@") === true) return { url: `https://www.youtube.com/${seg[0]}`, handle: clean(seg[0]) };
+      if (["channel", "c", "user"].includes(seg[0] ?? "") && seg[1] !== undefined) return { url: `https://www.youtube.com/${seg[0] ?? ""}/${seg[1]}`, handle: seg[1] };
+      return { url, handle: null };
+    }
     const last = seg.at(-1) ?? null;
     return { url, handle: last === null ? null : clean(last) };
   } catch {
     return { url, handle: null };
   }
 }
+
+/** Facebook first path segments that are listings, groups or content, never a person's profile. */
+const FB_NOT_PROFILE = new Set(["public", "people", "groups", "pages", "watch", "events", "search", "hashtag", "photo", "story.php", "share", "reel", "marketplace"]);
 
 /** Directory, genealogy and translation noise: never a profile of the subject. */
 const NOISE_HOSTS = ["myheritage.", "geni.com", "ancestry.", "familysearch.", "translate.google."];
@@ -96,6 +111,8 @@ export function pageKey(url: string): string | null {
 export function profileKey(url: string): string | null {
   const p = canonicalProfile(url);
   if (platformOf(p.url) === "linkedin" && p.handle !== null && p.url.includes('/in/')) return `linkedin.com/in/${p.handle}`;
+  // profile.php?id= keys by id (pageKey drops the query); m./web./www. hosts already collapse in canonicalProfile
+  if (p.handle !== null && p.url.startsWith("https://www.facebook.com/")) return `facebook.com/${p.handle}`;
   return pageKey(p.url);
 }
 
@@ -117,9 +134,23 @@ export function sourceIdentityUpdates(
   return out;
 }
 
-function isNoise(url: string): boolean {
+/** Titles of people-search and directory listings: one page, many different people. */
+// ponytail: "ů" is not a \w char, so "profilů" is matched without a trailing \b; "Results" stays case-sensitive
+const LISTING_TITLE = /profilů|\bprofily\b|\bprofiles\b|\bpeople named\b/i;
+const RESULTS_TITLE = /\bResults\b/;
+
+/**
+ * Never a candidate: PDFs, genealogy/translation hosts, LinkedIn pages other than /in/, /posts/, /company/
+ * (directories such as /pub/dir/), Facebook /public/ listings, and pages whose title reads like a listing.
+ */
+export function isNoise(url: string, excerpt = ""): boolean {
   const key = pageKey(url) ?? "";
-  return key.endsWith(".pdf") || NOISE_HOSTS.some((h) => key.includes(h));
+  if (key.endsWith(".pdf") || NOISE_HOSTS.some((h) => key.includes(h))) return true;
+  const [host = "", first = ""] = key.split("/");
+  if (host.endsWith("linkedin.com") && !["in", "posts", "company"].includes(first)) return true;
+  if (host.endsWith("facebook.com") && first === "public") return true;
+  const title = excerpt.split("\n")[0] ?? "";
+  return LISTING_TITLE.test(title) || RESULTS_TITLE.test(title);
 }
 
 /** The anchor as a page key when it is a URL or bare domain (contains a dot, no spaces); null for a city or IČO. */
@@ -169,7 +200,7 @@ export function pickDrafts(ctx: Pick<StepContext, "candidates" | "sources" | "su
   const known = new Set(ctx.candidates.flatMap((c) => c.profile_urls.map(profileKey)));
   const name = surname(ctx.subject);
   const eligible = ctx.sources
-    .filter((s) => !isNoise(s.url) && !known.has(profileKey(s.url)))
+    .filter((s) => !isNoise(s.url, s.excerpt) && !known.has(profileKey(s.url)))
     .filter((s) => PROFILE_PLATFORMS.has(platformOf(s.url)) || s.excerpt.toLowerCase().includes(name))
     .sort((a, b) => rankOf(a.url) - rankOf(b.url));
   const byKey = new Map<string, { url: string; excerpt: string }>();

@@ -1,0 +1,47 @@
+/**
+ * Tests for the run view's pure helpers: which candidates get the lineup questions, which texts are role criteria.
+ *
+ * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
+ * Module:  src/app/runs/[id]/__tests__/state.test.ts
+ * Deps:    vitest
+ * Tested:  n/a (test file)
+ *
+ * Key responsibilities:
+ * - questionsToAsk: one question per platform, web hits only as filler
+ * - roleCriteria: mh- questions only
+ *
+ * Design constraints:
+ * - Pure: no React, no fetch
+ */
+import { describe, expect, it } from "vitest";
+import type { Candidate } from "@/domain/claim";
+import { questionsToAsk, roleCriteria } from "../state";
+
+const cand = (id: string, platform: string, score: number, decision: Candidate["decision"] = "possibly-same-as"): Candidate => ({
+  id, run_id: "r", name: "x", profile_urls: [`https://${id}`], anchor_match: null, score, decision, platform, handle: id, snippet: "", reasons: [],
+});
+
+describe("questionsToAsk", () => {
+  it("asks the best open profile per platform, so three questions reach three platforms", () => {
+    const picked = questionsToAsk(
+      [cand("li-low", "linkedin", 0.4), cand("li-high", "linkedin", 0.6), cand("ig", "instagram", 0.5), cand("yt", "youtube", 0.5), cand("web", "web", 0.7), cand("x", "x", 0.5, "merge")],
+      3,
+    );
+    expect(picked.map((c) => c.id)).toEqual(["li-high", "ig", "yt"]);
+  });
+  it("fills with web hits only when fewer profile platforms are open", () => {
+    const picked = questionsToAsk([cand("li1", "linkedin", 0.6), cand("li2", "linkedin", 0.5), cand("w1", "web", 0.4), cand("w2", "web", 0.6)], 3);
+    expect(picked.map((c) => c.id)).toEqual(["li1", "w2", "w1"]);
+  });
+});
+
+describe("roleCriteria", () => {
+  it("keeps role must-haves only; base research prompts are never criteria", () => {
+    const qs = [
+      { id: "current-role", text: "What is the subject's current role and employer?" },
+      { id: "mh-title-experience", text: "Has held a Senior Data Engineer position or equivalent" },
+    ];
+    expect(roleCriteria(qs)).toEqual(["Has held a Senior Data Engineer position or equivalent"]);
+    expect(roleCriteria(qs.slice(0, 1))).toEqual([]);
+  });
+});

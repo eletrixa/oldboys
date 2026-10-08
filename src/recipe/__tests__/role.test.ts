@@ -7,7 +7,7 @@
  * Tested:  n/a (this is the test)
  */
 import { describe, expect, it } from "vitest";
-import { profileFor, roleQuestions } from "@/recipe/seams/role";
+import { profileFor, roleLocation, roleQuestions } from "@/recipe/seams/role";
 import { fakeLlm, fakePorts } from "@/recipe/__tests__/fakes";
 
 const m = (id: string, text: string) => ({ id, text, accepted_evidence: ["repo", "talk"] });
@@ -32,6 +32,7 @@ describe("roleQuestions", () => {
     expect(r.questions.map((q) => q.id)).toEqual(["mh-pipeline", "mh-airflow", "mh-location", "mh-a", "mh-b"]);
     expect(r.questions[0]?.text).toBe("Has shipped a production data pipeline? (repo, talk)");
     expect(r.cost_usd).toBeGreaterThan(0);
+    expect(r.calls).toBe(1);
   });
 
   it("falls back to 3 generic questions and a note when the LLM fails", async () => {
@@ -40,6 +41,15 @@ describe("roleQuestions", () => {
     expect(r.questions.every((q) => q.id.startsWith("mh-"))).toBe(true);
     expect(r.questions[0]?.text).toContain("Senior Data Engineer");
     expect(r.notes[0]).toContain("fallback");
+    expect(r.calls).toBe(0);
+    expect(r.questions[2]?.text).toBe("Location compatible with Prague (profile location)");
+  });
+
+  it("takes the role's place, skipping work modes, else a plain-city anchor, never the whole role string", () => {
+    expect(roleLocation("Senior Data Engineer, Prague, hybrid")).toBe("Prague");
+    expect(roleLocation("Senior Data Engineer, remote", "Liberec")).toBe("Liberec");
+    expect(roleLocation("CMO", "https://firma.cz")).toBeNull();
+    expect(roleLocation("CMO", "27074358")).toBeNull();
   });
 
   it("falls back when every returned id is unusable", async () => {

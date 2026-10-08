@@ -185,7 +185,7 @@ export class VerificationCallWorkflow extends WorkflowEntrypoint<CloudflareEnv, 
       call.run_id,
       "call:extract",
       "llm",
-      { type: "phone", callId: call.id, claims: claims.length, gap: gapReason },
+      { type: "phone", callId: call.id, claims: claims.length, gap: gapReason, calls: costUsd > 0 ? 1 : 0 },
       costUsd,
       Date.now() - started,
     );

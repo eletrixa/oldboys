@@ -1,0 +1,34 @@
+{
+  "iteration": 3,
+  "stars": 3.6,
+  "weighted_mean": 3.55,
+  "weights": {"screen1": 0.10, "screen2": 0.20, "breadth": 0.15, "identity": 0.20, "honesty": 0.15, "judge_value": 0.20},
+  "scores": {"screen1": 4.0, "screen2": 4.0, "breadth": 3.5, "identity": 3.5, "honesty": 3.5, "judge_value": 3.0},
+  "previous": {"iteration": 2, "stars": 3.1, "scores": {"screen1": 4.0, "screen2": 3.5, "breadth": 3.5, "identity": 2.5, "honesty": 3.0, "judge_value": 2.5}},
+  "claimed_not_real": [
+    "Real AI call count: both keyless runs show '2 AI calls'; role_questions and resolve ledger rows lack 'calls' and run-cost defaults to 1",
+    "Server-side token: /api/start attaches RUN_TOKEN to any anonymous POST, so the gate is now open to curl",
+    "Purge backs the privacy line: only sources and R2 are purged (7 days); brief_json, candidates, claims, ledger keep excerpts; copy still says 'after judging'"
+  ],
+  "fixes": [
+    {"rank": 1, "file": "src/recipe/seams/resolve.ts", "change": "Treat LinkedIn /pub/dir/, /search/ and non-/in/ non-/company/ pages (and Facebook /public/, 'profilů'/'profiles' titles) as noise so directory pages never become candidates; test with cz.linkedin.com/pub/dir/Lukáš/Pokorný."},
+    {"rank": 2, "file": "src/workflow/research-run.ts, src/recipe/seams/role.ts, src/domain/run-cost.ts", "change": "Write 'calls' on role_questions and resolve ledger rows, return calls from roleQuestions, default missing calls to 0; test that a keyless run shows 0 AI calls."},
+    {"rank": 3, "file": "src/app/api/start/route.ts", "change": "Require Turnstile or a signed short-lived nonce from the page render plus a per-IP limit before attaching RUN_TOKEN."},
+    {"rank": 4, "file": "src/app/runs/[id]/parts.tsx, src/recipe/seams/synthesize.ts, src/recipe/seams/role.ts", "change": "Degraded brief shows role criteria only under 'not checked, AI unavailable'; drop base prompts with 'the subject'/'the anchor'; location criterion from anchor city, not whole role string."},
+    {"rank": 5, "file": "src/recipe/seams/synthesize.ts", "change": "Interview questions: at most two identity checks for social profiles with real handles, never generic web pages; add 2-3 templated role questions."},
+    {"rank": 6, "file": "src/recipe/seams/resolve.ts, src/recipe/sources/types.ts", "change": "Canonicalise Facebook (m./web./www., profile.php?id) and YouTube (/@x, /channel/x; watch?v= has null handle); label Facebook platform."},
+    {"rank": 7, "file": "src/workflow/purge.ts, src/app/start-form.tsx", "change": "Purge brief_json, candidate snippets, claims and ledger ref_json for expired runs; copy says 'deleted after 7 days'."},
+    {"rank": 8, "file": "src/app/runs/[id]/state.ts", "change": "Spend the 3 lineup questions on the best-scoring candidate per platform, preferring anchor mentions (Pokorny's Instagram 'mentions Liberec' was never asked)."},
+    {"rank": 9, "file": "src/recipe/goals/hiring.ts", "change": "Add a reasoned Facebook gap; talks_serp empty text becomes 'talk hits found, none confirmed' when unverified hits exist."},
+    {"rank": 10, "file": "src/app/runs/[id]/parts.tsx, src/app/runs/[id]/run-view.tsx", "change": "Plain degraded notice, MOCK label for CALL_PROVIDER=mock, ranked contradiction for two IČOs or two current employers."}
+  ],
+  "to_reach_4_5_with_key": [
+    "Fix 1 with test: keyed Pokorny run asks only about real profiles; no confirmed evidence from a directory page",
+    "Fixes 2-3: true AI call count, start route not callable by curl",
+    "FACT claims with verbatim quotes from merged sources only, INFERENCE labeled, one contradiction shown by rank",
+    "Top of brief answers the hiring question in 10 seconds with real interview questions (fixes 4-5)",
+    "E3 goal delta >= 50% shown live",
+    "End-to-end <= 4 min with Opus on both demo subjects",
+    "Privacy line matches the purge (fix 7)"
+  ]
+}

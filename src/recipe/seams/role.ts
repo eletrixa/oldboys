@@ -7,7 +7,8 @@
  * Tested:  src/recipe/__tests__/role.test.ts
  *
  * Key responsibilities:
- * - `roleQuestions`: observable, web-searchable must-have questions with `mh-` ids; deterministic fallback on LLM failure
+ * - `roleQuestions`: observable, web-searchable must-have questions with `mh-` ids; deterministic fallback on LLM failure;
+ *   `calls` = successful model calls (0 when the model threw), so the header count stays true
  * - `profileFor`: ordered keyword rules mapping a role to an evidence profile
  *
  * Design constraints:
@@ -47,21 +48,38 @@ function fit(text: string, evidence: string[]): string {
   return full.length <= MAX_TEXT ? full : `${full.slice(0, MAX_TEXT - 1)}…`;
 }
 
+const WORK_MODE = /^(hybrid|remote|on-?site|office|full[- ]time|part[- ]time|contract|freelance)$/i;
+const PLACE = /^\p{Lu}[\p{L} .'-]*$/u;
+
+/**
+ * The place a role is in: the last comma part after the title that looks like a place name, skipping work modes
+ * ("Senior Data Engineer, Prague, hybrid" -> "Prague"); else the anchor when it is a plain city (not a URL or IČO).
+ */
+export function roleLocation(role: string, anchor = ""): string | null {
+  const parts = role.split(",").slice(1).map((p) => p.trim());
+  const place = parts.reverse().find((p) => !WORK_MODE.test(p) && PLACE.test(p));
+  if (place !== undefined) return place;
+  const a = anchor.trim();
+  return PLACE.test(a) ? a : null;
+}
+
 /** Generic questions from the role title only; used when the LLM call fails. */
-function fallback(role: string): Question[] {
+function fallback(role: string, anchor: string): Question[] {
   const title = (role.split(",")[0] ?? role).trim();
   const label = title === "" ? "this role" : title;
+  const where = roleLocation(role, anchor);
   return [
     { id: "mh-title-experience", text: fit(`Has held a ${label} position or equivalent`, ["job history", "profile"]) },
     { id: "mh-public-work", text: fit(`Has public work showing ${label} skills`, ["repo", "talk", "article", "portfolio"]) },
-    { id: "mh-location-fit", text: fit(`Location compatible with: ${role.trim() === "" ? "the role" : role.trim()}`, ["profile location"]) },
+    { id: "mh-location-fit", text: fit(`Location compatible with ${where ?? "the role"}`, ["profile location"]) },
   ];
 }
 
 export async function roleQuestions(
   role: string,
   ports: Pick<Ports, "llm">,
-): Promise<{ questions: Question[]; cost_usd: number; notes: string[] }> {
+  anchor = "",
+): Promise<{ questions: Question[]; cost_usd: number; calls: number; notes: string[] }> {
   try {
     const r = await ports.llm({
       model: "primary",
@@ -79,10 +97,10 @@ export async function roleQuestions(
       questions.push({ id, text: fit(m.text, m.accepted_evidence) });
       if (questions.length === MAX_QUESTIONS) break;
     }
-    if (questions.length > 0) return { questions, cost_usd: r.cost_usd, notes: [] };
-    return { questions: fallback(role), cost_usd: r.cost_usd, notes: ["role questions: no usable LLM output, used generic fallback"] };
+    if (questions.length > 0) return { questions, cost_usd: r.cost_usd, calls: 1, notes: [] };
+    return { questions: fallback(role, anchor), cost_usd: r.cost_usd, calls: 1, notes: ["role questions: no usable LLM output, used generic fallback"] };
   } catch (e) {
     const why = e instanceof Error ? e.message : "unknown error";
-    return { questions: fallback(role), cost_usd: 0, notes: [`role questions: LLM failed (${why}), used generic fallback`] };
+    return { questions: fallback(role, anchor), cost_usd: 0, calls: 0, notes: [`role questions: LLM failed (${why}), used generic fallback`] };
   }
 }

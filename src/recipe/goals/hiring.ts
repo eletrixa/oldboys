@@ -41,7 +41,7 @@ export const hiringRecipe: Recipe = {
     { id: "youtube_channel", kind: "actor", actor: "streamers/youtube-scraper", onEmpty: { gap: "no YouTube videos or channel found" } },
     { id: "bluesky_profile", kind: "actor", actor: "rest/bluesky", onEmpty: { gap: "no Bluesky account found" } },
     { id: "personal_site_crawl", kind: "actor", actor: "apify/website-content-crawler", onEmpty: { gap: "no personal site found" } },
-    { id: "talks_serp", kind: "serp", actor: "apify/google-search-scraper", query: '{subject} talk OR podcast OR conference OR blog OR interview', onEmpty: { gap: "no talks or posts indexed" } },
+    { id: "talks_serp", kind: "serp", actor: "apify/google-search-scraper", query: '{subject} talk OR podcast OR conference OR blog OR interview', onEmpty: { gap: "no talks, podcasts or posts found in web search" } },
     { id: "extract_claims", kind: "extract" },
     { id: "verify_claims", kind: "verify" },
     { id: "synthesize_report", kind: "synthesize" },

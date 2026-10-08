@@ -4,12 +4,13 @@
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/runs/[id]/state.ts
  * Deps:    src/domain/claim, src/domain/run-cost (types only)
- * Tested:  n/a
+ * Tested:  src/app/runs/[id]/__tests__/state.test.ts
  *
  * Key responsibilities:
  * - RunState: the GET /api/runs/:id/state contract
  * - stepRows: map the ledger step + status to the five human progress rows
  * - sortLineup: confirmed first, social platforms before web hits
+ * - questionsToAsk: one open profile per platform; roleCriteria: role must-haves (mh-) only
  *
  * Design constraints:
  * - Pure and import-type only, so both the route handler and client code can use it
@@ -67,17 +68,23 @@ function rowOf(step: string): number {
 }
 
 /**
- * Candidates worth a question: profile platforms first (by platform value, then score);
- * plain web hits only fill up to `max` when fewer platform profiles are open.
+ * Candidates worth a question: the highest-scored open profile per platform (one question per platform, so three
+ * questions reach three different profiles); plain web hits only fill up to `max` when fewer profiles are open.
  */
 export function questionsToAsk(candidates: readonly Candidate[], max: number): Candidate[] {
   const open = sortLineup(
     candidates.filter((c) => c.decision === "possibly-same-as"),
     (c) => c.decision,
   );
-  const profiles = open.filter((c) => c.platform !== "web");
+  // sortLineup puts each platform's best score first, so the first row per platform wins
+  const profiles = open.filter((c, i) => c.platform !== "web" && open.findIndex((o) => o.platform === c.platform) === i);
   const web = open.filter((c) => c.platform === "web");
   return (profiles.length < max ? [...profiles, ...web] : profiles).slice(0, max);
+}
+
+/** Role must-haves only (ids "mh-"); the base research prompts are not criteria and never shown as such. */
+export function roleCriteria(questions: readonly { id: string; text: string }[]): string[] {
+  return questions.filter((q) => q.id.startsWith("mh-")).map((q) => q.text);
 }
 
 export function stepRows(state: Pick<RunState, "status" | "step" | "mentions" | "failed_step"> & { degraded?: boolean }): RowState[] {
