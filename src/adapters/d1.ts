@@ -3,11 +3,13 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/adapters/d1.ts
- * Deps:    D1Database, R2Bucket (bindings), zod
+ * Deps:    D1Database, R2Bucket (bindings), zod, src/domain/cv-check
  * Tested:  n/a (Workers bindings; exercised by `pnpm preview` runs)
  *
  * Key responsibilities:
- * - `loadContext` rebuilds StepContext from D1 before every step (Workflow steps are stateless)
+ * - `loadContext` rebuilds StepContext from D1 before every step (Workflow steps are stateless); questions = recipe
+ *   base + questions_json, plus `cv-consistency` once the run has a CV source (withCvQuestion), so extract, verify and
+ *   synthesize see the CV question only on CV runs
  * - `persistOutcome` writes sources/candidates/claims/gaps/brief; claims_mode=replace rewrites the run's claims
  * - Raw payloads go to R2 under `<run>/<source>.json`; D1 keeps only the excerpt
  * - `applySourceIdentity` re-marks sources after the lineup (merged / unverified by profile key, then name + employer
@@ -21,6 +23,7 @@
 import { Brief, Candidate, CandidateDecision, Claim, Gap, LedgerEntry, Source } from "@/domain/claim";
 import type { LedgerAppend, SourceStore } from "@/domain/ports";
 import { headlineOrgs } from "@/domain/corroborate";
+import { withCvQuestion } from "@/domain/cv-check";
 import { sourceIdentityUpdates } from "@/recipe/seams/resolve";
 import type { StepContext, StepOutcome } from "@/recipe/sources/types";
 import type { Question } from "@/recipe/step";
@@ -106,17 +109,18 @@ export async function loadContext(db: D1Database, runId: string, baseQuestions: 
     db.prepare("SELECT COALESCE(SUM(CASE WHEN kind = 'call' THEN COALESCE(json_extract(ref_json, '$.calls'), 1) ELSE 0 END), 0) AS calls, COALESCE(SUM(cost_usd), 0) AS usd FROM ledger_entries WHERE run_id = ? AND kind IN ('call','llm')").bind(runId).first<{ calls: number; usd: number }>(),
   ]);
   const extra = json<Question[]>(inv.questions_json, []);
+  const sources = srcs.results.map((r) => Source.parse(r));
   return {
     runId,
     subject: String(inv.subject),
     anchor: String(inv.anchor),
     goal: inv.goal as StepContext["goal"],
     role: typeof inv.role === "string" ? inv.role : null,
-    questions: [...baseQuestions, ...extra],
+    questions: withCvQuestion(String(inv.goal), [...baseQuestions, ...extra], sources),
     candidates: cands.results.map((r) =>
       Candidate.parse({ ...r, profile_urls: json(r.profile_urls_json, []), reasons: json(r.reasons_json, []) }),
     ),
-    sources: srcs.results.map((r) => Source.parse(r)),
+    sources,
     claims: clms.results.map((r) =>
       Claim.parse({ ...r, supports: json(r.supports_json, []), contradicts: json(r.contradicts_json, []) }),
     ),

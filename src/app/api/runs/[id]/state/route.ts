@@ -3,12 +3,13 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/api/runs/[id]/state/route.ts
- * Deps:    @opennextjs/cloudflare (getCloudflareContext), bindings DB, src/recipe/goals, src/domain/run-cost, src/domain/quote, src/app/intake/intake-rows (type)
- * Tested:  n/a
+ * Deps:    @opennextjs/cloudflare (getCloudflareContext), bindings DB, src/recipe/goals, src/domain/run-cost, src/domain/quote, src/domain/cv-check, src/app/intake/intake-rows (type)
+ * Tested:  n/a (withCvQuestion: src/domain/__tests__/cv-check.test.ts)
  *
  * Key responsibilities:
  * - Read investigation, candidates, claims, sources, brief and last ledger step from D1
- * - Questions = recipe base questions + investigations.questions_json; mentions = COUNT(sources)
+ * - Questions = recipe base questions + investigations.questions_json, plus `cv-consistency` when the run has a CV
+ *   source (withCvQuestion, same rule as the Workflow's loadContext); mentions = COUNT(sources)
  * - step_index/step_count from the recipe; failed_step = first recipe step without a ledger row on a failed run
  * - role = investigations.role (the brief's "Hiring for" line); subject is "" until the seed step derived it;
  *   headline = what the seed_profile ledger row recorded (plans/006); sources carry identity_reason (migration 0008),
@@ -26,6 +27,7 @@
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import type { Brief, Candidate, Claim } from "@/domain/claim";
 import { GoalId } from "@/domain/claim";
+import { withCvQuestion } from "@/domain/cv-check";
 import { quoteContexts } from "@/domain/quote";
 import { type CostRow, runCost } from "@/domain/run-cost";
 import { recipeFor } from "@/recipe/goals";
@@ -137,7 +139,7 @@ export async function GET(
     claims: runClaims,
     sources: sources.results.map(({ excerpt: _excerpt, ...s }) => s),
     quote_contexts: quoteContexts(runClaims, new Map(sources.results.map((s) => [s.id, s.excerpt]))),
-    questions: [...base, ...extra],
+    questions: withCvQuestion(head.goal, [...base, ...extra], sources.results),
     brief: brief ? (JSON.parse(brief.brief_json) as Brief) : null,
     cost: runCost(ledger.results, head.created_at),
     failure: failure ?? null,

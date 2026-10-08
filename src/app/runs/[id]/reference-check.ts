@@ -3,8 +3,8 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/runs/[id]/reference-check.ts
- * Deps:    src/domain/art9 (containsArt9Topic), ./summary (aiOff, shorten), ./state (RunState, hiringFor)
- * Tested:  src/app/runs/[id]/__tests__/reference-check.test.ts
+ * Deps:    src/domain/art9 (containsArt9Topic), ./summary (aiOff, shorten), ./state (RunState, hiringFor), ./cv-check
+ * Tested:  src/app/runs/[id]/__tests__/reference-check.test.ts, src/app/runs/[id]/__tests__/cv-check.test.ts (CV check)
  *
  * Key responsibilities:
  * - referenceQuestions: header, at most 8 numbered questions and a consent / private-topics footer, or null while
@@ -15,9 +15,12 @@
  * Design constraints:
  * - Pure and deterministic; plain text only (works in e-mail, notes and any ATS)
  * - Gaps only: never brief.also_found, unconfirmed candidates, claims or interview_questions (those are for the candidate)
+ * - CV differences (idea #14) are never put to a referee: they would disclose the candidate's CV and are asked in the
+ *   interview first ("ask, don't assume"), so their to-verify items are skipped (cvDifferenceTexts)
  * - Rates the research, never the candidate: no scores, ranks or traits; Art. 9 topics dropped as defense in depth
  */
 import { containsArt9Topic } from "@/domain/art9";
+import { cvDifferenceTexts } from "./cv-check";
 import { hiringFor, type RunState } from "./state";
 import { aiOff, shorten } from "./summary";
 
@@ -49,7 +52,9 @@ function questions(state: RunState, name: string): string[] {
       return null;
     })
     .filter((q) => q !== null);
+  const cvItems = cvDifferenceTexts(state);
   const checks = brief.to_verify
+    .filter((t) => !cvItems.has(t))
     .map((t) => shorten(t))
     .filter((t) => t !== "")
     .map((t) => `Can you confirm: ${t}?`);

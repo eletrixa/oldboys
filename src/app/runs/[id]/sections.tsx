@@ -3,8 +3,8 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/runs/[id]/sections.tsx
- * Deps:    react, src/domain/claim (types), ./state, ./evidence, ./claim-evidence, ../../ui (Radar primitives)
- * Tested:  isShown and the claim evidence rendering in __tests__/sections.test.ts; ordering and bands in __tests__/state.test.ts
+ * Deps:    react, src/domain/claim (types), src/domain/cv-check (type), ./state, ./evidence, ./claim-evidence, ./cv-check, ../../ui (Radar primitives)
+ * Tested:  isShown and the claim evidence rendering in __tests__/sections.test.ts; CV outcome pills in __tests__/cv-check.test.ts; ordering and bands in __tests__/state.test.ts
  *
  * Key responsibilities:
  * - SectionList: sections in the order given (BriefView passes them confidence descending)
@@ -14,14 +14,18 @@
  * - Under each claim a "Show evidence" disclosure (ClaimEvidence, idea #5): quote, sources, retrieval dates, saved copy
  * - Source-only sections (platforms without claims) list their confirmed source links; empty ones are not rendered
  * - SourceLink: the pasted CV renders as "Candidate's CV (pasted)" with no href (its URL is "cv:<runId>")
+ * - "CV vs public record" (idea #14): the explainer line and, per claim, an outcome pill above its text (Matches
+ *   public record / Differs — ask, don't assume / Not found publicly), claims grouped in that order (./cv-check)
  *
  * Design constraints:
  * - Pure rendering; the confidence rates the research behind a section, never the person, and is shown in words only
  *   (Strong / Some / Thin evidence), never as a percentage
  */
 import type { BriefSection, Claim } from "@/domain/claim";
+import type { CvOutcome } from "@/domain/cv-check";
 import { CARD, Pill, SourceLink, type Tone } from "../../ui";
 import { ClaimEvidence } from "./claim-evidence";
+import { CV_EXPLAINER, CV_OUTCOME, cvRows, isCvSection } from "./cv-check";
 import { type Evidence, quoteLink, retrievedLabel } from "./evidence";
 import { type ConfidenceBand, confidenceBand, host } from "./state";
 
@@ -38,7 +42,8 @@ function linkTitle(reason: string | null | undefined, fetchedAt: string | null |
   return [typeof reason === "string" && reason !== "" ? `Confirmed: ${reason}` : null, retrievedLabel(fetchedAt)].filter((t) => t !== null).join(" · ");
 }
 
-export function ClaimList({ claims, evidence }: { claims: Claim[]; evidence: Evidence }): React.JSX.Element | null {
+/** `outcomeOf`: the CV check outcome per claim id; only the "CV vs public record" section passes it. */
+export function ClaimList({ claims, evidence, outcomeOf }: { claims: Claim[]; evidence: Evidence; outcomeOf?: ReadonlyMap<string, CvOutcome> }): React.JSX.Element | null {
   if (claims.length === 0) return null;
   return (
     <ul className="mt-3 flex flex-col gap-3">
@@ -48,6 +53,7 @@ export function ClaimList({ claims, evidence }: { claims: Claim[]; evidence: Evi
             {KIND_LABEL[c.kind]}
           </Pill>
           <span className="min-w-0 [overflow-wrap:anywhere]">
+            <CvOutcomePill outcome={outcomeOf?.get(c.id)} />
             {c.text}
             {c.contradicts.length > 0 && (
               <Pill tone="conflict" className="ml-2">
@@ -74,10 +80,31 @@ export function ClaimList({ claims, evidence }: { claims: Claim[]; evidence: Evi
   );
 }
 
+function CvOutcomePill({ outcome }: { outcome: CvOutcome | undefined }): React.JSX.Element | null {
+  if (outcome === undefined) return null;
+  return (
+    <span className="mb-1 block">
+      <Pill tone={CV_OUTCOME[outcome].tone}>{CV_OUTCOME[outcome].label}</Pill>
+    </span>
+  );
+}
+
+/** The CV check's claims in outcome order with their pills, under the explainer line. */
+function CvClaims({ claims, evidence }: { claims: Claim[]; evidence: Evidence }): React.JSX.Element {
+  const rows = cvRows(claims, [...evidence.sourceOf].map(([id, info]) => ({ id, url: info.url })));
+  return (
+    <>
+      <p className="mt-2 text-xs text-muted">{CV_EXPLAINER}</p>
+      <ClaimList claims={rows.map((r) => r.claim)} evidence={evidence} outcomeOf={new Map(rows.map((r) => [r.claim.id, r.outcome]))} />
+    </>
+  );
+}
+
 function SectionCard({ section, claims, evidence }: { section: BriefSection; claims: Claim[]; evidence: Evidence }): React.JSX.Element {
   const band = confidenceBand(section.confidence);
-  const facts = claims.filter((c) => c.kind !== "INFERENCE");
-  const inferences = claims.filter((c) => c.kind === "INFERENCE");
+  const cv = isCvSection(section.id) && claims.length > 0;
+  const facts = cv ? [] : claims.filter((c) => c.kind !== "INFERENCE");
+  const inferences = cv ? [] : claims.filter((c) => c.kind === "INFERENCE");
   const links = claims.length === 0 ? [...new Set(section.source_ids.flatMap((sid) => evidence.sourceOf.get(sid)?.url ?? []))] : [];
   return (
     <section className={CARD}>
@@ -87,6 +114,7 @@ function SectionCard({ section, claims, evidence }: { section: BriefSection; cla
       </div>
       <p className="mt-1 text-xs text-muted">{section.confidence_reason}</p>
       {section.summary !== "" && <p className="mt-2 text-sm text-ink">{section.summary}</p>}
+      {cv && <CvClaims claims={claims} evidence={evidence} />}
       <ClaimList claims={facts} evidence={evidence} />
       <ClaimList claims={inferences} evidence={evidence} />
       {links.length > 0 && (

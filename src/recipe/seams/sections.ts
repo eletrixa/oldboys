@@ -3,8 +3,8 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/recipe/seams/sections.ts
- * Deps:    src/domain/confidence, src/domain/url (canonicalUrl), src/recipe/sources/types (platformOf)
- * Tested:  src/recipe/__tests__/sections.test.ts
+ * Deps:    src/domain/confidence, src/domain/cv-check, src/domain/url (canonicalUrl), src/recipe/sources/types (platformOf)
+ * Tested:  src/recipe/__tests__/sections.test.ts, src/recipe/__tests__/cv-consistency.test.ts (CV check)
  *
  * Key responsibilities:
  * - One section per question with at least one kept claim (short title; role must-haves "mh-*" by their text)
@@ -15,12 +15,16 @@
  *   a support id that is not among the run's sources counts as no source and puts "source missing" in the reason
  * - A claim counts as contradicted when `contradicts` is non-empty or a surviving "contradictions" claim cites one
  *   of its supporting sources (the contradictions section itself is not marked down for disagreeing)
+ * - "CV vs public record" (`cv-consistency`): confidence rates how well the CV could be checked, never the person:
+ *   a match and a difference both count as checked (a claim with a confirmed public source), not-found items as
+ *   unchecked, differences never as contradictions; reason "N of M CV statements checked against public sources"
  *
  * Design constraints:
  * - Pure, called by synthesizeBrief; never asks the model, so a degraded brief gets the same sections
  * - Questions with nothing found get no section (they stay in the gap lists); order is recipe order, the UI sorts
  */
 import { sectionConfidence, sourceOrigin } from "@/domain/confidence";
+import { CV_QUESTION_ID, isCvSource } from "@/domain/cv-check";
 import { canonicalUrl } from "@/domain/url";
 import type { Brief, BriefSection, Claim, Source } from "@/domain/claim";
 import { platformOf } from "@/recipe/sources/types";
@@ -32,6 +36,7 @@ const QUESTION_TITLE: Record<string, string> = {
   "public-talks": "Talks and writing",
   "location-match": "Location",
   contradictions: "Where sources disagree",
+  [CV_QUESTION_ID]: "CV vs public record",
   "legal-entity": "Legal entity",
   "statutory-bodies": "Statutory bodies and owners",
   "registered-address": "Registered address",
@@ -60,6 +65,8 @@ export function sectionTitle(q: { id: string; text: string; title?: string }): s
   return QUESTION_TITLE[q.id] ?? (q.title !== undefined && q.title.trim() !== "" ? q.title.trim() : shorten(q.text));
 }
 
+const plural = (n: number, word: string): string => `${String(n)} ${word}${n === 1 ? "" : "s"}`;
+
 function section(
   id: string,
   title: string,
@@ -85,22 +92,25 @@ function section(
   const ids = [...byUrl.values()];
   const missing = claims.filter((c) => c.supports.some((sid) => !identityOf.has(sid))).length;
   const origins = ids.map((sid) => sourceOrigin(urlOf.get(sid) ?? "", profileUrls, actorOf.get(sid)));
+  // CV check: a statement is "checked" once a confirmed public source speaks to it, whether it matches or differs
+  const cvCheck = id === CV_QUESTION_ID;
+  const isPublic = (sid: string): boolean => isMerged(sid) && !isCvSource({ url: urlOf.get(sid) ?? "", actor: actorOf.get(sid) });
+  const checked = claims.filter((c) => c.supports.some(isPublic)).length;
   const conf = sectionConfidence({
     self_sources: origins.filter((o) => o === "self").length,
     mirror_sources: origins.filter((o) => o === "mirror").length,
     independent_sources: origins.filter((o) => o === "independent").length,
     claims: claims.length,
-    facts: claims.filter((c) => c.kind === "FACT" && c.supports.some(isMerged)).length,
-    inferences: claims.filter((c) => c.kind === "INFERENCE").length,
+    facts: cvCheck ? checked : claims.filter((c) => c.kind === "FACT" && c.supports.some(isMerged)).length,
+    inferences: cvCheck ? claims.length - checked : claims.filter((c) => c.kind === "INFERENCE").length,
     sources: ids.length,
     confirmed_sources: ids.filter(isMerged).length,
-    contradictions: claims.filter((c) => c.contradicts.length > 0 || (c.question_id !== "contradictions" && c.supports.some((sid) => disputed.has(sid)))).length,
+    contradictions: cvCheck ? 0 : claims.filter((c) => c.contradicts.length > 0 || (c.question_id !== "contradictions" && c.supports.some((sid) => disputed.has(sid)))).length,
   });
-  const confidence_reason = missing === 0 ? conf.confidence_reason : `${conf.confidence_reason}; ${missing === 1 ? "a cited source is missing" : `${String(missing)} cited sources are missing`}`;
+  const base = cvCheck ? `${String(checked)} of ${plural(claims.length, "CV statement")} checked against public sources` : conf.confidence_reason;
+  const confidence_reason = missing === 0 ? base : `${base}; ${missing === 1 ? "a cited source is missing" : `${String(missing)} cited sources are missing`}`;
   return { id, title, ...conf, confidence_reason, claim_ids: claims.map((c) => c.id), source_ids: ids, summary };
 }
-
-const plural = (n: number, word: string): string => `${String(n)} ${word}${n === 1 ? "" : "s"}`;
 
 /**
  * `confirmedSources`: merged identity, not rejected (as in evidenceOf); `allSources` gives the identity of every
