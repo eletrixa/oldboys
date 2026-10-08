@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/roles/roles-view.tsx
- * Deps:    react, next/link, src/domain/role-overview
+ * Deps:    react, next/link, src/domain/role-overview, src/app/_components (token, TokenForm, RoleTable)
  * Tested:  builder in src/domain/__tests__/role-overview.test.ts; view n/a
  *
  * Key responsibilities:
@@ -18,69 +18,16 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import type { CoverageLabel, RoleGroup } from "@/domain/role-overview";
-
-const TOKEN_KEY = "oldboys.runToken";
-const DISCLAIMER = "This table shows how much public evidence the research found, not how good a candidate is.";
-
-const CELL_STYLE: Readonly<Record<CoverageLabel, string>> = {
-  documented: "text-teal-300",
-  partial: "text-amber-300",
-  "no evidence": "text-zinc-400",
-  "not checked": "text-zinc-500 italic",
-};
+import { DISCLAIMER, RoleTable } from "@/app/_components/role-table";
+import { readToken, writeToken } from "@/app/_components/token";
+import { TokenForm } from "@/app/_components/token-form";
+import type { RoleGroup } from "@/domain/role-overview";
 
 type Load =
   | { kind: "loading" }
   | { kind: "token"; error: string | null }
   | { kind: "error"; message: string }
   | { kind: "ready"; groups: RoleGroup[] };
-
-function readToken(): string | null {
-  try {
-    return sessionStorage.getItem(TOKEN_KEY);
-  } catch {
-    return null;
-  }
-}
-
-function writeToken(token: string | null): void {
-  try {
-    if (token === null) sessionStorage.removeItem(TOKEN_KEY);
-    else sessionStorage.setItem(TOKEN_KEY, token);
-  } catch {
-    // Storage blocked: the user is asked again next time.
-  }
-}
-
-function TokenForm({ error, onSubmit }: { error: string | null; onSubmit: (token: string) => void }): React.JSX.Element {
-  return (
-    <form
-      className="flex flex-col gap-3"
-      onSubmit={(e) => {
-        e.preventDefault();
-        const raw = new FormData(e.currentTarget).get("token");
-        if (typeof raw === "string" && raw.trim() !== "") onSubmit(raw.trim());
-      }}
-    >
-      <label className="flex flex-col gap-1.5 text-sm font-medium">
-        Team access token
-        <input
-          name="token"
-          type="password"
-          required
-          autoComplete="off"
-          className="w-full rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-zinc-100 focus:border-teal-400 focus:outline-none"
-        />
-        <span className="text-xs font-normal text-zinc-400">The list shows every brief, so it needs the team token. Kept only in this tab.</span>
-      </label>
-      {error !== null && <p className="text-sm text-red-300">{error}</p>}
-      <button type="submit" className="self-start rounded-xl bg-teal-500 px-4 py-2 font-medium text-zinc-950 hover:bg-teal-400">
-        Show roles
-      </button>
-    </form>
-  );
-}
 
 function RoleList({ groups }: { groups: RoleGroup[] }): React.JSX.Element {
   if (groups.length === 0) return <p className="text-zinc-400">No briefs with a role yet.</p>;
@@ -97,49 +44,6 @@ function RoleList({ groups }: { groups: RoleGroup[] }): React.JSX.Element {
         </li>
       ))}
     </ul>
-  );
-}
-
-function RoleTable({ group }: { group: RoleGroup }): React.JSX.Element {
-  return (
-    <div className="flex flex-col gap-3">
-      <h2 className="text-xl font-semibold">{group.role}</h2>
-      <p className="rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-zinc-300">{DISCLAIMER}</p>
-      <div className="overflow-x-auto rounded-xl border border-zinc-800">
-        <table className="w-full text-left text-sm">
-          <caption className="sr-only">Evidence found per must-have for {group.role}, newest brief first</caption>
-          <thead className="bg-zinc-900 text-xs text-zinc-400">
-            <tr>
-              <th scope="col" className="px-3 py-2 font-medium">Person</th>
-              <th scope="col" className="px-3 py-2 font-medium">Date</th>
-              <th scope="col" className="px-3 py-2 font-medium">Status</th>
-              {group.questions.map((q) => (
-                <th key={q} scope="col" className="min-w-40 px-3 py-2 font-medium">{q}</th>
-              ))}
-              <th scope="col" className="px-3 py-2 font-medium">Sources confirmed</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-zinc-800">
-            {group.runs.map((run) => (
-              <tr key={run.id}>
-                <th scope="row" className="px-3 py-2 font-medium">
-                  <Link href={`/runs/${run.id}`} className="text-teal-300 underline-offset-2 hover:underline">{run.subject}</Link>
-                </th>
-                <td className="whitespace-nowrap px-3 py-2 text-zinc-400">{run.created_at.slice(0, 10)}</td>
-                <td className="px-3 py-2 text-zinc-400">{run.status}</td>
-                {run.cells.map((label, i) => (
-                  <td key={group.questions[i] ?? i} className={`px-3 py-2 ${CELL_STYLE[label]}`}>{label}</td>
-                ))}
-                <td className="px-3 py-2 text-zinc-300">{run.sources_confirmed}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      <p className="text-xs text-zinc-500">
-        &quot;Not checked&quot; means the brief is missing, ran without the AI summary, or did not ask this question. Only sources tied to a confirmed profile are counted.
-      </p>
-    </div>
   );
 }
 

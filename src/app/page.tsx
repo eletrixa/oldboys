@@ -8,7 +8,7 @@
  *
  * Key responsibilities:
  * - Heading, sub copy and the client start form (Screen 1)
- * - Small link to /roles (candidates overview per role, idea #16)
+ * - Small link to /positions (pick or add a position; /roles stays reachable by URL)
  *
  * Design constraints:
  * - Server component; interactivity lives in start-form.tsx
@@ -29,8 +29,8 @@ export default function HomePage(): React.JSX.Element {
       <StartForm />
       <p className="text-sm text-zinc-400">
         Several people for one role?{" "}
-        <Link href="/roles" className="text-teal-300 underline-offset-2 hover:underline">
-          Roles
+        <Link href="/positions" className="text-teal-300 underline-offset-2 hover:underline">
+          Positions
         </Link>
       </p>
     </main>

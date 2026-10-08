@@ -1,0 +1,53 @@
+/**
+ * E2E: the recruiter path from a pasted posting to a position that research can start from.
+ *
+ * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
+ * Module:  e2e/positions.spec.ts
+ * Deps:    @playwright/test
+ * Tested:  n/a (this is the test)
+ *
+ * Key responsibilities:
+ * - Add a position, see its must-haves, open the research start form with it, find it in the list
+ *
+ * Design constraints:
+ * - Reads E2E_RUN_TOKEN, skips when unset, never prints it; no research run is started (no spend)
+ * - Assertions hold on the deterministic fallback extraction (no LLM needed)
+ */
+import { expect, test } from "@playwright/test";
+
+const TOKEN = process.env.E2E_RUN_TOKEN;
+const SUFFIX = Date.now().toString(36);
+const TITLE = `Senior Data Engineer ${SUFFIX}`;
+const POSTING = [
+  "Senior Data Engineer, Prague (hybrid).",
+  "You will design and run batch and streaming data pipelines on a cloud warehouse, own data quality,",
+  "and work with analysts and product managers on reliable metrics. We expect several years of Python and SQL,",
+  "experience with orchestration tools such as Airflow, and the habit of writing down what you build.",
+  "Nice to have: dbt, Kafka, and a record of mentoring colleagues.",
+].join(" ");
+
+test.skip(TOKEN === undefined || TOKEN === "", "E2E_RUN_TOKEN is not set; skipping the positions e2e");
+
+test("paste a posting, research from it, find it in the list", async ({ page }) => {
+  test.setTimeout(90_000);
+  await page.goto("/positions/new");
+  await page.getByLabel("Team access token").fill(TOKEN ?? "");
+  await page.getByRole("button", { name: "Continue" }).click();
+  await page.getByLabel("Posting text").fill(POSTING);
+  await page.getByLabel("Title (optional)").fill(TITLE);
+  await page.getByRole("button", { name: "Add position" }).click();
+
+  await expect(page).toHaveURL(/\/positions\/(?!new$)[A-Za-z0-9_-]+$/, { timeout: 60_000 }); // ingest may call the LLM
+  const id = new URL(page.url()).pathname.split("/").pop() ?? "";
+  await expect(page.getByRole("heading", { level: 1 })).toContainText(TITLE);
+  await expect(page.getByRole("list", { name: "Must-haves" }).getByRole("listitem")).not.toHaveCount(0);
+
+  await page.getByRole("link", { name: "Research a candidate" }).click();
+  await expect(page).toHaveURL(`/?positionId=${id}`);
+  await expect(page.getByText(TITLE)).toBeVisible();
+  await expect(page.locator("input[name=role]")).toHaveCount(0);
+
+  await page.goto("/positions");
+  const section = page.locator("section", { has: page.getByRole("heading", { name: "data", exact: true }) });
+  await expect(section.getByRole("link", { name: TITLE })).toBeVisible();
+});

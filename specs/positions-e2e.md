@@ -17,7 +17,7 @@ File `e2e/positions.spec.ts` (root Playwright; the repo has no root Playwright c
 - Posting text used: a short fixed posting titled "Senior Data Engineer" with a Prague location, 300+ characters so it passes the minimum-length rule.
 - Steps:
   1. Open `/positions/new`, enter the token in the token form, fill the textarea and the title field, submit.
-  2. Expect to land on `/positions/<id>` (URL matches `/positions/[A-Za-z0-9_-]+`), the header shows "Senior Data Engineer", and the must-haves list has at least one item.
+  2. Expect to land on `/positions/<id>` (URL matches `/positions/[A-Za-z0-9_-]+` but not `/positions/new`; allow up to 60s because ingest may call the LLM), the header shows "Senior Data Engineer", and the must-haves list has at least one item.
   3. Click "Research a candidate"; expect URL `/?positionId=<id>`, the position title visible, and no role input in the form.
   4. Open `/positions`; expect a card with "Senior Data Engineer" inside a section headed `data` (or `other` if the test is run on the fallback with a title the table does not map; the chosen title must map to `data`).
 - The test does not start a research run (no spend) and does not need Apify.

@@ -7,7 +7,7 @@
  * Tested:  src/app/runs/[id]/__tests__/interview-kit.test.ts
  *
  * Key responsibilities:
- * - interviewKit: header (role, confirmed profile, date, research cost), coverage per question with sourced claims,
+ * - interviewKit: header (role, or the position title when the run has one, confirmed profile, date, research cost), coverage per question with sourced claims,
  *   interview questions as a checklist with room for notes, to-verify list, gap lists, footer
  * - Findings by section (confidence descending, with the reason) replace per-question coverage; briefs stored
  *   before sections fall back to coverage
@@ -61,8 +61,9 @@ function section(title: string, lines: readonly string[]): string[] {
 
 function header(state: RunState, brief: Brief, generatedAt: string): string[] {
   const { cost } = state;
+  const hiringFor = state.position?.title ?? state.role;
   const lines = [
-    state.role !== null ? `Hiring for: ${escapeMd(state.role)}` : null,
+    hiringFor !== null ? `Hiring for: ${escapeMd(hiringFor)}` : null,
     brief.headline !== null ? `Confirmed profile: ${escapeMd(brief.headline)}` : null,
     brief.location_note !== null ? escapeMd(brief.location_note) : null,
     `Generated: ${day(generatedAt)}`,

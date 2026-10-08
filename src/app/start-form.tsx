@@ -3,22 +3,26 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/start-form.tsx
- * Deps:    react, next/navigation
- * Tested:  n/a
+ * Deps:    react, next/navigation, ./start-body, ./start-position
+ * Tested:  n/a (body builder: src/app/__tests__/start-body.test.ts)
  *
  * Key responsibilities:
  * - Submit {goal: "hiring", role, profileUrl?, cvText?} (plans/006); on 201 route to /runs/<id>
+ * - With `?positionId=<id>` (specs/positions-pages): show the position's title and must-haves read-only, hide the role
+ *   field and send positionId instead of role; an unknown id shows an inline note and the normal form
  * - Client check: one of profile URL or CV; the server normalises and validates the URL
  * - Inline humane error on 4xx/5xx or network failure
  *
  * Design constraints:
- * - Client component; posts to /api/start, which adds RUN_TOKEN server-side, so no token ships to the browser
+ * - Client component; reads the query with useSearchParams inside Suspense so the home page stays static; posts to /api/start, which adds RUN_TOKEN server-side, so no token ships to the browser
  * - Copy stays short and calm; no emoji
  */
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useState } from "react";
+import { buildStartBody, positionIdParam } from "./start-body";
+import { PositionBanner, usePositionSummary } from "./start-position";
 
 const FIELD =
   "w-full rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-zinc-100 placeholder:text-zinc-500 focus:border-teal-400 focus:outline-none";
@@ -45,8 +49,10 @@ function Field({ name, label, helper, type = "text", placeholder, required = fal
   );
 }
 
-export function StartForm(): React.JSX.Element {
+function StartFormInner(): React.JSX.Element {
   const router = useRouter();
+  const position = usePositionSummary(positionIdParam(useSearchParams()));
+  const positionId = position.status === "ready" ? position.summary.id : null;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -58,6 +64,7 @@ export function StartForm(): React.JSX.Element {
     };
     const profileUrl = text("profileUrl");
     const cvText = text("cvText");
+    if (position.status === "loading") return;
     if (profileUrl === "" && cvText === "") {
       setError("Please add their LinkedIn profile or paste their CV.");
       return;
@@ -68,12 +75,7 @@ export function StartForm(): React.JSX.Element {
       const res = await fetch("/api/start", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          goal: "hiring",
-          role: text("role"),
-          ...(profileUrl === "" ? {} : { profileUrl }),
-          ...(cvText === "" ? {} : { cvText }),
-        }),
+        body: JSON.stringify(buildStartBody({ role: text("role"), profileUrl, cvText, positionId })),
       });
       if (res.status === 201) {
         const { id } = await res.json<{ id: string }>();
@@ -85,7 +87,9 @@ export function StartForm(): React.JSX.Element {
           ? "Too many briefs started just now. Please try again in a little while."
           : res.status === 503
             ? "The service is not fully configured yet. Please tell the team."
-            : res.status === 400
+            : res.status === 404
+              ? "That position is no longer available. Please pick it again from Positions."
+              : res.status === 400
               ? "Please check the LinkedIn link (it looks like linkedin.com/in/...) and the role, and try again."
               : "We could not start the brief. Please try again.",
       );
@@ -104,6 +108,12 @@ export function StartForm(): React.JSX.Element {
         void submit(e.currentTarget);
       }}
     >
+      {position.status === "ready" && <PositionBanner summary={position.summary} />}
+      {position.status === "error" && (
+        <p role="status" className="text-sm text-amber-300">
+          We could not load that position, so you can name the role yourself.
+        </p>
+      )}
       <Field
         name="profileUrl"
         type="url"
@@ -121,7 +131,9 @@ export function StartForm(): React.JSX.Element {
           className={`${FIELD} mt-3`}
         />
       </details>
-      <Field name="role" label="Role you are hiring for" required helper="The brief focuses on what matters for this role." />
+      {positionId === null && position.status !== "loading" && (
+        <Field name="role" label="Role you are hiring for" required helper="The brief focuses on what matters for this role." />
+      )}
       <p className="rounded-xl border border-emerald-900 bg-emerald-950/50 p-4 text-sm text-emerald-100">
         <strong>Privacy:</strong> Public information only. We never look at private accounts, and we do not judge
         personality, health, religion or politics. Everything we collect is deleted after 7 days.
@@ -134,7 +146,7 @@ export function StartForm(): React.JSX.Element {
       <div className="flex items-center gap-4">
         <button
           type="submit"
-          disabled={busy}
+          disabled={busy || position.status === "loading"}
           className="rounded-xl bg-teal-500 px-5 py-3 font-semibold text-zinc-950 hover:bg-teal-400 disabled:opacity-60"
         >
           {busy ? "Creating..." : "Create brief"}
@@ -142,5 +154,13 @@ export function StartForm(): React.JSX.Element {
         <span className="text-sm text-zinc-400">Usually takes 2 to 4 minutes</span>
       </div>
     </form>
+  );
+}
+
+export function StartForm(): React.JSX.Element {
+  return (
+    <Suspense>
+      <StartFormInner />
+    </Suspense>
   );
 }

@@ -3,12 +3,13 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/runs/[id]/run-view.tsx
- * Deps:    react, next/link, ./parts, ./state, ./identity-map-card
+ * Deps:    react, next/link, ./parts, ./state, ./identity-map-card, ./position-header
  * Tested:  n/a
  *
  * Key responsibilities:
  * - Poll GET /api/runs/:id/state every 2 s until done or failed
  * - Header: derived name once the seed step knows it ("the candidate" before), the seed headline under it
+ * - "Researched for: <position title>" link to /positions/<id> under the name when the run came from a position
  * - Show the run cost and research time line (ledger projection) while running and when done
  * - Identity map above the profile list (same live decisions)
  * - On failure keep the progress rows, mark the failed one, show the reason, sources so far and a retry link
@@ -24,6 +25,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Candidate, CandidateDecision } from "@/domain/claim";
 import { IdentityMapCard } from "./identity-map-card";
+import { positionHeader } from "./position-header";
 import { type Answer, BriefView, CostLine, ProfileList, ProgressSteps, QuestionCard } from "./parts";
 import { type RunState, firstName, headerText, questionsToAsk, sortLineup, stepRows } from "./state";
 
@@ -141,6 +143,7 @@ export function RunView({ id }: { id: string }): React.JSX.Element {
   if (!state) return <main className="mx-auto max-w-2xl px-4 py-10 text-zinc-400">Loading...</main>;
 
   const first = firstName(state.subject) ?? "the candidate";
+  const forPosition = positionHeader(state);
   const created = Date.parse(state.created_at);
   const cached = state.status === "done" && !Number.isNaN(created) && openedAt - created > CACHED_AFTER_MS;
   const degraded = state.brief !== null && state.brief.degraded !== null;
@@ -159,6 +162,11 @@ export function RunView({ id }: { id: string }): React.JSX.Element {
           {headerText(state.subject, state.status === "done")}
         </h1>
         {state.headline !== null && <p className="text-zinc-300">{state.headline}</p>}
+        {forPosition !== null && (
+          <p className="text-sm text-zinc-400">
+            <Link href={forPosition.href} className="text-teal-300 underline-offset-2 hover:underline">{forPosition.label}</Link>
+          </p>
+        )}
         {state.status !== "done" && (
           <p className="text-zinc-400">This usually takes 2 to 4 minutes. Keep this tab open.</p>
         )}
