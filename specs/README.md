@@ -33,4 +33,4 @@ created: 2026-10-08
 | [positions-purge](positions-purge.md) | expiry sweep of positions and R2 objects | `src/workflow/purge.ts` |
 | [positions-e2e](positions-e2e.md) | Playwright happy path | `e2e/positions.spec.ts` |
 
-Migration `0010_positions.sql` is defined in `plans/007-position-selector/00-SYNTHESIS.md` (Contracts) and is not repeated here.
+Migration `0011_positions.sql` is defined in `plans/007-position-selector/00-SYNTHESIS.md` (Contracts) and is not repeated here.
