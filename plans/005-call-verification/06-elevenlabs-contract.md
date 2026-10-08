@@ -151,14 +151,14 @@ General knowledge, not legal advice. Verify with counsel.
 
 ## What the UI developers call
 
-All routes except the webhook are served by the Worker. `Authorization: Bearer <RUN_TOKEN>` is required where marked. Numbers are E.164. The full number is used once, in the approve handler, and is never returned by any route.
+All routes except the webhook are served by the Worker. Routes marked "session or bearer" accept a logged-in `oldboys_session` cookie (the web UI) or `Authorization: Bearer <RUN_TOKEN>` (scripts, curl); without either they answer `401`, and a bearer is answered `503` while `RUN_TOKEN` is unset. `POST /api/runs` stays bearer-only. Numbers are E.164. The full number is used once, in the approve handler, and is never returned by any route.
 
 | Route | Auth | Purpose |
 |---|---|---|
 | `GET /api/runs/:id/calls` | none | Proposal (computed, not stored), provider, call limit and usage, the run's calls with answers |
-| `POST /api/runs/:id/calls` | bearer | Build a brief from the stored brief, gaps and weak claims, or from operator-edited questions; create a `drafted` call |
-| `POST /api/calls/:id/approve` | bearer | Record consent, dial once, start the Workflow |
-| `POST /api/calls/:id/skip` | bearer | Mark `skipped`; writes a `decision` ledger row, existing gaps stay stated |
+| `POST /api/runs/:id/calls` | session or bearer | Build a brief from the stored brief, gaps and weak claims, or from operator-edited questions; create a `drafted` call |
+| `POST /api/calls/:id/approve` | session or bearer | Record consent, dial once, start the Workflow |
+| `POST /api/calls/:id/skip` | session or bearer | Mark `skipped`; writes a `decision` ledger row, existing gaps stay stated |
 | `GET /api/calls/:id` | none | Status, brief, result summary, `last_error`, per-question `answers` |
 | `POST /api/webhooks/elevenlabs` | HMAC signature | Called by ElevenLabs only, never by the UI |
 
@@ -180,7 +180,7 @@ No auth (same as `/state`). `404` unknown run. Response `200`:
 
 ### `POST /api/runs/:id/calls`
 
-Request (bearer): optional body `{"language": "en", "questions": [{"question_id": "mh-1", "text": "...", "why": "..."}]}` (`language` 2 to 5 chars, default `en`; `questions` optional). `404` unknown run, `409` while the run is still `queued`. Response `201`:
+Request (session or bearer): optional body `{"language": "en", "questions": [{"question_id": "mh-1", "text": "...", "why": "..."}]}` (`language` 2 to 5 chars, default `en`; `questions` optional). `404` unknown run, `409` while the run is still `queued`. Response `201`:
 
 ```json
 {
@@ -204,17 +204,17 @@ With `questions` (the operator edited the proposal): 1 to 5 questions, each 5 to
 
 ### `POST /api/calls/:id/approve`
 
-Request (bearer):
+Request (session or bearer):
 
 ```json
 { "to_number": "+420123456789", "consent_ack": true, "consent_note": "volunteer, agreed verbally", "operator": "robert" }
 ```
 
-Responses: `202 {"id","status":"dialing","provider":"elevenlabs"}` (with the mock provider the result is immediate and `status` is already `done`); `400` invalid body or number not E.164; `401` bad bearer; `404` unknown call; `409` call not `drafted` or the run already has `RUN_CALL_MAX` (2) non-skipped calls; `502` provider rejected the call (row goes to `failed` with the reason, no Workflow is created).
+Responses: `202 {"id","status":"dialing","provider":"elevenlabs"}` (with the mock provider the result is immediate and `status` is already `done`); `400` invalid body or number not E.164; `401` no session and no or a wrong bearer; `404` unknown call; `409` call not `drafted` or the run already has `RUN_CALL_MAX` (2) non-skipped calls; `502` provider rejected the call (row goes to `failed` with the reason, no Workflow is created).
 
 ### `POST /api/calls/:id/skip`
 
-Request (bearer), no body. Response `200 {"id","status":"skipped"}`; `409` if the call is no longer `drafted`. Gaps are left as they are (still stated in the report); a `decision` ledger row records the skip.
+Request (session or bearer), no body. Response `200 {"id","status":"skipped"}`; `409` if the call is no longer `drafted`. Gaps are left as they are (still stated in the report); a `decision` ledger row records the skip.
 
 ### `GET /api/calls/:id`
 

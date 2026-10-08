@@ -163,3 +163,7 @@ Each agent appends: what it starts, progress, what it finishes. Newest at the bo
 
 ## 2026-10-09 · cv-consistency agent (Minas)
 - Started: 01:14. Idea #14 "CV consistency check": for runs with a CV, compare CV statements (employer, role, dates, projects, education) with the confirmed public sources; matches / differs / not found publicly; differences become neutral interview questions.
+
+## 2026-10-09 · login instead of team token in the UI (Minas)
+- Started/finished: the web UI no longer asks for the team token (RUN_TOKEN). `POST /api/runs/:id/calls`, `POST /api/calls/:id/approve`, `POST /api/calls/:id/skip` and `GET /api/roles` use `requireSessionOrBearer` (session cookie or bearer; 401 otherwise, 503 only for a bearer while RUN_TOKEN is unset). The call panel drops the token form and the Authorization header; a 401 shows "Your login has expired. Log in again." with a link to `/login`. `POST /api/runs`, intake and webhook routes unchanged; the bearer keeps working for the extension, scripts and curl.
+- Files: src/app/api/{runs/[id]/calls,calls/[id]/approve,calls/[id]/skip,roles}/route.ts, src/app/runs/[id]/call-panel-view.tsx, src/app/run-token.tsx (deleted), scripts/auth-flow.mjs, CLAUDE.md, docs/ops/call-verification.md, plans/005-call-verification/06-elevenlabs-contract.md, CHANGELOG.md, PROGRESS.md.

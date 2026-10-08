@@ -154,7 +154,7 @@ try {
   const envPath = new URL("../.dev.vars", import.meta.url).pathname;
   const token = existsSync(envPath) ? /^RUN_TOKEN=(.*)$/m.exec(readFileSync(envPath, "utf8"))?.[1]?.trim().replace(/^["']|["']$/g, "") : undefined;
   const roles401 = await fetch(`${base}/api/roles`);
-  check("8 GET /api/roles with nothing is 401 (503 only when RUN_TOKEN is unset)", roles401.status === 401 || (!token && roles401.status === 503), String(roles401.status));
+  check("8 GET /api/roles with nothing is 401", roles401.status === 401, String(roles401.status));
   if (token) {
     const bearer = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
     const created = await fetch(`${base}/api/runs`, { method: "POST", headers: bearer, body: JSON.stringify({ goal: "hiring", role: "Backend engineer", profileUrl: "https://www.linkedin.com/in/smoke-bearer-person" }) });
