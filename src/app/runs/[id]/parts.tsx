@@ -15,7 +15,7 @@
  * - Confirmed evidence grouped by the URL's platform (evidenceGroup), not by the actor that fetched it; the pasted CV
  *   is plain text, not a link (SourceLink)
  * - Phone verification panel (CallPanel, client) right after "To verify"; it fetches its own data
- * - Interview kit buttons (KitActions) under the top line; gap labels come from state.ts (GAP_LABEL, gapLine)
+ * - Interview kit exports (KitActions) after the gap lists, before AlsoFound; gap labels come from state.ts (GAP_LABEL, gapLine)
  * - Findings as sections by confidence (SectionList); briefs stored before sections render per question
  * - Accessibility: labelled progressbar with status text, QuestionCard focuses its heading on mount, 44px summary and link targets
  *
@@ -28,7 +28,7 @@
 import { useEffect, useRef } from "react";
 import type { Brief, Candidate, CandidateDecision } from "@/domain/claim";
 import { formatDuration, type RunCost } from "@/domain/run-cost";
-import { BTN_PRIMARY, BTN_QUIET, BTN_SECONDARY, CARD, CARD_PEACH, CARD_UNSURE, Pill, SourceLink, type Tone } from "../../ui";
+import { BTN_PRIMARY, BTN_QUIET, BTN_SECONDARY, CARD, CARD_PEACH, CARD_UNSURE, Chevron, Pill, SUMMARY, SourceLink, type Tone } from "../../ui";
 import { CallPanel } from "./call-panel-view";
 import { KitActions } from "./kit-actions";
 import { ClaimList, SectionList } from "./sections";
@@ -142,8 +142,8 @@ function ProfileRow({ c, decision }: { c: Candidate; decision: CandidateDecision
         <a href={c.profile_urls[0]} target="_blank" rel="noreferrer" className="flex min-h-11 items-center text-sm font-medium hover:underline">
           {platformLabel(c)}
         </a>
-        <p className="truncate text-sm text-muted">{c.snippet}</p>
-        {reason !== undefined && reason !== "" && <p className="truncate text-xs text-muted">{reason}</p>}
+        <p className="line-clamp-2 text-sm text-muted">{c.snippet}</p>
+        {reason !== undefined && reason !== "" && <p className="text-xs text-muted">{reason}</p>}
       </div>
       <Pill tone={badge.tone}>{badge.text}</Pill>
     </li>
@@ -169,8 +169,8 @@ export function ProfileList({
         ))}
       </ul>
       {extra.length > 0 && (
-        <details className="mt-3">
-          <summary className="flex min-h-11 cursor-pointer items-center text-sm text-muted hover:text-ink">Show {String(extra.length)} more web hits</summary>
+        <details className="group mt-3">
+          <summary className={SUMMARY}><Chevron />Show {String(extra.length)} more web hits</summary>
           <ul className="mt-2 divide-y divide-divider">
             {extra.map((c) => (
               <ProfileRow key={c.id} c={c} decision={decisionOf(c)} />
@@ -202,6 +202,7 @@ export function QuestionCard({
   return (
     <section className={CARD_PEACH}>
       <h2 ref={heading} tabIndex={-1} className="font-serif text-2xl focus:outline-none">Quick question: is this {label} profile also {first}?</h2>
+      <p className="mt-1 text-sm text-muted">Your answer decides whether we use this profile in the brief.</p>
       <div className="mt-3 flex items-start gap-3">
         <PlatformMark c={candidate} />
         <div className="min-w-0">
@@ -246,7 +247,7 @@ function List({
   if (numbered) {
     return (
       <section>
-        <h3 className="text-base font-semibold">{title}</h3>
+        <h2 className="font-serif text-xl">{title}</h2>
         <ol className="mt-2 divide-y divide-divider">
           {items.map((t, i) => {
             const text = typeof t === "string" ? t : t.text;
@@ -263,7 +264,7 @@ function List({
   }
   return (
     <section>
-      <h3 className="text-base font-semibold">{title}</h3>
+      <h2 className="font-serif text-xl">{title}</h2>
       <ul className="mt-2 divide-y divide-divider">
         {items.map((t) =>
           typeof t === "string" ? (
@@ -335,8 +336,8 @@ function EvidenceList({ items }: { items: Evidence[] }): React.JSX.Element {
     <>
       <EvidenceGroups items={items.slice(0, EVIDENCE_VISIBLE)} />
       {rest.length > 0 && (
-        <details className="mt-3">
-          <summary className="flex min-h-11 cursor-pointer items-center text-sm text-muted hover:text-ink">Show {String(rest.length)} more</summary>
+        <details className="group mt-3">
+          <summary className={SUMMARY}><Chevron />Show {String(rest.length)} more</summary>
           <EvidenceGroups items={rest} />
         </details>
       )}
@@ -347,10 +348,12 @@ function EvidenceList({ items }: { items: Evidence[] }): React.JSX.Element {
 function AlsoFound({ items }: { items: Evidence[] }): React.JSX.Element | null {
   if (items.length === 0) return null;
   return (
-    <details>
-      <summary className="flex min-h-11 cursor-pointer items-center text-sm font-semibold text-muted hover:text-ink">
-        Mentions of the name, not confirmed ({String(items.length)}) — identity not verified, not used in the brief
+    <details className="group">
+      <summary className={SUMMARY}>
+        <Chevron />
+        Same name, not confirmed as them ({String(items.length)})
       </summary>
+      <p className="text-xs text-muted">Not used in your brief.</p>
       <EvidenceList items={items} />
     </details>
   );
@@ -390,7 +393,7 @@ function ConfirmedEvidence({ items }: { items: Evidence[] }): React.JSX.Element 
   if (items.length === 0) return null;
   return (
     <section className={CARD}>
-      <h3 className="text-base font-semibold">From profiles you confirmed</h3>
+      <h2 className="font-serif text-xl">From profiles you confirmed</h2>
       <EvidenceList items={items} />
     </section>
   );
@@ -400,7 +403,7 @@ function ConfirmedEvidence({ items }: { items: Evidence[] }): React.JSX.Element 
 function RoleCriteria({ texts }: { texts: string[] }): React.JSX.Element {
   return (
     <section className={CARD}>
-      <h3 className="text-base font-semibold">Role criteria (not checked, AI unavailable)</h3>
+      <h2 className="font-serif text-xl">Role criteria (not checked, AI unavailable)</h2>
       {texts.length === 0 ? (
         <p className="mt-2 text-sm text-muted">No role criteria yet</p>
       ) : (
@@ -426,7 +429,6 @@ export function BriefView({ state }: { state: RunState }): React.JSX.Element | n
     <div id="brief" className="flex scroll-mt-6 flex-col gap-4">
       <SummaryCard state={state} />
       <TopLine headline={brief.headline ?? null} locationNote={brief.location_note ?? null} role={state.role} />
-      <KitActions state={state} />
       {brief.degraded !== null && <DegradedNotice reason={brief.degraded} />}
       {brief.degraded !== null && <ConfirmedEvidence items={brief.evidence} />}
       {sections !== null && <SectionList sections={sections} claims={state.claims} urlOf={urlOf} noteOf={noteOf} />}
@@ -450,6 +452,7 @@ export function BriefView({ state }: { state: RunState }): React.JSX.Element | n
       <CallPanel state={state} />
       <List title={searchedTitle(searchedEmpty(brief))} items={searchedEmpty(brief).map(gapItem)} />
       <List title="Not searched, and why" items={brief.not_searched.map(gapItem)} />
+      <KitActions state={state} />
       <AlsoFound items={brief.also_found} />
       {brief.removed_protected > 0 ? (
         <p className="text-xs text-muted">{String(brief.removed_protected)} {brief.removed_protected === 1 ? "item" : "items"} removed (protected categories)</p>

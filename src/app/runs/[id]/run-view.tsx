@@ -10,8 +10,8 @@
  * - Poll GET /api/runs/:id/state every 2 s until done or failed
  * - Header: derived name once the seed step knows it ("the candidate" before), the seed headline under it
  * - When done, the brief comes first and the confirmation steps fold into a closed "How we confirmed it" disclosure
- * - While running show a hint that the brief appears here; no jump link
- * - Audit record link as the last element of the ready view
+ * - One footer closes the page: running hint (not done), then "Back to home" and "Audit record" links
+ * - Not-found view: eyebrow, heading, muted sentence and a primary back link on the header rhythm
  * - Show the run cost and research time line (ledger projection) while running and when done
  * - Identity map above the profile list (same live decisions)
  * - On failure keep the progress rows, mark the failed one, show the reason, sources so far and a retry link
@@ -26,7 +26,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Candidate, CandidateDecision } from "@/domain/claim";
-import { BTN_QUIET, BTN_SECONDARY, CARD_CONFLICT, Eyebrow, LINK, Pill } from "../../ui";
+import { BTN_PRIMARY, BTN_SECONDARY, CARD_CONFLICT, Chevron, Eyebrow, LINK, Pill, SUMMARY } from "../../ui";
 import { IdentityMapCard } from "./identity-map-card";
 import { type Answer, BriefView, CostLine, ProfileList, ProgressSteps, QuestionCard } from "./parts";
 import { type RunState, firstName, headerText, questionsToAsk, sortLineup, stepRows } from "./state";
@@ -136,10 +136,11 @@ export function RunView({ id }: { id: string }): React.JSX.Element {
 
   if (missing) {
     return (
-      <main className="mx-auto flex max-w-3xl flex-col gap-4 px-4 py-10 md:py-14">
+      <main className="mx-auto flex max-w-3xl flex-col items-start gap-4 px-4 py-10 md:py-14">
+        <Eyebrow>Brief</Eyebrow>
         <h1 className="font-serif text-4xl leading-[1.05] md:text-5xl">We could not find this brief</h1>
         <p className="text-muted">The link may be mistyped, or the run is no longer available.</p>
-        <Link href="/" className={`${LINK} w-fit`}>Back to home</Link>
+        <Link href="/" className={`${BTN_PRIMARY} self-start`}>Back to home</Link>
       </main>
     );
   }
@@ -200,7 +201,7 @@ export function RunView({ id }: { id: string }): React.JSX.Element {
   const running = state.status !== "done" && state.status !== "failed";
 
   return (
-    <main className="mx-auto flex max-w-3xl flex-col gap-8 px-4 py-10 md:py-14">
+    <main className={`mx-auto flex max-w-3xl flex-col px-4 py-10 md:py-14 ${briefFirst ? "gap-10" : "gap-8"}`}>
       <header className="flex flex-col gap-3 border-b border-divider pb-8">
         <Eyebrow>{state.status === "done" ? "Candidate brief" : "Research in progress"}</Eyebrow>
         <h1 className="font-serif text-4xl leading-[1.05] md:text-5xl">
@@ -220,8 +221,9 @@ export function RunView({ id }: { id: string }): React.JSX.Element {
       {briefFirst ? (
         <>
           <BriefView state={state} />
-          <details className="group">
-            <summary className="flex min-h-11 cursor-pointer items-center gap-2 text-sm font-semibold text-muted hover:text-ink">
+          <details className="group border-t border-divider pt-4">
+            <summary className={`${SUMMARY} text-base text-ink`}>
+              <Chevron />
               How we confirmed it is {first}
             </summary>
             <div className="mt-4 flex flex-col gap-8">
@@ -239,12 +241,12 @@ export function RunView({ id }: { id: string }): React.JSX.Element {
           {sendRows}
         </>
       )}
-      <Link href="/" className={`${BTN_QUIET} self-start`}>Back to home</Link>
-      {running && <p className="text-sm text-muted">The brief appears here when the research is done.</p>}
       {!briefFirst && <BriefView state={state} />}
-      <Link href={`/runs/${id}/audit`} className="self-start text-xs text-muted underline-offset-4 hover:text-ink hover:underline">
-        Audit record
-      </Link>
+      {running && <p className="text-sm text-muted">The brief appears here when the research is done.</p>}
+      <div className="flex items-center gap-6 border-t border-divider pt-6 text-sm">
+        <Link href="/" className={LINK}>Back to home</Link>
+        <Link href={`/runs/${id}/audit`} className={LINK}>Audit record</Link>
+      </div>
     </main>
   );
 }

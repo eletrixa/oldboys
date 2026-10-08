@@ -16,8 +16,9 @@
 import Link from "next/link";
 import type { SessionUser } from "@/domain/session";
 import { LogoutButton } from "./logout-button";
+import { NavLink } from "./nav-link";
+import { BTN_SECONDARY } from "./ui";
 
-const QUIET = "flex min-h-11 items-center rounded-lg px-3 text-sm font-medium text-muted hover:bg-sage hover:text-ink";
 const PRIMARY = "flex min-h-11 items-center rounded-lg bg-action px-4 text-sm font-semibold text-white hover:bg-action-hover";
 
 export function SiteNav({ user }: { user: SessionUser | null }): React.JSX.Element {
@@ -25,16 +26,16 @@ export function SiteNav({ user }: { user: SessionUser | null }): React.JSX.Eleme
     <nav aria-label="Main" className="flex flex-wrap items-center justify-end gap-1">
       {user === null ? (
         <>
-          <Link href="/login" className={QUIET}>Log in</Link>
+          <NavLink href="/login">Log in</NavLink>
           <Link href="/register" className={PRIMARY}>Create account</Link>
         </>
       ) : (
         <>
-          <Link href="/roles" className={QUIET}>Roles</Link>
-          <Link href="/briefs" className={QUIET}>My briefs</Link>
+          <NavLink href="/roles">Roles</NavLink>
+          <NavLink href="/briefs">My briefs</NavLink>
           <span className="hidden px-2 text-sm text-muted md:inline">{user.organizationName}</span>
           <LogoutButton />
-          <Link href="/" className={PRIMARY}>New brief</Link>
+          <Link href="/" className={BTN_SECONDARY}>New brief</Link>
         </>
       )}
     </nav>

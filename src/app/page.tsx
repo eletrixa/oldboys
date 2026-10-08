@@ -53,7 +53,7 @@ export default async function HomePage(): Promise<React.JSX.Element> {
             </li>
           ))}
         </ol>
-        <p className="text-sm text-ok">No overall score. Coverage describes the research, not the person.</p>
+        <p className="text-sm text-muted">No overall score. Coverage describes the research, not the person.</p>
       </section>
       <section className="flex flex-col gap-4">
         <div className={`${CARD} md:p-8`}>

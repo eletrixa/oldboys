@@ -1,5 +1,5 @@
 /**
- * Export buttons for a finished brief, grouped by audience: Interview, Candidate, ATS, References.
+ * Export actions for a finished brief: one "Copy interview kit" button plus a "More exports" disclosure.
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/runs/[id]/kit-actions.tsx
@@ -8,22 +8,22 @@
  *
  * Key responsibilities:
  * - KitActions: build the kit (generatedAt = now) or the candidate notice at click time, copy it or download it as .md
- * - Candidate row: an "EN | CZ" switch (local state, default EN) picks the language of the copied and downloaded notice
+ * - Candidate notice: an "EN | CZ" switch inside the disclosure (local state, default EN) picks the language of the copied and downloaded notice
  * - Copy for ATS: a short plain-text note (atsNote) with the link to this brief, for pasting into any ATS card
  * - Copy reference questions: research gaps as plain-text questions for a former manager or colleague (idea #18)
- * - One compact labelled row per audience (small muted label + its buttons)
- * - Short "Copied" / "Copy failed" label on each copy button
+ * - One row: primary copy button + "More exports" disclosure (group/chevron from ui.tsx)
+ * - One sr-only role="status" span reports "Copied" / "Copy failed" for the last copy that ran
  * - The kit fetches GET /api/runs/:id/calls at click time for the phone verification section; on any error
  *   the kit is built without it
  *
  * Design constraints:
  * - Client only; the only fetch is the run's calls for the kit, everything else comes from the RunState on the page
- * - No alert(); failures show on the button
+ * - No alert(); failures are announced in the status span
  */
 "use client";
 
 import { useState } from "react";
-import { BTN_SECONDARY } from "../../ui";
+import { BTN_QUIET, BTN_SECONDARY, Chevron, SUMMARY } from "../../ui";
 import type { CallView, RunCalls } from "./call-panel";
 import type { RunState } from "./state";
 import { interviewKit, kitFileName } from "./interview-kit";
@@ -31,9 +31,6 @@ import { candidateCopy, noticeFileName, type NoticeLang } from "./candidate-copy
 import { atsNote } from "./ats-note";
 import { referenceQuestions } from "./reference-check";
 
-const BTN = BTN_SECONDARY;
-const ROW = "flex flex-wrap items-center gap-2";
-const LABEL = "w-20 shrink-0 text-xs font-medium text-muted";
 const LANG_GROUP = "inline-flex overflow-hidden rounded-md border border-divider text-xs font-medium";
 const LANG_BTN =
   "px-2 py-1 text-muted hover:bg-sage/60 hover:text-ink aria-pressed:bg-action aria-pressed:text-white aria-pressed:hover:bg-action-hover aria-pressed:hover:text-white";
@@ -87,10 +84,7 @@ function downloadText(text: string | null, fileName: string): void {
 }
 
 export function KitActions({ state }: { state: RunState }): React.JSX.Element | null {
-  const [kitCopy, setKitCopy] = useState<CopyStatus>("idle");
-  const [noticeCopy, setNoticeCopy] = useState<CopyStatus>("idle");
-  const [atsCopy, setAtsCopy] = useState<CopyStatus>("idle");
-  const [refCopy, setRefCopy] = useState<CopyStatus>("idle");
+  const [status, setCopy] = useState<CopyStatus>("idle");
   const [noticeLang, setNoticeLang] = useState<NoticeLang>("en");
   if (state.brief === null) return null;
 
@@ -99,52 +93,58 @@ export function KitActions({ state }: { state: RunState }): React.JSX.Element | 
   const ats = (): string | null => atsNote(state, `${window.location.origin}/runs/${state.id}`);
   const refs = (): string | null => referenceQuestions(state);
 
+  const item = "w-full justify-start";
+  const exportBtn = `${BTN_QUIET} ${item}`;
   return (
     <div className="flex flex-col gap-2">
-      <div className={ROW}>
-        <span className={LABEL}>Interview</span>
-        <button type="button" className={BTN} onClick={() => void copyText(kit(), setKitCopy)} aria-live="polite">
-          {kitCopy === "idle" ? "Copy interview kit" : STATUS_LABEL[kitCopy]}
+      <div className="flex flex-wrap items-center gap-2">
+        <button type="button" className={BTN_SECONDARY} onClick={() => void copyText(kit(), setCopy)}>
+          Copy interview kit
         </button>
-        <button type="button" className={BTN} onClick={() => void kit().then((text) => { downloadText(text, kitFileName(state)); })}>
-          Download .md
-        </button>
-      </div>
-      <div className={ROW}>
-        <span className={LABEL}>Candidate</span>
-        <div className={LANG_GROUP} role="group" aria-label="Candidate notice language">
-          {LANGS.map((l) => (
-            <button
-              key={l.lang}
-              type="button"
-              className={LANG_BTN}
-              aria-pressed={noticeLang === l.lang}
-              title={l.title}
-              onClick={() => { setNoticeLang(l.lang); }}
-            >
-              {l.label}
+        <details className="group relative">
+          <summary className={`${SUMMARY} ${BTN_QUIET}`}>
+            <Chevron />
+            More exports
+          </summary>
+          <div className="mt-2 flex flex-col divide-y divide-divider rounded-lg border border-divider bg-surface">
+            <button type="button" className={exportBtn} onClick={() => void kit().then((text) => { downloadText(text, kitFileName(state)); })}>
+              Download .md
             </button>
-          ))}
-        </div>
-        <button type="button" className={BTN} onClick={() => void copyText(notice(), setNoticeCopy)} aria-live="polite">
-          {noticeCopy === "idle" ? "Copy candidate notice" : STATUS_LABEL[noticeCopy]}
-        </button>
-        <button type="button" className={BTN} onClick={() => { downloadText(notice(), noticeFileName(state, noticeLang)); }}>
-          Download candidate notice (.md)
-        </button>
+            <div className="flex items-center gap-2 px-3 py-1">
+              <div className={LANG_GROUP} role="group" aria-label="Candidate notice language">
+                {LANGS.map((l) => (
+                  <button
+                    key={l.lang}
+                    type="button"
+                    className={LANG_BTN}
+                    aria-pressed={noticeLang === l.lang}
+                    title={l.title}
+                    onClick={() => { setNoticeLang(l.lang); }}
+                  >
+                    {l.label}
+                  </button>
+                ))}
+              </div>
+              <span className="text-xs text-muted">Candidate notice language</span>
+            </div>
+            <button type="button" className={exportBtn} onClick={() => void copyText(notice(), setCopy)}>
+              Copy candidate notice
+            </button>
+            <button type="button" className={exportBtn} onClick={() => { downloadText(notice(), noticeFileName(state, noticeLang)); }}>
+              Download candidate notice (.md)
+            </button>
+            <button type="button" className={exportBtn} onClick={() => void copyText(ats(), setCopy)}>
+              Copy for ATS
+            </button>
+            <button type="button" className={exportBtn} onClick={() => void copyText(refs(), setCopy)}>
+              Copy reference questions
+            </button>
+          </div>
+        </details>
       </div>
-      <div className={ROW}>
-        <span className={LABEL}>ATS</span>
-        <button type="button" className={BTN} onClick={() => void copyText(ats(), setAtsCopy)} aria-live="polite">
-          {atsCopy === "idle" ? "Copy for ATS" : STATUS_LABEL[atsCopy]}
-        </button>
-      </div>
-      <div className={ROW}>
-        <span className={LABEL}>References</span>
-        <button type="button" className={BTN} onClick={() => void copyText(refs(), setRefCopy)} aria-live="polite">
-          {refCopy === "idle" ? "Copy reference questions" : STATUS_LABEL[refCopy]}
-        </button>
-      </div>
+      <span role="status" className="sr-only">
+        {status === "idle" ? "" : STATUS_LABEL[status]}
+      </span>
     </div>
   );
 }

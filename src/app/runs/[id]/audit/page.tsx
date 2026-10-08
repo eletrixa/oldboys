@@ -11,6 +11,7 @@
  *   GET /api/runs/:id/audit?download=1
  *
  * Design constraints:
+ * - Missing times are omitted from meta lines, never shown as a dash; lineup answers are Pills
  * - Server component, rendered per request; shows no traits, claims, excerpts or profile URLs
  * - Lineup titles only for confirmed profiles; the record holds null for namesakes and "not sure"
  * - Same access rule as the run page: the id is an unguessable UUID
@@ -20,8 +21,8 @@
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import Link from "next/link";
 import { loadAuditRecord } from "@/app/api/runs/[id]/audit/load";
-import type { AuditRecord, SourceStatus } from "@/domain/audit";
-import { BTN_QUIET, BTN_SECONDARY, CARD, Eyebrow, LINK, Pill, type Tone } from "@/app/ui";
+import type { AuditRecord, LineupAnswer, SourceStatus } from "@/domain/audit";
+import { BTN_PRIMARY, BTN_QUIET, BTN_SECONDARY, CARD, Eyebrow, Pill, type Tone } from "@/app/ui";
 
 export const dynamic = "force-dynamic";
 
@@ -35,13 +36,24 @@ const STATUS_TONE: Record<SourceStatus, Tone> = {
   ok: "ok",
   empty: "neutral",
   failed: "conflict",
-  "not searched": "unsure",
+  "not searched": "neutral",
 };
 
 /** "2026-10-08 20:00 UTC"; empty or unreadable dates read as a dash. */
 function when(iso: string | null): string {
   if (iso === null || iso === "" || Number.isNaN(Date.parse(iso))) return "–";
   return `${new Date(iso).toISOString().slice(0, 16).replace("T", " ")} UTC`;
+}
+
+/** Like when(), but null for a missing or unreadable time so meta lines can skip the segment. */
+function whenOrNull(iso: string | null): string | null {
+  return when(iso) === "–" ? null : when(iso);
+}
+
+function AnswerPill({ answer }: { answer: LineupAnswer }): React.JSX.Element {
+  if (answer === "yes") return <Pill tone="ok">This is them</Pill>;
+  if (answer === "no") return <Pill tone="neutral">Someone else</Pill>;
+  return <Pill tone="unsure">Not sure yet</Pill>;
 }
 
 function usd(n: number): string {
@@ -72,8 +84,14 @@ function SourcesCard({ record }: { record: AuditRecord }): React.JSX.Element {
                 <Pill tone={STATUS_TONE[s.status]}>{s.status}</Pill>
               </div>
               <p className="text-xs text-muted tabular-nums">
-                {when(s.time)} · {String(s.items)} {s.items === 1 ? "item" : "items"} · {usd(s.cost_usd)}
-                {s.reason !== null && ` · ${s.reason}`}
+                {[
+                  whenOrNull(s.time),
+                  `${String(s.items)} ${s.items === 1 ? "item" : "items"}`,
+                  usd(s.cost_usd),
+                  s.reason,
+                ]
+                  .filter((part): part is string => part !== null)
+                  .join(" · ")}
               </p>
             </li>
           ))}
@@ -100,7 +118,7 @@ function LineupCard({ record }: { record: AuditRecord }): React.JSX.Element {
                 <span className="text-muted">{l.platform}</span> ·{" "}
                 {l.title ?? <span className="text-muted">title not kept</span>}
               </span>
-              <span className="shrink-0 text-muted">{l.answer}</span>
+              <AnswerPill answer={l.answer} />
             </li>
           ))}
         </ul>
@@ -121,7 +139,7 @@ function CallsCard({ record }: { record: AuditRecord }): React.JSX.Element {
             <li key={String(i)} className="flex items-center gap-3">
               <span>{c.status}</span>
               {c.mock && <Pill tone="unsure">MOCK</Pill>}
-              <span className="text-xs text-muted tabular-nums">{when(c.created_at)}</span>
+              {whenOrNull(c.created_at) !== null && <span className="text-xs text-muted tabular-nums">{when(c.created_at)}</span>}
             </li>
           ))}
         </ul>
@@ -136,10 +154,11 @@ export default async function AuditPage({ params }: { params: Promise<{ id: stri
   const record = await loadAuditRecord(env.DB, id, new Date());
   if (!record) {
     return (
-      <main className="mx-auto flex max-w-xl flex-col items-start gap-4 px-4 py-16">
+      <main className="mx-auto flex max-w-3xl flex-col items-start gap-4 px-4 py-10 md:py-14">
+        <Eyebrow>Audit</Eyebrow>
         <h1 className="font-serif text-4xl leading-[1.05]">We could not find this run</h1>
         <p className="text-muted">It may have been deleted already.</p>
-        <Link href="/" className={LINK}>Back</Link>
+        <Link href="/" className={`${BTN_PRIMARY} self-start`}>Back to home</Link>
       </main>
     );
   }

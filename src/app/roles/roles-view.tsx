@@ -21,7 +21,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { CoverageLabel, RoleGroup } from "@/domain/role-overview";
-import { BTN_QUIET, CARD_FLUSH, CARD_SAGE, Eyebrow, LINK, Pill } from "../ui";
+import { CARD_FLUSH, CARD_SAGE, Eyebrow, LINK, Pill } from "../ui";
 
 const DISCLAIMER = "This table shows how much public evidence the research found, not how good a candidate is.";
 
@@ -42,14 +42,15 @@ type Load =
 function RoleList({ groups }: { groups: RoleGroup[] }): React.JSX.Element {
   if (groups.length === 0) return <p className="text-muted">No briefs with a role yet.</p>;
   return (
-    <ul className="divide-y divide-divider">
+    <ul className="divide-y divide-divider border-b border-divider">
       {groups.map((g) => (
         <li key={g.key}>
-          <Link href={`/roles/${encodeURIComponent(g.key)}`} className="-mx-2 flex min-h-11 items-center justify-between gap-4 rounded-lg px-2 py-4 hover:bg-sage/40">
-            <span className="font-serif text-xl">{g.role}</span>
+          <Link href={`/roles/${encodeURIComponent(g.key)}`} className="group -mx-3 flex min-h-11 items-center justify-between gap-4 rounded-lg px-3 py-4 hover:bg-surface">
+            <span className="font-serif text-xl group-hover:text-action">{g.role}</span>
             <span className="shrink-0 text-sm text-muted tabular-nums">
               {g.run_count} {g.run_count === 1 ? "brief" : "briefs"}
             </span>
+            <span aria-hidden="true" className="text-muted group-hover:text-action">›</span>
           </Link>
         </li>
       ))}
@@ -61,7 +62,7 @@ function RoleTable({ group }: { group: RoleGroup }): React.JSX.Element {
   return (
     <div className="flex flex-col gap-4">
       <h2 className="font-serif text-2xl">{group.role}</h2>
-      <p className={`${CARD_SAGE} text-sm`}>{DISCLAIMER}</p>
+      <p className={`${CARD_SAGE} text-sm text-muted`}>{DISCLAIMER}</p>
       <div className={CARD_FLUSH}>
         <p className="px-4 pt-3 text-xs text-muted md:hidden">Swipe sideways to see every must-have.</p>
         <div role="region" aria-label="Evidence per must-have" tabIndex={0} className="overflow-x-auto">
@@ -72,7 +73,7 @@ function RoleTable({ group }: { group: RoleGroup }): React.JSX.Element {
                 <th scope="col" className="sticky left-0 z-10 bg-canvas px-4 py-3 font-semibold">Person</th>
                 <th scope="col" className="px-4 py-3 font-semibold">Date</th>
                 {group.questions.map((q) => (
-                  <th key={q} scope="col" className="min-w-40 px-4 py-3 font-semibold">{q}</th>
+                  <th key={q} scope="col" className="min-w-[10rem] px-4 py-3 text-xs font-semibold tracking-normal text-muted normal-case">{q}</th>
                 ))}
                 <th scope="col" className="px-4 py-3 font-semibold">Sources confirmed</th>
               </tr>
@@ -140,9 +141,9 @@ export function RolesView({ roleKey }: { roleKey?: string }): React.JSX.Element 
       <header className="flex flex-col items-start gap-3 border-b border-divider pb-8">
         <Eyebrow>Roles</Eyebrow>
         <h1 className="font-serif text-4xl leading-[1.05] md:text-5xl">Candidates by role</h1>
-        <p className="text-muted">Compare the briefs made for the same role.</p>
+        <p className="max-w-[62ch] text-muted">Compare the briefs made for the same role.</p>
         {roleKey !== undefined && (
-          <Link href="/roles" className={`${BTN_QUIET} -ml-3`}>All roles</Link>
+          <Link href="/roles" className={`${LINK} text-sm`}>All roles</Link>
         )}
       </header>
       {load.kind === "loading" && (

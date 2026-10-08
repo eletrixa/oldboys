@@ -103,6 +103,7 @@ export function IdentityMapCard({
           </text>
         )}
       </svg>
+      <p className="mt-2 text-xs text-muted">Lines show which profiles we link to {first}, not how good a candidate is.</p>
       </div>
       <ul className="mt-3 hidden flex-wrap gap-x-4 gap-y-1 text-xs text-muted sm:flex">
         <li className="flex items-center gap-2">
@@ -118,7 +119,6 @@ export function IdentityMapCard({
           Someone else, not linked
         </li>
       </ul>
-      <p className="mt-2 text-xs text-muted">Lines show which profiles we link to {first}, not how good a candidate is.</p>
     </section>
   );
 }

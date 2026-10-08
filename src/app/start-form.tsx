@@ -22,7 +22,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { BTN_PRIMARY, CARD_SAGE, FIELD, LINK } from "./ui";
+import { BTN_PRIMARY, CARD_SAGE, Chevron, FIELD, LINK, SUMMARY } from "./ui";
 
 const CV_MAX = 20_000;
 
@@ -138,8 +138,8 @@ export function StartForm({ initialRole, autoFocusRole = false }: StartFormProps
         placeholder="https://www.linkedin.com/in/..."
         helper="We read their name, location and employer from it, so we know exactly who they are."
       />
-      <details className="group rounded-lg border border-line/60 p-4">
-        <summary className="flex min-h-11 cursor-pointer items-center text-sm font-semibold text-muted hover:text-ink">or paste their CV</summary>
+      <details className="group border-t border-divider pt-2">
+        <summary className={SUMMARY}><Chevron />Or paste their CV instead</summary>
         <textarea
           name="cvText"
           rows={8}

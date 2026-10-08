@@ -149,6 +149,14 @@ describe("summary30s", () => {
   });
 });
 
+describe("ask length", () => {
+  it("keeps a long interview question whole up to 220 characters", () => {
+    const q = "How many engineers worked with you on the events platform rebuild, and what did you decide yourself when the migration plan changed halfway through?";
+    const s = summary30s(run({ brief: brief({ interview_questions: [q] }) }));
+    expect(s?.ask).toBe(`Ask: ${q}`);
+  });
+});
+
 describe("shorten", () => {
   it("keeps short text and cuts long text at a word with an ellipsis", () => {
     expect(shorten("Short one.")).toBe("Short one");

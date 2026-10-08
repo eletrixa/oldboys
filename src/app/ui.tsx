@@ -8,7 +8,7 @@
  *
  * Key responsibilities:
  * - Class strings for cards (plain, flush, peach, sage, conflict, unsure), buttons, fields and links so pages do not drift
- * - Eyebrow, Pill (semantic tone) and SourceLink
+ * - Eyebrow, Pill (semantic tone), SourceLink, and the SUMMARY + Chevron disclosure pattern
  *
  * Design constraints:
  * - Semantic tokens only (canvas, surface, ink, muted, action, sage, peach, divider, ok, unsure, conflict, inference)
@@ -28,14 +28,27 @@ export const CARD_CONFLICT = "rounded-2xl border border-conflict/40 bg-conflict-
 export const CARD_UNSURE = "rounded-2xl border border-unsure/40 bg-unsure-bg p-5 md:p-6";
 
 const BTN = "inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-lg text-sm whitespace-nowrap transition-colors";
-export const BTN_PRIMARY = `${BTN} bg-action px-5 font-semibold text-white hover:bg-action-hover disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-action`;
-export const BTN_SECONDARY = `${BTN} border border-line/60 bg-surface px-4 font-medium text-ink hover:border-ink hover:bg-sage/60`;
-export const BTN_QUIET = `${BTN} px-3 font-medium text-muted hover:bg-sage/60 hover:text-ink`;
+export const BTN_PRIMARY = `${BTN} bg-action px-5 font-semibold text-white hover:bg-action-hover active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-action`;
+export const BTN_SECONDARY = `${BTN} border border-line/60 bg-surface px-4 font-medium text-ink hover:border-ink hover:bg-sage/60 active:bg-sage`;
+export const BTN_QUIET = `${BTN} px-3 font-medium text-muted hover:bg-sage/60 hover:text-ink active:bg-sage`;
 
 /** Border and placeholder meet 3:1 / 4.5:1; focus uses the global :focus-visible ring. */
 export const FIELD = "w-full rounded-lg border border-line bg-surface px-4 py-3 text-ink placeholder:text-muted";
 
 export const LINK = "font-medium text-action underline decoration-action/40 underline-offset-4 hover:decoration-action";
+
+/** `<details className="group">` + `<summary className={SUMMARY}><Chevron />…</summary>`: 44px target, native marker hidden. */
+export const SUMMARY =
+  "flex min-h-11 cursor-pointer list-none items-center gap-2 text-sm font-semibold text-muted hover:text-ink [&::-webkit-details-marker]:hidden";
+
+/** Disclosure marker that turns when the parent `details.group` is open. */
+export function Chevron(): React.JSX.Element {
+  return (
+    <span aria-hidden="true" className="inline-block w-3 text-base leading-none text-action transition-transform group-open:rotate-90 motion-reduce:transition-none">
+      ›
+    </span>
+  );
+}
 
 export type Tone = "ok" | "unsure" | "conflict" | "neutral" | "inference";
 
@@ -58,7 +71,7 @@ export function Eyebrow({ children }: { children: React.ReactNode }): React.JSX.
 /** External source link shown as its hostname. */
 /** A source as a link; the pasted CV ("cv:<runId>") as plain text with no href. `label` defaults to the host. */
 export function SourceLink({ url, label, className = "" }: { url: string; label?: string; className?: string }): React.JSX.Element {
-  if (isCvSource(url)) return <span className={`text-zinc-400 ${className}`}>{CV_SOURCE_TEXT}</span>;
+  if (isCvSource(url)) return <span className={`text-muted ${className}`}>{CV_SOURCE_TEXT}</span>;
   return (
     <a href={url} target="_blank" rel="noreferrer" className={`${LINK} ${className}`}>
       {label ?? host(url)}
