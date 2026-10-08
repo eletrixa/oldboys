@@ -20,7 +20,7 @@ import { type ConfidenceBand, confidenceBand, host } from "./state";
 const CARD = "rounded-2xl border border-zinc-800 bg-zinc-900/60 p-5";
 
 const BAND: Record<ConfidenceBand, string> = {
-  strong: "bg-teal-500/15 text-teal-300",
+  strong: "bg-ok-bg text-ok",
   fair: "bg-amber-500/15 text-amber-300",
   weak: "bg-zinc-800 text-zinc-400",
 };

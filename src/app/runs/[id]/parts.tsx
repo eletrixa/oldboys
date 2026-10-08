@@ -97,7 +97,7 @@ export function CostLine({ cost }: { cost: RunCost }): React.JSX.Element {
 }
 
 const BADGE: Record<CandidateDecision, { text: string; cls: string }> = {
-  merge: { text: "This is them", cls: "bg-teal-500/15 text-teal-300" },
+  merge: { text: "This is them", cls: "bg-ok-bg text-ok" },
   rejected: { text: "Someone else", cls: "bg-zinc-800 text-zinc-400" },
   "possibly-same-as": { text: "Not sure yet", cls: "bg-amber-500/15 text-amber-300" },
 };
@@ -213,7 +213,7 @@ export function QuestionCard({
 }
 
 const COVERAGE = {
-  evidenced: "bg-teal-500/15 text-teal-300",
+  evidenced: "bg-ok-bg text-ok",
   partial: "bg-amber-500/15 text-amber-300",
   none: "bg-zinc-800 text-zinc-400",
 } as const;

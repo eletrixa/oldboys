@@ -96,3 +96,9 @@ Each agent appends: what it starts, progress, what it finishes. Newest at the bo
 - Started: 23:45. Follow-up to idea #17: honest legal basis (no "candidate informed" claim, new "Candidate notice: not recorded" line), free-text reasons scrubbed (URLs → host, e-mails, phone numbers), lineup titles kept only for confirmed profiles; same scrub for "not searched" reasons in the candidate notice.
 - Finished: 23:49. Pure `scrubReason` (src/domain/scrub.ts). No schema change, no new endpoint; pnpm check green.
 - Files: src/domain/{scrub.ts,__tests__/scrub.test.ts} (new), src/domain/audit.ts, src/domain/__tests__/audit.test.ts, src/app/runs/[id]/audit/page.tsx, src/app/runs/[id]/candidate-copy.ts, src/app/runs/[id]/__tests__/candidate-copy.test.ts, PROGRESS.md.
+
+## 2026-10-08 23:55 · Radar UI (Josef's Claude session)
+- Started/finished: Radar brand theme (design kit V2 + visual guideline) over the whole UI without rewriting components: `globals.css` defines semantic tokens (canvas, surface, ink, muted, action, sage, peach, divider, focus, ok/unsure/conflict) and remaps the zinc/teal/amber/red/emerald/violet scales the existing classes use, so the dark theme renders as Radar's warm light theme. New code should use the semantic names (bg-canvas, text-ink, bg-action, text-muted, border-divider, bg-ok-bg text-ok).
+- Shell and home: Echo r mark + "radar" wordmark, Roles / New brief, honesty footer (`layout.tsx`); editorial home with three steps and the start form in a card (`page.tsx`). Supported states (evidenced, This is them, strong, audit ok, identity-map merge) now use the green `ok` tokens instead of rust.
+- Fonts: Public Sans and Newsreader variable TTFs self-hosted in `public/fonts` with their OFL notices (no network fetch).
+- Not touched: start-form logic, run-view logic, API, extension UI. `pnpm check` and `pnpm build` green.

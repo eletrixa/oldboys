@@ -29,7 +29,7 @@ const VIA_LABEL: Record<AuditRecord["run"]["started_via"], string> = {
   api: "API",
 };
 const STATUS_CLS: Record<SourceStatus, string> = {
-  ok: "bg-teal-500/15 text-teal-300",
+  ok: "bg-ok-bg text-ok",
   empty: "bg-zinc-700/60 text-zinc-300",
   failed: "bg-red-500/15 text-red-300",
   "not searched": "bg-amber-500/15 text-amber-300",

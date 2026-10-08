@@ -24,7 +24,7 @@ const DESC_ID = "identity-map-desc";
 const MARK: Record<CandidateDecision, string> = { merge: "✓", "possibly-same-as": "?", rejected: "×" };
 
 const NODE_CLS: Record<CandidateDecision, { circle: string; mark: string }> = {
-  merge: { circle: "fill-teal-500/20 stroke-teal-400", mark: "fill-teal-300" },
+  merge: { circle: "fill-ok-bg stroke-ok", mark: "fill-ok" },
   "possibly-same-as": { circle: "fill-amber-500/15 stroke-amber-400", mark: "fill-amber-300" },
   rejected: { circle: "fill-zinc-800 stroke-zinc-600", mark: "fill-zinc-400" },
 };
@@ -70,7 +70,7 @@ export function IdentityMapCard({
         {layout.linked.map((n) => {
           const e = edgeOf(center, n);
           return n.decision === "merge" ? (
-            <line key={`edge-${n.id}`} {...e} strokeWidth={n.supplied ? 4 : 3} strokeLinecap="round" className="stroke-teal-400" />
+            <line key={`edge-${n.id}`} {...e} strokeWidth={n.supplied ? 4 : 3} strokeLinecap="round" className="stroke-ok" />
           ) : (
             <line key={`edge-${n.id}`} {...e} strokeWidth={2} strokeDasharray="6 5" className="stroke-amber-400" />
           );
