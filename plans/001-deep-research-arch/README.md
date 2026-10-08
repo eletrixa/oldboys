@@ -1,6 +1,6 @@
 ---
 plan: deep-research-arch
-status: draft
+status: active
 owner: Robert
 created: 2026-10-08
 type: research
@@ -8,7 +8,11 @@ type: research
 
 # 001 — Architecture: Social Media Deep Research agent (Hackathon Case 01)
 
-Decision dossier for the one-night build. Read order:
+Decision dossier for the one-night build.
+
+Deployment decisions superseded by 002.
+
+Read order:
 
 | # | File | What |
 |---|---|---|

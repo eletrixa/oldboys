@@ -1,0 +1,22 @@
+# CI on pull requests: typecheck, lint, test and OpenNext build. Never deploys.
+#
+# Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
+# Module:  .github/workflows/ci.yml
+# Deps:    pnpm/action-setup, actions/setup-node, wrangler
+# Tested:  n/a
+name: ci
+on:
+  pull_request:
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm check
+      - run: pnpm exec opennextjs-cloudflare build

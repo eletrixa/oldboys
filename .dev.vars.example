@@ -1,0 +1,6 @@
+# Local secrets for `wrangler dev` / `next dev` via initOpenNextCloudflareForDev. Copy to .dev.vars (gitignored).
+ANTHROPIC_API_KEY=
+APIFY_TOKEN=
+ELEVENLABS_API_KEY=
+# Bearer token clients must send to POST /api/runs (openssl rand -hex 24)
+RUN_TOKEN=
