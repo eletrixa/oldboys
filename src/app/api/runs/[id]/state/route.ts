@@ -61,11 +61,21 @@ export async function GET(
     env.DB.prepare("SELECT * FROM claims WHERE run_id = ? ORDER BY rank").bind(id).all<ClaimRow>(),
     env.DB.prepare("SELECT id, url FROM sources WHERE run_id = ?").bind(id).all<{ id: string; url: string }>(),
     env.DB.prepare("SELECT brief_json FROM briefs WHERE run_id = ?").bind(id).first<{ brief_json: string }>(),
-    env.DB.prepare("SELECT step, ts, kind, cost_usd, ms FROM ledger_entries WHERE run_id = ? ORDER BY seq")
+    env.DB.prepare("SELECT step, ts, kind, cost_usd, ms, ref_json FROM ledger_entries WHERE run_id = ? ORDER BY seq")
       .bind(id)
-      .all<CostRow & { step: string }>(),
+      .all<CostRow & { step: string; ref_json: string | null }>(),
   ]);
   const last = ledger.results.at(-1);
+  const failure = ledger.results
+    .map((row) => {
+      try {
+        const ref: unknown = row.ref_json === null ? null : JSON.parse(row.ref_json);
+        return typeof ref === "object" && ref !== null && "failed" in ref && "reason" in ref && typeof ref.reason === "string" ? ref.reason : null;
+      } catch {
+        return null;
+      }
+    })
+    .find((r): r is string => r !== null);
 
   const goal = GoalId.safeParse(head.goal);
   const base = goal.success ? recipeFor(goal.data).questions : [];
@@ -91,6 +101,7 @@ export async function GET(
     questions: [...base, ...extra],
     brief: brief ? (JSON.parse(brief.brief_json) as Brief) : null,
     cost: runCost(ledger.results, head.created_at),
+    failure: failure ?? null,
   };
   return Response.json(state, { headers: { "Cache-Control": "no-store" } });
 }

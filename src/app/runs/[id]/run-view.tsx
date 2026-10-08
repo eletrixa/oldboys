@@ -127,6 +127,7 @@ export function RunView({ id }: { id: string }): React.JSX.Element {
       {state.status === "failed" ? (
         <p role="alert" className="rounded-xl border border-red-900 bg-red-950/40 p-4 text-sm text-red-200">
           Something went wrong while putting this brief together. Please start a new one.
+          {state.failure !== null && <span className="mt-2 block text-xs text-red-300/80">Step failed: {state.failure}</span>}
         </p>
       ) : (
         <ProgressSteps rows={stepRows(state)} labels={labels} />

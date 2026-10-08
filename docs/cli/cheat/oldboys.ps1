@@ -46,6 +46,10 @@ function global:cheatoldboys {
     Write-Host "Run Vitest once" -ForegroundColor White
     Write-Host "    pnpm test:watch                        " -NoNewline -ForegroundColor Green
     Write-Host "Vitest watch mode" -ForegroundColor White
+    Write-Host "    LIVE=1 SUBJECT=.. ANCHOR=.. REPORT=out.txt pnpm exec vitest run live-sources" -ForegroundColor Green
+    Write-Host "                                           Live Apify smoke of every hiring collector (spends ~\$0.01)" -ForegroundColor White
+    Write-Host "    node scripts/ui-flow.mjs name city role prefix" -NoNewline -ForegroundColor Green
+    Write-Host "  Screen 1 -> 2 browser flow + screenshots against pnpm preview" -ForegroundColor White
     Write-Host ""
     Write-Host "  ┌─────────────────────────────────────────────────────────────────┐" -ForegroundColor DarkGray
     Write-Host "  │  DEPLOYMENT                                                    │" -ForegroundColor Yellow

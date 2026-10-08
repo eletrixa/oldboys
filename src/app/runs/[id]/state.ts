@@ -30,6 +30,8 @@ export type RunState = {
   sources: { id: string; url: string }[];
   questions: { id: string; text: string }[];
   brief: Brief | null;
+  /** Reason recorded by the Workflow when status is failed; null otherwise. */
+  failure: string | null;
   cost: RunCost;
 };
 
