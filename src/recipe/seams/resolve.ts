@@ -8,7 +8,7 @@
  *
  * Key responsibilities:
  * - Draft one candidate per profile-like source; LLM scores each vs subject + anchor; thresholds decide
- * - Deterministic fallback when the LLM call fails: anchor substring match
+ * - Deterministic fallback when the LLM call fails: anchor substring match, never above ASK range (no silent merge)
  *
  * Design constraints:
  * - Never merges on name alone (plans/001 case studies §B); below ASK_FLOOR the UI asks the manager
@@ -75,8 +75,9 @@ export async function resolveCandidates(ctx: StepContext, ports: Ports): Promise
     out.notes.push(`llm scoring failed, deterministic fallback: ${error instanceof Error ? error.message : String(error)}`);
     scores = drafts.map((d) => ({
       id: d.id,
-      score: d.excerpt.toLowerCase().includes(ctx.anchor.toLowerCase()) ? 0.85 : 0.5,
-      reasons: ["fallback: anchor substring match"],
+      // Without a model we never merge on our own: anchor in excerpt is a strong hint, still asked (below MERGE_FLOOR)
+      score: d.excerpt.toLowerCase().includes(ctx.anchor.toLowerCase()) ? 0.75 : 0.5,
+      reasons: [d.excerpt.toLowerCase().includes(ctx.anchor.toLowerCase()) ? "fallback: anchor found in text, please confirm" : "fallback: name match only"],
     }));
   }
   const byId = new Map(scores.map((s) => [s.id, s]));

@@ -42,10 +42,10 @@ describe("resolve", () => {
     expect(out.candidates[0]?.platform).toBe("linkedin");
   });
 
-  it("falls back to anchor matching when the LLM fails", async () => {
+  it("falls back to anchor matching when the LLM fails and never merges on its own", async () => {
     const out = await resolveCandidates(baseContext({ sources }), fakePorts());
     const byUrl = new Map(out.candidates.map((c) => [c.profile_urls[0], c.decision]));
-    expect(byUrl.get("https://cz.linkedin.com/in/jana-dvorakova-data")).toBe("merge");
+    expect(byUrl.get("https://cz.linkedin.com/in/jana-dvorakova-data")).toBe("possibly-same-as");
     expect(byUrl.get("https://cz.linkedin.com/in/jana-dvorakova-nurse")).toBe("possibly-same-as");
   });
 });
