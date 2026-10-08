@@ -3,13 +3,13 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/api/intake/tags/route.ts
- * Deps:    @opennextjs/cloudflare (getCloudflareContext), binding DB, secret RUN_TOKEN, ./tag-body, src/app/api/_lib/{auth,body}, src/app/intake/intake-rows (type)
+ * Deps:    @opennextjs/cloudflare (getCloudflareContext), binding DB, secret RUN_TOKEN, ./tag-body, src/app/api/_lib/{session-or-bearer,body}, src/app/intake/intake-rows (type)
  * Tested:  schema and duplicate classifier in ./__tests__/tag-body.test.ts; route n/a (QA pass, like /api/roles)
  *
  * Key responsibilities:
  * - GET: all intake_tags rows newest first -> { tags }
  * - POST {tag, role? (or positionId, then the position's title), goal?, startupjobsOfferId?}: 201 with the stored tag, 400 invalid body, 404 unknown positionId, 409 when the tag or the StartupJobs offer id exists
- * - Bearer auth against RUN_TOKEN on both methods
+ * - Login session or bearer RUN_TOKEN on both methods (a recruiter binds tags from the position page without the team token)
  *
  * Design constraints:
  * - No runtime = "edge"
@@ -17,7 +17,7 @@
  * - Database error text is logged, never returned
  */
 import { getCloudflareContext } from "@opennextjs/cloudflare";
-import { requireBearer } from "@/app/api/_lib/auth";
+import { requireSessionOrBearer } from "@/app/api/_lib/session-or-bearer";
 import { parseJsonBody } from "@/app/api/_lib/body";
 import type { TagRow } from "@/app/intake/intake-rows";
 import { duplicateField, TagBody } from "./tag-body";
@@ -26,7 +26,7 @@ const COLUMNS = "tag, role, goal, startupjobs_offer_id, position_id, created_at"
 
 export async function GET(request: Request): Promise<Response> {
   const { env } = getCloudflareContext();
-  const denied = requireBearer(request, env.RUN_TOKEN);
+  const denied = await requireSessionOrBearer(request, env);
   if (denied) return denied;
 
   const rows = await env.DB.prepare(`SELECT ${COLUMNS} FROM intake_tags ORDER BY created_at DESC, tag`).all<TagRow>();
@@ -35,7 +35,7 @@ export async function GET(request: Request): Promise<Response> {
 
 export async function POST(request: Request): Promise<Response> {
   const { env } = getCloudflareContext();
-  const denied = requireBearer(request, env.RUN_TOKEN);
+  const denied = await requireSessionOrBearer(request, env);
   if (denied) return denied;
 
   const body = await parseJsonBody(request, TagBody);
