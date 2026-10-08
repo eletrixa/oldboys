@@ -14,6 +14,7 @@
  * - Pure: no I/O, no node: imports; the caller passes the clock (`nowSecs`)
  * - Never throws on bad input; any problem returns false / null
  */
+import { toHex } from "./digest";
 
 import { timingSafeEqual } from "@/domain/timing-safe-equal";
 
@@ -32,10 +33,6 @@ export function parseSignatureHeader(header: string | null): { t: number; v0: st
     else if (key === "v0" && value.length > 0) v0 = value;
   }
   return t === null || v0 === null ? null : { t, v0 };
-}
-
-function toHex(bytes: Uint8Array): string {
-  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
 export async function verifyElevenLabsSignature(input: {
