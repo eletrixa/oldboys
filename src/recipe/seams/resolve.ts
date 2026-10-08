@@ -3,8 +3,8 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/recipe/seams/resolve.ts
- * Deps:    zod
- * Tested:  src/recipe/__tests__/seams.test.ts
+ * Deps:    zod, src/domain/corroborate, src/recipe/sources/linkedin (experienceCompanies)
+ * Tested:  src/recipe/__tests__/seams.test.ts, src/recipe/__tests__/identity-corroboration.test.ts
  *
  * Key responsibilities:
  * - Draft one candidate per profile-like source; LLM scores each vs subject + anchor; thresholds decide
@@ -18,8 +18,13 @@
  *   leading initial "L. Pokorný") in its title line or URL handle, so surname-only namesakes never fill the lineup
  * - Handles come only from known profile URL shapes; Instagram posts/reels and unknown paths on profile platforms
  *   get no handle (never a post code or a path word)
+ * - Model merges need a deterministic corroboration (anchor/place, merged-profile employer, cross-link to a merged
+ *   profile); a name/handle-only hit is capped at UNCORROBORATED_CAP (possibly-same-as). anchor_match is also set
+ *   when the model's reasons say the location matched
+ * - Lineup reasons and snippets carry professional identifiers only (personal-life details filtered, prompt says so)
  * - `sourceIdentityUpdates`: after the lineup, sources whose profile key equals a merged candidate's become
- *   "merged", sources under a rejected candidate "unverified"; extract and synthesize trust only "merged"
+ *   "merged", sources under a rejected candidate "unverified"; then (rule 2) a still-unverified source naming the
+ *   subject in full plus a confirmed employer token becomes "merged" with a reason; extract and synthesize trust only "merged"
  * - `noneConfirmed`: a collector found hits but none sits on a merged profile; the Workflow records UNCONFIRMED_GAP
  * - `lineupNeedsAnswer`: pause for the manager only on possibly-same-as, or when nothing is merged (a seed merge counts)
  *
@@ -30,6 +35,8 @@ import { z } from "zod";
 import type { Candidate, Source, SourceIdentity } from "@/domain/claim";
 import type { Ports } from "@/domain/ports";
 import { emptyOutcome } from "@/recipe/runner";
+import { corroborationReason, employerHit, fold, mentionsPlace, orgTokens, professionalReasons, professionalSnippet } from "@/domain/corroborate";
+import { experienceCompanies, LINKEDIN_PROFILE_ACTORS } from "@/recipe/sources/linkedin";
 import { clip, platformOf, type StepContext, type StepOutcome } from "@/recipe/sources/types";
 
 export const MERGE_FLOOR = 0.8;
@@ -131,20 +138,43 @@ export function profileKey(url: string): string | null {
   return pageKey(p.url);
 }
 
-/** Identity changes after the lineup: under a merged candidate -> merged, under a rejected one -> unverified. */
+export type IdentitySource = Pick<Source, "id" | "url" | "identity"> & Partial<Pick<Source, "excerpt" | "actor">>;
+export type IdentityUpdate = { id: string; identity: SourceIdentity; reason: string | null };
+
+/** Companies in the experience lines of merged LinkedIn profile sources (seed scrape or linkedin collector). */
+export function mergedProfileOrgs(sources: readonly IdentitySource[]): string[] {
+  return sources.filter((s) => s.identity === "merged" && LINKEDIN_PROFILE_ACTORS.has(s.actor ?? "")).flatMap((s) => experienceCompanies(s.excerpt ?? ""));
+}
+
+/**
+ * Identity changes after the lineup.
+ * Rule 1 (profile key): under a merged candidate -> merged, under a rejected one -> unverified (reason null).
+ * Rule 2 (name + employer, only with `corroboration`): a source still unverified and not on a rejected profile
+ * becomes merged when it names the subject in full AND carries a distinctive token of a confirmed organisation:
+ * `orgs` (seed employer, headline orgs) plus the companies of merged LinkedIn profiles. Candidates never change.
+ */
 export function sourceIdentityUpdates(
   candidates: readonly Pick<Candidate, "decision" | "profile_urls">[],
-  sources: readonly Pick<Source, "id" | "url" | "identity">[],
-): { id: string; identity: SourceIdentity }[] {
+  sources: readonly IdentitySource[],
+  corroboration?: { subject: string; orgs: readonly string[] },
+): IdentityUpdate[] {
   const keys = (d: Candidate["decision"]) => new Set(candidates.filter((c) => c.decision === d).flatMap((c) => c.profile_urls.map(profileKey)));
   const merged = keys("merge");
   const rejected = keys("rejected");
-  const out: { id: string; identity: SourceIdentity }[] = [];
-  for (const s of sources) {
+  const out: IdentityUpdate[] = [];
+  const after = sources.map((s) => {
     const k = profileKey(s.url);
-    if (k === null) continue;
-    const next: SourceIdentity | null = rejected.has(k) ? "unverified" : merged.has(k) ? "merged" : null;
-    if (next !== null && next !== s.identity) out.push({ id: s.id, identity: next });
+    const next: SourceIdentity | null = k === null ? null : rejected.has(k) ? "unverified" : merged.has(k) ? "merged" : null;
+    if (next !== null && next !== s.identity) out.push({ id: s.id, identity: next, reason: null });
+    return { ...s, identity: next ?? s.identity, rejected: k !== null && rejected.has(k) };
+  });
+  if (corroboration === undefined) return out;
+  const tokens = orgTokens([...corroboration.orgs, ...mergedProfileOrgs(after)], corroboration.subject);
+  if (tokens.length === 0) return out;
+  for (const s of after) {
+    if (s.identity === "merged" || s.rejected) continue;
+    const reason = corroborationReason(corroboration.subject, tokens, { url: s.url, excerpt: s.excerpt ?? "" });
+    if (reason !== null) out.push({ id: s.id, identity: "merged", reason });
   }
   return out;
 }
@@ -224,11 +254,6 @@ function surname(subject: string): string {
   return subject.trim().split(/\s+/).at(-1)?.toLowerCase() ?? subject.toLowerCase();
 }
 
-/** Lowercase, diacritics stripped: "Lukáš" -> "lukas". */
-function fold(text: string): string {
-  return text.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
-}
-
 /** True when a and b differ by at most one insert, delete or substitution (Jozef / Josef). */
 function withinOneEdit(a: string, b: string): boolean {
   if (a === b) return true;
@@ -294,6 +319,37 @@ export function pickDrafts(ctx: Pick<StepContext, "candidates" | "sources" | "su
   return [...byKey.values()];
 }
 
+/** Highest score a name- or handle-only hit may keep: possibly-same-as, never merge. */
+export const UNCORROBORATED_CAP = 0.7;
+const UNCORROBORATED_REASON = "name or handle only: no location, employer or cross-link match";
+const LOCATION_REASON = /\b(?:location|located|based in|lives in)\b/i;
+
+/**
+ * What besides the name ties a hit to the subject: the anchor link or text, the anchor's place, a token of a merged
+ * LinkedIn profile's employer, or a cross-link to or from a merged profile. Null when it is name/handle only.
+ */
+export function corroboration(d: { url: string; excerpt: string }, ctx: Pick<StepContext, "subject" | "anchor" | "candidates" | "sources">): string | null {
+  const text = `${d.excerpt}\n${d.url}`;
+  const lc = text.toLowerCase();
+  const aKey = anchorKey(ctx.anchor);
+  if (aKey !== null && pageKey(d.url) === aKey) return "anchor link";
+  if (ctx.anchor.trim() !== "" && lc.includes(ctx.anchor.trim().toLowerCase())) return "anchor";
+  if (mentionsPlace(ctx.anchor, text)) return "location";
+  const employer = employerHit(text, orgTokens(mergedProfileOrgs(ctx.sources), ctx.subject));
+  if (employer !== null) return `employer (${employer})`;
+  const mergedKeys = ctx.candidates.filter((c) => c.decision === "merge").flatMap((c) => c.profile_urls.map(pageKey)).filter((k): k is string => k !== null);
+  // ponytail: substring link check, like fallbackScores; misses shortened or redirected links
+  if (mergedKeys.some((k) => lc.includes(k))) return "cross-link";
+  const own = pageKey(d.url);
+  return own !== null && ctx.sources.some((s) => s.identity === "merged" && s.excerpt.toLowerCase().includes(own)) ? "cross-link" : null;
+}
+
+/** anchor_match: the hit matched the anchor or its place, or the model's reasons say the location matched. */
+function anchorMatched(anchor: string, why: string | null, reasons: readonly string[]): boolean {
+  if (why === "anchor link" || why === "anchor" || why === "location") return true;
+  return reasons.some((r) => LOCATION_REASON.test(r) || mentionsPlace(anchor, r));
+}
+
 export async function resolveCandidates(ctx: StepContext, ports: Ports): Promise<StepOutcome> {
   const out = emptyOutcome();
   const drafts = pickDrafts(ctx).map((s) => {
@@ -306,17 +362,26 @@ export async function resolveCandidates(ctx: StepContext, ports: Ports): Promise
   }
 
   let scores: z.infer<typeof Scores>;
+  let byModel = false;
+  const employers = mergedProfileOrgs(ctx.sources);
   try {
     const r = await ports.llm({
       model: "primary",
-      system:
-        "You resolve whether a public web hit belongs to the person described. Score 0..1 = probability it is the same person. Use the anchor (city, employer, website or IČO), cross-links between profiles, and name match. A bare name match is at most 0.5. Give short reasons.",
-      prompt: `Subject: ${ctx.subject}\nAnchor: ${ctx.anchor}\n\nHits:\n${drafts.map((d) => `- id=${d.id} platform=${d.platform} url=${d.url}\n  ${d.excerpt.replaceAll("\n", " ")}`).join("\n")}`,
+      system: [
+        "You resolve whether a public web hit belongs to the person described. Score 0..1 = probability it is the same person.",
+        "Use the anchor (city, employer, website or IČO), the confirmed employers, cross-links between profiles, and name match.",
+        `Score ${String(MERGE_FLOOR)} or more only when the name matches AND the hit shows the location, a confirmed employer, or a cross-link to a confirmed profile.`,
+        `A name or handle match alone is at most ${String(UNCORROBORATED_CAP)}; a bare name match is at most 0.5.`,
+        "Give short reasons citing only professional identifiers: name, handle, headline, employer, location, cross-links.",
+        "Never mention personal-life details (check-ins, profile pictures, photos, family, hobbies).",
+      ].join(" "),
+      prompt: `Subject: ${ctx.subject}\nAnchor: ${ctx.anchor}\nConfirmed employers: ${employers.length > 0 ? employers.join(", ") : "none yet"}\n\nHits:\n${drafts.map((d) => `- id=${d.id} platform=${d.platform} url=${d.url}\n  ${d.excerpt.replaceAll("\n", " ")}`).join("\n")}`,
       schema: Scores,
     });
     out.cost_usd += r.cost_usd;
     out.calls += 1;
     scores = r.value;
+    byModel = true;
   } catch (error) {
     out.notes.push(`llm scoring failed, deterministic fallback: ${error instanceof Error ? error.message : String(error)}`);
     scores = fallbackScores(drafts, ctx.anchor);
@@ -324,18 +389,22 @@ export async function resolveCandidates(ctx: StepContext, ports: Ports): Promise
   const byId = new Map(scores.map((s) => [s.id, s]));
   const all = drafts.map((d) => {
     const s = byId.get(d.id) ?? { score: 0.5, reasons: ["unscored"] };
+    const why = corroboration(d, ctx);
+    // fallbackScores already merges only on hard links; a model merge also needs a deterministic corroboration
+    const capped = byModel && s.score >= MERGE_FLOOR && why === null;
+    const score = capped ? UNCORROBORATED_CAP : s.score;
     return {
       id: d.id,
       run_id: ctx.runId,
       name: ctx.subject,
       profile_urls: [d.url],
-      anchor_match: d.excerpt.toLowerCase().includes(ctx.anchor.toLowerCase()) ? ctx.anchor : null,
-      score: s.score,
-      decision: decisionFor(s.score),
+      anchor_match: anchorMatched(ctx.anchor, why, s.reasons) ? ctx.anchor : null,
+      score,
+      decision: decisionFor(score),
       platform: d.platform,
       handle: d.handle,
-      snippet: d.snippet,
-      reasons: s.reasons,
+      snippet: professionalSnippet(d.snippet),
+      reasons: professionalReasons(capped ? [...s.reasons, UNCORROBORATED_REASON] : s.reasons),
     };
   });
   out.candidates = all;

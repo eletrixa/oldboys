@@ -381,6 +381,7 @@ export function BriefView({ state }: { state: RunState }): React.JSX.Element | n
   const { brief } = state;
   if (!brief) return null;
   const urlOf = new Map(state.sources.map((s) => [s.id, s.url]));
+  const noteOf = new Map(state.sources.flatMap((s) => (typeof s.identity_reason === "string" && s.identity_reason !== "" ? [[s.id, s.identity_reason] as const] : [])));
   const textOf = new Map(state.questions.map((q) => [q.id, q.text]));
   const allUnavailable = brief.per_question.length > 0 && brief.per_question.every((q) => q.summary.startsWith("AI summary unavailable"));
   const sections = briefSections(brief);
@@ -391,7 +392,7 @@ export function BriefView({ state }: { state: RunState }): React.JSX.Element | n
       <KitActions state={state} />
       {brief.degraded !== null && <DegradedNotice reason={brief.degraded} />}
       {brief.degraded !== null && <ConfirmedEvidence items={brief.evidence} />}
-      {sections !== null && <SectionList sections={sections} claims={state.claims} urlOf={urlOf} />}
+      {sections !== null && <SectionList sections={sections} claims={state.claims} urlOf={urlOf} noteOf={noteOf} />}
       {allUnavailable ? (
         <RoleCriteria texts={roleCriteria(state.questions)} />
       ) : (
@@ -403,7 +404,7 @@ export function BriefView({ state }: { state: RunState }): React.JSX.Element | n
               <span className={`shrink-0 rounded-full px-3 py-1 text-xs ${COVERAGE[q.coverage]}`}>{q.coverage}</span>
             </div>
             <p className="mt-2 text-sm text-zinc-300">{q.summary}</p>
-            <ClaimList claims={state.claims.filter((c) => q.claim_ids.includes(c.id))} urlOf={urlOf} />
+            <ClaimList claims={state.claims.filter((c) => q.claim_ids.includes(c.id))} urlOf={urlOf} noteOf={noteOf} />
           </section>
         ))
       )}
