@@ -1,5 +1,5 @@
 /**
- * Audit record page: GDPR record of one run (who started it, legal basis, every source queried, lineup, calls, retention).
+ * Audit record page: GDPR record of one run (who started it, legal basis, candidate notice, every source queried, lineup, calls, retention).
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/runs/[id]/audit/page.tsx
@@ -12,6 +12,7 @@
  *
  * Design constraints:
  * - Server component, rendered per request; shows no traits, claims, excerpts or profile URLs
+ * - Lineup titles only for confirmed profiles; the record holds null for namesakes and "not sure"
  * - Same access rule as the run page: the id is an unguessable UUID
  */
 import { getCloudflareContext } from "@opennextjs/cloudflare";
@@ -93,7 +94,8 @@ function LineupCard({ record }: { record: AuditRecord }): React.JSX.Element {
           {record.lineup.map((l, i) => (
             <li key={`${l.platform}-${String(i)}`} className="flex items-center justify-between gap-3">
               <span className="min-w-0 truncate">
-                <span className="text-zinc-500">{l.platform}</span> · {l.title}
+                <span className="text-zinc-500">{l.platform}</span> ·{" "}
+                {l.title ?? <span className="text-zinc-500">title not kept</span>}
               </span>
               <span className="shrink-0 text-zinc-300">{l.answer}</span>
             </li>
@@ -172,6 +174,7 @@ export default async function AuditPage({ params }: { params: Promise<{ id: stri
         <dl className="flex flex-col gap-2">
           <Row label="Legal basis">{legal.basis}</Row>
           <Row label="Purpose">{legal.purpose}</Row>
+          <Row label="Candidate notice">{legal.notice}</Row>
         </dl>
       </section>
 

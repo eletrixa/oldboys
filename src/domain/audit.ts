@@ -3,28 +3,35 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/domain/audit.ts
- * Deps:    zod, src/domain/run-cost
+ * Deps:    zod, src/domain/run-cost, src/domain/scrub
  * Tested:  src/domain/__tests__/audit.test.ts
  *
  * Key responsibilities:
- * - auditRecord(rows): start channel (form / extension / api), legal basis + purpose, every collector step with
- *   status (ok / empty / failed / not searched + reason), items and cost, model call count, lineup answers,
- *   verification call statuses (MOCK flagged) and the scheduled deletion date
+ * - auditRecord(rows): start channel (form / extension / api), legal basis + purpose + candidate notice note, every
+ *   collector step with status (ok / empty / failed / not searched + reason), items and cost, model call count,
+ *   lineup answers, verification call statuses (MOCK flagged) and the scheduled deletion date
+ * - LEGAL_BASIS states only what the hiring team declares; NOTICE_NOTE says the tool records no candidate notice
  * - RETENTION_DAYS / deletionDate: single source of the 7-day retention, also used by src/workflow/purge.ts
  *
  * Design constraints:
  * - Pure: no I/O; rows come from D1 via the caller, recipe steps are passed as plain data
- * - Never carries traits, claims, excerpts, profile URLs or phone numbers; lineup rows keep platform + title only
+ * - Never carries traits, claims, excerpts, profile URLs or phone numbers; lineup rows keep platform + answer, and
+ *   the title only for "yes" (the subject's confirmed profile), null for namesakes and "not sure"
+ * - Every source reason passes scrubReason once, in auditRecord (no URLs with queries, e-mails or phone numbers)
+ * - Never claims the candidate was informed: no code records a notice
  * - Unreadable ref_json never throws; the step then reads as "no record"
  */
 import { z } from "zod";
 import { runCost } from "@/domain/run-cost";
+import { scrubReason } from "@/domain/scrub";
 
 export const RETENTION_DAYS = 7;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 export const LEGAL_BASIS =
-  "Legitimate interest, Art. 6(1)(f) GDPR: pre-employment screening of public professional data. The candidate is informed about the research.";
+  "Legitimate interest, Art. 6(1)(f) GDPR, as declared by the hiring team: pre-employment screening of public professional data.";
+export const NOTICE_NOTE =
+  "Not recorded by this tool. The hiring team informs the candidate (GDPR Art. 14), for example with the candidate notice from the run page.";
 export const RETENTION_NOTE = "Earlier deletion on request (done by hand; no automatic delete on rejection yet).";
 
 /** Recipe step kinds that query an outside source; the others are model seams or the lineup. */
@@ -85,11 +92,11 @@ export type AuditRecord = {
     anchor: string;
     role: string | null;
   };
-  legal: { basis: string; purpose: string };
+  legal: { basis: string; purpose: string; notice: string };
   sources: AuditSource[];
   model_calls: number;
   total_cost_usd: number;
-  lineup: { platform: string; title: string; answer: LineupAnswer }[];
+  lineup: { platform: string; title: string | null; answer: LineupAnswer }[];
   verification_calls: { status: string; mock: boolean; created_at: string; finished_at: string | null }[];
   retention: { days: number; delete_after: string; note: string };
 };
@@ -189,7 +196,9 @@ export function auditRecord(rows: AuditRows): AuditRecord {
   const answered = ledger.map((r) => ref(DecisionsRef, r.ref_json)).findLast((r) => r !== null);
   const lineup = (answered?.decisions ?? []).flatMap((d) => {
     const c = names.get(d.id);
-    return c ? [{ platform: c.platform, title: c.name, answer: lineupAnswer(d.decision) }] : [];
+    if (!c) return [];
+    const answer = lineupAnswer(d.decision);
+    return [{ platform: c.platform, title: answer === "yes" ? c.name : null, answer }];
   });
 
   const cost = runCost(ledger, run.created_at);
@@ -206,8 +215,8 @@ export function auditRecord(rows: AuditRows): AuditRecord {
       anchor: run.anchor,
       role: run.role,
     },
-    legal: { basis: LEGAL_BASIS, purpose: purpose(run) },
-    sources,
+    legal: { basis: LEGAL_BASIS, purpose: purpose(run), notice: NOTICE_NOTE },
+    sources: sources.map((s) => ({ ...s, reason: s.reason === null ? null : scrubReason(s.reason) })),
     model_calls: cost.llm_calls,
     total_cost_usd: cost.usd,
     lineup,

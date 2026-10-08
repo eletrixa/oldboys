@@ -7,15 +7,16 @@
  * Tested:  n/a (this is the test)
  *
  * Key responsibilities:
- * - Start channel (form / extension / api), legal basis + purpose, deletion date = created_at + 7 days
+ * - Start channel (form / extension / api), legal basis (no "informed" claim) + purpose + notice note, deletion date
  * - Collector status: ok, empty, not searched (budget skip or "not searched:" gap), failed, fallback rows
- * - Lineup answers map to yes / no / not sure with platform + title only; calls keep status + MOCK flag
+ * - Reasons are scrubbed (request URLs, e-mails, phone numbers never reach the record)
+ * - Lineup answers map to yes / no / not sure; title kept only for "yes"; calls keep status + MOCK flag
  *
  * Design constraints:
  * - Fixtures stay inline
  */
 import { describe, expect, it } from "vitest";
-import { auditRecord, deletionDate, LEGAL_BASIS, RETENTION_DAYS, startChannel, type AuditLedgerRow, type AuditRows } from "@/domain/audit";
+import { auditRecord, deletionDate, LEGAL_BASIS, NOTICE_NOTE, RETENTION_DAYS, startChannel, type AuditLedgerRow, type AuditRows } from "@/domain/audit";
 
 const START = "2026-10-08T20:00:00.000Z";
 
@@ -83,7 +84,9 @@ describe("auditRecord", () => {
       anchor: "Brno",
       role: "Senior backend engineer",
     });
-    expect(a.legal).toEqual({ basis: LEGAL_BASIS, purpose: "Pre-employment screening for the role: Senior backend engineer" });
+    expect(a.legal).toEqual({ basis: LEGAL_BASIS, purpose: "Pre-employment screening for the role: Senior backend engineer", notice: NOTICE_NOTE });
+    expect(a.legal.basis).not.toContain("informed");
+    expect(a.legal.notice).toContain("Not recorded by this tool");
     expect(a.retention).toEqual({ days: 7, delete_after: "2026-10-15T20:00:00.000Z", note: "Earlier deletion on request (done by hand; no automatic delete on rejection yet)." });
     expect(a.generated_at).toBe("2026-10-08T21:00:00.000Z");
   });
@@ -149,7 +152,7 @@ describe("auditRecord", () => {
     expect(a.sources[0]).toMatchObject({ status: "not searched", reason: "not reached yet" });
   });
 
-  it("maps the last lineup answer to yes / no / not sure with platform and title only", () => {
+  it("maps the last lineup answer to yes / no / not sure and keeps the title only for yes", () => {
     const a = auditRecord(
       rows({
         candidates: [
@@ -172,9 +175,34 @@ describe("auditRecord", () => {
     );
     expect(a.lineup).toEqual([
       { platform: "linkedin", title: "Jana Dvořáková – Backend engineer", answer: "yes" },
-      { platform: "github", title: "jdvorakova", answer: "no" },
-      { platform: "instagram", title: "jana.d", answer: "not sure" },
+      { platform: "github", title: null, answer: "no" },
+      { platform: "instagram", title: null, answer: "not sure" },
     ]);
+  });
+
+  it("scrubs request URLs, e-mails and phone numbers out of every reason", () => {
+    const openAlexFailure =
+      'not searched: request failed: https://api.openalex.org/authors?search=Jan%20Novak&per-page=5&mailto=robert@soulfire.cz: HTTP 429 {"error":"Too Many Requests"}';
+    const failed = auditRecord(
+      rows({
+        run: { ...rows().run, status: "failed" },
+        ledger: [
+          row("serp_person", "call", { sources: 0, calls: 1 }),
+          row("resolve_lineup", "llm", { calls: 1 }),
+          row("run", "decision", { failed: true, reason: "call to +420 777 123 456 failed" }),
+        ],
+        gaps: [{ question_id: "serp_person", reason: openAlexFailure }],
+      }),
+    );
+    expect(failed.sources.map((s) => [s.step, s.status, s.reason])).toEqual([
+      ["serp_person", "not searched", 'request failed: api.openalex.org: HTTP 429 {"error":"Too Many Requests"}'],
+      ["github_profile", "failed", "call to (number) failed"],
+      ["x_profile", "not searched", "run stopped before this step"],
+    ]);
+    const skipped = auditRecord(rows({ ledger: [row("x_profile", "decision", { skipped: "see https://x.com/jana?ref=a, ask hr@example.com" })] }));
+    expect(skipped.sources.find((s) => s.step === "x_profile")?.reason).toBe("see x.com, ask (email)");
+    const json = JSON.stringify([failed, skipped]);
+    for (const leak of ["robert@soulfire.cz", "mailto", "search=", "Jan%20Novak", "777 123 456", "hr@example.com"]) expect(json).not.toContain(leak);
   });
 
   it("keeps call status and flags the mock provider", () => {
