@@ -8,13 +8,12 @@
  *
  * Key responsibilities:
  * - Semantic Radar tokens (canvas, surface, ink, muted, action, sage, peach, divider, focus, evidence states)
- * - Remaps the zinc / teal / amber / red / emerald / violet scales that the existing UI classes use, so the
- *   former dark theme renders as Radar's warm light theme without touching the component files
+ * - Inference tokens for INFERENCE claim badges
  * - Self-hosted fonts, serif headings, focus ring, reduced motion
  *
  * Design constraints:
- * - Class names now lie on purpose: zinc-950 is the light canvas, zinc-100 is the ink, teal-* is the rust action
- *   colour. New code should use the semantic names (bg-canvas, text-ink, bg-action, text-muted, border-divider).
+ * - Components use only the semantic names (bg-canvas, text-ink, bg-action, text-muted, border-divider, ok/unsure/
+ *   conflict/inference); the default Tailwind palette is never referenced. Spec: docs/design/radar-ui.md
  * - Text pairs stay at WCAG AA: muted #59635D on canvas 5.8:1, white on action #A44732 6.0:1.
  * - No network fonts: files are served from /fonts, so nothing is fetched at build or from a third party.
  */
@@ -55,44 +54,8 @@
   --color-unsure-bg: #fff1d5;
   --color-conflict: #913e47;
   --color-conflict-bg: #f7e6e8;
-
-  /* Former dark neutrals, inverted to Radar's light theme (950 = canvas ... 100 = ink) */
-  --color-zinc-950: #faf7f2;
-  --color-zinc-900: #ffffff;
-  --color-zinc-800: #daddd7;
-  --color-zinc-700: #c9ccc5;
-  --color-zinc-600: #7a827c;
-  --color-zinc-500: #59635d;
-  --color-zinc-400: #59635d;
-  --color-zinc-300: #3f4642;
-  --color-zinc-200: #323835;
-  --color-zinc-100: #282d2b;
-
-  /* Former teal accent becomes the rust action colour */
-  --color-teal-950: #f8ece7;
-  --color-teal-800: #e3bfb3;
-  --color-teal-500: #a44732;
-  --color-teal-400: #873a29;
-  --color-teal-300: #a44732;
-
-  /* Evidence states: amber = unverified / partial, red = conflict or failure, emerald = supported, violet = statement */
-  --color-amber-950: #fff1d5;
-  --color-amber-700: #e2c58c;
-  --color-amber-500: #c9952e;
-  --color-amber-400: #a8771e;
-  --color-amber-300: #795514;
-  --color-amber-200: #694a11;
-  --color-red-950: #f7e6e8;
-  --color-red-900: #e7c3c8;
-  --color-red-800: #d9a8af;
-  --color-red-500: #913e47;
-  --color-red-300: #913e47;
-  --color-red-200: #7c333b;
-  --color-emerald-950: #e5eee8;
-  --color-emerald-900: #b9cfc1;
-  --color-emerald-100: #35604a;
-  --color-violet-500: #5b4f8f;
-  --color-violet-300: #4c4280;
+  --color-inference: #5b4f8f;
+  --color-inference-bg: #ebe7f5;
 }
 
 @layer base {

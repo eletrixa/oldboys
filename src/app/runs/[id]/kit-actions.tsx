@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/runs/[id]/kit-actions.tsx
- * Deps:    react, ./interview-kit, ./candidate-copy, ./ats-note, ./reference-check
+ * Deps:    react, ../../ui (Radar tokens), ./interview-kit, ./candidate-copy, ./ats-note, ./reference-check
  * Tested:  n/a (the texts are tested in __tests__/{interview-kit,candidate-copy,ats-note,reference-check}.test.ts)
  *
  * Key responsibilities:
@@ -20,13 +20,14 @@
 "use client";
 
 import { useState } from "react";
+import { BTN_SECONDARY } from "../../ui";
 import type { RunState } from "./state";
 import { interviewKit, kitFileName } from "./interview-kit";
 import { candidateCopy, noticeFileName } from "./candidate-copy";
 import { atsNote } from "./ats-note";
 import { referenceQuestions } from "./reference-check";
 
-const BTN = "rounded-xl border border-zinc-700 px-4 py-2 text-sm hover:bg-zinc-800";
+const BTN = BTN_SECONDARY;
 const ROW = "flex flex-wrap items-center gap-2";
 const LABEL = "w-20 shrink-0 text-xs font-medium text-muted";
 

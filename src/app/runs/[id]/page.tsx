@@ -25,8 +25,8 @@ export default async function RunPage({
   return (
     <>
       <RunView id={id} />
-      <div className="mx-auto max-w-2xl px-4 pb-10">
-        <Link href={`/runs/${id}/audit`} className="text-xs text-zinc-500 hover:text-zinc-300 hover:underline">
+      <div className="mx-auto max-w-3xl px-4 pb-10">
+        <Link href={`/runs/${id}/audit`} className="text-xs text-muted underline-offset-4 hover:text-ink hover:underline">
           Audit record
         </Link>
       </div>
