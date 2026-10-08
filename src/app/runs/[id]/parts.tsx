@@ -21,6 +21,7 @@
 import type { Brief, Candidate, CandidateDecision } from "@/domain/claim";
 import { formatDuration, type RunCost } from "@/domain/run-cost";
 import { KitActions } from "./kit-actions";
+import { SummaryCard } from "./summary-card";
 import { PLATFORM_LABEL, type RowState, type RunState, evidenceGroup, gapLine, roleCriteria, searchedEmpty, searchedTitle } from "./state";
 
 const CARD = "rounded-2xl border border-zinc-800 bg-zinc-900/60 p-5";
@@ -381,6 +382,7 @@ export function BriefView({ state }: { state: RunState }): React.JSX.Element | n
   const allUnavailable = brief.per_question.length > 0 && brief.per_question.every((q) => q.summary.startsWith("AI summary unavailable"));
   return (
     <div id="brief" className="flex scroll-mt-6 flex-col gap-4">
+      <SummaryCard state={state} />
       <TopLine headline={brief.headline ?? null} locationNote={brief.location_note ?? null} role={state.role} />
       <KitActions state={state} />
       {brief.degraded !== null && <DegradedNotice reason={brief.degraded} />}
