@@ -1,0 +1,40 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pnpm check)",
+      "Bash(pnpm typecheck)",
+      "Bash(pnpm lint)",
+      "Bash(pnpm test)",
+      "Bash(pnpm test:*)",
+      "Bash(pnpm build)",
+      "Bash(pnpm cf-typegen)",
+      "Bash(pnpm db:migrate:local)",
+      "Bash(pnpm exec opennextjs-cloudflare build)",
+      "Bash(pnpm exec wrangler deploy --dry-run:*)",
+      "Bash(scripts/agent-check.sh)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)"
+    ],
+    "deny": [
+      "Bash(pnpm deploy)",
+      "Bash(pnpm db:migrate:remote)",
+      "Bash(pnpm exec wrangler secret:*)",
+      "Read(.dev.vars)",
+      "Read(~/s/**)"
+    ]
+  },
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "scripts/agent-check.sh || { echo 'pnpm check failed: fix typecheck/lint/test before finishing' >&2; exit 2; }",
+            "timeout": 300
+          }
+        ]
+      }
+    ]
+  }
+}

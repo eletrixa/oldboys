@@ -30,6 +30,10 @@ function global:cheatoldboys {
     Write-Host "Lint" -ForegroundColor White
     Write-Host "    pnpm check                             " -NoNewline -ForegroundColor Green
     Write-Host "typecheck + lint + test" -ForegroundColor White
+    Write-Host "    pnpm hooks:install                     " -NoNewline -ForegroundColor Green
+    Write-Host "Enable pre-commit hook (runs pnpm check on code changes)" -ForegroundColor White
+    Write-Host "    scripts/agent-check.sh                 " -NoNewline -ForegroundColor Green
+    Write-Host "Same gate the Claude Stop hook runs" -ForegroundColor White
     Write-Host ""
     Write-Host "  ┌─────────────────────────────────────────────────────────────────┐" -ForegroundColor DarkGray
     Write-Host "  │  TESTING                                                       │" -ForegroundColor Yellow

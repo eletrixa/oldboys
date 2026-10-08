@@ -68,6 +68,14 @@ Shortcuts live in `docs/cli/` (`repojumper/oldboys.ps1` defines `GoOldboys`, `ch
 ## Git
 Author `Robert <robert@soulfire.cz>`.
 
+## Definition of done (strict)
+Every change to `src/`, `migrations/`, `scripts/` or any root config must pass `pnpm check` (typecheck + lint + test) before the task is reported done. The Claude Code Stop hook in `.claude/settings.json` runs `scripts/agent-check.sh` and blocks the turn when it fails; the same script is the pre-commit hook (`pnpm hooks:install` once per clone). Rules:
+- Run `pnpm check` yourself after editing; do not wait for the hook.
+- Never skip or weaken a test, lint rule or the hook to get green. Fix the code.
+- New code under `src/domain` and `src/recipe` ships with a Vitest test next to it (`__tests__/`).
+- Agents may not deploy, migrate remote D1, touch Worker secrets, or read `.dev.vars` or `~/s` (denied in `.claude/settings.json`). Push only when Robert asks in the current task.
+- `pnpm exec wrangler deploy --dry-run --outdir <scratch>` is the allowed way to prove the Worker still bundles.
+
 ## Known gotchas
 - `next` is pinned exactly to 16.3.8 (`eslint-config-next` stays 16.4.0: its 16.3.8 pulls an eslint-plugin-react that breaks ESLint 10): 16.4 breaks on Workers with OpenNext 1.20.9 (`Unexpected loadManifest(/.next/server/preview-props.json)`). Bump only together with an OpenNext release that includes PR #1356.
 - `POST /api/runs` needs `Authorization: Bearer <RUN_TOKEN>`; the value lives in `~/s/oldboys/.env` and in the Worker secret.

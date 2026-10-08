@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# Pre-commit hook: block commits whose code or config does not pass `pnpm check`.
+# Enable once per clone with `pnpm hooks:install` (sets core.hooksPath to .githooks).
+exec "$(git rev-parse --show-toplevel)/scripts/agent-check.sh"

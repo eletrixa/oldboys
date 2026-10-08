@@ -14,6 +14,7 @@ Status: scaffolded 2026-10-08, deploy target Cloudflare Workers (plans/002)
 ## Quickstart
 ```sh
 pnpm install
+pnpm hooks:install            # pre-commit runs pnpm check on code changes
 cp .dev.vars.example .dev.vars
 pnpm db:migrate:local
 pnpm dev
