@@ -46,7 +46,7 @@ type: feature
 | `src/workflow/providers/` | ElevenLabs (plain `fetch`) and mock provider adapters |
 | `src/app/api/calls/` | Approve, skip and get routes |
 | `src/app/api/webhooks/elevenlabs/` | Signed post-call webhook |
-| `migrations/0003_calls.sql` | `calls`, `webhook_events`, widened `claims.kind` CHECK |
+| `migrations/0004_calls.sql` | `calls`, `webhook_events`, widened `claims.kind` CHECK |
 | `docs/ops/call-verification.md` | ElevenLabs agent setup and manual checklist |
 | `plans/001-deep-research-arch/00-SYNTHESIS.md` | Domain decisions this plan extends |
 | `plans/002-cloudflare-platform/` | Platform decisions (win on conflict) |

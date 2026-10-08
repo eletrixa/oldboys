@@ -45,7 +45,7 @@ Go for the live path only if all of these hold:
 
 - [ ] A1 answered by the organisers (or Robert accepts the risk in writing).
 - [ ] `pnpm check` green on stage 1 and S1 to S6 hold.
-- [ ] Migration `0003_calls.sql` applied remotely by Robert before the webhook route deploys.
+- [ ] Migration `0004_calls.sql` applied remotely by Robert before the webhook route deploys.
 - [ ] `ELEVENLABS_WEBHOOK_SECRET`, `ELEVENLABS_API_KEY`, agent id and phone number id set; overrides enabled on the agent for prompt, first message and language.
 - [ ] E-C3 passes, then E-C1 passes with a volunteer callee who consented.
 - [ ] Opener contains AI disclosure, purpose and recording consent; hang up on refusal.

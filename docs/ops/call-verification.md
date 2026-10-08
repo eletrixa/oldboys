@@ -97,7 +97,7 @@ curl -X POST http://localhost:3141/api/calls/<call-id>/skip \
 
 ## Migration
 
-The schema lives in `migrations/0002_calls.sql`. Apply to production before deploying the webhook route:
+The schema lives in `migrations/0004_calls.sql`. Apply to production before deploying the webhook route:
 
 ```bash
 pnpm db:migrate:remote

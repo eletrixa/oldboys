@@ -184,7 +184,7 @@ Stage 1:
 2. `claim.ts` gains `STATEMENT` with tests (quote and at least one support required, exhaustive switches). `call.ts` schemas and `transitionCall`, illegal transitions rejected.
 3. `call-brief.ts`: identity question first, one question per gap, weak claims included, cap 5, disclosure and consent lines present, GDPR Art. 9 denylist, hiring and due-diligence scripts differ.
 4. `call-ingest.ts`: excerpt format, STATEMENT kept when the quote matches a turn, downgraded otherwise, refusal / no-answer / unconfirmed identity yield a gap reason and zero claims, confidence caps.
-5. Migration `0003_calls.sql` plus `pnpm db:migrate:local`.
+5. Migration `0004_calls.sql` plus `pnpm db:migrate:local`.
 6. Mock provider (tested) and the `PlaceCall` / `FetchCallResult` ports.
 7. `VerificationCallWorkflow`, `worker.ts` export, `wrangler.jsonc` binding `VERIFY_CALL`, typegen, cheat file.
 8. Routes: create, approve, skip, get, and the shared auth helper.
