@@ -7,7 +7,7 @@
  * Tested:  src/app/runs/[id]/__tests__/state.test.ts
  *
  * Key responsibilities:
- * - RunState: the GET /api/runs/:id/state contract
+ * - RunState: the GET /api/runs/:id/state contract (incl. organization_name)
  * - stepRows: map the ledger step + status to the five human progress rows
  * - sortLineup: confirmed first, social platforms before web hits
  * - questionsToAsk: one open profile per platform; roleCriteria: role must-haves (mh-) only
@@ -36,6 +36,8 @@ export type RunState = {
   headline: string | null;
   /** Role the manager is hiring for (hiring goal); null for other goals and older runs. */
   role: string | null;
+  /** Recruiter's organization when the run was started from a logged-in browser; null for bearer/extension runs. */
+  organization_name: string | null;
   /** ISO timestamp the run was created; drives the CACHED label. */
   created_at: string;
   status: RunStatus;

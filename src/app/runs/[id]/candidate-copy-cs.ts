@@ -69,19 +69,19 @@ function dateCs(isoDay: string): string {
 export const CS_TEXT: NoticeText = {
   title: "Jak jsme se podívali na Vaše veřejné profily",
   greeting: () => "Dobrý den,",
-  intro: (role) =>
-    `děkujeme za Váš zájem ${role !== null ? `o pozici ${role}` : "o nabízenou pozici"}. V rámci výběrového řízení se náš tým ` +
-    "podíval na veřejné informace o Vás. Chceme Vám říct, na co jsme se dívali a proč.",
+  intro: (role, org) =>
+    `děkujeme za Váš zájem ${role !== null ? `o pozici ${role}` : "o nabízenou pozici"}. V rámci výběrového řízení se ` +
+    `${org !== null ? `náborový tým společnosti ${org}` : "náš tým"} podíval na veřejné informace o Vás. Chceme Vám říct, na co jsme se dívali a proč.`,
   whyHeading: "Proč",
   why: (role) =>
     `${role !== null ? `Obsazujeme pozici ${role}.` : "Obsazujeme nabízenou pozici."} Průzkum nám pomáhá připravit dobré otázky ` +
     "na pohovor a zjistit, které části Vaší veřejné práce souvisejí s pozicí.",
   doesHeading: "Co průzkum dělá a co ne",
-  does: [
+  does: (org) => [
     "- Používá jen veřejné zdroje. Žádné soukromé zprávy, uzavřené skupiny ani přihlašování.",
     "- Hodnotí samotný průzkum: kolik veřejných dokladů našel a jak jsou kvalitní. Nikdy nehodnotí Vás jako člověka.",
     "- Nezabývá se zdravím, politickými názory, náboženstvím, etnickým původem, sexuální orientací ani podobnými citlivými tématy.",
-    "- Průzkum sám nic nerozhoduje; každé rozhodnutí dělají lidé z našeho týmu.",
+    `- Průzkum sám nic nerozhoduje; každé rozhodnutí dělají lidé ${org !== null ? `ze společnosti ${org}` : "z našeho týmu"}.`,
   ],
   searchedHeading: "Veřejné zdroje, které jsme prohledali",
   emptySuffix: "(nenašli jsme nic, co bychom mohli potvrdit jako Vaše)",
@@ -97,7 +97,7 @@ export const CS_TEXT: NoticeText = {
   rightsHeading: "Vaše práva",
   rights: "Můžete se nás zeptat, co jsme našli, požádat o opravu nebo o okamžité smazání.",
   reply: "Stačí odpovědět na tento e-mail.",
-  closing: ["S pozdravem  ", "náborový tým"],
+  closing: (org) => ["S pozdravem  ", org !== null ? `náborový tým společnosti ${org}` : "náborový tým"],
   label: (label) => LABEL_CS[label] ?? label,
   reason: reasonCs,
 };

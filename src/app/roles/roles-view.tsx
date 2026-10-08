@@ -3,15 +3,15 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/roles/roles-view.tsx
- * Deps:    react, next/link, src/domain/role-overview, src/app/run-token, src/app/ui
+ * Deps:    react, next/link, src/domain/role-overview, src/app/ui
  * Tested:  builder in src/domain/__tests__/role-overview.test.ts; view n/a
  *
  * Key responsibilities:
- * - Ask once for the operator token (RUN_TOKEN), keep it in sessionStorage, GET /api/roles with it
+ * - GET /api/roles with the session cookie (scoped to the organization); 401 shows a log-in prompt
  * - No roleKey: roles with run counts; roleKey: rows = runs newest first, columns = must-haves + sources confirmed
  *
  * Design constraints:
- * - Client component; the token never leaves sessionStorage except as the Authorization header
+ * - Client component; no token handling, the session cookie travels by default
  * - Radar design (docs/design/radar-ui.md): semantic tokens and src/app/ui.tsx classes only
  * - Table scrolls sideways inside a focusable labelled region; the person column stays sticky
  * - Shows the amount of evidence found, never a verdict on the person: no total, no ranking, no coverage sort
@@ -20,7 +20,6 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { TokenForm, readToken, writeToken } from "@/app/run-token";
 import type { CoverageLabel, RoleGroup } from "@/domain/role-overview";
 import { BTN_QUIET, CARD_FLUSH, CARD_SAGE, Eyebrow, LINK, Pill } from "../ui";
 
@@ -35,9 +34,10 @@ const CELL_STYLE: Readonly<Record<CoverageLabel, { text: string; dot: string }>>
 
 type Load =
   | { kind: "loading" }
-  | { kind: "token"; error: string | null }
+  | { kind: "unauthorized" }
   | { kind: "error"; message: string }
   | { kind: "ready"; groups: RoleGroup[] };
+
 
 function RoleList({ groups }: { groups: RoleGroup[] }): React.JSX.Element {
   if (groups.length === 0) return <p className="text-muted">No briefs with a role yet.</p>;
@@ -107,18 +107,13 @@ function RoleTable({ group }: { group: RoleGroup }): React.JSX.Element {
   );
 }
 
-/** GET /api/roles; without a token the request still goes out and its 401 shows the token form. */
-async function loadRoles(token: string | null): Promise<Load> {
+/** GET /api/roles with the session cookie; a 401 means the visitor is not logged in. */
+async function loadRoles(): Promise<Load> {
   try {
-    const headers: HeadersInit = token === null ? {} : { Authorization: `Bearer ${token}` };
-    const res = await fetch("/api/roles", { headers, cache: "no-store" });
-    if (res.status === 401) {
-      writeToken(null);
-      return { kind: "token", error: token === null ? null : "That token did not work. Please try again." };
-    }
+    const res = await fetch("/api/roles", { cache: "no-store" });
+    if (res.status === 401) return { kind: "unauthorized" };
     if (!res.ok) return { kind: "error", message: "We could not load the roles. Please try again." };
     const { groups } = await res.json<{ groups: RoleGroup[] }>();
-    if (token !== null) writeToken(token);
     return { kind: "ready", groups };
   } catch {
     return { kind: "error", message: "We could not reach the service. Please try again." };
@@ -130,18 +125,13 @@ export function RolesView({ roleKey }: { roleKey?: string }): React.JSX.Element 
 
   useEffect(() => {
     let live = true;
-    void loadRoles(readToken()).then((next) => {
+    void loadRoles().then((next) => {
       if (live) setLoad(next);
     });
     return () => {
       live = false;
     };
   }, []);
-
-  function submitToken(token: string): void {
-    setLoad({ kind: "loading" });
-    void loadRoles(token).then(setLoad);
-  }
 
   const group = load.kind === "ready" && roleKey !== undefined ? load.groups.find((g) => g.key === roleKey) : undefined;
 
@@ -161,7 +151,11 @@ export function RolesView({ roleKey }: { roleKey?: string }): React.JSX.Element 
           <div className="h-4 w-1/2 rounded bg-divider" />
         </div>
       )}
-      {load.kind === "token" && <TokenForm error={load.error} hint="The list shows every brief, so it needs the team token. Kept only in this tab." submitLabel="Show roles" onSubmit={submitToken} />}
+      {load.kind === "unauthorized" && (
+        <p className="text-muted">
+          <Link href="/login" className={LINK}>Log in</Link> to see your team&apos;s roles.
+        </p>
+      )}
       {load.kind === "error" && <p className="text-conflict">{load.message}</p>}
       {load.kind === "ready" && roleKey === undefined && <RoleList groups={load.groups} />}
       {load.kind === "ready" && roleKey !== undefined && (group === undefined ? <p className="text-muted">No briefs for this role.</p> : <RoleTable group={group} />)}

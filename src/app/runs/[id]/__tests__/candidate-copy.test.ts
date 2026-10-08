@@ -55,6 +55,7 @@ const run = (over: Partial<RunState> = {}): RunState => ({
   subject: "Jan Novak",
   headline: null,
   role: "Senior Data Engineer",
+  organization_name: null,
   created_at: "2026-10-08T21:00:00.000Z",
   status: "done",
   step: null,
@@ -124,6 +125,19 @@ describe("candidateCopy", () => {
     expect(md).toContain("- <https://x.com/jnovak>");
     expect(md).not.toContain("linkedin.com");
     expect(md).toContain("## Your rights");
+  });
+
+  it("names the recruiter's organization in the text and sign-off", () => {
+    const md = notice({ organization_name: "Acme s.r.o." });
+    expect(md).toContain("the hiring team at Acme s.r.o.");
+    expect(md).toContain("The hiring team at Acme s.r.o.");
+    expect(md).not.toContain("our hiring team");
+  });
+
+  it("keeps the anonymous wording without an organization", () => {
+    const md = notice({ organization_name: null });
+    expect(md).toContain("our hiring team");
+    expect(md).toContain("The hiring team\n");
   });
 
   it("nothing confirmed and no role: plain fallbacks, empty lists leave no heading", () => {

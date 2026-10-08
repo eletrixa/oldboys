@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/page.tsx
- * Deps:    next, next/link, ./start-form, ./ui
+ * Deps:    next, next/link, ./start-form, ./api/_lib/current-user, ./ui
  * Tested:  n/a
  *
  * Key responsibilities:
@@ -16,6 +16,8 @@
  * - Radar Visual Guideline: one primary action per view, plain language, no surveillance imagery
  */
 import Link from "next/link";
+import { redirect } from "next/navigation";
+import { currentUser } from "./api/_lib/current-user";
 import { StartForm } from "./start-form";
 import { CARD, Eyebrow, LINK } from "./ui";
 
@@ -25,7 +27,9 @@ const STEPS: readonly (readonly [string, string])[] = [
   ["Prepare the conversation", "Gaps become suggested interview questions. You make the decision."],
 ];
 
-export default function HomePage(): React.JSX.Element {
+export default async function HomePage(): Promise<React.JSX.Element> {
+  const user = await currentUser();
+  if (user === null) redirect("/login");
   return (
     <main className="mx-auto grid max-w-5xl gap-10 px-4 py-12 md:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] md:items-start md:py-16">
       <section className="flex flex-col gap-6">
@@ -53,7 +57,8 @@ export default function HomePage(): React.JSX.Element {
       </section>
       <section className="flex flex-col gap-4">
         <div className={`${CARD} md:p-8`}>
-          <h2 className="mb-5 text-2xl">Start a brief</h2>
+          <h2 className="mb-1 text-2xl">Start a brief</h2>
+          <p className="mb-5 text-sm text-muted">Hiring at {user.organizationName}</p>
           <StartForm />
         </div>
         <p className="px-1 text-sm text-muted">

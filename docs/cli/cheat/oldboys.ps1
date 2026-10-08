@@ -98,6 +98,28 @@ function global:cheatoldboys {
     Write-Host "live smoke; needs SMOKE_TO_NUMBER + RUN_TOKEN env" -ForegroundColor White
     Write-Host ""
     Write-Host "  ┌─────────────────────────────────────────────────────────────────┐" -ForegroundColor DarkGray
+    Write-Host "  │  REGISTRATION                                                  │" -ForegroundColor Yellow
+    Write-Host "  └─────────────────────────────────────────────────────────────────┘" -ForegroundColor DarkGray
+    Write-Host "    GET /register                          " -NoNewline -ForegroundColor Green
+    Write-Host "Recruiter signup form (email, password, name, IČO)" -ForegroundColor White
+    Write-Host "    POST /api/auth/register                " -NoNewline -ForegroundColor Green
+    Write-Host "Create account and organization (201 + Set-Cookie or 409/429)" -ForegroundColor White
+    Write-Host "    GET /login                             " -NoNewline -ForegroundColor Green
+    Write-Host "Recruiter login form" -ForegroundColor White
+    Write-Host "    POST /api/auth/login                   " -NoNewline -ForegroundColor Green
+    Write-Host "Authenticate account (200 + Set-Cookie or 401/429)" -ForegroundColor White
+    Write-Host "    POST /api/auth/logout                  " -NoNewline -ForegroundColor Green
+    Write-Host "Logout (204, clears session cookie)" -ForegroundColor White
+    Write-Host "    GET /api/ares/:ico                     " -NoNewline -ForegroundColor Green
+    Write-Host "Look up company by IČO (200/404/400/502)" -ForegroundColor White
+    Write-Host "    GET /onboarding                        " -NoNewline -ForegroundColor Green
+    Write-Host "Post-signup onboarding (shows company, start form)" -ForegroundColor White
+    Write-Host "    GET /briefs                            " -NoNewline -ForegroundColor Green
+    Write-Host "List organization's research runs (scoped by session)" -ForegroundColor White
+    Write-Host "    pnpm db:migrate:local                  " -NoNewline -ForegroundColor Green
+    Write-Host "Apply 0010_accounts migration (organizations, accounts, sessions, auth_attempts)" -ForegroundColor White
+    Write-Host ""
+    Write-Host "  ┌─────────────────────────────────────────────────────────────────┐" -ForegroundColor DarkGray
     Write-Host "  │  INTAKE (plans/008, docs/ops/intake.md)                        │" -ForegroundColor Yellow
     Write-Host "  └─────────────────────────────────────────────────────────────────┘" -ForegroundColor DarkGray
     Write-Host "    wrangler secret put INTAKE_TOKEN       " -NoNewline -ForegroundColor Green

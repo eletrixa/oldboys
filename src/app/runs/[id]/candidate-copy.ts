@@ -7,7 +7,7 @@
  * Tested:  src/app/runs/[id]/__tests__/candidate-copy.test.ts
  *
  * Key responsibilities:
- * - candidateCopy: who researches and why (role), sources searched and not searched (with scrubbed reasons), links confirmed
+ * - candidateCopy: who researches (the recruiter's organization when known) and why (role), sources searched and not searched (with scrubbed reasons), links confirmed
  *   as the person's, what the research is used for, "rates the evidence, never you", deletion date, how to object
  * - Two languages (NoticeLang "en" | "cs", idea #24 part): one NoticeText table per language, same sections and logic;
  *   the Czech table lives in candidate-copy-cs.ts
@@ -51,11 +51,12 @@ function confirmedLinks(state: RunState, brief: Brief): string[] {
 export type NoticeText = {
   title: string;
   greeting: (subject: string) => string;
-  intro: (role: string | null) => string;
+  /** org is the recruiter's organization name (escaped) or null for the anonymous wording. */
+  intro: (role: string | null, org: string | null) => string;
   whyHeading: string;
   why: (role: string | null) => string;
   doesHeading: string;
-  does: readonly string[];
+  does: (org: string | null) => readonly string[];
   searchedHeading: string;
   emptySuffix: string;
   notSearchedHeading: string;
@@ -68,7 +69,7 @@ export type NoticeText = {
   rightsHeading: string;
   rights: string;
   reply: string;
-  closing: readonly string[];
+  closing: (org: string | null) => readonly string[];
   /** English source label (GAP_LABEL / evidenceGroup) → this language. */
   label: (label: string) => string;
   /** Scrubbed raw gap reason → plain words in this language. */
@@ -77,22 +78,27 @@ export type NoticeText = {
 
 export type NoticeLang = "en" | "cs";
 
+/** "the hiring team at Acme" when the run has an organization, else the anonymous wording. */
+function enTeam(org: string | null): string {
+  return org !== null ? `the hiring team at ${org}` : "our hiring team";
+}
+
 const EN_TEXT: NoticeText = {
   title: "How we looked at your public profiles",
   greeting: (subject) => `Hello ${subject},`,
-  intro: (role) =>
+  intro: (role, org) =>
     `Thank you for your interest in ${role !== null ? `the ${role} role` : "the role you applied for"}. As part of the hiring ` +
-    "process, our hiring team looked at public information about you. We want you to know what we looked at and why.",
+    `process, ${enTeam(org)} looked at public information about you. We want you to know what we looked at and why.`,
   whyHeading: "Why",
   why: (role) =>
     `We are hiring for ${role !== null ? `the ${role} role` : "the role you applied for"}. The research helps us prepare good ` +
     "questions for the interview and see which parts of your public work relate to the role.",
   doesHeading: "What the research does and does not do",
-  does: [
+  does: (org) => [
     "- It uses public sources only. No private messages, closed groups or logins.",
     "- It rates the research itself: how much public evidence it found and how good that evidence is. It never rates you as a person.",
     "- It does not look at health, political views, religion, ethnicity, sexual orientation or similar sensitive topics.",
-    "- No decision is made by the research alone; people in our hiring team make every decision.",
+    `- No decision is made by the research alone; people in ${enTeam(org)} make every decision.`,
   ],
   searchedHeading: "Public sources we searched",
   emptySuffix: "(nothing found that we could confirm as yours)",
@@ -108,7 +114,7 @@ const EN_TEXT: NoticeText = {
   rightsHeading: "Your rights",
   rights: "You can ask us what we found, ask us to correct something, or ask us to delete it now.",
   reply: "Reply to this email",
-  closing: ["Kind regards,  ", "The hiring team"],
+  closing: (org) => ["Kind regards,  ", org !== null ? `The hiring team at ${org}` : "The hiring team"],
   label: (label) => label,
   reason: gapText,
 };
@@ -145,13 +151,14 @@ export function candidateCopy(state: RunState, lang: NoticeLang = "en"): string 
   if (brief === null) return null;
   const t = TEXT[lang];
   const role = state.role !== null && state.role.trim() !== "" ? escapeMd(state.role) : null;
+  const org = state.organization_name !== null ? escapeMd(state.organization_name) : null;
   const links = confirmedLinks(state, brief);
   const lines = [
     `# ${t.title}`,
     "",
     t.greeting(escapeMd(state.subject)),
     "",
-    t.intro(role),
+    t.intro(role, org),
     "",
     `## ${t.whyHeading}`,
     "",
@@ -159,7 +166,7 @@ export function candidateCopy(state: RunState, lang: NoticeLang = "en"): string 
     "",
     `## ${t.doesHeading}`,
     "",
-    ...t.does,
+    ...t.does(org),
     "",
     ...section(t.searchedHeading, searchedLines(state, brief, t)),
     ...section(t.notSearchedHeading, brief.not_searched.map((g) => notSearchedLine(g, t))),
@@ -179,7 +186,7 @@ export function candidateCopy(state: RunState, lang: NoticeLang = "en"): string 
     "",
     t.reply,
     "",
-    ...t.closing,
+    ...t.closing(org),
   ];
   return `${lines.join("\n")}\n`;
 }

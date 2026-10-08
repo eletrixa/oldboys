@@ -35,13 +35,16 @@ export type StartRunInput = {
   sourceUrl?: string;
   via: "api" | "start" | "intake";
   applicationId?: string;
+  /** Set for runs started by a logged-in recruiter (via = start); NULL for bearer, extension and intake runs. */
+  accountId?: string;
+  organizationId?: string;
 };
 
 export async function startRun(env: StartRunEnv, input: StartRunInput, now: Date): Promise<{ id: string }> {
   const id = crypto.randomUUID();
   await env.DB.prepare(
-    `INSERT INTO investigations (id, subject, anchor, goal, status, budget_usd, budget_calls, created_at, source_url, role, via, profile_url, cv_text, application_id)
-     VALUES (?, ?, ?, ?, 'queued', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO investigations (id, subject, anchor, goal, status, budget_usd, budget_calls, created_at, source_url, role, via, profile_url, cv_text, application_id, account_id, organization_id)
+     VALUES (?, ?, ?, ?, 'queued', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   )
     .bind(
       id,
@@ -57,6 +60,8 @@ export async function startRun(env: StartRunEnv, input: StartRunInput, now: Date
       input.profileUrl ?? null,
       input.cvText ?? null,
       input.applicationId ?? null,
+      input.accountId ?? null,
+      input.organizationId ?? null,
     )
     .run();
   await env.RESEARCH_RUN.create({ id, params: { runId: id } });
