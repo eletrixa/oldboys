@@ -45,7 +45,13 @@ export function ClaimList({ claims, urlOf }: { claims: Claim[]; urlOf: ReadonlyM
           {c.text}
           {c.supports.map((sid) => {
             const url = urlOf.get(sid);
-            return url !== undefined ? <SourceLink key={sid} url={url} /> : null;
+            return url !== undefined ? (
+              <SourceLink key={sid} url={url} />
+            ) : (
+              <span key={sid} className="ml-2 text-xs text-zinc-500">
+                source missing
+              </span>
+            );
           })}
         </li>
       ))}

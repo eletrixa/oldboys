@@ -24,7 +24,7 @@ import { selectCallProvider } from "@/workflow/calls";
 
 const DraftBody = z.object({ language: z.string().min(2).max(5).optional() });
 /** Role questions appended by the runner (investigations.questions_json); malformed JSON means none. */
-const ExtraQuestions = z.array(z.object({ id: z.string(), text: z.string() }));
+const ExtraQuestions = z.array(z.object({ id: z.string(), text: z.string(), title: z.string().optional() }));
 
 type ClaimRow = Omit<Claim, "supports" | "contradicts"> & {
   supports_json: string;

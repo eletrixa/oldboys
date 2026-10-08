@@ -13,7 +13,7 @@
  *
  * Design constraints:
  * - Pure: counts in, number and sentence out; computed in the synthesize seam, never by the LLM
- * - Rounded to 2 decimals, clamped to 0..1
+ * - Rounded to 2 decimals, clamped to 0..0.95 (a public-web brief is never certain)
  */
 
 export type SectionCounts = {
@@ -37,6 +37,8 @@ const SINGLE_SOURCE_CAP = 0.6;
 const UNCONFIRMED_CAP = 0.5;
 const NO_FACT_CAP = 0.4;
 const CONTRADICTION_PENALTY = 0.2;
+/** A public-web brief is never certain. */
+const MAX_SCORE = 0.95;
 
 const count = (n: number, word: string): string => `${String(n)} ${word}${n === 1 ? "" : "s"}`;
 
@@ -68,6 +70,6 @@ export function sectionConfidence(c: SectionCounts): SectionConfidence {
   if (c.confirmed_sources === 0) score = Math.min(score, UNCONFIRMED_CAP);
   if (c.facts === 0) score = Math.min(score, NO_FACT_CAP);
   if (c.contradictions > 0) score -= CONTRADICTION_PENALTY;
-  const confidence = Math.round(Math.min(1, Math.max(0, score)) * 100) / 100;
+  const confidence = Math.round(Math.min(MAX_SCORE, Math.max(0, score)) * 100) / 100;
   return { confidence, confidence_reason: reason(c) };
 }

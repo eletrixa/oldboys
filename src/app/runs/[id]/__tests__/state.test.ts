@@ -19,7 +19,7 @@
  */
 import { describe, expect, it } from "vitest";
 import type { Brief, Candidate } from "@/domain/claim";
-import { briefSections, confidenceBand, evidenceGroup, firstName, headerText, questionsToAsk, roleCriteria, searchedTitle, seedHeadline, stepRows } from "../state";
+import { briefSections, confidenceBand, evidenceGroup, firstName, gapLine, gapText, headerText, questionsToAsk, roleCriteria, searchedTitle, seedHeadline, stepRows } from "../state";
 
 const cand = (id: string, platform: string, score: number, decision: Candidate["decision"] = "possibly-same-as"): Candidate => ({
   id, run_id: "r", name: "x", profile_urls: [`https://${id}`], anchor_match: null, score, decision, platform, handle: id, snippet: "", reasons: [],
@@ -73,6 +73,20 @@ describe("searchedTitle", () => {
   it("reads 'nothing confirmed' once any gap is namesake-only, else 'nothing found'", () => {
     expect(searchedTitle([{ reason: "no ORCID record found" }])).toBe("Searched, nothing found");
     expect(searchedTitle([{ reason: "no ORCID record found" }, { reason: "hits found, none confirmed (same name, identity not verified)" }])).toBe("Searched, nothing confirmed");
+  });
+});
+
+describe("gapText", () => {
+  it("turns a failed request into plain words, with or without a status code", () => {
+    expect(gapText('request failed: https://api.stackexchange.com/2.3/users?x=1: HTTP 400 {"error_id":502,"error_message":"too many requests"}')).toBe(
+      "the service refused our request (HTTP 400)",
+    );
+    expect(gapText("request failed: https://api.example.com/x: fetch failed")).toBe("the service did not answer");
+  });
+  it("reads a missing handle as a missing profile and passes other reasons through", () => {
+    expect(gapText("no confirmed handle or id to look up")).toBe("no confirmed profile to look up");
+    expect(gapText("no public repositories")).toBe("no public repositories");
+    expect(gapLine({ source: "stackexchange_profile", reason: "request failed: https://a.b/c: HTTP 429 x" })).toBe("Stack Exchange: the service refused our request (HTTP 429)");
   });
 });
 

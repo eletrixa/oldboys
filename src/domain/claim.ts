@@ -37,7 +37,7 @@ export const Investigation = z.object({
   /** Free-text role the manager is hiring for (hiring goal); null for other goals. */
   role: z.string().nullable(),
   /** Dynamic must-have questions derived from `role`; merged with the recipe's base questions. */
-  questions: z.array(z.object({ id: z.string().min(1), text: z.string().min(1) })),
+  questions: z.array(z.object({ id: z.string().min(1), text: z.string().min(1), title: z.string().min(1).optional() })),
 });
 export type Investigation = z.infer<typeof Investigation>;
 
