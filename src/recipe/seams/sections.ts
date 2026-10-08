@@ -8,8 +8,9 @@
  *
  * Key responsibilities:
  * - One section per question with at least one kept claim (short title; role must-haves "mh-*" by their text)
- * - One "Social presence" section for confirmed social profiles no claim cites, one section per other platform
- *   group (GitHub, business registry, web pages) whose confirmed sources no claim cites
+ * - One section per non-social platform group (GitHub, business registry, web pages) whose confirmed sources no claim
+ *   cites; uncited social profiles get no section (it would only list links)
+ * - Source origin (self / mirror / independent) comes from sourceOrigin with the merged candidates' profile URLs
  * - Counts per section feed sectionConfidence: facts need a merged supporting source, sources are distinct canonical URLs;
  *   a support id that is not among the run's sources counts as no source and puts "source missing" in the reason
  *
@@ -17,7 +18,7 @@
  * - Pure, called by synthesizeBrief; never asks the model, so a degraded brief gets the same sections
  * - Questions with nothing found get no section (they stay in the gap lists); order is recipe order, the UI sorts
  */
-import { sectionConfidence } from "@/domain/confidence";
+import { sectionConfidence, sourceOrigin } from "@/domain/confidence";
 import { canonicalUrl } from "@/domain/url";
 import type { Brief, BriefSection, Claim, Source } from "@/domain/claim";
 import { platformOf } from "@/recipe/sources/types";
@@ -37,15 +38,8 @@ const QUESTION_TITLE: Record<string, string> = {
   "social-consistency": "Social consistency",
 };
 
-const SOCIAL: Record<string, string> = {
-  linkedin: "LinkedIn",
-  x: "X",
-  instagram: "Instagram",
-  tiktok: "TikTok",
-  youtube: "YouTube",
-  bluesky: "Bluesky",
-  facebook: "Facebook",
-};
+/** Social profiles carry no claim of their own, so a "Social presence" section would only list links: it is not emitted. */
+const SOCIAL = new Set(["linkedin", "x", "instagram", "tiktok", "youtube", "bluesky", "facebook"]);
 const GROUP_TITLE: Record<string, string> = { github: "GitHub", ares: "Business registry", web: "Web pages" };
 const TITLE_MAX = 48;
 
@@ -72,6 +66,7 @@ function section(
   identityOf: ReadonlyMap<string, Source["identity"]>,
   urlOf: ReadonlyMap<string, string>,
   summary: string,
+  profileUrls: readonly string[],
 ): BriefSection {
   const isMerged = (sid: string): boolean => identityOf.get(sid) === "merged";
   // unknown ids are no source; one source per canonical URL, preferring the confirmed copy
@@ -85,7 +80,11 @@ function section(
   }
   const ids = [...byUrl.values()];
   const missing = claims.filter((c) => c.supports.some((sid) => !identityOf.has(sid))).length;
+  const origins = ids.map((sid) => sourceOrigin(urlOf.get(sid) ?? "", profileUrls));
   const conf = sectionConfidence({
+    self_sources: origins.filter((o) => o === "self").length,
+    mirror_sources: origins.filter((o) => o === "mirror").length,
+    independent_sources: origins.filter((o) => o === "independent").length,
     claims: claims.length,
     facts: claims.filter((c) => c.kind === "FACT" && c.supports.some(isMerged)).length,
     inferences: claims.filter((c) => c.kind === "INFERENCE").length,
@@ -93,7 +92,7 @@ function section(
     confirmed_sources: ids.filter(isMerged).length,
     contradictions: claims.filter((c) => c.contradicts.length > 0).length,
   });
-  const confidence_reason = missing === 0 ? conf.confidence_reason : `${conf.confidence_reason}; source missing for ${plural(missing, "claim")}`;
+  const confidence_reason = missing === 0 ? conf.confidence_reason : `${conf.confidence_reason}; ${missing === 1 ? "a cited source is missing" : `${String(missing)} cited sources are missing`}`;
   return { id, title, ...conf, confidence_reason, claim_ids: claims.map((c) => c.id), source_ids: ids, summary };
 }
 
@@ -109,6 +108,7 @@ export function sectionsOf(
   perQuestion: Brief["per_question"],
   allSources: readonly Source[],
   confirmedSources: readonly Source[],
+  profileUrls: readonly string[] = [],
 ): BriefSection[] {
   const identityOf = new Map(allSources.map((s) => [s.id, s.identity]));
   const urlOf = new Map(allSources.map((s) => [s.id, s.url]));
@@ -116,31 +116,16 @@ export function sectionsOf(
   const fromQuestions = questions.flatMap((q) => {
     const cs = claims.filter((c) => c.question_id === q.id);
     if (cs.length === 0) return [];
-    return [section(q.id, sectionTitle(q), cs, cs.flatMap((c) => c.supports), identityOf, urlOf, summaryOf.get(q.id) ?? "")];
+    return [section(q.id, sectionTitle(q), cs, cs.flatMap((c) => c.supports), identityOf, urlOf, summaryOf.get(q.id) ?? "", profileUrls)];
   });
 
   const cited = new Set(claims.flatMap((c) => c.supports));
   const byPlatform = Map.groupBy(confirmedSources, (s) => platformOf(s.url));
   const uncited = [...byPlatform].filter(([, ss]) => !ss.some((s) => cited.has(s.id)));
-  const social = uncited.filter(([p]) => p in SOCIAL);
-  const socialSection =
-    social.length === 0
-      ? []
-      : [
-          section(
-            "social-presence",
-            "Social presence",
-            [],
-            social.flatMap(([, ss]) => ss.map((s) => s.id)),
-            identityOf,
-            urlOf,
-            `Confirmed profiles on ${social.map(([p]) => SOCIAL[p] ?? p).join(", ")}; nothing from them is used in a claim.`,
-          ),
-        ];
   const groups = uncited
-    .filter(([p]) => !(p in SOCIAL))
+    .filter(([p]) => !SOCIAL.has(p))
     .map(([p, ss]) =>
-      section(`evidence-${p}`, GROUP_TITLE[p] ?? p, [], ss.map((s) => s.id), identityOf, urlOf, `${plural(ss.length, "confirmed source")}; nothing from them is used in a claim.`),
+      section(`evidence-${p}`, GROUP_TITLE[p] ?? p, [], ss.map((s) => s.id), identityOf, urlOf, `${plural(ss.length, "confirmed source")}; nothing from them is used in a claim.`, profileUrls),
     );
-  return [...fromQuestions, ...socialSection, ...groups];
+  return [...fromQuestions, ...groups];
 }

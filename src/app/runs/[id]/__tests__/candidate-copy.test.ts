@@ -36,7 +36,7 @@ const brief = (over: Partial<Brief> = {}): Brief => ({
   per_question: [{ question_id: "mh-exp", coverage: "evidenced", claim_ids: ["c1"], summary: "Five years of data work." }],
   interview_questions: ["Walk me through your last pipeline."],
   to_verify: ["Dates at Acme"],
-  not_searched: [{ source: "facebook_profile", reason: "not collected: public Facebook pages need a login" }],
+  not_searched: [{ source: "facebook_profile", reason: "profile not opened (login needed); only search snippets were read" }],
   searched_empty: [{ source: "github_profile", reason: "no public repositories" }],
   removed_protected: 1,
   degraded: null,
@@ -91,7 +91,7 @@ describe("candidateCopy", () => {
     expect(md).toContain("- LinkedIn\n");
     expect(md).toContain("- X\n");
     expect(md).toContain("- GitHub (nothing found that we could confirm as yours)");
-    expect(md).toContain("- Facebook: not collected: public Facebook pages need a login");
+    expect(md).toContain("- Facebook: profile not opened (login needed); only search snippets were read");
     expect(md).toContain("- <https://www.linkedin.com/in/jnovak>");
     expect(md).toContain("- <https://x.com/jnovak>");
     expect(md).toContain("deleted on 2026-10-15");
