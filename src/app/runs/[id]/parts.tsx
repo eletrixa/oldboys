@@ -12,7 +12,8 @@
  * - Brief top line: "Confirmed profile: <headline>" next to "Hiring for: <role>" (both quoted, no model needed),
  *   with the location note (confirmed profile names another city than the anchor) under the profile line
  * - Gap list reads "Searched, nothing confirmed" when any searched gap is a namesake-only one
- * - Confirmed evidence grouped by the URL's platform (evidenceGroup), not by the actor that fetched it
+ * - Confirmed evidence grouped by the URL's platform (evidenceGroup), not by the actor that fetched it; the pasted CV
+ *   is plain text, not a link (SourceLink)
  * - Phone verification panel (CallPanel, client) right after "To verify"; it fetches its own data
  * - Interview kit buttons (KitActions) under the top line; gap labels come from state.ts (GAP_LABEL, gapLine)
  * - Findings as sections by confidence (SectionList); briefs stored before sections render per question

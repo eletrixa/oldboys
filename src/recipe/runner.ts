@@ -12,7 +12,8 @@
  * - A collector whose sources an earlier step already fetched (`alreadyFetched`) and that has nothing new to request
  *   returns those sources, not empty, with the note "already fetched at seed" and no request
  * - Budget: refuse a paid (actor) request once calls or USD are exhausted (note + empty); free REST fetches are not gated
- * - One source per page: a hit whose canonical URL (no locale / trailing slash) is already in the run is not stored again
+ * - One source per page: a hit whose canonical URL (no locale / trailing slash) is already in the run is not stored again;
+ *   deduped hits add the note "N hits already in the run" and do not make the step empty (no onEmpty gap)
  *
  * Design constraints:
  * - Never mutates ctx; the Workflow persists the outcome and rebuilds ctx for the next step
@@ -92,6 +93,8 @@ async function collect(step: Step, ctx: StepContext, ports: Ports): Promise<Step
     return out;
   }
   const seen = new Set(ctx.sources.map((s) => canonicalUrl(s.url)));
+  let parsedHits = 0;
+  let deduped = 0;
   for (const req of requests) {
     if (req.via === "actor" && !budgetLeft(ctx, out.calls, out.cost_usd)) {
       out.notes.push("run budget reached");
@@ -108,9 +111,13 @@ async function collect(step: Step, ctx: StepContext, ports: Ports): Promise<Step
       out.notes.push(`request failed: ${error instanceof Error ? error.message : String(error)}`);
       continue;
     }
+    parsedHits += parsed.length;
     for (const p of parsed) {
       const key = canonicalUrl(p.url);
-      if (seen.has(key)) continue;
+      if (seen.has(key)) {
+        deduped += 1;
+        continue;
+      }
       seen.add(key);
       const fetched = ports.now();
       const source: Omit<Source, "r2_key"> = {
@@ -126,6 +133,8 @@ async function collect(step: Step, ctx: StepContext, ports: Ports): Promise<Step
       out.sources.push(await ports.storeSource(source, p.raw));
     }
   }
-  out.empty = out.sources.length === 0;
+  if (deduped > 0) out.notes.push(`${String(deduped)} hits already in the run`);
+  // Pages found but all stored by an earlier step are not "nothing found": empty only when parse returned nothing
+  out.empty = parsedHits === 0;
   return out;
 }

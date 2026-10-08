@@ -9,7 +9,8 @@
  * Key responsibilities:
  * - One `step.do` per recipe step: load context from D1 -> executeStep -> persist -> ledger row
  * - `seed` step (plans/006) runs first, before role_questions: the manager's LinkedIn URL / CV become the merged
- *   identity and set investigations.subject/anchor; a scrape or model failure is a ledger note, never a failed run
+ *   identity and set investigations.subject/anchor; a scrape or model failure is a ledger note, never a failed run;
+ *   seed row ids are stable (stableId), so a retried seed step upserts instead of duplicating sources/candidates
  * - `onEmpty`: run the declared fallback step once, or record a Gap (ledger decision with ref.gap)
  * - resolve: persist candidates; pause with `step.waitForEvent('lineup-answer')` when any candidate is
  *   possibly-same-as or none merged (lineupNeedsAnswer, seed merges count); apply the manager's decisions on resume
@@ -18,7 +19,8 @@
  * - Source identity re-marked after the lineup and before extract (applySourceIdentity), so only SERP hits on
  *   a merged profile count as confirmed
  * - Truthful gaps: a collector that made no request, or whose requests all failed, records "not searched: <why>", not its onEmpty text; a
- *   post-lineup collector whose hits are all unconfirmed records UNCONFIRMED_GAP, so every source ends in a row or a gap
+ *   post-lineup collector whose hits are all unconfirmed records UNCONFIRMED_GAP, so every source ends in a row or a gap;
+ *   a collector whose hits were all stored by an earlier step is not empty (runner), so no onEmpty gap is recorded
  * - Model failures degrade (evidence-only brief, ledger `{degraded}`) and the run still ends `done`;
  *   `failed` is only for unexpected throws
  *

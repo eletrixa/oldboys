@@ -9,8 +9,8 @@
  * Key responsibilities:
  * - Drop claims about GDPR Art. 9 categories before anything is summarised (count only, content never stored)
  * - Coverage: evidenced = ≥1 FACT, partial = INFERENCE only, none = no claim
- * - Re-applies verify's screenClaims (noise, alias contradictions), so dropped claims never reach summaries,
- *   interview questions or to_verify
+ * - Re-applies verify's screenClaims (noise, alias contradictions); dropped claims and alias contradictions (kept in
+ *   the ledger, ranked last) never reach summaries, sections, interview questions or to_verify
  * - Model interview questions: at most 5, only for questions interviewAllowed admits (unevidenced must-haves,
  *   surviving contradictions; `public-code` only for a technical role)
  * - also_found (hiring): a hit must name the subject's surname in excerpt or URL, otherwise it is noise and dropped
@@ -37,9 +37,9 @@ import type { Brief, Candidate, Claim, Coverage, Source } from "@/domain/claim";
 import type { Ports } from "@/domain/ports";
 import { emptyOutcome } from "@/recipe/runner";
 import { recipeFor } from "@/recipe/goals";
-import { PLATFORM_RANK, profileKey, UNCONFIRMED_GAP } from "@/recipe/seams/resolve";
+import { confirmedSources, PLATFORM_RANK, profileKey, UNCONFIRMED_GAP } from "@/recipe/seams/resolve";
 import { sectionsOf } from "@/recipe/seams/sections";
-import { saysCompatible, screenClaims } from "@/recipe/seams/verify";
+import { aliasNoted, saysCompatible, screenClaims } from "@/recipe/seams/verify";
 import { platformOf, type StepContext, type StepOutcome } from "@/recipe/sources/types";
 
 const Protected = z.array(z.object({ id: z.string(), protected: z.boolean() }));
@@ -169,10 +169,6 @@ function uniqueRows(sources: readonly Source[]): Brief["evidence"] {
 }
 
 /** Merged-identity sources whose profile the manager did not reject: the only ones a brief may present as found. */
-function confirmedSources(ctx: StepContext): Source[] {
-  return ctx.sources.filter(notRejected(ctx)).filter(confirmed);
-}
-
 export function evidenceOf(ctx: StepContext): Brief["evidence"] {
   return uniqueRows(confirmedSources(ctx));
 }
@@ -303,10 +299,10 @@ export async function synthesizeBrief(ctx: StepContext, ports: Ports): Promise<S
   const unprotected = await dropProtected(ctx.claims, ports, out);
   const removed = ctx.claims.length - unprotected.length;
   if (removed > 0) out.notes.push(`removed protected category: ${String(removed)}`);
-  // Same noise / alias screen as verify: a dropped false contradiction never reaches summaries, questions or to_verify
+  // Same noise / alias screen as verify: a false contradiction never reaches summaries, questions or to_verify
   const screened = screenClaims(unprotected, ctx.sources, ctx.subject);
   out.notes.push(...screened.notes);
-  let kept = screened.kept;
+  let kept = screened.kept.filter((c) => !aliasNoted(c));
 
   const byQ = new Map<string, Claim[]>(ctx.questions.map((q) => [q.id, []]));
   for (const c of kept) byQ.get(c.question_id)?.push(c);

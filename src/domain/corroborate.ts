@@ -10,7 +10,9 @@
  * Key responsibilities:
  * - `corroborationReason`: a page names the subject in full (either order, diacritics-insensitive) AND carries a
  *   distinctive token of a confirmed employer -> "name and employer match (<Org>)"; null otherwise
- * - `orgTokens`: organisation names -> folded whole-word tokens (4+ chars, no generic words, no name parts)
+ * - `orgTokens`: organisation names -> folded whole-word tokens (4+ chars, no generic English/Czech words, no name parts)
+ * - `isGenericOrgWord`: "Česká", "Univerzita", "Group" ...; a match on a generic word alone never corroborates
+ * - `fold` / `hasWord` / `escape`: shared text helpers (verify's alias screen reuses them)
  * - `placeOf` / `mentionsPlace`: the anchor's place ("Prague" from "Prague, Czechia") as a whole word
  * - `professionalReasons` / `professionalSnippet`: drop personal-life details (check-ins, profile pictures,
  *   family words, hobbies) from what the lineup shows
@@ -24,22 +26,38 @@ export function fold(text: string): string {
   return text.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
 }
 
-const escape = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+export const escape = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 /** Whole-word (letters/digits) test on already folded text. */
-function hasWord(hay: string, word: string): boolean {
+export function hasWord(hay: string, word: string): boolean {
   return new RegExp(`(?<![\\p{L}\\p{N}])${escape(word)}(?![\\p{L}\\p{N}])`, "u").test(hay);
 }
 
-/** Words in organisation names that say nothing about which organisation it is. */
-const ORG_STOP = new Set([
-  "group", "company", "companies", "limited", "corp", "corporation", "holding", "holdings", "international", "global",
-  "services", "service", "solutions", "gmbh", "consulting", "partners", "digital", "marketing", "media", "technologies",
-  "technology", "systems", "software", "agency", "nasdaq", "nyse", "self", "employed", "freelance", "freelancer",
-  "stealth", "startup", "czech", "czechia", "republic", "europe", "university", "school", "team", "labs", "ventures",
-  "capital", "management", "industries", "enterprise", "enterprises", "present", "with", "from", "growth", "business",
-  "native", "brand", "sales", "product", "data", "head", "chief", "officer", "director", "manager", "turnaround",
-]);
+/**
+ * Words in organisation names that say nothing about which organisation it is, English and Czech. Folded, so
+ * "Česká" and "ceska" are the same stop word.
+ */
+const ORG_STOP = new Set(
+  [
+    "group", "company", "companies", "limited", "corp", "corporation", "holding", "holdings", "international", "global",
+    "services", "service", "solutions", "gmbh", "consulting", "partners", "digital", "marketing", "media", "technologies",
+    "technology", "systems", "software", "agency", "studio", "studios", "nasdaq", "nyse", "self", "employed", "freelance",
+    "freelancer", "stealth", "startup", "czech", "czechia", "republic", "europe", "university", "school", "college",
+    "institute", "academy", "bank", "city", "team", "labs", "ventures", "capital", "management", "industries",
+    "enterprise", "enterprises", "present", "with", "from", "growth", "business", "native", "brand", "sales", "product",
+    "data", "head", "chief", "officer", "director", "manager", "turnaround",
+    // Czech country, institution and legal-form words
+    "česká", "český", "české", "česko", "republika", "univerzita", "univerzity", "vysoká", "vysoké", "škola", "školy",
+    "gymnázium", "akademie", "ústav", "institut", "fakulta", "banka", "město", "města", "městská", "městský", "obec",
+    "kraj", "krajský", "krajská", "státní", "národní", "společnost", "skupina", "služby", "družstvo", "agentura",
+    "nadace", "spolek",
+  ].map(fold),
+);
+
+/** True for a generic organisation word ("Česká", "Univerzita", "Group"), any case or diacritics. */
+export function isGenericOrgWord(word: string): boolean {
+  return ORG_STOP.has(fold(word));
+}
 
 /** Organisation names hinted in a headline: "ex-Meta", "CMO @ Groupon", "Engineer at Kiwi.com". */
 export function headlineOrgs(headline: string): string[] {
@@ -72,10 +90,10 @@ export function mentionsFullName(subject: string, text: string): boolean {
   return [parts, [sur, ...parts.slice(0, -1)]].some((o) => new RegExp(`(?<!\\p{L})${o.map(escape).join("[\\s,._-]+")}(?!\\p{L})`, "u").test(hay));
 }
 
-/** Label of the first organisation token found as a whole word in text, or null. */
+/** Label of the first non-generic organisation token found as a whole word in text, or null. */
 export function employerHit(text: string, tokens: readonly OrgToken[]): string | null {
   const hay = fold(text);
-  return tokens.find((t) => hasWord(hay, t.token))?.label ?? null;
+  return tokens.find((t) => !isGenericOrgWord(t.token) && hasWord(hay, t.token))?.label ?? null;
 }
 
 /** Excerpt plus the decoded URL: what a page is judged on. */
