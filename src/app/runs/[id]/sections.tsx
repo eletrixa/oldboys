@@ -4,12 +4,12 @@
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/runs/[id]/sections.tsx
  * Deps:    react, src/domain/claim (types), ./state
- * Tested:  n/a (ordering and bands are tested in __tests__/state.test.ts)
+ * Tested:  isShown in __tests__/sections.test.ts; ordering and bands in __tests__/state.test.ts
  *
  * Key responsibilities:
  * - SectionList: sections in the order given (BriefView passes them confidence descending)
  * - ClaimList: one claim per row with its kind tag and source links; also used for the per-question fallback
- * - Source-only sections (social presence, platforms without claims) list their confirmed source links
+ * - Source-only sections (platforms without claims) list their confirmed source links; empty ones are not rendered
  *
  * Design constraints:
  * - Pure rendering; the confidence rates the research behind a section, never the person
@@ -91,10 +91,15 @@ function SectionCard({ section, claims, urlOf }: { section: BriefSection; claims
   );
 }
 
+/** A section with no claims and no sources has nothing to show; neither has a claimless social-presence list. */
+export function isShown(s: BriefSection): boolean {
+  return s.claim_ids.length > 0 || (s.source_ids.length > 0 && s.id !== "social-presence");
+}
+
 export function SectionList({ sections, claims, urlOf }: { sections: BriefSection[]; claims: Claim[]; urlOf: ReadonlyMap<string, string> }): React.JSX.Element {
   return (
     <>
-      {sections.map((s) => (
+      {sections.filter(isShown).map((s) => (
         <SectionCard key={s.id} section={s} claims={claims.filter((c) => s.claim_ids.includes(c.id))} urlOf={urlOf} />
       ))}
     </>

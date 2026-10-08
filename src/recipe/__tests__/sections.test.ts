@@ -8,7 +8,8 @@
  *
  * Key responsibilities:
  * - A question gets a section only when it has claims; titles are short, must-haves keep their text
- * - Uncited confirmed social profiles form one "Social presence" section, other platforms one section each
+ * - Uncited social profiles get no section; other uncited platforms one section each
+ * - Mirror sites do not count as confirmation; the candidate's own site counts as self-reported
  * - Confidence follows the sources' identity (merged) and contradictions; the degraded brief carries the same sections
  *
  * Design constraints:
@@ -34,38 +35,51 @@ const questions = [
 const li = src("s-li", "https://www.linkedin.com/in/jana");
 const gh = src("s-gh", "https://github.com/jana");
 const site = src("s-web", "https://jana.dev/about");
+const press = src("s-press", "https://news.example/jana-profile");
+const podcast = src("s-pod", "https://podcast.example/ep1");
+const rr = src("s-rr", "https://rocketreach.co/jana");
+const bb = src("s-bb", "https://www.bloomberg.com/profile/person/1");
 const ig = src("s-ig", "https://www.instagram.com/jana");
 const xs = src("s-x", "https://x.com/jana");
 const namesake = src("s-ns", "https://example.com/other-jana", "unverified");
-const all = [li, gh, site, ig, xs, namesake];
+const all = [li, gh, site, ig, xs, namesake, press, podcast, rr, bb];
 const confirmedOnly = all.filter((s) => s.identity === "merged");
 const perQuestion = questions.map((q) => ({ question_id: q.id, coverage: "evidenced" as const, claim_ids: [], summary: `summary ${q.id}` }));
 
 describe("sectionsOf", () => {
-  it("gives a section only to questions with claims, plus social presence and uncited platforms", () => {
-    const claims = [claim("c1", "current-role", ["s-li"]), claim("c2", "current-role", ["s-web"]), claim("c3", "mh-sql", ["s-li"], { kind: "INFERENCE", quote: null })];
+  it("gives a section only to questions with claims, plus uncited non-social platforms (GitHub), never a social presence section", () => {
+    const claims = [claim("c1", "current-role", ["s-li"]), claim("c2", "current-role", ["s-press"]), claim("c3", "mh-sql", ["s-li"], { kind: "INFERENCE", quote: null })];
     const sections = sectionsOf(questions, claims, perQuestion, all, confirmedOnly);
     expect(sections.map((s) => [s.id, s.title])).toEqual([
       ["current-role", "Current role"],
       ["mh-sql", "Has five years of SQL in production"],
-      ["social-presence", "Social presence"],
       ["evidence-github", "GitHub"],
     ]);
-    expect(sections[0]).toMatchObject({ claim_ids: ["c1", "c2"], source_ids: ["s-li", "s-web"], confidence: 0.9, summary: "summary current-role" });
-    expect(sections[0]?.confidence_reason).toBe("2 facts from 2 confirmed sources, no contradictions");
-    expect(sections[1]).toMatchObject({ confidence: 0.3, confidence_reason: "1 inference from 1 confirmed source, no contradictions" });
-    expect(sections[2]).toMatchObject({ source_ids: ["s-ig", "s-x"], confidence: 0.4, claim_ids: [] });
-    expect(sections[2]?.summary).toContain("Instagram, X");
+    expect(sections[0]).toMatchObject({ claim_ids: ["c1", "c2"], source_ids: ["s-li", "s-press"], confidence: 0.85, summary: "summary current-role" });
+    expect(sections[0]?.confidence_reason).toBe("Self-reported, plus one independent source");
+    expect(sections[1]).toMatchObject({ confidence: 0.3, confidence_reason: "Inferred, no verbatim quote" });
+  });
+
+  it("does not count LinkedIn plus RocketReach and Bloomberg as three confirmations", () => {
+    const sections = sectionsOf(questions, [claim("c1", "current-role", ["s-li", "s-rr", "s-bb"])], perQuestion, all, confirmedOnly);
+    expect(sections[0]).toMatchObject({ confidence: 0.6, confidence_reason: "Self-reported; a mirror site repeats it" });
+  });
+
+  it("reaches 0.95 with two independent sources and treats the candidate's own site as self-reported", () => {
+    const two = sectionsOf(questions, [claim("c1", "current-role", ["s-li", "s-press", "s-pod"])], perQuestion, all, confirmedOnly);
+    expect(two[0]).toMatchObject({ confidence: 0.95, confidence_reason: "Confirmed by 2 independent sources" });
+    const own = sectionsOf(questions, [claim("c1", "current-role", ["s-web", "s-li"])], perQuestion, all, confirmedOnly, ["https://jana.dev/"]);
+    expect(own[0]).toMatchObject({ confidence: 0.75, confidence_reason: "Self-reported only" });
   });
 
   it("counts a FACT only from a merged source and lowers on a contradiction", () => {
     const mixed = sectionsOf(questions, [claim("c1", "current-role", ["s-ns"]), claim("c2", "current-role", ["s-li"])], perQuestion, all, confirmedOnly);
-    expect(mixed[0]).toMatchObject({ confidence: 0.65, confidence_reason: "1 fact, 1 unverified from 2 sources, 1 confirmed, no contradictions" });
+    expect(mixed[0]).toMatchObject({ confidence: 0.65, confidence_reason: "Self-reported, plus one independent source" });
     const namesakeOnly = sectionsOf(questions, [claim("c1", "current-role", ["s-ns"])], perQuestion, all, confirmedOnly);
-    expect(namesakeOnly[0]).toMatchObject({ confidence: 0.3, confidence_reason: "1 unverified from 1 source, none confirmed, no contradictions" });
-    const contradicted = sectionsOf(questions, [claim("c1", "current-role", ["s-li", "s-web"], { contradicts: ["s-gh"] })], perQuestion, all, confirmedOnly);
-    expect(contradicted[0]?.confidence).toBe(0.7);
-    expect(contradicted[0]?.confidence_reason).toBe("1 fact from 2 confirmed sources, 1 contradiction");
+    expect(namesakeOnly[0]).toMatchObject({ confidence: 0.3, confidence_reason: "Inferred, no verbatim quote" });
+    const contradicted = sectionsOf(questions, [claim("c1", "current-role", ["s-li", "s-press"], { contradicts: ["s-gh"] })], perQuestion, all, confirmedOnly);
+    expect(contradicted[0]?.confidence).toBe(0.65);
+    expect(contradicted[0]?.confidence_reason).toBe("Self-reported, plus one independent source; sources disagree");
   });
 
   it("has no sections when nothing was found", () => {
@@ -94,13 +108,13 @@ describe("sectionsOf sources", () => {
     const sections = sectionsOf(questions, [claim("c1", "current-role", ["s-li", "s-li2"])], perQuestion, [li, dup], [li, dup]);
     expect(sections[0]?.source_ids).toEqual(["s-li"]);
     expect(sections[0]?.confidence).toBe(0.6);
-    expect(sections[0]?.confidence_reason).toBe("1 fact from 1 confirmed source, no contradictions");
+    expect(sections[0]?.confidence_reason).toBe("Self-reported only");
   });
 
   it("treats a support id outside the run's sources as no source and says so", () => {
     const sections = sectionsOf(questions, [claim("c1", "current-role", ["9b6ea47"], { kind: "INFERENCE", quote: null })], perQuestion, all, confirmedOnly);
     expect(sections[0]?.source_ids).toEqual([]);
-    expect(sections[0]?.confidence_reason).toBe("1 inference from no source, no contradictions; source missing for 1 claim");
+    expect(sections[0]?.confidence_reason).toBe("Inferred, no source; a cited source is missing");
   });
 });
 
@@ -109,7 +123,7 @@ describe("synthesizeBrief sections", () => {
     const ctx = baseContext({ questions, sources: all, claims: [claim("c1", "current-role", ["s-li"])] });
     const brief = (await synthesizeBrief(ctx, fakePorts())).brief;
     expect(brief?.degraded).not.toBeNull();
-    expect(brief?.sections.map((s) => s.id)).toEqual(["current-role", "social-presence", "evidence-github", "evidence-web"]);
+    expect(brief?.sections.map((s) => s.id)).toEqual(["current-role", "evidence-github", "evidence-web"]);
     expect(brief?.sections[0]?.confidence).toBe(0.6);
   });
 });

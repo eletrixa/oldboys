@@ -229,7 +229,7 @@ export function locationNoteOf(anchor: string, candidates: readonly Candidate[],
 
 const PROFILE_PLATFORMS = new Set(Object.keys(PLATFORM_LABEL));
 const IDENTITY_MAX = 2;
-const FACEBOOK_GAP = { source: "facebook_profile", reason: "not collected: public Facebook pages need a login" };
+const FACEBOOK_GAP = { source: "facebook_profile", reason: "profile not opened (login needed); only search snippets were read" };
 
 /**
  * Degraded mode: at most two identity questions about open social profiles (never plain web pages a candidate
@@ -313,7 +313,7 @@ export async function synthesizeBrief(ctx: StepContext, ports: Ports): Promise<S
     also_found: alsoFoundOf(ctx),
     headline: headlineOf(ctx.candidates),
     location_note: locationNoteOf(ctx.anchor, ctx.candidates, ctx.sources),
-    sections: sectionsOf(ctx.questions, kept, perQuestion, ctx.sources, confirmedSources(ctx)),
+    sections: sectionsOf(ctx.questions, kept, perQuestion, ctx.sources, confirmedSources(ctx), ctx.candidates.filter((c) => c.decision === "merge").flatMap((c) => c.profile_urls)),
   };
   out.brief = brief;
   out.empty = false;
