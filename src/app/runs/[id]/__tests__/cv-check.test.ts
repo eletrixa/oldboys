@@ -144,8 +144,8 @@ describe("CV vs public record section", () => {
 
 describe("summary, kit and reference questions", () => {
   it("adds the CV line to the 30-second summary and never counts the CV check as a research question", () => {
-    expect(summary30s(run(true))?.documented).toBe("No profile confirmed yet; 1 of 1 research questions have evidence. CV: 1 statement matches the public record, 1 to ask about, 1 not found publicly.");
-    expect(summary30s(run(false))?.documented).toBe("No profile confirmed yet; 1 of 1 research questions have evidence.");
+    expect(summary30s(run(true))?.documented).toBe("No profile confirmed yet; 1 of 1 research questions has evidence. CV: 1 statement matches the public record, 1 to ask about, 1 not found publicly.");
+    expect(summary30s(run(false))?.documented).toBe("No profile confirmed yet; 1 of 1 research questions has evidence.");
   });
 
   it("labels each CV claim in the interview kit and lists the difference as a question", () => {

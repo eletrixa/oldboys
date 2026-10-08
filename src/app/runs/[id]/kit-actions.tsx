@@ -12,7 +12,7 @@
  * - Copy for ATS: a short plain-text note (atsNote) with the link to this brief, for pasting into any ATS card
  * - Copy reference questions: research gaps as plain-text questions for a former manager or colleague (idea #18)
  * - KitReviewCard below the row: paste the filled kit back after the interview to see the open points (idea #23, client only)
- * - One row: primary copy button + "More exports" disclosure (group/chevron from ui.tsx)
+ * - One top-aligned row: primary copy button + "More exports" disclosure (group/chevron from ui.tsx); opening it never moves the button
  * - One sr-only role="status" span reports "Copied" / "Copy failed" for the last copy that ran; that button's label shows it too for 2 s
  * - EN/CZ buttons are 44px targets (BTN_QUIET, aria-pressed = font-semibold text-ink); the row carries the brief tail's divider
  * - The kit fetches GET /api/runs/:id/calls at click time for the phone verification section; on any error
@@ -106,7 +106,7 @@ export function KitActions({ state }: { state: RunState }): React.JSX.Element | 
   const exportBtn = `${BTN_QUIET} ${item}`;
   return (
     <div className="flex flex-col gap-2 border-t border-divider pt-6">
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-start gap-2">
         <button type="button" className={BTN_SECONDARY} onClick={() => void copyText(kit(), setCopy("kit"))}>
           {labelFor(last === "kit", status, "Copy interview kit")}
         </button>

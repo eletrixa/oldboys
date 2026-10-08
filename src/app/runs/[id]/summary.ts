@@ -96,7 +96,7 @@ function researched(state: RunState, brief: Brief, off: boolean): string {
   const evidenced = rows.filter((q) => q.coverage === "evidenced").length;
   const partial = rows.filter((q) => q.coverage === "partial").length;
   const partly = partial > 0 ? `, ${String(partial)} partly` : "";
-  return `${head}; ${String(evidenced)} of ${String(rows.length)} ${noun} have evidence${partly}.`;
+  return `${head}; ${String(evidenced)} of ${String(rows.length)} ${noun} ${evidenced === 1 ? "has" : "have"} evidence${partly}.`;
 }
 
 /** Up to two gaps: criteria with no evidence first, then sources searched in vain, then sources not searched. */

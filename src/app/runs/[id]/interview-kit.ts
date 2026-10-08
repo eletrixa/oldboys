@@ -181,7 +181,7 @@ export function interviewKit(state: RunState, generatedAt: string, calls: readon
   const empty = searchedEmpty(brief);
   const sections = briefSections(brief);
   const footer = [`_${FOOTER}_`];
-  if (brief.removed_protected > 0) footer.push(`_${String(brief.removed_protected)} items removed (protected categories)_`);
+  if (brief.removed_protected > 0) footer.push(`_${plural(brief.removed_protected, "item")} removed (protected categories)_`);
   const lines = [
     ...header(state, brief, generatedAt),
     ...(brief.degraded !== null ? degradedCoverage(state, brief, brief.degraded) : []),

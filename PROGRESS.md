@@ -176,3 +176,8 @@ Each agent appends: what it starts, progress, what it finishes. Newest at the bo
 ## 2026-10-09 · phone-verify: US caller number (Minas)
 - `ELEVENLABS_PHONE_NUMBER_ID` now points at the Twilio US number (+1 443 316 2585) after Trust Hub individual KYC was approved; the Czech verified caller ID is kept in ElevenLabs but unused (Czech carriers reject Twilio calls showing a Czech caller ID as spoofed). `RUN_CALL_MAX` 2 → 3. `call_initiation_failure` webhook event enabled so busy/no-answer reaches the app without waiting on the poll fallback.
 - Files: wrangler.jsonc, docs/ops/call-verification.md, CHANGELOG.md, PROGRESS.md.
+
+## 2026-10-09 · qa-fixes agent (Minas)
+- Started: 01:46. Fixes from the browser QA: phone-call questions are asked only for plain "nothing found" source gaps (tool failures, budget, fallback and namesake-only gaps are skipped; kept reasons scrubbed), "1 item removed" in the interview kit, "1 of 3 … has evidence" in the 30-second summary and ATS note, export row no longer jumps when More exports opens.
+- Finished: 01:50. pnpm check green, wrangler dry-run bundles.
+- Files: src/domain/call-brief.ts, src/domain/__tests__/call-brief.test.ts, src/app/runs/[id]/{interview-kit.ts,summary.ts,kit-actions.tsx} and their tests, CHANGELOG.md, PROGRESS.md.
