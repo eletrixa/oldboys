@@ -15,3 +15,4 @@ next-env.d.ts
 extension/.output/
 extension/.wxt/
 AGENTS.md
+.playwright-mcp/
