@@ -13,13 +13,15 @@
  *   with the location note (confirmed profile names another city than the anchor) under the profile line
  * - Gap list reads "Searched, nothing confirmed" when any searched gap is a namesake-only one
  * - Confirmed evidence grouped by the URL's platform (evidenceGroup), not by the actor that fetched it
+ * - Interview kit buttons (KitActions) under the top line; gap labels come from state.ts (GAP_LABEL, gapLine)
  *
  * Design constraints:
  * - No data fetching here; callbacks are passed in by the view
  */
 import type { Brief, Candidate, CandidateDecision } from "@/domain/claim";
 import { formatDuration, type RunCost } from "@/domain/run-cost";
-import { PLATFORM_LABEL, type RowState, type RunState, evidenceGroup, roleCriteria, searchedTitle } from "./state";
+import { KitActions } from "./kit-actions";
+import { PLATFORM_LABEL, type RowState, type RunState, evidenceGroup, gapLine, roleCriteria, searchedEmpty, searchedTitle } from "./state";
 
 const CARD = "rounded-2xl border border-zinc-800 bg-zinc-900/60 p-5";
 
@@ -353,35 +355,6 @@ function ConfirmedEvidence({ items }: { items: Evidence[] }): React.JSX.Element 
   );
 }
 
-/** Human labels for recipe step ids that appear in the gap lists. */
-const GAP_LABEL: Record<string, string> = {
-  serp_person: "Web search",
-  social_serp: "Social profile search",
-  linkedin_profile: "LinkedIn",
-  github_profile: "GitHub",
-  stackexchange_profile: "Stack Exchange",
-  huggingface_profile: "Hugging Face",
-  orcid_search: "ORCID",
-  openalex_author: "OpenAlex",
-  x_profile: "X",
-  instagram_profile: "Instagram",
-  tiktok_profile: "TikTok",
-  youtube_channel: "YouTube",
-  bluesky_profile: "Bluesky",
-  personal_site_crawl: "Personal website",
-  talks_serp: "Talks and posts",
-  facebook_profile: "Facebook",
-};
-
-type Gap = Brief["not_searched"][number];
-
-/** `searched_empty` is added to Brief by another change; read it without depending on the type having it. */
-function searchedEmpty(brief: Brief): Gap[] {
-  const b: unknown = brief;
-  return typeof b === "object" && b !== null && "searched_empty" in b && Array.isArray(b.searched_empty) ? (b.searched_empty as Gap[]) : [];
-}
-
-const gapLine = (g: Gap): string => `${GAP_LABEL[g.source] ?? g.source}: ${g.reason}`;
 
 function RoleCriteria({ texts }: { texts: string[] }): React.JSX.Element {
   return (
@@ -409,6 +382,7 @@ export function BriefView({ state }: { state: RunState }): React.JSX.Element | n
   return (
     <div id="brief" className="flex scroll-mt-6 flex-col gap-4">
       <TopLine headline={brief.headline ?? null} locationNote={brief.location_note ?? null} role={state.role} />
+      <KitActions state={state} />
       {brief.degraded !== null && <DegradedNotice reason={brief.degraded} />}
       {brief.degraded !== null && <ConfirmedEvidence items={brief.evidence} />}
       {allUnavailable ? (

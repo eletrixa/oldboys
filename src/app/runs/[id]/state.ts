@@ -13,6 +13,7 @@
  * - questionsToAsk: one open profile per platform; roleCriteria: role must-haves (mh-) only
   * - evidenceGroup: the heading a confirmed source sits under, from its URL's platform (LinkedIn, X), not the actor
  * - searchedTitle: "Searched, nothing confirmed" when a gap is namesake-only, else "nothing found"
+ * - GAP_LABEL, gapLine, searchedEmpty: human gap lines, shared by BriefView and the interview kit
  *
  * Design constraints:
  * - Pure (types plus the pure platformOf), so both the route handler and client code can use it
@@ -127,3 +128,34 @@ export function stepRows(state: Pick<RunState, "status" | "step" | "mentions" | 
 export function searchedTitle(gaps: readonly { reason: string }[]): string {
   return gaps.some((g) => g.reason.includes("none confirmed")) ? "Searched, nothing confirmed" : "Searched, nothing found";
 }
+
+/** Human labels for recipe step ids that appear in the gap lists. */
+export const GAP_LABEL: Record<string, string> = {
+  serp_person: "Web search",
+  social_serp: "Social profile search",
+  linkedin_profile: "LinkedIn",
+  github_profile: "GitHub",
+  stackexchange_profile: "Stack Exchange",
+  huggingface_profile: "Hugging Face",
+  orcid_search: "ORCID",
+  openalex_author: "OpenAlex",
+  x_profile: "X",
+  instagram_profile: "Instagram",
+  tiktok_profile: "TikTok",
+  youtube_channel: "YouTube",
+  bluesky_profile: "Bluesky",
+  personal_site_crawl: "Personal website",
+  talks_serp: "Talks and posts",
+  facebook_profile: "Facebook",
+};
+
+type Gap = Brief["not_searched"][number];
+
+/** `searched_empty` is defaulted for older briefs; read it without trusting a stored brief to have it. */
+export function searchedEmpty(brief: Brief): Gap[] {
+  const b: unknown = brief;
+  return typeof b === "object" && b !== null && "searched_empty" in b && Array.isArray(b.searched_empty) ? (b.searched_empty as Gap[]) : [];
+}
+
+/** "LinkedIn: no public profile" — step id replaced by its human label. */
+export const gapLine = (g: Gap): string => `${GAP_LABEL[g.source] ?? g.source}: ${g.reason}`;
