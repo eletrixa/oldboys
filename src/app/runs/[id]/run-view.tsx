@@ -9,7 +9,7 @@
  * Key responsibilities:
  * - Poll GET /api/runs/:id/state every 2 s until done or failed
  * - Show the run cost and research time line (ledger projection) while running and when done
- * - Send all lineup decisions to POST /api/runs/:id/answer in one event once no question is pending
+ * - Show the lineup, then one question at a time (at most MAX_QUESTIONS); send every decision in one answer event
  *
  * Design constraints:
  * - Client component; no SSE; "I'm not sure" is answered locally and keeps possibly-same-as
@@ -20,9 +20,11 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Candidate, CandidateDecision } from "@/domain/claim";
 import { type Answer, BriefView, CostLine, ProfileList, ProgressSteps, QuestionCard } from "./parts";
-import { type RunState, stepRows } from "./state";
+import { type RunState, sortLineup, stepRows } from "./state";
 
 const POLL_MS = 2000;
+/** Wireframe: one easy question at a time, and never more than a few; the rest keep the server's decision. */
+const MAX_QUESTIONS = 3;
 
 async function sendAnswer(id: string, decisions: { id: string; decision: Answer }[]): Promise<void> {
   await fetch(`/api/runs/${id}/answer`, {
@@ -68,7 +70,12 @@ export function RunView({ id }: { id: string }): React.JSX.Element {
 
   const decisionOf = useCallback((c: Candidate): CandidateDecision => local[c.id] ?? c.decision, [local]);
 
-  const pending = (state?.candidates ?? []).filter((c) => c.decision === "possibly-same-as" && !(c.id in local) && !(c.id in unsure));
+  const asked = Object.keys(local).length + Object.keys(unsure).length;
+  const pending =
+    asked >= MAX_QUESTIONS
+      ? []
+      : sortLineup(state?.candidates ?? [], (c) => c.decision).filter((c) => c.decision === "possibly-same-as" && !(c.id in local) && !(c.id in unsure));
+  const question = pending[0];
 
   // One answer event resumes the Workflow, so every decision goes in a single send once nothing is pending.
   useEffect(() => {
@@ -95,7 +102,7 @@ export function RunView({ id }: { id: string }): React.JSX.Element {
       </main>
     );
   }
-  if (!state) return <main className="mx-auto max-w-xl px-4 py-16 text-zinc-400">Loading...</main>;
+  if (!state) return <main className="mx-auto max-w-2xl px-4 py-10 text-zinc-400">Loading...</main>;
 
   const first = state.subject.split(/\s+/)[0] ?? state.subject;
   const labels = [
@@ -107,7 +114,7 @@ export function RunView({ id }: { id: string }): React.JSX.Element {
   ];
 
   return (
-    <main className="mx-auto flex max-w-xl flex-col gap-6 px-4 py-16">
+    <main className="mx-auto flex max-w-2xl flex-col gap-6 px-4 py-10">
       <header className="flex flex-col gap-2">
         <h1 className="text-3xl font-semibold tracking-tight">
           {state.status === "done" ? `${first}'s brief` : `Putting together ${first}'s brief`}
@@ -124,10 +131,8 @@ export function RunView({ id }: { id: string }): React.JSX.Element {
       ) : (
         <ProgressSteps rows={stepRows(state)} labels={labels} />
       )}
-      {pending.map((c) => (
-        <QuestionCard key={c.id} candidate={c} onAnswer={answer} />
-      ))}
-      {state.candidates.length > 0 && <ProfileList candidates={state.candidates} decisionOf={decisionOf} />}
+      {state.candidates.length > 0 && <ProfileList candidates={sortLineup(state.candidates, decisionOf)} decisionOf={decisionOf} />}
+      {question !== undefined && <QuestionCard key={question.id} candidate={question} first={first} onAnswer={answer} />}
       <div className="flex items-center justify-between">
         <Link href="/" className="text-sm text-zinc-400 underline">Back</Link>
         {state.status === "done" ? (

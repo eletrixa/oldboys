@@ -9,6 +9,7 @@
  * Key responsibilities:
  * - RunState: the GET /api/runs/:id/state contract
  * - stepRows: map the ledger step + status to the five human progress rows
+ * - sortLineup: confirmed first, social platforms before web hits
  *
  * Design constraints:
  * - Pure and import-type only, so both the route handler and client code can use it
@@ -34,9 +35,22 @@ export type RunState = {
 
 export type RowState = "done" | "active" | "todo";
 
+const PLATFORM_RANK: Record<string, number> = { linkedin: 0, github: 1, x: 2, instagram: 3, tiktok: 4, youtube: 5, bluesky: 6 };
+const DECISION_RANK: Record<Candidate["decision"], number> = { merge: 0, "possibly-same-as": 1, rejected: 2 };
+
+/** Lineup order: confirmed first, then open questions, social platforms before plain web hits. */
+export function sortLineup<T extends Pick<Candidate, "platform" | "decision" | "score">>(candidates: readonly T[], decisionOf: (c: T) => Candidate["decision"]): T[] {
+  return [...candidates].sort(
+    (a, b) =>
+      DECISION_RANK[decisionOf(a)] - DECISION_RANK[decisionOf(b)] ||
+      (PLATFORM_RANK[a.platform] ?? 9) - (PLATFORM_RANK[b.platform] ?? 9) ||
+      b.score - a.score,
+  );
+}
+
 /** Index of the human row a ledger step belongs to; unknown steps are treated as collectors. */
 function rowOf(step: string): number {
-  if (step.startsWith("serp")) return 0;
+  if (step.startsWith("serp") || step.startsWith("load") || step.startsWith("role") || step.startsWith("social")) return 0;
   if (step.startsWith("resolve")) return 1;
   if (step.startsWith("extract") || step.startsWith("verify")) return 3;
   if (step.startsWith("synthesize")) return 4;

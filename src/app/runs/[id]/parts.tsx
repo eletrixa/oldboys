@@ -19,6 +19,14 @@ import type { RowState, RunState } from "./state";
 
 const CARD = "rounded-2xl border border-zinc-800 bg-zinc-900/60 p-5";
 
+function host(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return url;
+  }
+}
+
 function Mark({ state }: { state: RowState }): React.JSX.Element {
   if (state === "done") {
     return (
@@ -69,12 +77,32 @@ const BADGE: Record<CandidateDecision, { text: string; cls: string }> = {
   "possibly-same-as": { text: "Not sure yet", cls: "bg-amber-500/15 text-amber-300" },
 };
 
-function Icon({ platform }: { platform: string }): React.JSX.Element {
+function Icon({ name }: { name: string }): React.JSX.Element {
+  const initials = name
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((w) => w.charAt(0))
+    .join("");
   return (
-    <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-zinc-800 text-xs font-semibold uppercase">
-      {platform.slice(0, 2)}
+    <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-teal-500/15 text-xs font-semibold uppercase text-teal-300">
+      {initials}
     </span>
   );
+}
+
+const PLATFORM_LABEL: Record<string, string> = {
+  linkedin: "LinkedIn",
+  github: "GitHub",
+  instagram: "Instagram",
+  x: "X",
+  tiktok: "TikTok",
+  youtube: "YouTube",
+  bluesky: "Bluesky",
+};
+
+/** "LinkedIn", or the site's hostname for plain web hits. */
+export function platformLabel(c: Pick<Candidate, "platform" | "profile_urls">): string {
+  return PLATFORM_LABEL[c.platform] ?? host(c.profile_urls[0] ?? "web");
 }
 
 export function ProfileList({
@@ -92,9 +120,11 @@ export function ProfileList({
           const badge = BADGE[decisionOf(c)];
           return (
             <li key={c.id} className="flex items-center gap-3">
-              <Icon platform={c.platform} />
+              <Icon name={c.name} />
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium capitalize">{c.platform}</p>
+                <a href={c.profile_urls[0]} target="_blank" rel="noreferrer" className="text-sm font-medium hover:underline">
+                  {platformLabel(c)}
+                </a>
                 <p className="truncate text-sm text-zinc-400">{c.snippet}</p>
               </div>
               <span className={`shrink-0 rounded-full px-3 py-1 text-xs ${badge.cls}`}>{badge.text}</span>
@@ -110,17 +140,28 @@ export type Answer = CandidateDecision;
 
 export function QuestionCard({
   candidate,
+  first,
   onAnswer,
 }: {
   candidate: Candidate;
+  first: string;
   onAnswer: (id: string, answer: Answer) => void;
 }): React.JSX.Element {
   const btn = "rounded-xl border border-amber-700/60 px-4 py-2 text-sm hover:bg-amber-500/10";
+  const label = platformLabel(candidate);
+  const who = candidate.handle !== null && candidate.platform !== "web" ? `${label} · @${candidate.handle}` : label;
   return (
-    <section className="rounded-2xl border border-amber-700/50 bg-amber-950/30 p-5">
-      <h2 className="font-semibold text-amber-200">Quick question: is this {candidate.platform} account also them?</h2>
-      <p className="mt-2 text-sm">{candidate.handle ?? candidate.name}</p>
-      <p className="text-sm text-zinc-400">{candidate.snippet}</p>
+    <section className="rounded-2xl border border-amber-700/50 bg-amber-950/30 p-5" aria-live="polite">
+      <h2 className="font-semibold text-amber-200">Quick question: is this {label} profile also {first}?</h2>
+      <div className="mt-3 flex items-start gap-3">
+        <Icon name={candidate.name} />
+        <div className="min-w-0">
+          <a href={candidate.profile_urls[0]} target="_blank" rel="noreferrer" className="text-sm font-medium hover:underline">
+            {who}
+          </a>
+          <p className="text-sm text-zinc-400">{candidate.snippet}</p>
+        </div>
+      </div>
       <div className="mt-4 flex flex-wrap gap-2">
         <button type="button" className={`${btn} bg-amber-500 text-zinc-950 hover:bg-amber-400`} onClick={() => { onAnswer(candidate.id, "merge"); }}>
           Yes, it&apos;s them
@@ -141,14 +182,6 @@ const COVERAGE = {
   partial: "bg-amber-500/15 text-amber-300",
   none: "bg-zinc-800 text-zinc-400",
 } as const;
-
-function host(url: string): string {
-  try {
-    return new URL(url).hostname.replace(/^www\./, "");
-  } catch {
-    return url;
-  }
-}
 
 function List({ title, items }: { title: string; items: string[] }): React.JSX.Element | null {
   if (items.length === 0) return null;
