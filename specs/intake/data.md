@@ -1,7 +1,7 @@
-# Unit: data (migration 0008 + Application schema)
+# Unit: data (migration 0009 + Application schema)
 
 ## Files
-- `migrations/0008_intake.sql` (new; SQL header comment like `0007_profile_first.sql`)
+- `migrations/0009_intake.sql` (new; SQL header comment like `0007_profile_first.sql`)
 - `src/domain/application.ts` (new) + `src/domain/__tests__/application.test.ts`
 
 ## Migration

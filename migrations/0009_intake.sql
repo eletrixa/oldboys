@@ -1,8 +1,8 @@
--- 0008_intake: job applications from email, Google Forms, the hosted apply page and StartupJobs (plans/008, specs/intake).
+-- 0009_intake: job applications from email, Google Forms, the hosted apply page and StartupJobs (plans/008, specs/intake).
 --
 -- Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
--- Module:  migrations/0008_intake.sql
--- Deps:    D1 (SQLite), investigations (0001), via (0006)
+-- Module:  migrations/0009_intake.sql
+-- Deps:    D1 (SQLite), investigations (0001), via (0006); follows 0008_identity_reason on main
 -- Tested:  n/a (applied by pnpm db:migrate:local in dev); row contract in src/workflow/__tests__/intake.test.ts
 --
 -- intake_tags maps a routing tag to the role and goal a run gets. applications holds one row per

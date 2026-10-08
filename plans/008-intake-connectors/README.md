@@ -37,7 +37,7 @@ Unit contracts live in [`specs/intake/`](../../specs/intake/00-overview.md). Ope
 | Path | What |
 |---|---|
 | `specs/intake/` | Contracts per unit, test lists |
-| `migrations/0008_intake.sql` | `intake_tags`, `applications`, `investigations.application_id` |
+| `migrations/0009_intake.sql` | `intake_tags`, `applications`, `investigations.application_id` |
 | `src/domain/application.ts` | IntakeInput, statuses, candidateInput, decideStatus |
 | `src/workflow/start-run.ts`, `src/workflow/intake.ts` | Shared run start; the funnel |
 | `src/workflow/intake-email.ts`, `src/worker.ts` | Email Workers handler |

@@ -10,7 +10,7 @@
 
 ```ts
 export type ParsedMail = { messageId?: string; from?: { address?: string; name?: string }; to: { address?: string }[]; subject?: string; text?: string; html?: string; attachments: { filename?: string; mimeType?: string; content: ArrayBuffer | string }[] };  // the subset of postal-mime's Email we read
-export function tagFromRecipient(rcpt: string): string | null       // "jobs+senior-be@asajj.cz" → "senior-be"; no plus part → null; lowercased
+export function splitRecipient(rcpt: string): { local: string; tag: string | null }   // "Jobs+Senior-BE@asajj.cz" → { local: "jobs", tag: "senior-be" }; no plus part → tag null; lowercased; display-name form "X <jobs+a@b>" handled
 export function firstLinkedinUrl(text: string): string | null       // first linkedin.com/in/… in text (html stripped to text by the caller); normalised via normalizeLinkedinProfile
 export function pickCv(attachments): { filename: string; contentType: string; content } | null   // first application/pdf (or .pdf) else first text/plain; images and others ignored
 export function senderAllowed(from: string | undefined, allowList: string): boolean   // allowList "" → true; entries are addresses or domains, case-insensitive
@@ -27,6 +27,7 @@ export function parseIntakeMail(mail: ParsedMail, rcptTo: string, rawFallbackId:
 export type IntakeEmailEnv = IntakeEnv & { INTAKE_FORWARD_TO?: string; INTAKE_FROM_ALLOW?: string };
 export async function handleIntakeEmail(message: ForwardableEmailMessage, env: IntakeEmailEnv, now: Date, log: (line: string) => void): Promise<void>
 ```
+0. Recipient gate (the zone has a catch-all to this Worker): `tagFromRecipient` also returns the local part; if the local part is not `jobs` or `jobs+<something>` → `message.setReject("no such address")`, return, nothing stored. `rcptLocalPart("Jobs+Senior-BE@asajj.cz") === "jobs"`, tag `"senior-be"`.
 1. `message.rawSize > 10 * 1024 * 1024` → `message.setReject("message too large")`, return.
 2. `raw = await new Response(message.raw).arrayBuffer()`; `parsed = await PostalMime.parse(raw)`; `rawId = sha256hex(raw)` (WebCrypto).
 3. `input = parseIntakeMail(parsed, message.to, rawId)`; `allowed = senderAllowed(message.from, env.INTAKE_FROM_ALLOW ?? "")`.
@@ -47,5 +48,5 @@ email: async (message, env, ctx) => { await handleIntakeEmail(message, env, new 
 
 ## Tests
 - `email-intake.test.ts`: each helper plus `parseIntakeMail` over the four fixtures parsed with postal-mime (real library in Node).
-- `intake-email.test.ts`: fake `ForwardableEmailMessage` (`raw` as ReadableStream from the fixture, `rawSize`, `setReject`/`forward` spies) + the funnel fakes: oversize → reject and nothing stored; happy → application stored and forwarded; forward failure → logged, no throw; `INTAKE_FROM_ALLOW` excluding the sender → `unmatched`.
+- `intake-email.test.ts`: fake `ForwardableEmailMessage` (`raw` as ReadableStream from the fixture, `rawSize`, `setReject`/`forward` spies) + the funnel fakes: wrong recipient (`info@asajj.cz`) → reject and nothing stored; oversize → reject and nothing stored; happy → application stored and forwarded; forward failure → logged, no throw; `INTAKE_FROM_ALLOW` excluding the sender → `unmatched`.
 - `pnpm exec wrangler deploy --dry-run --outdir <scratch>` still bundles (`email` export present).
