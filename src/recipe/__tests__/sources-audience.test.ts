@@ -144,9 +144,19 @@ describe("bluesky", () => {
     ]);
   });
   it("parses actors", () => {
-    const out = bluesky.parse({ actors: [{ handle: "jana.bsky.social", displayName: "Jana", description: "hi" }] }, baseContext(), step);
+    const out = bluesky.parse(
+      {
+        actors: [
+          { handle: "jana.bsky.social", displayName: "Jana Dvorakova", description: "hi" },
+          { handle: "someone.bsky.social", displayName: "Jana Novak", description: "fuzzy match without the surname" },
+        ],
+      },
+      baseContext(),
+      step,
+    );
+    expect(out).toHaveLength(1);
     expect(out[0]).toMatchObject({ url: "https://bsky.app/profile/jana.bsky.social" });
-    expect(out[0]?.excerpt).toBe("Jana (@jana.bsky.social)\nhi");
+    expect(out[0]?.excerpt).toBe("Jana Dvorakova (@jana.bsky.social)\nhi");
     expect(bluesky.parse(null, baseContext(), step)).toEqual([]);
   });
 });
