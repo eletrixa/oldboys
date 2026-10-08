@@ -22,7 +22,7 @@
  */
 import { formatDuration } from "@/domain/run-cost";
 import type { Brief, BriefSection, Claim } from "@/domain/claim";
-import { type RunState, briefSections, confidenceBand, gapLine, roleCriteria, searchedEmpty, searchedTitle } from "./state";
+import { type RunState, briefSections, confidenceBand, gapLine, hiringFor, roleCriteria, searchedEmpty, searchedTitle } from "./state";
 
 const FOOTER = "This kit rates the research, never the candidate. Public sources only; run data is deleted after 7 days.";
 
@@ -61,9 +61,9 @@ function section(title: string, lines: readonly string[]): string[] {
 
 function header(state: RunState, brief: Brief, generatedAt: string): string[] {
   const { cost } = state;
-  const hiringFor = state.position?.title ?? state.role;
+  const hiring = hiringFor(state);
   const lines = [
-    hiringFor !== null ? `Hiring for: ${escapeMd(hiringFor)}` : null,
+    hiring !== null ? `Hiring for: ${escapeMd(hiring)}` : null,
     brief.headline !== null ? `Confirmed profile: ${escapeMd(brief.headline)}` : null,
     brief.location_note !== null ? escapeMd(brief.location_note) : null,
     `Generated: ${day(generatedAt)}`,

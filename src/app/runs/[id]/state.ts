@@ -13,6 +13,8 @@
  * - questionsToAsk: one open profile per platform; roleCriteria: role must-haves (mh-) only
   * - evidenceGroup: the heading a confirmed source sits under, from its URL's platform (LinkedIn, X, CV), not the actor
  * - isCvSource / CV_SOURCE_TEXT: the pasted CV ("cv:<runId>") renders as text, never as a link
+ * - hiringFor: the position title when the run has one, else the role; the one answer for the brief header, the
+ *   interview kit, the ATS note and the reference questions
  * - searchedTitle: "Searched, nothing confirmed" when a gap is namesake-only, else "nothing found"
  * - GAP_LABEL, gapText, gapLine, searchedEmpty: human gap lines (raw request errors turned into plain words), shared by BriefView and the interview kit
  * - briefSections (confidence descending, null for briefs stored before sections), confidenceBand, host
@@ -147,6 +149,11 @@ export function stepRows(state: Pick<RunState, "status" | "step" | "mentions" | 
 export function firstName(subject: string): string | null {
   const first = subject.trim().split(/\s+/)[0] ?? "";
   return first === "" ? null : first;
+}
+
+/** What the run is hiring for: the position title (live, when the run came from a position), else the role entered at start. */
+export function hiringFor(state: Pick<RunState, "role" | "position">): string | null {
+  return state.position?.title ?? state.role;
 }
 
 /** Run page title: "<First>'s brief" / "Putting together <First>'s brief", or "the candidate" / "the brief" before the name is known. */

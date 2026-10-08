@@ -72,6 +72,7 @@ export async function listPositions(db: D1Database): Promise<PositionListItem[]>
 }
 
 export async function getPosition(db: D1Database, id: string): Promise<PositionDetail | null> {
+  if (!POSITION_ID.safeParse(id).success) return null;
   const [position, rows] = await Promise.all([loadPosition(db, id), loadRoleRunRows(db, "i.position_id = ? AND i.goal = 'hiring'", [id])]);
   if (!position) return null;
   return {

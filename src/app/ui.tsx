@@ -50,10 +50,9 @@ export function Eyebrow({ children }: { children: React.ReactNode }): React.JSX.
   return <p className="text-xs font-semibold tracking-[0.08em] text-action uppercase">{children}</p>;
 }
 
-/** External source link shown as its hostname. */
 /** A source as a link; the pasted CV ("cv:<runId>") as plain text with no href. `label` defaults to the host. */
 export function SourceLink({ url, label, className = "" }: { url: string; label?: string; className?: string }): React.JSX.Element {
-  if (isCvSource(url)) return <span className={`text-zinc-400 ${className}`}>{CV_SOURCE_TEXT}</span>;
+  if (isCvSource(url)) return <span className={`text-muted ${className}`}>{CV_SOURCE_TEXT}</span>;
   return (
     <a href={url} target="_blank" rel="noreferrer" className={`${LINK} ${className}`}>
       {label ?? host(url)}

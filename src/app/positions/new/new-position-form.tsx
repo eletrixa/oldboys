@@ -12,18 +12,23 @@
  *
  * Design constraints:
  * - Client component; submit is disabled while pending and when text and URL are both empty
- * - The token is asked for up front and kept only in sessionStorage
+ * - The token is asked for up front and kept only in sessionStorage; it is read with useSyncExternalStore so the
+ *   server render (token form) hydrates cleanly when the tab already holds one
  */
 "use client";
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { authFetch, readToken, writeToken } from "@/app/_components/token";
 import { TokenForm } from "@/app/_components/token-form";
 import { BTN_PRIMARY, Eyebrow, FIELD } from "@/app/ui";
 
 type CreateReply = { id?: string; error?: string };
+
+const noop = (): void => undefined;
+const subscribe = (): (() => void) => noop;
+const noTokenOnServer = (): null => null;
 
 export function NewPositionForm(): React.JSX.Element {
   const router = useRouter();
@@ -35,7 +40,8 @@ export function NewPositionForm(): React.JSX.Element {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const active = token ?? readToken();
+  const stored = useSyncExternalStore(subscribe, readToken, noTokenOnServer);
+  const active = token ?? stored;
   const empty = text.trim() === "" && url.trim() === "";
 
   async function submit(): Promise<void> {

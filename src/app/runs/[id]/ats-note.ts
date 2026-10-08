@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/runs/[id]/ats-note.ts
- * Deps:    src/domain/audit (deletionDate), ./summary (summary30s), ./state (RunState, sortLineup)
+ * Deps:    src/domain/audit (deletionDate), ./summary (summary30s), ./state (RunState, sortLineup, hiringFor)
  * Tested:  src/app/runs/[id]/__tests__/ats-note.test.ts
  *
  * Key responsibilities:
@@ -16,7 +16,7 @@
  * - Rates the research, never the candidate: no scores, ranks, verdicts or traits
  */
 import { deletionDate } from "@/domain/audit";
-import { sortLineup, type RunState } from "./state";
+import { hiringFor, sortLineup, type RunState } from "./state";
 import { summary30s } from "./summary";
 
 /** Most profile links on the note; the full brief has the rest. */
@@ -47,7 +47,7 @@ export function atsNote(state: RunState, briefUrl: string): string | null {
   const summary = summary30s(state);
   if (summary === null) return null;
   const subject = state.subject.trim() === "" ? "unnamed person" : state.subject.trim();
-  const role = state.role?.trim() ?? "";
+  const role = hiringFor(state)?.trim() ?? "";
   const profiles = confirmedProfiles(state);
   const until = deletionDate(state.created_at).slice(0, 10);
   return [
