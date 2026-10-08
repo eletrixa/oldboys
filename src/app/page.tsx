@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/page.tsx
- * Deps:    next, next/link, ./start-form
+ * Deps:    next, next/link, ./start-form, ./ui
  * Tested:  n/a
  *
  * Key responsibilities:
@@ -17,6 +17,7 @@
  */
 import Link from "next/link";
 import { StartForm } from "./start-form";
+import { CARD, Eyebrow, LINK } from "./ui";
 
 const STEPS: readonly (readonly [string, string])[] = [
   ["Gather evidence", "We read their public professional work and keep the exact words and the page each claim came from."],
@@ -28,7 +29,7 @@ export default function HomePage(): React.JSX.Element {
   return (
     <main className="mx-auto grid max-w-5xl gap-10 px-4 py-12 md:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] md:items-start md:py-16">
       <section className="flex flex-col gap-6">
-        <p className="text-xs font-semibold tracking-[0.08em] text-action uppercase">Evidence-led hiring</p>
+        <Eyebrow>Evidence-led hiring</Eyebrow>
         <h1 className="text-5xl leading-[1.05] md:text-6xl">
           Who are you
           <span className="block pl-8 md:pl-12">hiring?</span>
@@ -51,13 +52,13 @@ export default function HomePage(): React.JSX.Element {
         <p className="text-sm text-ok">No overall score. Coverage describes the research, not the person.</p>
       </section>
       <section className="flex flex-col gap-4">
-        <div className="rounded-2xl border border-divider bg-surface p-6 shadow-[0_12px_40px_rgba(40,45,43,0.08)] md:p-8">
+        <div className={`${CARD} md:p-8`}>
           <h2 className="mb-5 text-2xl">Start a brief</h2>
           <StartForm />
         </div>
         <p className="px-1 text-sm text-muted">
           Several people for one role?{" "}
-          <Link href="/roles" className="font-semibold text-action underline underline-offset-4 hover:text-action-hover">
+          <Link href="/roles" className={LINK}>
             See roles
           </Link>
         </p>

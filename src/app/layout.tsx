@@ -8,7 +8,7 @@
  *
  * Key responsibilities:
  * - Metadata and the <html>/<body> wrapper for every page
- * - Radar brand header (Echo r mark + wordmark, New brief, Roles) and a short honesty footer
+ * - Radar brand header (Echo r mark + wordmark, Roles, New brief as a secondary button so each page keeps one rust action) and a short honesty footer
  *
  * Design constraints:
  * - No runtime = "edge"; no next/font network fetch at build (fonts are self-hosted in public/fonts)
@@ -17,6 +17,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import "./globals.css";
+import { BTN_SECONDARY } from "./ui";
 
 export const metadata: Metadata = {
   title: "Radar — evidence-led research",
@@ -48,7 +49,7 @@ export default function RootLayout({
               <Link href="/roles" className="flex min-h-11 items-center rounded-lg px-3 text-sm font-medium text-muted hover:bg-sage hover:text-ink">
                 Roles
               </Link>
-              <Link href="/" className="flex min-h-11 items-center rounded-lg bg-action px-4 text-sm font-semibold text-white hover:bg-action-hover">
+              <Link href="/" className={BTN_SECONDARY}>
                 New brief
               </Link>
             </nav>

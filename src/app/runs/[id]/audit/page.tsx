@@ -14,6 +14,7 @@
  * - Server component, rendered per request; shows no traits, claims, excerpts or profile URLs
  * - Lineup titles only for confirmed profiles; the record holds null for namesakes and "not sure"
  * - Same access rule as the run page: the id is an unguessable UUID
+ * - Back link arrow is decorative (aria-hidden); download is an <a download> styled BTN_SECONDARY
  * - Radar look per docs/design/radar-ui.md: ui.tsx primitives and semantic tokens only, no raw colours
  */
 import { getCloudflareContext } from "@opennextjs/cloudflare";
@@ -147,7 +148,7 @@ export default async function AuditPage({ params }: { params: Promise<{ id: stri
   return (
     <main className="mx-auto flex max-w-3xl flex-col gap-8 px-4 py-10 md:py-14">
       <header className="flex flex-col gap-3 border-b border-divider pb-8">
-        <Link href={`/runs/${id}`} className={`${BTN_QUIET} -ml-3 self-start`}>← Back to the brief</Link>
+        <Link href={`/runs/${id}`} className={`${BTN_QUIET} -ml-3 self-start`}><span aria-hidden="true">←</span> Back to the brief</Link>
         <Eyebrow>Audit</Eyebrow>
         <h1 className="font-serif text-4xl leading-[1.05] md:text-5xl">Audit record</h1>
         <p className="text-sm text-muted tabular-nums">Generated {when(record.generated_at)}</p>

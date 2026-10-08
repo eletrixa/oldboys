@@ -13,6 +13,7 @@
  *
  * Design constraints:
  * - Client component; posts to /api/start, which adds RUN_TOKEN server-side, so no token ships to the browser
+ * - Helper text sits beside the label (aria-describedby), never inside it; CV summary is a 44px target
  * - Copy stays short and calm; no emoji
  */
 "use client";
@@ -30,16 +31,28 @@ type FieldProps = {
   type?: "text" | "url";
   placeholder?: string;
   required?: boolean;
+  invalid?: boolean;
 };
 
-function Field({ name, label, helper, type = "text", placeholder, required = false }: FieldProps): React.JSX.Element {
+function Field({ name, label, helper, type = "text", placeholder, required = false, invalid = false }: FieldProps): React.JSX.Element {
   return (
-    <label className="flex flex-col gap-1.5 text-sm font-semibold">
-      {label}
+    <div className="flex flex-col gap-1.5">
+      <label htmlFor={name} className="text-sm font-semibold">{label}</label>
       {/* type="text" with a url keyboard: the browser would reject "linkedin.com/in/..." without https, the server accepts it */}
-      <input name={name} type="text" inputMode={type === "url" ? "url" : "text"} required={required} maxLength={type === "url" ? 500 : 300} placeholder={placeholder} className={FIELD} />
-      {helper !== undefined && <span className="text-xs font-normal text-muted">{helper}</span>}
-    </label>
+      <input
+        id={name}
+        name={name}
+        type="text"
+        inputMode={type === "url" ? "url" : "text"}
+        required={required}
+        maxLength={type === "url" ? 500 : 300}
+        placeholder={placeholder}
+        aria-describedby={helper === undefined ? undefined : `${name}-help`}
+        aria-invalid={invalid || undefined}
+        className={FIELD}
+      />
+      {helper !== undefined && <span id={`${name}-help`} className="text-xs text-muted">{helper}</span>}
+    </div>
   );
 }
 
@@ -105,12 +118,13 @@ export function StartForm(): React.JSX.Element {
       <Field
         name="profileUrl"
         type="url"
+        invalid={error?.includes("LinkedIn") === true}
         label="Candidate's LinkedIn profile"
         placeholder="https://www.linkedin.com/in/..."
         helper="We read their name, location and employer from it, so we know exactly who they are."
       />
-      <details className="group rounded-lg border border-divider p-4">
-        <summary className="cursor-pointer text-sm font-semibold text-muted hover:text-ink">or paste their CV</summary>
+      <details className="group rounded-lg border border-line/60 p-4">
+        <summary className="flex min-h-11 cursor-pointer items-center text-sm font-semibold text-muted hover:text-ink">or paste their CV</summary>
         <textarea
           name="cvText"
           rows={8}
@@ -129,7 +143,7 @@ export function StartForm(): React.JSX.Element {
           {error}
         </p>
       )}
-      <div className="flex items-center gap-4">
+      <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:gap-4">
         <button
           type="submit"
           disabled={busy}
