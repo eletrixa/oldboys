@@ -16,10 +16,7 @@
       "Bash(git diff:*)",
       "Bash(git log:*)"
     ],
-    "deny": [
-      "Read(.dev.vars)",
-      "Read(~/s/**)"
-    ]
+    "deny": []
   },
   "hooks": {
     "Stop": [
