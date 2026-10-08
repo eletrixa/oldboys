@@ -35,7 +35,7 @@ POST /api/intake/startupjobs/<token>  (StartupJobs webhook)                     
 |---|---|
 | `INTAKE_TOKEN` | Bearer for `POST /api/intake/form`; also stored as a Script Property in the Apps Script |
 | `STARTUPJOBS_WEBHOOK_TOKEN` | Path segment of the StartupJobs webhook URL; treat the URL as a secret |
-| `STARTUPJOBS_TOKEN` | Optional. StartupJobs company API bearer, used only to retry a CV download that answers 401/403 |
+| `STARTUPJOBS_TOKEN` | Optional. StartupJobs bearer, used only to retry a CV file download that answers 401/403 (the company API itself is never called) |
 
 Generate a value without printing it, then store it where `RUN_TOKEN` lives (`~/s/oldboys/.env`) so it can be pasted into Apps Script / StartupJobs:
 
@@ -46,7 +46,7 @@ pnpm exec wrangler secret put INTAKE_TOKEN
 
 **Local `.dev.vars`** (copy from `.dev.vars.example`): `INTAKE_TOKEN`, `STARTUPJOBS_WEBHOOK_TOKEN`, `STARTUPJOBS_TOKEN`, plus `RUN_TOKEN` for the operator routes.
 
-**Migration.** The intake migration (`migrations/*_intake.sql`, adds `intake_tags`, `applications` and `investigations.application_id`) must be applied to prod D1 before deploying. CI cannot migrate D1; Robert runs `pnpm db:migrate:remote` first.
+**Migration.** The intake migration (`migrations/0009_intake.sql`, adds `intake_tags`, `applications` and `investigations.application_id`) must be applied to prod D1 before deploying. CI cannot migrate D1; Robert runs `pnpm db:migrate:remote` first.
 
 ## Create a position tag
 
@@ -210,7 +210,7 @@ The endpoint answers 201 `{applicationId, status}` or, for a repeated response i
 
 Facts (StartupJobs developer docs, 2024-07-25): a webhook URL is set per offer; on each application StartupJobs POSTs the full application as JSON; the endpoint must answer 200, 201, 202, 204 or 422, any other status **deletes the webhook**; there is no signature, so the secret lives in the path. The Worker answers only those codes (404 for a wrong token is the single exception and is intended: StartupJobs would delete the webhook, which is the right outcome for a leaked or rotated URL).
 
-1. Set the secret: `pnpm exec wrangler secret put STARTUPJOBS_WEBHOOK_TOKEN` (generate as above). Optional: `STARTUPJOBS_TOKEN` for CV downloads that need the company bearer.
+1. Set the secret: `pnpm exec wrangler secret put STARTUPJOBS_WEBHOOK_TOKEN` (generate as above). Optional: `STARTUPJOBS_TOKEN`. The StartupJobs company API is **not called**; the webhook payload is the whole application. The only use of `STARTUPJOBS_TOKEN` is one retry of the CV file download when the file URL answers 401 or 403.
 2. Map the offer to a tag, either way:
    - set the offer's **internal position name** to the tag (`senior-be`), or
    - create the tag with `startupjobsOfferId` set to the numeric offer id (the offer id mapping wins when both exist).
@@ -315,4 +315,4 @@ Also check the Cloudflare dashboard Activity log under Email Routing: it shows d
 | Gmail "forwarding address" confirmation never arrives | `INTAKE_FORWARD_TO` was emptied, or the destination was removed in Email Routing | Restore the var and deploy, check Destination addresses shows `robert@soulfire.cz` verified, resend the confirmation |
 | Log line "forward failed" | Destination removed or unverified | Verify it in Email Routing -> Destination addresses; the application was stored anyway |
 | Seznam copy never arrives | Rule condition does not match, or `+` target refused | Test with a mail to the exact seznam address; if `+` is refused, a copy to plain `jobs@` is stored as `unmatched`, so give the candidates the apply page link instead |
-| Migration errors "no such table: applications" | Intake migration not applied to this D1 | `pnpm db:migrate:local` / Robert runs `pnpm db:migrate:remote` |
+| Migration errors "no such table: applications" | `0009_intake.sql` not applied to this D1 | `pnpm db:migrate:local` / Robert runs `pnpm db:migrate:remote` |

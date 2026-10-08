@@ -127,7 +127,7 @@ function global:cheatoldboys {
     Write-Host "    curl -X POST 'localhost:8787/cdn-cgi/handler/email?from=a@b.cz&to=jobs+senior-be@asajj.cz' --data-binary @x.eml " -NoNewline -ForegroundColor Green
     Write-Host "Local email test (see docs/ops/intake.md)" -ForegroundColor White
     Write-Host "    pnpm db:migrate:remote                 " -NoNewline -ForegroundColor Green
-    Write-Host "Intake migration to prod D1 before deploy (Robert runs it)" -ForegroundColor White
+    Write-Host "0009_intake.sql to prod D1 before deploy (Robert runs it)" -ForegroundColor White
     Write-Host ""
     Write-Host "  ┌─────────────────────────────────────────────────────────────────┐" -ForegroundColor DarkGray
     Write-Host "  │  NAVIGATION                                                    │" -ForegroundColor Yellow

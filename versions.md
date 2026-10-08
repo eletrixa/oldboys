@@ -22,7 +22,7 @@ Job applications from email, Google Forms, a hosted apply page and a StartupJobs
 #### Files Added
 - `specs/intake/*.md` - Unit contracts (overview, data, funnel, email, form, apply page, StartupJobs, UI, ops)
 - `plans/008-intake-connectors/` - Decision dossier (synthesis, connector research, pre-mortem)
-- `migrations/*_intake.sql` - `intake_tags`, `applications`, `investigations.application_id`
+- `migrations/0009_intake.sql` - `intake_tags`, `applications`, `investigations.application_id`
 - `src/domain/application.ts` - Intake schemas, `candidateInput`, `decideStatus`, `safeFilename`, `cvR2Key`
 - `src/domain/cv-text.ts` - CV text extraction from PDF and plain text
 - `src/domain/email-intake.ts` - Pure mail helpers and `parseIntakeMail`
