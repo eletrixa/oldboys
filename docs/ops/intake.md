@@ -285,6 +285,12 @@ curl -s https://oldboys.asajj.cz/api/intake/applications -H "Authorization: Bear
 
 Also check the Cloudflare dashboard Activity log under Email Routing: it shows delivered, rejected and forwarded mail per message.
 
+## Production state (2026-10-09)
+
+Done by the rollout, so nobody repeats it: Worker secrets `INTAKE_TOKEN` and `STARTUPJOBS_WEBHOOK_TOKEN` are set (values in `~/s/oldboys/.env`, next to `RUN_TOKEN`); `STARTUPJOBS_TOKEN` is not set (only needed when StartupJobs file downloads answer 401/403). Tags `cmo` ("CMO") and `ux-designer` ("UX designer") exist, so `https://oldboys.asajj.cz/apply/cmo`, `/apply/ux-designer`, `jobs+cmo@asajj.cz` and `jobs+ux-designer@asajj.cz` are live. Verified in production with spend-free payloads: form 201/401, StartupJobs test payload 200 and wrong token 404, apply cross-origin 403, and a real mail from `zoraone@agentmail.to` to `jobs+nosuchtag@asajj.cz` stored `unmatched` within seconds (Email Routing, MX and the Worker `email` export all work). The StartupJobs webhook URL is `https://oldboys.asajj.cz/api/intake/startupjobs/<STARTUPJOBS_WEBHOOK_TOKEN>`.
+
+Still manual, per section: Gmail filter and Seznam rule on the mailbox that receives board mail, the Google Form and its Apps Script trigger, the webhook URL in each StartupJobs offer, the apply link in LinkedIn and Jobs.cz postings, and one real application per board to capture its mail shape into `src/domain/__tests__/fixtures/`.
+
 ## Troubleshooting
 
 | Symptom (status) | Cause | Fix |
