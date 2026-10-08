@@ -150,3 +150,6 @@ Each agent appends: what it starts, progress, what it finishes. Newest at the bo
 - Started: 00:55. GDPR Art. 15 "data access export": GET /api/runs/:id/access-export + a download link on the audit page; one JSON with what the run holds about the candidate (confirmed sources with excerpts, linked profiles, claims backed only by confirmed sources, the brief text, purpose, legal basis, controller, deletion date) and a "not included" list.
 - Finished: 01:00. Never unverified sources, namesakes, also_found, ledger notes, phone numbers or Art. 9 claims; same access rule as the audit route. No schema change; pnpm check green, wrangler dry-run bundles.
 - Files: src/domain/access-export.ts, src/domain/__tests__/access-export.test.ts, src/app/api/runs/[id]/access-export/{route,load}.ts (new), src/app/runs/[id]/audit/page.tsx, CHANGELOG.md, PROGRESS.md (+ `purpose` exported from src/domain/audit.ts).
+
+## 2026-10-09 · evidence-click agent (Minas)
+- Started: 01:01. Idea #5 "Evidence on click": every brief claim gets a "Show evidence" disclosure with the verbatim quote, a deep link that opens the source at the quote (Text Fragment), the retrieval date and the saved excerpt around the quote (kept until the 7-day purge); inline links become quote deep links with the retrieved date in the tooltip.
