@@ -12,13 +12,14 @@
  * - evidenceGroup: platform label from the URL, step label or "Web search" for plain pages
  * - searchedTitle: "nothing confirmed" once a namesake-only gap is present
  * - briefSections: confidence descending, null for briefs stored without sections; confidenceBand thresholds
+ * - headerText / firstName / seedHeadline: "the candidate" until the seed derived a name; seed counts as the first row
  *
  * Design constraints:
  * - Pure: no React, no fetch
  */
 import { describe, expect, it } from "vitest";
 import type { Brief, Candidate } from "@/domain/claim";
-import { briefSections, confidenceBand, evidenceGroup, questionsToAsk, roleCriteria, searchedTitle } from "../state";
+import { briefSections, confidenceBand, evidenceGroup, firstName, headerText, questionsToAsk, roleCriteria, searchedTitle, seedHeadline, stepRows } from "../state";
 
 const cand = (id: string, platform: string, score: number, decision: Candidate["decision"] = "possibly-same-as"): Candidate => ({
   id, run_id: "r", name: "x", profile_urls: [`https://${id}`], anchor_match: null, score, decision, platform, handle: id, snippet: "", reasons: [],
@@ -91,5 +92,30 @@ describe("briefSections", () => {
 describe("confidenceBand", () => {
   it("splits at 0.75 and 0.5", () => {
     expect([0.75, 0.74, 0.5, 0.49].map(confidenceBand)).toEqual(["strong", "fair", "fair", "weak"]);
+  });
+});
+
+describe("profile-first header (plans/006)", () => {
+  it("says 'the brief' until the seed step derived a name", () => {
+    expect(firstName("")).toBeNull();
+    expect(headerText("", false)).toBe("Putting together the brief");
+    expect(headerText(" ", true)).toBe("The candidate's brief");
+    expect(headerText("Josef Buryan", false)).toBe("Putting together Josef's brief");
+    expect(headerText("Josef Buryan", true)).toBe("Josef's brief");
+  });
+
+  it("reads the last non-empty headline from seed_profile ledger rows", () => {
+    const rows = [
+      { step: "seed_profile", ref_json: JSON.stringify({ headline: "CMO at Groupon" }) },
+      { step: "seed_profile", ref_json: JSON.stringify({ headline: null }) },
+      { step: "serp_person", ref_json: JSON.stringify({ headline: "not this" }) },
+      { step: "seed_profile", ref_json: "{broken" },
+    ];
+    expect(seedHeadline(rows)).toBe("CMO at Groupon");
+    expect(seedHeadline([])).toBeNull();
+  });
+
+  it("puts the seed step in the first progress row", () => {
+    expect(stepRows({ status: "running", step: "seed_profile", mentions: 0, failed_step: null })[0]).toBe("active");
   });
 });

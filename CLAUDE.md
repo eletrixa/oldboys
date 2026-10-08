@@ -1,10 +1,10 @@
 # oldboys — agent context
 
 ## Product
-Hackathon Case 01 (Apify): social media deep research. Input: a person or organization, one anchor (city, website or IČO) and a goal. Output: a report where every claim links to a source, FACT is split from INFERENCE, gaps are stated, namesakes are handled, and a different goal yields different substance. Judging: value 35, originality 25, e2e 20, tech 10, honesty 10. Brief: `docs/brief.md`.
+Hackathon Case 01 (Apify): social media deep research. Input (hiring, plans/006): the candidate's LinkedIn profile URL or a pasted CV, plus the role; name, location and employer are derived from it and the given profile is the confirmed identity (the extension, curl and due-diligence still send a subject + anchor pair). Output: a report where every claim links to a source, FACT is split from INFERENCE, gaps are stated, namesakes are handled, and a different goal yields different substance. Judging: value 35, originality 25, e2e 20, tech 10, honesty 10. Brief: `docs/brief.md`.
 
 ## Binding decisions
-001 (`plans/001-deep-research-arch/00-SYNTHESIS.md`) domain, 002 (`plans/002-cloudflare-platform/`) platform, 005 (`plans/005-call-verification/`) verification calls. Where they conflict, 002 wins. Ops runbook for calls: `docs/ops/call-verification.md`.
+001 (`plans/001-deep-research-arch/00-SYNTHESIS.md`) domain, 002 (`plans/002-cloudflare-platform/`) platform, 005 (`plans/005-call-verification/`) verification calls, 006 (`plans/006-profile-first/`) profile-first start. Where they conflict, 002 wins. Ops runbook for calls: `docs/ops/call-verification.md`.
 
 | Topic | Decision |
 |---|---|

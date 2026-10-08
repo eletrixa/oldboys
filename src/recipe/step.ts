@@ -8,6 +8,7 @@
  *
  * Key responsibilities:
  * - Shape of a declared per-goal recipe: ordered steps with onEmpty fallbacks and one pausable resolve step
+ * - `seed` (plans/006): first step of a profile-first recipe; the Workflow runs it before role_questions
  *
  * Design constraints:
  * - Branching happens only via `onEmpty` and the `resolve` step (plans/001 pre-mortem #1)
@@ -17,7 +18,7 @@ import type { GoalId } from "@/domain/claim";
 
 export type Question = { id: string; text: string };
 
-export type StepKind = "serp" | "actor" | "ares" | "resolve" | "extract" | "verify" | "synthesize";
+export type StepKind = "seed" | "serp" | "actor" | "ares" | "resolve" | "extract" | "verify" | "synthesize";
 
 export type Step = {
   id: string;

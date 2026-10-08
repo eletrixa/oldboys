@@ -7,7 +7,7 @@
  * Tested:  src/recipe/__tests__/goals.test.ts
  *
  * Key responsibilities:
- * - Question list and ordered step list for goal "hiring"
+ * - Question list and ordered step list for goal "hiring"; `seed_profile` first (manager's LinkedIn URL or CV, plans/006)
  *
  * Design constraints:
  * - Must call `github_profile`; must never call ARES (that is due-diligence's step)
@@ -26,6 +26,7 @@ export const hiringRecipe: Recipe = {
     { id: "contradictions", text: "Which sources disagree with each other?" },
   ],
   steps: [
+    { id: "seed_profile", kind: "seed" },
     { id: "serp_person", kind: "serp", actor: "apify/google-search-scraper", query: '"{subject}" {anchor}\n{subject}', onEmpty: { gap: "no search hits for subject + anchor" } },
     { id: "social_serp", kind: "serp", actor: "apify/google-search-scraper", query: '{subject} linkedin\n{subject} instagram OR twitter OR tiktok OR github', onEmpty: { gap: "no social profiles indexed by Google" } },
     { id: "resolve_lineup", kind: "resolve" },

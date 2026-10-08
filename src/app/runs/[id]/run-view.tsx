@@ -8,6 +8,7 @@
  *
  * Key responsibilities:
  * - Poll GET /api/runs/:id/state every 2 s until done or failed
+ * - Header: derived name once the seed step knows it ("the candidate" before), the seed headline under it
  * - Show the run cost and research time line (ledger projection) while running and when done
  * - On failure keep the progress rows, mark the failed one, show the reason, sources so far and a retry link
  * - Show one question at a time (at most MAX_QUESTIONS) above the lineup, so it is never below the fold; send every
@@ -22,7 +23,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Candidate, CandidateDecision } from "@/domain/claim";
 import { type Answer, BriefView, CostLine, ProfileList, ProgressSteps, QuestionCard } from "./parts";
-import { type RunState, questionsToAsk, sortLineup, stepRows } from "./state";
+import { type RunState, firstName, headerText, questionsToAsk, sortLineup, stepRows } from "./state";
 
 const POLL_MS = 2000;
 /** Wireframe: one easy question at a time, and never more than a few; the rest keep the server's decision. */
@@ -137,13 +138,13 @@ export function RunView({ id }: { id: string }): React.JSX.Element {
   }
   if (!state) return <main className="mx-auto max-w-2xl px-4 py-10 text-zinc-400">Loading...</main>;
 
-  const first = state.subject.split(/\s+/)[0] ?? state.subject;
+  const first = firstName(state.subject) ?? "the candidate";
   const created = Date.parse(state.created_at);
   const cached = state.status === "done" && !Number.isNaN(created) && openedAt - created > CACHED_AFTER_MS;
   const degraded = state.brief !== null && state.brief.degraded !== null;
   const labels = [
     state.mentions === 0 ? "Searching public sources (Google can take up to 2 minutes)" : `Found ${String(state.mentions)} public ${state.mentions === 1 ? "mention" : "mentions"}`,
-    `Making sure we have the right ${first}`,
+    `Making sure we have the right ${firstName(state.subject) ?? "person"}`,
     degraded ? "Reading their work history and projects (skipped: AI unavailable)" : "Reading their work history and projects",
     degraded ? "Double-checking facts against each other (skipped: AI unavailable)" : "Double-checking facts against each other",
     "Writing your brief",
@@ -153,8 +154,9 @@ export function RunView({ id }: { id: string }): React.JSX.Element {
     <main className="mx-auto flex max-w-2xl flex-col gap-6 px-4 py-10">
       <header className="flex flex-col gap-2">
         <h1 className="text-3xl font-semibold tracking-tight">
-          {state.status === "done" ? `${first}'s brief` : `Putting together ${first}'s brief`}
+          {headerText(state.subject, state.status === "done")}
         </h1>
+        {state.headline !== null && <p className="text-zinc-300">{state.headline}</p>}
         {state.status !== "done" && (
           <p className="text-zinc-400">This usually takes 2 to 4 minutes. Keep this tab open.</p>
         )}

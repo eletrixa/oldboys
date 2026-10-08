@@ -18,9 +18,10 @@ export default function HomePage(): React.JSX.Element {
   return (
     <main className="mx-auto flex max-w-2xl flex-col gap-8 px-4 py-10">
       <header className="flex flex-col gap-2">
-        <h1 className="text-3xl font-semibold tracking-tight">Who are you looking into?</h1>
+        <h1 className="text-3xl font-semibold tracking-tight">Who are you hiring?</h1>
         <p className="text-zinc-400">
-          We check public profiles and registries and give you a short brief with a source for every point.
+          Give us their LinkedIn profile or CV. We check their public work and give you a short brief with a source for
+          every point.
         </p>
       </header>
       <StartForm />
