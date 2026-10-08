@@ -3,13 +3,14 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/runs/[id]/run-view.tsx
- * Deps:    react, next/link, ./parts, ./state
+ * Deps:    react, next/link, ./parts, ./state, ./identity-map-card
  * Tested:  n/a
  *
  * Key responsibilities:
  * - Poll GET /api/runs/:id/state every 2 s until done or failed
  * - Header: derived name once the seed step knows it ("the candidate" before), the seed headline under it
  * - Show the run cost and research time line (ledger projection) while running and when done
+ * - Identity map above the profile list (same live decisions)
  * - On failure keep the progress rows, mark the failed one, show the reason, sources so far and a retry link
  * - Show one question at a time (at most MAX_QUESTIONS) above the lineup, so it is never below the fold; send every
  *   decision in one answer event
@@ -22,6 +23,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Candidate, CandidateDecision } from "@/domain/claim";
+import { IdentityMapCard } from "./identity-map-card";
 import { type Answer, BriefView, CostLine, ProfileList, ProgressSteps, QuestionCard } from "./parts";
 import { type RunState, firstName, headerText, questionsToAsk, sortLineup, stepRows } from "./state";
 
@@ -172,6 +174,7 @@ export function RunView({ id }: { id: string }): React.JSX.Element {
         </div>
       )}
       {question !== undefined && <QuestionCard key={question.id} candidate={question} first={first} onAnswer={answer} />}
+      {state.candidates.length > 1 && <IdentityMapCard candidates={state.candidates} decisionOf={decisionOf} first={first} />}
       {state.candidates.length > 0 && <ProfileList candidates={sortLineup(state.candidates, decisionOf)} decisionOf={decisionOf} />}
       {sendFailed && (
         <p role="alert" className="flex items-center gap-3 text-sm text-red-300">

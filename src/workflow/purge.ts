@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/workflow/purge.ts
- * Deps:    bindings DB (D1), SOURCES (R2)
+ * Deps:    bindings DB (D1), SOURCES (R2), src/domain/audit (RETENTION_DAYS)
  * Tested:  n/a (I/O only; cron trigger in wrangler.jsonc, handler in src/worker.ts)
  *
  * Key responsibilities:
@@ -12,8 +12,10 @@
  *
  * Design constraints:
  * - Batches of 20 runs per tick; idempotent, safe to rerun
+ * - RETENTION_DAYS lives in src/domain/audit.ts so the audit record's deletion date matches this purge
  */
-export const RETENTION_DAYS = 7;
+import { RETENTION_DAYS } from "@/domain/audit";
+
 const BATCH = 20;
 
 export async function purgeExpired(db: D1Database, bucket: R2Bucket, now: Date): Promise<{ runs: number }> {
