@@ -50,15 +50,17 @@ export function authHeaders(token: string | null): Record<string, string> {
 
 /** GET `path` with the token; `what` names the thing in the error copy ("the roles"). */
 export async function fetchGated<T>(path: string, token: string | null, what: string): Promise<Gated<T>> {
+  // No token yet: ask for one instead of provoking a 401 in the console on every first visit.
+  if (token === null) return { kind: "token", error: null };
   try {
     const res = await fetch(path, { headers: authHeaders(token), cache: "no-store" });
     if (res.status === 401) {
       writeToken(null);
-      return { kind: "token", error: token === null ? null : "That token did not work. Please try again." };
+      return { kind: "token", error: "That token did not work. Please try again." };
     }
     if (!res.ok) return { kind: "error", message: `We could not load ${what}. Please try again.` };
     const data = await res.json<T>();
-    if (token !== null) writeToken(token);
+    writeToken(token);
     return { kind: "ready", data };
   } catch {
     return { kind: "error", message: "We could not reach the service. Please try again." };
