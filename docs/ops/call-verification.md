@@ -111,3 +111,13 @@ The schema lives in `migrations/0004_calls.sql` (no further migration for phone 
 ```bash
 pnpm db:migrate:remote
 ```
+
+## Live setup state (2026-10-09)
+
+Production `CALL_PROVIDER` is now `"elevenlabs"` (`wrangler.jsonc`).
+
+- **ElevenLabs agent** "oldboys verification call (hackathon)" (`ELEVENLABS_AGENT_ID=agent_5401m4etsexkfy5r4p1bam6zaqnz`): English, LLM `claude-sonnet-4-6`, TTS `eleven_flash_v2`, overrides enabled for prompt / first message / language, system tools `end_call` + `voicemail_detection`, data collection `identity_confirmed`, max call length 300s, `record_voice` off, `delete_audio` on, retention 7 days. Sentiment analysis is OFF — emotion inference is not allowed in hiring.
+- **Phone number**: `ELEVENLABS_PHONE_NUMBER_ID=phnum_7601m4etsn2mfd2rwgfky2bwmjfw` is a Twilio Verified Caller ID (outbound only). The Twilio account has the Czech low-risk Geo permission on; buying a dedicated number is blocked until Twilio Trust Hub KYC is approved.
+- **Webhook**: HMAC workspace webhook `3d42b5a6c31544f5b7f7adc4bc1808a0` → `https://oldboys.asajj.cz/api/webhooks/elevenlabs`, event `transcript` only. `call_initiation_failure` is not enabled yet, so busy/no-answer is detected by the Workflow poll fallback after 30 minutes.
+- **Secrets**: `ELEVENLABS_API_KEY` and `ELEVENLABS_WEBHOOK_SECRET` are set by Robert via `wrangler secret put`. Until the webhook secret is set, the webhook route answers 503 and ElevenLabs retries.
+- **Rollback**: set `CALL_PROVIDER` back to `"mock"` in `wrangler.jsonc`.

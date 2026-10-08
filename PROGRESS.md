@@ -130,3 +130,8 @@ Each agent appends: what it starts, progress, what it finishes. Newest at the bo
 - Started: 00:38. Retention fix: the 7-day purge now also deletes intake `applications` (contact data, CV text, cover letter) and their CV files in R2, before the run row (FK) and for applications that never started a run.
 - Finished: 00:46. Local D1 check: `DELETE FROM investigations` with an application still pointing at the run fails with `FOREIGN KEY constraint failed (SQLITE_CONSTRAINT_FOREIGNKEY)`, so before this fix the first expired intake run would have made every purge tick throw; deleting the application first lets the run delete succeed. No schema change; pnpm check green, wrangler dry-run bundles.
 - Files: src/workflow/purge.ts, src/workflow/__tests__/purge.test.ts (new), PROGRESS.md.
+
+## 2026-10-09 · phone-verify live switch (Minas)
+- Switched production `CALL_PROVIDER` from `"mock"` to `"elevenlabs"` and set `ELEVENLABS_AGENT_ID` / `ELEVENLABS_PHONE_NUMBER_ID` (non-secret dashboard ids) in `wrangler.jsonc`. Documented the live ElevenLabs/Twilio setup state in `docs/ops/call-verification.md`.
+- Worker secrets `ELEVENLABS_API_KEY` and `ELEVENLABS_WEBHOOK_SECRET` are still Robert's step (`wrangler secret put`); until set, the webhook route answers 503. No code or schema change; pnpm check green, wrangler dry-run bundles.
+- Files: wrangler.jsonc, docs/ops/call-verification.md, PROGRESS.md.
