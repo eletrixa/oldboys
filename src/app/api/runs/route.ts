@@ -27,6 +27,8 @@ const StartRunBody = z.object({
   anchor: z.string().trim().min(1).max(200),
   goal: GoalId,
   sourceUrl: z.url().max(500).optional(),
+  /** Free-text role the manager is hiring for; drives the must-have questions (hiring goal). */
+  role: z.string().trim().min(1).max(300).optional(),
 });
 
 function isAuthorized(request: Request, token: string): boolean {
@@ -82,8 +84,8 @@ export async function POST(request: Request): Promise<Response> {
   const budgetCalls = Number(env.RUN_BUDGET_CALLS);
 
   await env.DB.prepare(
-    `INSERT INTO investigations (id, subject, anchor, goal, status, budget_usd, budget_calls, created_at, source_url)
-     VALUES (?, ?, ?, ?, 'queued', ?, ?, ?, ?)`,
+    `INSERT INTO investigations (id, subject, anchor, goal, status, budget_usd, budget_calls, created_at, source_url, role)
+     VALUES (?, ?, ?, ?, 'queued', ?, ?, ?, ?, ?)`,
   )
     .bind(
       id,
@@ -94,6 +96,7 @@ export async function POST(request: Request): Promise<Response> {
       budgetCalls,
       now.toISOString(),
       parsed.data.sourceUrl ?? null,
+      parsed.data.role ?? null,
     )
     .run();
 

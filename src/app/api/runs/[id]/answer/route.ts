@@ -7,7 +7,7 @@
  * Tested:  n/a
  *
  * Key responsibilities:
- * - Validate {candidateId}; send the 'lineup-answer' event the resolve step waits for
+ * - Validate {decisions:[{id,decision}]} (or legacy {candidateId}); send the 'lineup-answer' event the resolve step waits for
  *
  * Design constraints:
  * - No runtime = "edge"; the event type string must match src/workflow/research-run.ts
@@ -16,7 +16,12 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { z } from "zod";
 import type { LineupAnswer } from "@/workflow/research-run";
 
-const AnswerBody = z.object({ candidateId: z.string().trim().min(1) });
+const Decision = z.object({ id: z.string().trim().min(1), decision: z.enum(["merge", "possibly-same-as", "rejected"]) });
+/** New shape: explicit decisions per candidate. Legacy `{candidateId}` still accepted (= merge that one). */
+const AnswerBody = z.union([
+  z.object({ decisions: z.array(Decision).min(1) }),
+  z.object({ candidateId: z.string().trim().min(1) }),
+]);
 
 export async function POST(
   request: Request,
@@ -41,7 +46,10 @@ export async function POST(
   } catch {
     return Response.json({ error: "run not found" }, { status: 404 });
   }
-  const payload: LineupAnswer = { candidateId: parsed.data.candidateId };
+  const payload: LineupAnswer =
+    "decisions" in parsed.data
+      ? { decisions: parsed.data.decisions }
+      : { decisions: [{ id: parsed.data.candidateId, decision: "merge" }] };
   await instance.sendEvent({ type: "lineup-answer", payload });
   return Response.json({ ok: true, id });
 }
