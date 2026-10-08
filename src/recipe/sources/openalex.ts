@@ -7,7 +7,7 @@
  * Tested:  src/recipe/__tests__/sources-makers.test.ts
  *
  * Key responsibilities:
- * - `rest/openalex`: one Source per matching author; `mailto` puts the Worker in the polite pool (shared egress IPs hit 429 otherwise)
+ * - `rest/openalex`: one Source per matching author; `mailto` requests the polite pool (OpenAlex still answered 429 from Workers egress on 2026-10-08)
  *
  * Design constraints:
  * - Pure: no fetch here; unknown payload shapes parse to []
