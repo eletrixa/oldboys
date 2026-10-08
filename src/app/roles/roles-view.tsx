@@ -3,24 +3,24 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/roles/roles-view.tsx
- * Deps:    react, next/link, src/domain/role-overview
+ * Deps:    react, next/link, src/app/_lib/operator-token, src/domain/role-overview
  * Tested:  builder in src/domain/__tests__/role-overview.test.ts; view n/a
  *
  * Key responsibilities:
- * - Ask once for the operator token (RUN_TOKEN), keep it in sessionStorage, GET /api/roles with it
+ * - Ask once for the operator token (RUN_TOKEN) via the shared src/app/_lib/operator-token, GET /api/roles with it
  * - No roleKey: roles with run counts; roleKey: rows = runs newest first, columns = must-haves + sources confirmed
  *
  * Design constraints:
- * - Client component; the token never leaves sessionStorage except as the Authorization header
+ * - Client component; token storage and the 401 handling live in the shared module
  * - Shows the amount of evidence found, never a verdict on the person: no total, no ranking, no coverage sort
  */
 "use client";
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { fetchGated, type Gated, readToken, TokenForm } from "@/app/_lib/operator-token";
 import type { CoverageLabel, RoleGroup } from "@/domain/role-overview";
 
-const TOKEN_KEY = "oldboys.runToken";
 const DISCLAIMER = "This table shows how much public evidence the research found, not how good a candidate is.";
 
 const CELL_STYLE: Readonly<Record<CoverageLabel, string>> = {
@@ -29,58 +29,6 @@ const CELL_STYLE: Readonly<Record<CoverageLabel, string>> = {
   "no evidence": "text-zinc-400",
   "not checked": "text-zinc-500 italic",
 };
-
-type Load =
-  | { kind: "loading" }
-  | { kind: "token"; error: string | null }
-  | { kind: "error"; message: string }
-  | { kind: "ready"; groups: RoleGroup[] };
-
-function readToken(): string | null {
-  try {
-    return sessionStorage.getItem(TOKEN_KEY);
-  } catch {
-    return null;
-  }
-}
-
-function writeToken(token: string | null): void {
-  try {
-    if (token === null) sessionStorage.removeItem(TOKEN_KEY);
-    else sessionStorage.setItem(TOKEN_KEY, token);
-  } catch {
-    // Storage blocked: the user is asked again next time.
-  }
-}
-
-function TokenForm({ error, onSubmit }: { error: string | null; onSubmit: (token: string) => void }): React.JSX.Element {
-  return (
-    <form
-      className="flex flex-col gap-3"
-      onSubmit={(e) => {
-        e.preventDefault();
-        const raw = new FormData(e.currentTarget).get("token");
-        if (typeof raw === "string" && raw.trim() !== "") onSubmit(raw.trim());
-      }}
-    >
-      <label className="flex flex-col gap-1.5 text-sm font-medium">
-        Team access token
-        <input
-          name="token"
-          type="password"
-          required
-          autoComplete="off"
-          className="w-full rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-zinc-100 focus:border-teal-400 focus:outline-none"
-        />
-        <span className="text-xs font-normal text-zinc-400">The list shows every brief, so it needs the team token. Kept only in this tab.</span>
-      </label>
-      {error !== null && <p className="text-sm text-red-300">{error}</p>}
-      <button type="submit" className="self-start rounded-xl bg-teal-500 px-4 py-2 font-medium text-zinc-950 hover:bg-teal-400">
-        Show roles
-      </button>
-    </form>
-  );
-}
 
 function RoleList({ groups }: { groups: RoleGroup[] }): React.JSX.Element {
   if (groups.length === 0) return <p className="text-zinc-400">No briefs with a role yet.</p>;
@@ -143,26 +91,11 @@ function RoleTable({ group }: { group: RoleGroup }): React.JSX.Element {
   );
 }
 
-/** GET /api/roles; without a token the request still goes out and its 401 shows the token form. */
-async function loadRoles(token: string | null): Promise<Load> {
-  try {
-    const headers: HeadersInit = token === null ? {} : { Authorization: `Bearer ${token}` };
-    const res = await fetch("/api/roles", { headers, cache: "no-store" });
-    if (res.status === 401) {
-      writeToken(null);
-      return { kind: "token", error: token === null ? null : "That token did not work. Please try again." };
-    }
-    if (!res.ok) return { kind: "error", message: "We could not load the roles. Please try again." };
-    const { groups } = await res.json<{ groups: RoleGroup[] }>();
-    if (token !== null) writeToken(token);
-    return { kind: "ready", groups };
-  } catch {
-    return { kind: "error", message: "We could not reach the service. Please try again." };
-  }
-}
+const loadRoles = (token: string | null): Promise<Gated<{ groups: RoleGroup[] }>> =>
+  fetchGated<{ groups: RoleGroup[] }>("/api/roles", token, "the roles");
 
 export function RolesView({ roleKey }: { roleKey?: string }): React.JSX.Element {
-  const [load, setLoad] = useState<Load>({ kind: "loading" });
+  const [load, setLoad] = useState<Gated<{ groups: RoleGroup[] }>>({ kind: "loading" });
 
   useEffect(() => {
     let live = true;
@@ -179,7 +112,7 @@ export function RolesView({ roleKey }: { roleKey?: string }): React.JSX.Element 
     void loadRoles(token).then(setLoad);
   }
 
-  const group = load.kind === "ready" && roleKey !== undefined ? load.groups.find((g) => g.key === roleKey) : undefined;
+  const group = load.kind === "ready" && roleKey !== undefined ? load.data.groups.find((g) => g.key === roleKey) : undefined;
 
   return (
     <main className="mx-auto flex max-w-5xl flex-col gap-6 px-4 py-10">
@@ -191,9 +124,9 @@ export function RolesView({ roleKey }: { roleKey?: string }): React.JSX.Element 
         )}
       </header>
       {load.kind === "loading" && <p className="text-zinc-400">Loading…</p>}
-      {load.kind === "token" && <TokenForm error={load.error} onSubmit={submitToken} />}
+      {load.kind === "token" && <TokenForm error={load.error} helper="The list shows every brief, so it needs the team token. Kept only in this tab." button="Show roles" onSubmit={submitToken} />}
       {load.kind === "error" && <p className="text-red-300">{load.message}</p>}
-      {load.kind === "ready" && roleKey === undefined && <RoleList groups={load.groups} />}
+      {load.kind === "ready" && roleKey === undefined && <RoleList groups={load.data.groups} />}
       {load.kind === "ready" && roleKey !== undefined && (group === undefined ? <p className="text-zinc-400">No briefs for this role.</p> : <RoleTable group={group} />)}
     </main>
   );

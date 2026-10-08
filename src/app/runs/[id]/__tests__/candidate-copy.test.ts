@@ -63,6 +63,7 @@ const run = (over: Partial<RunState> = {}): RunState => ({
   questions: [{ id: "mh-exp", text: "Has five years of data engineering" }],
   brief: brief(),
   failure: null,
+  intake: null,
   failed_step: null,
   step_index: 10,
   step_count: 10,
