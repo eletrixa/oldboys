@@ -27,3 +27,8 @@ Each agent appends: what it starts, progress, what it finishes. Newest at the bo
 ## 2026-10-08 · ui agent
 - Started: Screen 1 (src/app/start-form.tsx) and Screen 2 (src/app/runs/[id]/) plus GET /api/runs/[id]/state stub.
 - Finished: pnpm check and pnpm build run; see report for contract questions (role not stored, token is public).
+
+## 2026-10-08 · run-cost agent (Minas)
+- Started: idea #25 "Cena a čas u každého reportu": cost and research time on the run page from the ledger.
+- Finished: pure `runCost` + `formatDuration` (pause time excluded, open pause stops the clock), `cost` field on RunState filled by GET /api/runs/:id/state, muted `CostLine` under the run header; stale verify TODO removed from claim.ts header. No schema change, no new endpoint.
+- Files: src/domain/run-cost.ts, src/domain/__tests__/run-cost.test.ts, src/app/api/runs/[id]/state/route.ts, src/app/runs/[id]/{state.ts,parts.tsx,run-view.tsx}, src/domain/claim.ts.

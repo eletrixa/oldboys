@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/runs/[id]/state.ts
- * Deps:    src/domain/claim (types only)
+ * Deps:    src/domain/claim, src/domain/run-cost (types only)
  * Tested:  n/a
  *
  * Key responsibilities:
@@ -14,6 +14,7 @@
  * - Pure and import-type only, so both the route handler and client code can use it
  */
 import type { Brief, Candidate, Claim } from "@/domain/claim";
+import type { RunCost } from "@/domain/run-cost";
 
 export type RunStatus = "queued" | "running" | "paused" | "done" | "failed";
 
@@ -28,6 +29,7 @@ export type RunState = {
   sources: { id: string; url: string }[];
   questions: { id: string; text: string }[];
   brief: Brief | null;
+  cost: RunCost;
 };
 
 export type RowState = "done" | "active" | "todo";

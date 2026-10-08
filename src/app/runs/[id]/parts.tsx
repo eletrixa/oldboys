@@ -3,17 +3,18 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/runs/[id]/parts.tsx
- * Deps:    react, src/domain/claim (types)
+ * Deps:    react, src/domain/claim (types), src/domain/run-cost
  * Tested:  n/a
  *
  * Key responsibilities:
- * - ProgressSteps, ProfileList, QuestionCard, BriefView
+ * - ProgressSteps, ProfileList, QuestionCard, BriefView, CostLine
  * - Pure rendering from props; all fetching and state lives in run-view.tsx
  *
  * Design constraints:
  * - No data fetching here; callbacks are passed in by the view
  */
 import type { Candidate, CandidateDecision } from "@/domain/claim";
+import { formatDuration, type RunCost } from "@/domain/run-cost";
 import type { RowState, RunState } from "./state";
 
 const CARD = "rounded-2xl border border-zinc-800 bg-zinc-900/60 p-5";
@@ -49,6 +50,17 @@ export function ProgressSteps({ rows, labels }: { rows: RowState[]; labels: stri
       </ul>
     </div>
   );
+}
+
+/** One muted line: what the research cost so far and how long it took (pauses excluded). */
+export function CostLine({ cost }: { cost: RunCost }): React.JSX.Element {
+  const parts = [
+    `Research cost $${cost.usd.toFixed(2)}`,
+    `${String(cost.source_calls)} source ${cost.source_calls === 1 ? "call" : "calls"}`,
+    `${String(cost.llm_calls)} AI ${cost.llm_calls === 1 ? "call" : "calls"}`,
+    formatDuration(cost.duration_ms),
+  ];
+  return <p className="text-sm text-zinc-500">{parts.join(" · ")}</p>;
 }
 
 const BADGE: Record<CandidateDecision, { text: string; cls: string }> = {

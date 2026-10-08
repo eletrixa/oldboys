@@ -8,7 +8,7 @@
  *
  * Key responsibilities:
  * - Single source of truth for the domain shapes (plans/001 domain map); every track imports from here
- * - Enforce the FACT invariant: a FACT must carry a quote (verify.ts, TODO, will check quote ⊂ excerpt)
+ * - Enforce the FACT invariant: a FACT must carry a quote; quote ⊂ excerpt is checked in src/recipe/seams/verify.ts
  * - STATEMENT (plans/005): a consented callee said it on a verification call; same quote + support
  *   rule as FACT, but never presented as a public fact (confidence capped in call-ingest.ts)
  *

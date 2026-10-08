@@ -8,6 +8,7 @@
  *
  * Key responsibilities:
  * - Poll GET /api/runs/:id/state every 2 s until done or failed
+ * - Show the run cost and research time line (ledger projection) while running and when done
  * - Send all lineup decisions to POST /api/runs/:id/answer in one event once no question is pending
  *
  * Design constraints:
@@ -18,7 +19,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Candidate, CandidateDecision } from "@/domain/claim";
-import { type Answer, BriefView, ProfileList, ProgressSteps, QuestionCard } from "./parts";
+import { type Answer, BriefView, CostLine, ProfileList, ProgressSteps, QuestionCard } from "./parts";
 import { type RunState, stepRows } from "./state";
 
 const POLL_MS = 2000;
@@ -114,6 +115,7 @@ export function RunView({ id }: { id: string }): React.JSX.Element {
         {state.status !== "done" && (
           <p className="text-zinc-400">You can leave this page. We will let you know when it is ready.</p>
         )}
+        <CostLine cost={state.cost} />
       </header>
       {state.status === "failed" ? (
         <p role="alert" className="rounded-xl border border-red-900 bg-red-950/40 p-4 text-sm text-red-200">
