@@ -30,8 +30,9 @@ test("paste a posting, research from it, find it in the list", async ({ page }) 
   test.setTimeout(90_000);
   await registerAndLogin(page);
   await page.goto("/positions/new");
-  await page.getByLabel("Posting text").fill(POSTING);
-  await page.getByLabel("Title (optional)").fill(TITLE);
+  await page.getByRole("tab", { name: "By hand" }).click();
+  await page.getByLabel("Title", { exact: true }).fill(TITLE);
+  await page.getByLabel("Posting text (optional)").fill(POSTING);
   await page.getByRole("button", { name: "Add position" }).click();
 
   await expect(page).toHaveURL(/\/positions\/(?!new$)[A-Za-z0-9_-]+$/, { timeout: 60_000 }); // ingest may call the LLM

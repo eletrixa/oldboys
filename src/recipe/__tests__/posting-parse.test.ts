@@ -36,6 +36,15 @@ describe("parsePosting", () => {
     expect(parsePosting("jobs-cz", "<html><body>nothing</body></html>")).toEqual({ text: "" });
   });
 
+  it("R1c: a StartupJobs page (JSON-LD JobPosting inside @graph) gives title, company, location and the description text", () => {
+    const r = parsePosting("startupjobs", fixture("startupjobs.html"));
+    expect(r.title).toBe("Embedded C Developer");
+    expect(r.company).toBe("DIVELIT system s.r.o.");
+    expect(r.location).toBe("Brno");
+    expect(r.text).toContain("mikrokontroléry");
+    expect(r.text).not.toMatch(/<[a-z]/);
+  });
+
   it("R2: JobPosting inside @graph or an array is found, a page without one gives empty text", () => {
     const posting = { "@type": "JobPosting", title: "Dev", description: "<p>Build things</p>", hiringOrganization: { name: "Acme" }, jobLocation: [{ address: { addressLocality: "Brno" } }] };
     const wrap = (data: unknown) => `<script type="application/ld+json">${JSON.stringify(data)}</script>`;

@@ -7,7 +7,7 @@
  * Tested:  src/app/api/_lib/__tests__/position-body.test.ts
  *
  * Key responsibilities:
- * - `CreatePositionBody`: postingText and/or postingUrl (http or https), optional title override; title alone is rejected
+ * - `CreatePositionBody`: postingText and/or postingUrl (http or https), or a title alone (manual entry); optional title, company and location overrides
  * - `PatchPositionBody`: title, family and/or 1 to 5 must-haves; strict, at least one key
  *
  * Design constraints:
@@ -23,8 +23,10 @@ export const CreatePositionBody = z
     postingText: z.string().trim().min(1).max(20_000).optional(),
     postingUrl: z.url({ protocol: /^https?$/ }).max(500).optional(),
     title: title.optional(),
+    company: z.string().trim().min(1).max(200).optional(),
+    location: z.string().trim().min(1).max(200).optional(),
   })
-  .refine((b) => b.postingText !== undefined || b.postingUrl !== undefined, { message: "postingText or postingUrl is required" });
+  .refine((b) => b.postingText !== undefined || b.postingUrl !== undefined || b.title !== undefined, { message: "postingText, postingUrl or title is required" });
 export type CreatePositionBody = z.infer<typeof CreatePositionBody>;
 
 export const PatchPositionBody = z

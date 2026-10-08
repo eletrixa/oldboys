@@ -204,6 +204,9 @@ describe("route functions", () => {
     const failed = await createPositionRoute(authed({ postingUrl: "https://boards.greenhouse.io/acme/jobs/999" }), e, { fetchFn: down });
     expect(failed.status).toBe(422);
     expect((await failed.json<{ error: string }>()).error).toContain("paste the posting text");
-    expect((await createPositionRoute(authed({ title: "only" }), e)).status).toBe(400);
+    expect((await createPositionRoute(authed({ company: "no title" }), e)).status).toBe(400);
+    const manual = await createPositionRoute(authed({ title: "Head of Sales", company: "Acme" }), e, { newId: () => "manual-id" });
+    expect(manual.status).toBe(201);
+    expect(rows.find((r) => r.id === "manual-id")).toMatchObject({ ingest_method: "manual", company: "Acme" });
   });
 });

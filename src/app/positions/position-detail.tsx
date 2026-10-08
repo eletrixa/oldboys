@@ -58,7 +58,9 @@ function Body({ detail, onChange }: { detail: PositionDetail; onChange: (d: Posi
       <PositionBasics position={position} onSaved={saved} />
       {position.extraction === "fallback" && (
         <p className={`${CARD_PEACH} text-sm`}>
-          Fallback must-haves (AI was off). Edit them below so the research asks about this role.
+          {position.ingest_method === "manual"
+            ? "Three generic must-haves from the title. Edit them below so the research asks about this role."
+            : "Fallback must-haves (AI was off). Edit them below so the research asks about this role."}
         </p>
       )}
       <MustHaveEditor position={position} onSaved={saved} />
