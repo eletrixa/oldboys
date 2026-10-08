@@ -1,6 +1,7 @@
 /**
- * Verify seam tests: planted unsupported FACTs are downgraded, unknown ids, noise and alias contradictions dropped,
- * hedges downgraded; second model may only downgrade.
+ * Verify seam tests: planted unsupported FACTs are downgraded, unknown ids and noise dropped, alias contradictions
+ * ranked last (job titles are never aliases), unverified excerpts never back a FACT, hedges downgraded; second model
+ * may only downgrade.
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/recipe/__tests__/verify.test.ts
@@ -9,7 +10,7 @@
  */
 import { describe, expect, it } from "vitest";
 import type { Claim, Source } from "@/domain/claim";
-import { aliasPairs, hedged, normalise, quoteSupported, screenClaims, verifyClaims } from "@/recipe/seams/verify";
+import { ALIAS_MARK, aliasNoted, aliasPairs, hedged, normalise, quoteSupported, screenClaims, verifyClaims } from "@/recipe/seams/verify";
 import { baseContext, fakeLlm, fakePorts } from "@/recipe/__tests__/fakes";
 
 const src: Source = { id: "s1", run_id: "run-1", url: "https://github.com/jdvorakova", actor: "x", fetched_at: "t", excerpt: "Jana Dvořáková — Data Engineer at Kiwi.com, Brno. Maintains dbt-airflow-kit.", r2_key: "k", expires_at: "e", identity: "merged" };
@@ -93,7 +94,7 @@ describe("Buryan fact-check defects", () => {
     expect(out.claims.map((c) => c.id)).toEqual(["ok"]);
   });
 
-  it("drops a contradiction that names two aliases from 'A | B', 'A (formerly B)' or 'A, formerly B'; keeps a real one", () => {
+  it("ranks last (INFERENCE, never deleted) a contradiction naming two aliases from 'A | B', 'A (formerly B)' or 'A, formerly B'; keeps a real one", () => {
     expect(aliasPairs([{ excerpt: "CMO, Vilgain | Aktin" }], "Josef Buryan")).toContainEqual(["Vilgain", "Aktin"]);
     expect(aliasPairs([{ excerpt: "Josef Buryan | LinkedIn" }], "Josef Buryan")).toEqual([]);
     expect(aliasPairs([{ excerpt: "Head of Marketing at Rohlik Group (formerly Velka Pecka)" }])).toContainEqual(["Rohlik Group", "Velka Pecka"]);
@@ -104,9 +105,45 @@ describe("Buryan fact-check defects", () => {
       [src, li],
       "Josef Buryan",
     );
-    expect(kept.map((c) => c.id)).toEqual(["real"]);
+    expect(kept.map((c) => c.id)).toEqual(["aktin", "real"]);
+    const aktin = kept[0];
+    expect(aktin).toMatchObject({ kind: "INFERENCE", rank: 2 });
+    expect(aktin && aliasNoted(aktin)).toBe(true);
+    expect(kept[1]).toMatchObject({ kind: "INFERENCE", rank: 1, text: expect.not.stringContaining(ALIAS_MARK) as unknown });
     expect(notes[0]).toContain("aliases of one organisation: Vilgain | Aktin");
+    // re-screening (synthesize) leaves it as it is
+    expect(screenClaims(kept, [src, li], "Josef Buryan").kept).toEqual(kept);
     // the alias screen only touches the contradictions question
     expect(screenClaims([claim("career", { text: "CMO at Vilgain, which trades as Aktin", supports: ["li"] })], [li], "Josef Buryan").kept).toHaveLength(1);
+  });
+
+  it("never takes a job title as an alias of the employer, so a real contradiction naming both survives unchanged", () => {
+    const title: Source = { ...li, id: "title", excerpt: "Senior Marketing Manager | Groupon. Head of Growth | Chief Executive Officer" };
+    expect(aliasPairs([title], "Josef Buryan")).toEqual([]);
+    const real = claim("real", { question_id: "contradictions", text: "LinkedIn says Senior Marketing Manager at Groupon until 2024, a podcast says he left Groupon in 2022.", supports: ["title"] });
+    const { kept, notes } = screenClaims([real], [title], "Josef Buryan");
+    expect(kept).toEqual([real]);
+    expect(notes).toEqual([]);
+  });
+});
+
+describe("verifyClaims identity", () => {
+  it("a FACT whose quote is only in an unverified (namesake) excerpt becomes INFERENCE; one citing only it is dropped", async () => {
+    const namesake: Source = { ...src, id: "ns", url: "https://example.com/other-jana", excerpt: "Jana Dvořáková, CTO at Kiwi.com", identity: "unverified" };
+    const claims = [fact("mixed", "CTO at Kiwi.com", ["s1", "ns"]), fact("only-ns", "CTO at Kiwi.com", ["ns"])];
+    const out = await verifyClaims(baseContext({ sources: [src, namesake], claims }), fakePorts({ llm: fakeLlm(() => []) }));
+    expect(out.claims.map((c) => [c.id, c.kind, c.supports])).toEqual([["mixed", "INFERENCE", ["s1"]]]);
+    expect(out.notes).toContain("dropped (no source): only-ns");
+  });
+
+  it("a merged source under a rejected candidate's profile never backs a FACT", async () => {
+    const rejectedLi: Source = { ...src, id: "rli", url: "https://www.linkedin.com/in/other-jana", excerpt: "CTO at Kiwi.com" };
+    const ctx = baseContext({
+      sources: [src, rejectedLi],
+      claims: [fact("f", "CTO at Kiwi.com", ["s1", "rli"])],
+      candidates: [{ id: "c", run_id: "run-1", name: "Jana", profile_urls: [rejectedLi.url], anchor_match: null, score: 0.1, decision: "rejected", platform: "linkedin", handle: "other-jana", snippet: "", reasons: [] }],
+    });
+    const out = await verifyClaims(ctx, fakePorts({ llm: fakeLlm(() => []) }));
+    expect(out.claims[0]).toMatchObject({ kind: "INFERENCE", supports: ["s1"] });
   });
 });
