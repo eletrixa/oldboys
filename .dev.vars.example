@@ -16,5 +16,5 @@ OPENALEX_API_KEY=
 INTAKE_TOKEN=
 # Intake: secret path segment of the StartupJobs webhook URL /api/intake/startupjobs/<token> (openssl rand -hex 24)
 STARTUPJOBS_WEBHOOK_TOKEN=
-# Optional: StartupJobs company API bearer, used only to retry a CV download that answers 401/403
+# Optional: StartupJobs company API bearer, sent with CV file downloads from startupjobs.cz hosts (the API itself is never called)
 STARTUPJOBS_TOKEN=

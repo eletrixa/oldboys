@@ -35,7 +35,7 @@ POST /api/intake/startupjobs/<token>  (StartupJobs webhook)                     
 |---|---|
 | `INTAKE_TOKEN` | Bearer for `POST /api/intake/form`; also stored as a Script Property in the Apps Script |
 | `STARTUPJOBS_WEBHOOK_TOKEN` | Path segment of the StartupJobs webhook URL; treat the URL as a secret |
-| `STARTUPJOBS_TOKEN` | Optional. StartupJobs bearer, used only to retry a CV file download that answers 401/403 (the company API itself is never called) |
+| `STARTUPJOBS_TOKEN` | Optional. StartupJobs bearer, sent with the CV file download when the file URL is on a startupjobs.cz host (the company API itself is never called) |
 
 Generate a value without printing it, then store it where `RUN_TOKEN` lives (`~/s/oldboys/.env`) so it can be pasted into Apps Script / StartupJobs:
 
@@ -204,13 +204,13 @@ The endpoint answers 201 `{applicationId, status}` or, for a repeated response i
 
 ## Door 3: hosted apply page
 
-`https://oldboys.asajj.cz/apply/<tag>` (404 for an unknown tag). Public, candidate-facing, no mention of research. Fields: full name, email, LinkedIn URL or CV PDF (up to 5 MB, one of the two), optional message, a hidden honeypot. One application per email per position: a resubmit is a duplicate. The page says "Received" in every case except the hourly cap, where it asks to try again in an hour. This is the URL for LinkedIn "external website", the Jobs.cz ad text and StartupJobs ad text.
+`https://oldboys.asajj.cz/apply/<tag>` (404 for an unknown tag). Public, candidate-facing, no mention of research. Fields: full name, email, LinkedIn URL or CV PDF (up to 10 MB, one of the two), optional message, a hidden honeypot. One application per email per position: a resubmit is a duplicate. The page says "Received" in every case except the hourly cap, where it asks to try again in an hour. This is the URL for LinkedIn "external website", the Jobs.cz ad text and StartupJobs ad text.
 
 ## Door 4: StartupJobs webhook
 
 Facts (StartupJobs developer docs, 2024-07-25): a webhook URL is set per offer; on each application StartupJobs POSTs the full application as JSON; the endpoint must answer 200, 201, 202, 204 or 422, any other status **deletes the webhook**; there is no signature, so the secret lives in the path. The Worker answers only those codes (404 for a wrong token is the single exception and is intended: StartupJobs would delete the webhook, which is the right outcome for a leaked or rotated URL).
 
-1. Set the secret: `pnpm exec wrangler secret put STARTUPJOBS_WEBHOOK_TOKEN` (generate as above). Optional: `STARTUPJOBS_TOKEN`. The StartupJobs company API is **not called**; the webhook payload is the whole application. The only use of `STARTUPJOBS_TOKEN` is one retry of the CV file download when the file URL answers 401 or 403.
+1. Set the secret: `pnpm exec wrangler secret put STARTUPJOBS_WEBHOOK_TOKEN` (generate as above). Optional: `STARTUPJOBS_TOKEN`. The StartupJobs company API is **not called**; the webhook payload is the whole application. The only use of `STARTUPJOBS_TOKEN` is the CV file download: it is sent as a bearer when the file URL is on a startupjobs.cz host.
 2. Map the offer to a tag, either way:
    - set the offer's **internal position name** to the tag (`senior-be`), or
    - create the tag with `startupjobsOfferId` set to the numeric offer id (the offer id mapping wins when both exist).
@@ -309,7 +309,7 @@ Also check the Cloudflare dashboard Activity log under Email Routing: it shows d
 | `incomplete`, note "unsupported CV format" | DOCX or other format (stored in R2, not parsed) | Same as above |
 | `incomplete`, note "cv download failed <status>" | StartupJobs file URL needs auth or expired | Set `STARTUPJOBS_TOKEN`; or fetch the file from the application's admin page |
 | `incomplete` for Jobs.cz mails | The notification links the CV instead of attaching it | Put the apply page link in the ad; capture a real mail into the fixture |
-| `capped` | `INTAKE_PER_HOUR_CAP` reached when the application arrived | Start the run by hand from the start form with the row's LinkedIn URL, or raise the cap. Re-sending does not retry, because duplicates return the first row |
+| `capped` | `INTAKE_PER_HOUR_CAP` reached when the application arrived | Wait for the hour to pass and deliver the same application again (candidate resubmits the apply page, Apps Script re-POSTs the response, the mail is forwarded again): a `capped` row is the one duplicate that is re-decided and starts its run when there is room. Or raise the cap |
 | `received` that never moves | R2, D1 or Workflow create threw after the insert | `wrangler tail oldboys`, fix the cause, then delete the row (`DELETE FROM applications WHERE id = '<id>'` via `wrangler d1 execute oldboys --remote`) and re-send the source |
 | No row for a sent mail | Mail never reached the Worker: wrong address, recipient rejected, destination or rule disabled, over 10 MiB | Email Routing Activity log; rule `jobs@` and catch-all point to Worker `oldboys`; recipient must be `jobs@` or `jobs+<tag>@` |
 | Gmail "forwarding address" confirmation never arrives | `INTAKE_FORWARD_TO` was emptied, or the destination was removed in Email Routing | Restore the var and deploy, check Destination addresses shows `robert@soulfire.cz` verified, resend the confirmation |
