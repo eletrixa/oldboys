@@ -125,3 +125,8 @@ Each agent appends: what it starts, progress, what it finishes. Newest at the bo
 - Started: 00:23. Idea #24 (part) for the candidate notice (#7): Czech version with an EN | CZ switch next to "Copy candidate notice" / "Download candidate notice (.md)"; formal, gender-neutral Czech, Czech date format, generic source labels and known "not searched" reasons translated (unknown ones pass through scrubbed), file name candidate-notice-<id>-cs.md.
 - Finished: 00:28. English output unchanged. No schema change, no new endpoint; pnpm check green, wrangler dry-run bundles.
 - Files: src/app/runs/[id]/{candidate-copy.ts,candidate-copy-cs.ts,kit-actions.tsx,__tests__/candidate-copy.test.ts}, PROGRESS.md.
+
+## 2026-10-09 · purge-intake agent (Minas)
+- Started: 00:38. Retention fix: the 7-day purge now also deletes intake `applications` (contact data, CV text, cover letter) and their CV files in R2, before the run row (FK) and for applications that never started a run.
+- Finished: 00:46. Local D1 check: `DELETE FROM investigations` with an application still pointing at the run fails with `FOREIGN KEY constraint failed (SQLITE_CONSTRAINT_FOREIGNKEY)`, so before this fix the first expired intake run would have made every purge tick throw; deleting the application first lets the run delete succeed. No schema change; pnpm check green, wrangler dry-run bundles.
+- Files: src/workflow/purge.ts, src/workflow/__tests__/purge.test.ts (new), PROGRESS.md.
