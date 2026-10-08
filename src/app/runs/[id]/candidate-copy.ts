@@ -7,7 +7,7 @@
  * Tested:  src/app/runs/[id]/__tests__/candidate-copy.test.ts
  *
  * Key responsibilities:
- * - candidateCopy: who researches and why (role), sources searched and not searched (with scrubbed reasons), links confirmed
+ * - candidateCopy: who researches (the recruiter's organization when known) and why (role), sources searched and not searched (with scrubbed reasons), links confirmed
  *   as the person's, what the research is used for, "rates the evidence, never you", deletion date, how to object
  * - noticeFileName: candidate-notice-<run id prefix>.md, never the candidate's name
  *
@@ -68,6 +68,8 @@ export function candidateCopy(state: RunState): string | null {
   const { brief } = state;
   if (brief === null) return null;
   const role = state.role !== null && state.role.trim() !== "" ? `the ${escapeMd(state.role)} role` : "the role you applied for";
+  const org = state.organization_name;
+  const team = org !== null ? `the hiring team at ${escapeMd(org)}` : "our hiring team";
   const deleteOn = deletionDay(state.created_at);
   const links = confirmedLinks(state, brief);
   const lines = [
@@ -75,7 +77,7 @@ export function candidateCopy(state: RunState): string | null {
     "",
     `Hello ${escapeMd(state.subject)},`,
     "",
-    `Thank you for your interest in ${role}. As part of the hiring process, our hiring team looked at public ` +
+    `Thank you for your interest in ${role}. As part of the hiring process, ${team} looked at public ` +
       "information about you. We want you to know what we looked at and why.",
     "",
     "## Why",
@@ -88,7 +90,7 @@ export function candidateCopy(state: RunState): string | null {
     "- It uses public sources only. No private messages, closed groups or logins.",
     "- It rates the research itself: how much public evidence it found and how good that evidence is. It never rates you as a person.",
     "- It does not look at health, political views, religion, ethnicity, sexual orientation or similar sensitive topics.",
-    "- No decision is made by the research alone; people in our hiring team make every decision.",
+    `- No decision is made by the research alone; people in ${team} make every decision.`,
     "",
     ...section("Public sources we searched", searchedLines(state, brief)),
     ...section("Sources we did not search, and why", brief.not_searched.map((g) => `- ${escapeMd(gapLine({ ...g, reason: scrubReason(g.reason) }))}`)),
@@ -111,7 +113,7 @@ export function candidateCopy(state: RunState): string | null {
     "Reply to this email",
     "",
     "Kind regards,  ",
-    "The hiring team",
+    org !== null ? `The hiring team at ${escapeMd(org)}` : "The hiring team",
   ];
   return `${lines.join("\n")}\n`;
 }
