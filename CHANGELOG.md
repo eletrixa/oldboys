@@ -5,6 +5,7 @@ All notable changes to oldboys are documented here. The format follows [Keep a C
 ## [Unreleased]
 
 ### Added
+- After the interview (idea #23): paste the filled interview kit back on the run page to see answered / verified counts and the points still open, with "Copy open points"; ticked boxes or written notes count as answered, the notes are never read or scored and never leave the browser
 - Position selector ([plans/007-position-selector/](plans/007-position-selector/)): `/positions` lists positions by family with posting links, `/positions/new` ingests a posting from pasted text or a URL (Jobs.cz, Greenhouse, Lever, Ashby, JSON-LD) and extracts up to five must-haves once, `/positions/<id>` shows the posting, a LinkedIn people-search link, editable must-haves and the coverage table of its runs; "Research a candidate" pre-fills the start form and every run started from a position gets the same questions. Migration `0011_positions.sql`; var `POSITION_INGEST_USD`; `pnpm e2e` root Playwright smoke.
 - Profile-first start: candidate search from LinkedIn profile URL or pasted CV, plus role ([plans/006-profile-first/](plans/006-profile-first/))
 - Seed profile step to extract name, location, and LinkedIn from the given input
