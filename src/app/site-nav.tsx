@@ -22,7 +22,7 @@ import { BTN_SECONDARY } from "./ui";
 
 export function SiteNav({ user }: { user: SessionUser | null }): React.JSX.Element {
   return (
-    <nav aria-label="Main" className="flex w-full items-center gap-1 sm:w-auto sm:justify-end">
+    <nav aria-label="Main" className="flex w-full flex-wrap items-center gap-1 sm:w-auto sm:justify-end">
       {user === null ? (
         <>
           <NavLink href="/login">Log in</NavLink>
