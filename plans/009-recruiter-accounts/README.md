@@ -1,6 +1,6 @@
 ---
 plan: 009-recruiter-accounts
-status: draft
+status: active
 owner: Robert
 created: 2026-10-08
 type: feature
