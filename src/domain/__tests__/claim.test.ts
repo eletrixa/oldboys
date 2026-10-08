@@ -26,6 +26,8 @@ const investigation: Investigation = {
   budget_calls: 12,
   budget_ms: 180000,
   created_at: "2026-10-08T00:00:00.000Z",
+  role: "Senior Data Engineer, Prague, hybrid",
+  questions: [{ id: "mh-1", text: "Has shipped a production data pipeline" }],
 };
 
 const candidate: Candidate = {
@@ -36,6 +38,10 @@ const candidate: Candidate = {
   anchor_match: "city",
   score: 0.91,
   decision: "merge",
+  platform: "linkedin",
+  handle: "janedoe",
+  snippet: "Staff engineer at Acme, Prague",
+  reasons: ["city matches anchor", "bio links to acme.com"],
 };
 
 const source: Source = {

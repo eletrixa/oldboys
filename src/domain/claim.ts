@@ -34,6 +34,10 @@ export const Investigation = z.object({
   budget_calls: z.number().int().nonnegative(),
   budget_ms: z.number().int().positive(),
   created_at: z.string().min(1),
+  /** Free-text role the manager is hiring for (hiring goal); null for other goals. */
+  role: z.string().nullable(),
+  /** Dynamic must-have questions derived from `role`; merged with the recipe's base questions. */
+  questions: z.array(z.object({ id: z.string().min(1), text: z.string().min(1) })),
 });
 export type Investigation = z.infer<typeof Investigation>;
 
@@ -48,6 +52,13 @@ export const Candidate = z.object({
   anchor_match: z.string().nullable(),
   score: z.number().min(0).max(1),
   decision: CandidateDecision,
+  /** Where the profile lives: linkedin, github, instagram, x, web, ares ... */
+  platform: z.string().min(1),
+  handle: z.string().nullable(),
+  /** Short public snippet shown in the lineup (title, employer, city). */
+  snippet: z.string(),
+  /** Human-readable reasons behind `score` and `decision`. */
+  reasons: z.array(z.string()),
 });
 export type Candidate = z.infer<typeof Candidate>;
 
@@ -98,6 +109,7 @@ export const Gap = z.object({
 export type Gap = z.infer<typeof Gap>;
 
 export const LedgerKind = z.enum(["call", "llm", "decision", "pause"]);
+/** A Gap is recorded as a `decision` ledger row with `ref: { gap: true, ... }` (no schema change on D1). */
 export type LedgerKind = z.infer<typeof LedgerKind>;
 
 export const LedgerEntry = z.object({
@@ -111,3 +123,25 @@ export const LedgerEntry = z.object({
   ref: z.unknown(),
 });
 export type LedgerEntry = z.infer<typeof LedgerEntry>;
+
+export const Coverage = z.enum(["evidenced", "partial", "none"]);
+export type Coverage = z.infer<typeof Coverage>;
+
+/** The hiring-manager brief: one block per question (= must-have), gaps turned into interview questions. */
+export const Brief = z.object({
+  run_id: z.string().min(1),
+  per_question: z.array(
+    z.object({
+      question_id: z.string().min(1),
+      coverage: Coverage,
+      claim_ids: z.array(z.string().min(1)),
+      summary: z.string(),
+    }),
+  ),
+  interview_questions: z.array(z.string()),
+  to_verify: z.array(z.string()),
+  not_searched: z.array(z.object({ source: z.string().min(1), reason: z.string().min(1) })),
+  /** Count of claims dropped by the protected-category filter (GDPR Art. 9); content never stored in the brief. */
+  removed_protected: z.number().int().nonnegative(),
+});
+export type Brief = z.infer<typeof Brief>;

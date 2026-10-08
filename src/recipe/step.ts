@@ -22,8 +22,10 @@ export type StepKind = "serp" | "actor" | "ares" | "resolve" | "extract" | "veri
 export type Step = {
   id: string;
   kind: StepKind;
-  /** Apify actor id or ARES endpoint; absent for LLM seams and resolve. */
+  /** Apify actor id, REST source id (ares/..., rest/...); absent for LLM seams and resolve. */
   actor?: string;
+  /** Search query template for serp steps; `{subject}` and `{anchor}` are substituted. */
+  query?: string;
   /** What to do when the step returns nothing: run another step id, or record a Gap. */
   onEmpty?: { fallbackStep: string } | { gap: string };
 };

@@ -1,0 +1,140 @@
+/**
+ * D1 + R2 adapter: ledger append, source store, context load and outcome persistence for one run.
+ *
+ * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
+ * Module:  src/adapters/d1.ts
+ * Deps:    D1Database, R2Bucket (bindings), zod
+ * Tested:  n/a (Workers bindings; exercised by `pnpm preview` runs)
+ *
+ * Key responsibilities:
+ * - `loadContext` rebuilds StepContext from D1 before every step (Workflow steps are stateless)
+ * - `persistOutcome` writes sources/candidates/claims/gaps/brief; claims_mode=replace rewrites the run's claims
+ * - Raw payloads go to R2 under `<run>/<source>.json`; D1 keeps only the excerpt
+ *
+ * Design constraints:
+ * - Column names mirror migrations 0001 + 0002; no ORM
+ * - Gaps are also mirrored as ledger `decision` rows with `ref.gap = true` for the SSE stream
+ */
+import { Brief, Candidate, Claim, Gap, LedgerEntry, Source } from "@/domain/claim";
+import type { LedgerAppend, SourceStore } from "@/domain/ports";
+import type { StepContext, StepOutcome } from "@/recipe/sources/types";
+import type { Question } from "@/recipe/step";
+
+type Row = Record<string, unknown>;
+
+export function makeLedgerAppend(db: D1Database): LedgerAppend {
+  return async (entry) => {
+    const ts = new Date().toISOString();
+    const row = await db
+      .prepare(
+        `INSERT INTO ledger_entries (run_id, seq, ts, step, kind, cost_usd, ms, ref_json)
+         VALUES (?1, (SELECT COALESCE(MAX(seq), 0) + 1 FROM ledger_entries WHERE run_id = ?1), ?2, ?3, ?4, ?5, ?6, ?7)
+         RETURNING seq`,
+      )
+      .bind(entry.run_id, ts, entry.step, entry.kind, entry.cost_usd, entry.ms, JSON.stringify(entry.ref ?? null))
+      .first<{ seq: number }>();
+    if (!row) throw new Error("ledger insert returned no row");
+    return LedgerEntry.parse({ ...entry, seq: row.seq, ts });
+  };
+}
+
+export function makeSourceStore(db: D1Database, bucket: R2Bucket): SourceStore {
+  return async (source, raw) => {
+    const r2_key = `${source.run_id}/${source.id}.json`;
+    await bucket.put(r2_key, JSON.stringify(raw), { httpMetadata: { contentType: "application/json" } });
+    const full = Source.parse({ ...source, r2_key });
+    await db
+      .prepare(
+        `INSERT INTO sources (id, run_id, url, actor, fetched_at, excerpt, r2_key, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .bind(full.id, full.run_id, full.url, full.actor, full.fetched_at, full.excerpt, full.r2_key, full.expires_at)
+      .run();
+    return full;
+  };
+}
+
+function json<T>(v: unknown, fallback: T): T {
+  if (typeof v !== "string") return fallback;
+  try {
+    return JSON.parse(v) as T;
+  } catch {
+    return fallback;
+  }
+}
+
+export async function loadContext(db: D1Database, runId: string, baseQuestions: readonly Question[]): Promise<StepContext> {
+  const inv = await db
+    .prepare("SELECT subject, anchor, goal, role, questions_json, budget_usd, budget_calls FROM investigations WHERE id = ?")
+    .bind(runId)
+    .first<Row>();
+  if (!inv) throw new Error(`investigation ${runId} not found`);
+  const [cands, srcs, clms, gps, ledger] = await Promise.all([
+    db.prepare("SELECT * FROM candidates WHERE run_id = ?").bind(runId).all<Row>(),
+    db.prepare("SELECT * FROM sources WHERE run_id = ?").bind(runId).all<Row>(),
+    db.prepare("SELECT * FROM claims WHERE run_id = ?").bind(runId).all<Row>(),
+    db.prepare("SELECT * FROM gaps WHERE run_id = ?").bind(runId).all<Row>(),
+    db.prepare("SELECT COUNT(*) AS calls, COALESCE(SUM(cost_usd), 0) AS usd FROM ledger_entries WHERE run_id = ? AND kind IN ('call','llm')").bind(runId).first<{ calls: number; usd: number }>(),
+  ]);
+  const extra = json<Question[]>(inv.questions_json, []);
+  return {
+    runId,
+    subject: String(inv.subject),
+    anchor: String(inv.anchor),
+    goal: inv.goal as StepContext["goal"],
+    role: typeof inv.role === "string" ? inv.role : null,
+    questions: [...baseQuestions, ...extra],
+    candidates: cands.results.map((r) =>
+      Candidate.parse({ ...r, profile_urls: json(r.profile_urls_json, []), reasons: json(r.reasons_json, []) }),
+    ),
+    sources: srcs.results.map((r) => Source.parse(r)),
+    claims: clms.results.map((r) =>
+      Claim.parse({ ...r, supports: json(r.supports_json, []), contradicts: json(r.contradicts_json, []) }),
+    ),
+    gaps: gps.results.map((r) => Gap.parse(r)),
+    budget: { usd: Number(inv.budget_usd), calls: Number(inv.budget_calls) },
+    spent: { usd: ledger?.usd ?? 0, calls: ledger?.calls ?? 0 },
+  };
+}
+
+export async function persistOutcome(db: D1Database, runId: string, out: StepOutcome): Promise<void> {
+  const stmts: D1PreparedStatement[] = [];
+  for (const c of out.candidates) {
+    stmts.push(
+      db
+        .prepare(
+          `INSERT OR REPLACE INTO candidates (id, run_id, name, profile_urls_json, anchor_match, score, decision, platform, handle, snippet, reasons_json)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .bind(c.id, c.run_id, c.name, JSON.stringify(c.profile_urls), c.anchor_match, c.score, c.decision, c.platform, c.handle, c.snippet, JSON.stringify(c.reasons)),
+    );
+  }
+  if (out.claims_mode === "replace") stmts.push(db.prepare("DELETE FROM claims WHERE run_id = ?").bind(runId));
+  for (const c of out.claims) {
+    stmts.push(
+      db
+        .prepare(
+          `INSERT OR REPLACE INTO claims (id, run_id, question_id, candidate_id, text, kind, confidence, quote, supports_json, contradicts_json, rank)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .bind(c.id, c.run_id, c.question_id, c.candidate_id, c.text, c.kind, c.confidence, c.quote, JSON.stringify(c.supports), JSON.stringify(c.contradicts), c.rank),
+    );
+  }
+  for (const g of out.gaps) {
+    stmts.push(db.prepare("INSERT OR REPLACE INTO gaps (run_id, question_id, reason) VALUES (?, ?, ?)").bind(g.run_id, g.question_id, g.reason));
+  }
+  if (out.brief) {
+    stmts.push(
+      db
+        .prepare("INSERT OR REPLACE INTO briefs (run_id, brief_json, created_at) VALUES (?, ?, ?)")
+        .bind(runId, JSON.stringify(Brief.parse(out.brief)), new Date().toISOString()),
+    );
+  }
+  if (stmts.length > 0) await db.batch(stmts);
+}
+
+export async function setCandidateDecisions(db: D1Database, runId: string, decisions: readonly { id: string; decision: Candidate["decision"] }[]): Promise<void> {
+  if (decisions.length === 0) return;
+  await db.batch(
+    decisions.map((d) => db.prepare("UPDATE candidates SET decision = ? WHERE id = ? AND run_id = ?").bind(d.decision, d.id, runId)),
+  );
+}
