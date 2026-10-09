@@ -7,7 +7,7 @@
  * Tested:  n/a
  *
  * Key responsibilities:
- * - Logged out: landing anchors (The brief, How it works, Trust, FAQ; md and up), Log in, Create account, always on one row beside the mark. Logged in: My briefs and New brief (secondary, "New" under sm) at every width; Positions, Roles, organization name and Log out inline from md, in the "Menu" overflow under md; one row at 390px
+ * - Logged out: landing anchors (The brief, How it works, Trust, FAQ; md and up), Log in, Create account, always on one row beside the mark. Logged in: My briefs and New brief (secondary, "New" under sm) at every width; Positions, Roles, Guide, organization name and Log out inline from md, in the "Menu" overflow under md; one row at 390px
  *
  * Design constraints:
  * - Server component; rendered inside the layout's header next to the Radar mark
@@ -40,6 +40,7 @@ export function SiteNav({ user }: { user: SessionUser | null }): React.JSX.Eleme
           <span className="hidden md:contents">
             <NavLink href="/positions">Positions</NavLink>
             <NavLink href="/roles">Roles</NavLink>
+            <NavLink href="/guide">Guide</NavLink>
           </span>
           <NavLink href="/briefs">My briefs</NavLink>
           <span className="hidden px-2 text-sm text-muted md:inline">{user.organizationName}</span>
@@ -53,6 +54,7 @@ export function SiteNav({ user }: { user: SessionUser | null }): React.JSX.Eleme
           <NavMenu>
             <NavLink href="/positions">Positions</NavLink>
             <NavLink href="/roles">Roles</NavLink>
+            <NavLink href="/guide">Guide</NavLink>
             <span className="truncate px-3 py-1 text-sm text-muted">{user.organizationName}</span>
             <LogoutButton />
           </NavMenu>
