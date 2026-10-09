@@ -65,7 +65,7 @@ describe("titleChoices", () => {
     const rows = titleChoices(catalog, [item("old", "data", "2026-01-01", "data engineer", "Acme"), item("new", "sales", "2026-01-02", "AE", "Škoda")]);
     expect(rows.map((r) => r.title)).toEqual(["AE", "data engineer", "Backend Engineer"]);
     expect(rows[0]).toEqual({ title: "AE", family: "sales", href: "/positions/new", runs: 0, posting_url: null });
-    expect(rows[2]).toEqual({ title: "Backend Engineer", family: "engineering", href: "/?role=Backend%20Engineer", runs: null, posting_url: null });
+    expect(rows[2]).toEqual({ title: "Backend Engineer", family: "engineering", href: "/briefs/new?role=Backend%20Engineer", runs: null, posting_url: null });
     expect(JSON.stringify(rows)).not.toContain("Acme");
   });
   it("is the whole catalog when nothing is ingested", () => {

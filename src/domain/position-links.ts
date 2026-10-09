@@ -48,7 +48,7 @@ export function titleChoices(catalog: readonly RoleOption[], positions: readonly
   const taken = new Set(ingested.map((c) => fold(c.title)));
   const preset = catalog
     .filter((o) => !taken.has(fold(o.title)))
-    .map((o): TitleChoice => ({ title: o.title, family: o.family, href: `/?role=${encodeURIComponent(o.title)}`, runs: null, posting_url: null }));
+    .map((o): TitleChoice => ({ title: o.title, family: o.family, href: `/briefs/new?role=${encodeURIComponent(o.title)}`, runs: null, posting_url: null }));
   return [...ingested, ...preset];
 }
 
