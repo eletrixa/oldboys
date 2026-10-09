@@ -27,7 +27,7 @@ const L = (label: string): { readonly label: string } => ({ label });
 export const HEADER = {
   eyebrow: "Guide",
   title: "Your first brief, step by step",
-  lead: "Radar helps you prepare for an interview. You give it the position and the candidate. It reads public professional work and gives you one brief, with a source behind every point. A person makes every decision.",
+  lead: "Radar helps you prepare for an interview. You give it the position and the candidate. It reads public sources about the candidate and gives you one brief, with a source behind every point. A person makes every decision.",
   meta: "A 3-minute read. No technical knowledge needed.",
 } as const;
 
@@ -41,10 +41,10 @@ export const BEFORE: { readonly title: string; readonly items: readonly Rich[] }
   ],
 };
 
-/** The identity question as the run page asks it; Jana is a made-up example. */
+/** The identity question as the run page asks it; Jan is a made-up example. */
 export const QUESTION = {
   key: "Example question",
-  text: "Quick question: is this LinkedIn profile also Jana?",
+  text: "Quick question: is this LinkedIn profile also Jan?",
   answers: [L("Yes, it's them"), L("No"), L("I'm not sure")],
 } as const;
 
@@ -73,8 +73,9 @@ export const STEPS: readonly Step[] = [
     title: "Wait, and answer one question if asked",
     question: true,
     body: [
-      ["Radar now reads public professional sources. You can leave; the brief waits in ", L("My briefs"), "."],
-      ["Sometimes Radar finds a profile with the same name and asks if it is the same person. Answer only if you know. ", L("I'm not sure"), " is fine: Radar then never quotes that profile as a fact."],
+      ["Radar now reads public sources. You can leave; the brief waits in ", L("My briefs"), "."],
+      ["Sometimes Radar finds a profile with the same name and asks if it is the same person. Answer only if you know. ", L("I'm not sure"), " is fine: Radar then never quotes that profile as a fact. Decide by employer, city and job history, never by the photo."],
+      ["If you added their LinkedIn profile and do not answer within an hour, the research goes on without that profile."],
       [`If nothing moves for ${String(STALLED_AFTER_MINUTES)} minutes, start it again from the position or from `, L("My briefs"), "."],
     ],
   },
@@ -95,7 +96,7 @@ export const STEPS: readonly Step[] = [
       ["In ", L("Interview kit"), ", click ", L("Copy interview kit"), " to paste your questions anywhere, or ", L("Add interview to calendar"), "."],
       ["Under ", L("More exports"), " you find ", L("Copy for ATS"), " (for your hiring system), ", L("Copy reference questions"), " and ", L("Copy candidate notice"), "."],
       ["Send the notice to the candidate. It tells them what was looked at and how to object."],
-      [`Everything is deleted after ${String(RETENTION_DAYS)} days, or sooner with `, L("Delete candidate data"), "."],
+      [`Everything is deleted after ${String(RETENTION_DAYS)} days, or sooner with `, L("Delete candidate data"), ", for example when you reject the candidate."],
     ],
   },
 ];
@@ -125,10 +126,11 @@ export const WORDS: readonly { readonly term: string; readonly text: Rich }[] = 
 export const NEVER: { readonly title: string; readonly items: readonly string[] } = {
   title: "Radar never",
   items: [
-    "scores or ranks people, or decides for you",
-    "reads private accounts or closed groups",
+    "decides for you, or ranks candidates against each other",
+    "contacts the candidate, unless you start a phone call they agreed to",
+    "reads private accounts, closed groups or anything behind a login",
     "matches faces",
-    "uses health, religion, politics, union membership, sexual orientation or ethnic origin",
+    "puts health, religion, politics, union membership, sexual orientation or ethnic origin into the brief",
     `keeps the data longer than ${String(RETENTION_DAYS)} days`,
   ],
 };
@@ -160,7 +162,7 @@ export function allText(): string[] {
     ...rich(QUESTION.answers),
     ...STEPS.flatMap((s) => [s.title, ...s.body.flatMap(rich)]),
     ...WORDS.flatMap((w) => [w.term, ...rich(w.text)]),
-    // Each item reads as one sentence after its title ("Radar never scores or ranks people").
+    // Each item reads as one sentence after its title ("Radar never decides for you").
     ...NEVER.items.map((t) => `${NEVER.title} ${t}`),
     ...HELP.flatMap((h) => [h.q, ...rich(h.a)]),
   ];

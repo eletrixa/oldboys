@@ -83,15 +83,16 @@ At the end ask: "Which word was the most unclear?" and "Would you use this befor
 - Inference: "A quote may be shown with it, but the quote does not say the point directly."
 - Fit: the Evidence tab shows the same share at the top, as a percentage.
 - Welcome page line: type the job title there, or pick from the list of positions via **New brief**; step 1 says **New** on a phone.
+- Wording checked against the code (`7c42037`): "public sources" instead of "public professional sources"; "never decides for you, or ranks candidates against each other" instead of "never scores or ranks people"; protected topics are kept out of the brief; Radar never contacts the candidate unless you start a phone call they agreed to; nothing behind a login; decide identity by employer, city and job history, never by the photo; use **Delete candidate data** when you reject the candidate; the example question uses Jan, not Jana.
 
 **Still unclear (not copy, left for the team):**
-1. Welcome page role field (`src/app/onboarding/page.tsx`): `<StartForm autoFocusRole />` gets no `roleOptions`, so the role list never appears although the hint says "Pick a preselected role". `/briefs/new/page.tsx` passes `ROLE_OPTIONS`; the welcome page does not.
+1. **Fixed in `429915c`:** the welcome page now passes `ROLE_OPTIONS`, so the role list appears. Was: welcome page role field (`src/app/onboarding/page.tsx`): `<StartForm autoFocusRole />` gets no `roleOptions`, so the role list never appears although the hint says "Pick a preselected role". `/briefs/new/page.tsx` passes `ROLE_OPTIONS`; the welcome page does not.
 2. A new company sees and reuses other companies' positions, and "Research 1 candidate" skips a candidate another company already researched ("Started 0 runs. Skipped 1: already started") and links that company's brief. This is the positions-org-scope gap (Part B waits on a remote migration).
 3. "0 of 4" in **In 30 seconds** against "1 of 4 must-haves evidenced, 3 partly · 63%" in the Evidence tab for the same brief.
 4. **Sources and gaps** shows raw technical reasons (HTTP status with JSON, Apify run ids) to a non-technical reader.
 5. "See the evidence" switches the tab but leaves the view at the top.
 6. Big Five / DISC / MBTI and "scorecard … pts" in the first brief (JURY known issues 1 and 2).
-7. Registration: "Country (2 letters)" without an example; Czech-only fields (DIČ) shown for a foreign company.
+7. Registration: "Country (2 letters)" without an example (**fixed in `7c42037`:** placeholder GB and "For example GB, DE or US."); Czech-only fields (DIČ) shown for a foreign company (still open).
 8. Console: `/api/runs/<id>/calls/proposal` answers 403 for this account on another company's brief (no visible effect).
 
 ## (c) Result 2 — real non-technical tester: not run yet

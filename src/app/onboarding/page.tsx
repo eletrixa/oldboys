@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/onboarding/page.tsx
- * Deps:    next, next/link, ../start-form, ../api/_lib/current-user, ../runs/[id]/state (firstName)
+ * Deps:    next, next/link, ../start-form, ../api/_lib/current-user, ../runs/[id]/state (firstName), @/domain/role-catalog (ROLE_OPTIONS)
  * Tested:  n/a
  *
  * Key responsibilities:
@@ -19,6 +19,7 @@ import { currentUser } from "../api/_lib/current-user";
 import { firstName } from "../runs/[id]/state";
 import { Eyebrow, LINK } from "../ui";
 import { StartForm } from "../start-form";
+import { ROLE_OPTIONS } from "@/domain/role-catalog";
 
 export const metadata: Metadata = { title: "Welcome" };
 
@@ -34,7 +35,7 @@ export default async function OnboardingPage(): Promise<React.JSX.Element> {
         <p className="text-muted">Start your first brief for {user.organizationName}. Pick the role, then the person.</p>
         <p className="text-sm text-muted">New to Radar? <Link href="/guide" className={LINK}>Read the 3-minute guide</Link></p>
       </header>
-      <StartForm autoFocusRole />
+      <StartForm autoFocusRole roleOptions={ROLE_OPTIONS} />
     </main>
   );
 }
