@@ -1,19 +1,25 @@
 /**
- * Builds a minimal Word (.docx) file at test time: a stored (uncompressed) ZIP written byte by byte, no binary fixture.
+ * Builds a minimal Word (.docx) file at test time: a ZIP written byte by byte, stored or deflated, no binary fixture.
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/domain/__tests__/fixtures/tiny-docx.ts
- * Deps:    none
- * Tested:  n/a (test helper; used by cv-text.test.ts and src/app/api/apply/__tests__/apply.test.ts)
+ * Deps:    node:zlib (deflated entries)
+ * Tested:  n/a (test helper; used by cv-text.test.ts, cv-inflate.test.ts and src/app/api/apply/__tests__/apply.test.ts)
  *
  * Key responsibilities:
  * - `tinyDocx(paragraphs)`: [Content_Types].xml, _rels/.rels and word/document.xml with one w:p per paragraph;
  *   `tinyDocx([])` is a valid document with no text at all
  * - Correct local headers, central directory, end record and CRC-32, so a real ZIP reader (mammoth's JSZip) opens it
  *
+ * - `opts.deflate`: every entry deflated (method 8), as Word writes them; `opts.pad`: one more entry of that many zero
+ *   bytes (deflated, a decompression bomb when large)
+ *
  * Design constraints:
- * - Method 0 (stored) only; paragraphs are XML-escaped, any Unicode is UTF-8 encoded
+ * - Paragraphs are XML-escaped, any Unicode is UTF-8 encoded
  */
+import { deflateRawSync } from "node:zlib";
+
+export type TinyDocxOpts = { deflate?: boolean; pad?: number };
 const CONTENT_TYPES =
   '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
   '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
@@ -69,25 +75,28 @@ class Out {
 /** DOS date 1980-01-01, time 00:00. */
 const DOS_DATE = (0 << 9) | (1 << 5) | 1;
 
-export function tinyDocx(paragraphs: readonly string[]): ArrayBuffer {
+export function tinyDocx(paragraphs: readonly string[], opts: TinyDocxOpts = {}): ArrayBuffer {
   const enc = new TextEncoder();
-  const files: [string, string][] = [
-    ["[Content_Types].xml", CONTENT_TYPES],
-    ["_rels/.rels", RELS],
-    ["word/document.xml", documentXml(paragraphs)],
+  const files: [string, Uint8Array][] = [
+    ["[Content_Types].xml", enc.encode(CONTENT_TYPES)],
+    ["_rels/.rels", enc.encode(RELS)],
+    ["word/document.xml", enc.encode(documentXml(paragraphs))],
   ];
+  if (opts.pad !== undefined) files.push(["word/media/pad.bin", new Uint8Array(opts.pad)]);
   const out = new Out();
   const central = new Out();
-  for (const [path, text] of files) {
+  for (const [path, data] of files) {
     const name = enc.encode(path);
-    const data = enc.encode(text);
+    const deflate = opts.deflate === true || path.endsWith("pad.bin");
+    const packed = deflate ? new Uint8Array(deflateRawSync(data)) : data;
+    const method = deflate ? 8 : 0;
     const crc = crc32(data);
     const offset = out.bytes.length;
-    // Local file header: version 2.0, no flags, method 0 (stored).
-    out.u32(0x04034b50).u16(20).u16(0).u16(0).u16(0).u16(DOS_DATE).u32(crc).u32(data.length).u32(data.length).u16(name.length).u16(0).raw(name).raw(data);
+    // Local file header: version 2.0, no flags, method 0 (stored) or 8 (deflated).
+    out.u32(0x04034b50).u16(20).u16(0).u16(method).u16(0).u16(DOS_DATE).u32(crc).u32(packed.length).u32(data.length).u16(name.length).u16(0).raw(name).raw(packed);
     // Central directory entry pointing back at the local header.
     central
-      .u32(0x02014b50).u16(20).u16(20).u16(0).u16(0).u16(0).u16(DOS_DATE).u32(crc).u32(data.length).u32(data.length)
+      .u32(0x02014b50).u16(20).u16(20).u16(0).u16(method).u16(0).u16(DOS_DATE).u32(crc).u32(packed.length).u32(data.length)
       .u16(name.length).u16(0).u16(0).u16(0).u16(0).u32(0).u32(offset).raw(name);
   }
   const cdOffset = out.bytes.length;

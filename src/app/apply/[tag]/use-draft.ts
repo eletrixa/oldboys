@@ -12,11 +12,13 @@
  * - `markAll`: every problem of a Send at once, the first focused and announced; `recheck`: marked fields clear as
  *   they are fixed, and a field that lost focus is marked when it is wrong
  * - `fieldProps` / `shell`: id, name, aria-invalid and aria-describedby for a control, error and alert for its Field
+ * - `formEvents`: the form's blur and change listeners (name, email and LinkedIn re-checked on blur when filled or
+ *   marked; marked fields re-checked as the form changes)
  *
  * Design constraints:
  * - Client only; the rules are checkApplyAll's, never re-implemented here
  */
-import { useState, type RefObject } from "react";
+import { useState, type FocusEvent, type RefObject, type SyntheticEvent } from "react";
 import { formText } from "@/app/_lib/form-text";
 import type { Lang } from "./apply-copy";
 import { checkApplyAll, type ApplyDraft, type ApplyField, type ApplyProblem } from "./apply-fields";
@@ -25,12 +27,16 @@ import type { CvMode } from "./cv-field";
 
 type Errors = Partial<Record<ApplyField, string>>;
 type CvOverride = { mode?: CvMode; file?: File | null; text?: string };
+/** Fields checked again when they lose focus; the CV is checked as it changes. */
+const ON_BLUR = new Set<string>(["name", "email", "linkedinUrl"]);
+/** Controls the draft reads from the form itself; the CV's own handlers re-check with the new value. */
+const FORM_FIELDS = new Set<string>([...ON_BLUR, "coverLetter"]);
+
 type ControlProps = { id: string; name: ApplyField; "aria-invalid": boolean; "aria-describedby": string | undefined };
 
 export type Draft = {
   cv: { mode: CvMode; file: File | null; text: string; setMode: (m: CvMode) => void; setFile: (f: File | null) => void; setText: (t: string) => void };
   hasErrors: boolean;
-  isMarked: (field: string) => boolean;
   alertOn: ApplyField | null;
   errorFor: (field: ApplyField) => string | null;
   draftOf: (over?: CvOverride) => ApplyDraft;
@@ -40,6 +46,7 @@ export type Draft = {
   clear: () => void;
   fieldProps: (field: ApplyField, hint?: boolean) => ControlProps;
   shell: (field: ApplyField) => { field: ApplyField; error: string | null; alert: boolean };
+  formEvents: { onBlur: (e: FocusEvent<HTMLFormElement>) => void; onChange: (e: SyntheticEvent<HTMLFormElement>) => void };
 };
 
 export function useDraft(formRef: RefObject<HTMLFormElement | null>, lang: Lang): Draft {
@@ -84,11 +91,20 @@ export function useDraft(formRef: RefObject<HTMLFormElement | null>, lang: Lang)
     return { id: fieldId(field), name: field, "aria-invalid": error !== null, "aria-describedby": describedBy(field, hint, error) };
   };
   const shell = (field: ApplyField): ReturnType<Draft["shell"]> => ({ field, error: errorFor(field), alert: alertOn === field });
+  const formEvents: Draft["formEvents"] = {
+    onBlur: (e) => {
+      const t = e.target;
+      if (t instanceof HTMLInputElement && ON_BLUR.has(t.name) && (t.value.trim() !== "" || t.name in errors)) recheck({}, t.name as ApplyField);
+    },
+    onChange: (e) => {
+      const t = e.target as { name?: unknown };
+      if (typeof t.name === "string" && FORM_FIELDS.has(t.name) && Object.keys(errors).length > 0) recheck();
+    },
+  };
 
   return {
     cv: { mode: cvMode, file: cvFile, text: cvText, setMode: setCvMode, setFile: setCvFile, setText: setCvText },
     hasErrors: Object.keys(errors).length > 0,
-    isMarked: (field: string) => field in errors,
     alertOn,
     errorFor,
     draftOf,
@@ -100,5 +116,6 @@ export function useDraft(formRef: RefObject<HTMLFormElement | null>, lang: Lang)
     },
     fieldProps,
     shell,
+    formEvents,
   };
 }

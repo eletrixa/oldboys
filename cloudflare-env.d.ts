@@ -5,6 +5,7 @@ interface __BaseEnv_CloudflareEnv {
 	SOURCES: R2Bucket;
 	DB: D1Database;
 	ASSETS: Fetcher;
+	APPLY_RATE_LIMIT: RateLimit;
 	LLM_MODEL_PRIMARY: "claude-opus-5-5";
 	LLM_MODEL_VERIFY: "claude-sonnet-5-5";
 	RUN_BUDGET_USD: "0.50";

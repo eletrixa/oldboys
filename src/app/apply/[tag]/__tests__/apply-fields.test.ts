@@ -10,8 +10,9 @@
  * - checkApply: required fields, LinkedIn URL shape, CV formats (PDF / DOCX / TXT by media type or name, .doc only beside
  *   LinkedIn) and the 10 MiB size, pasted CV length, the "LinkedIn or CV" rule (pasted text counts), length caps, and
  *   which field each problem belongs to; checkApplyAll: every problem in one pass, in form order; Czech sentences
- * - cvFileProblem / cvRefusal (a refused pick worded around the file that stays), isCvFile, formatSize, attachedLine
- *   (the done card) and replyOutcome (status code to what the candidate sees, never a rate-limit sentence)
+ * - cvFileProblem / cvRefusal (a refused pick worded around the file that stays; an empty file refused too),
+ *   pickDropped (several files dropped at once), isCvFile, formatSize, attachedLine (the done card) and replyOutcome
+ *   (status code to what the candidate sees: only 201 is received, never a rate-limit sentence)
  * - apply-copy: both languages carry the same keys, toLang
  *
  * Design constraints:
@@ -21,7 +22,19 @@ import { describe, expect, it } from "vitest";
 import { CV_MAX, CV_MAX_BYTES } from "@/domain/application";
 import { CV_MEDIA_TYPE } from "@/domain/cv-kind";
 import { COPY, toLang } from "../apply-copy";
-import { attachedLine, checkApply, checkApplyAll, cvFileProblem, cvRefusal, formatSize, isCvFile, MESSAGES, replyOutcome, type ApplyDraft } from "../apply-fields";
+import {
+  attachedLine,
+  checkApply,
+  checkApplyAll,
+  cvFileProblem,
+  cvRefusal,
+  formatSize,
+  isCvFile,
+  MESSAGES,
+  pickDropped,
+  replyOutcome,
+  type ApplyDraft,
+} from "../apply-fields";
 
 const file = (size = 1000, name = "cv.pdf", type = "application/pdf"): File => new File([new Uint8Array(size)], name, { type });
 const ok: ApplyDraft = { name: "Josef Buryan", email: "josef@mail.test", linkedinUrl: "linkedin.com/in/josef-buryan", cv: null, cvText: "", message: "" };
@@ -110,6 +123,21 @@ describe("cvFileProblem and cvRefusal", () => {
     expect(cvFileProblem(file(10, "photo.png", "image/png"))).toBe("type");
     expect(cvFileProblem(file(CV_MAX_BYTES + 1))).toBe("size");
     expect(cvFileProblem(file(10, "cv.doc", "application/msword"))).toBeNull();
+    expect(cvFileProblem(file(0))).toBe("empty");
+  });
+
+  it("refuses an empty file in the form check too, with a sentence", () => {
+    expect(checkApply({ ...ok, cv: file(0) })).toEqual({ field: "cv", message: MESSAGES.cvEmpty });
+    expect(cvRefusal("empty", "cv.pdf", "old.pdf")).toBe("cv.pdf was not added: the file is empty. old.pdf is still attached.");
+  });
+
+  it("of several dropped files takes the first usable one, else the first", () => {
+    const photo = file(10, "photo.png", "image/png");
+    const cv = file(10, "cv.pdf");
+    const letter = file(10, "letter.docx", CV_MEDIA_TYPE.docx);
+    expect(pickDropped([photo, cv, letter])).toBe(cv);
+    expect(pickDropped([photo])).toBe(photo);
+    expect(pickDropped<File>([])).toBeUndefined();
   });
 
   it("words a refusal plainly when nothing is attached and names both files when a good one stays", () => {
@@ -173,9 +201,9 @@ describe("attachedLine", () => {
 });
 
 describe("replyOutcome", () => {
-  it("treats 200 and 201 as received", () => {
+  it("treats only 201 as received: the 200 a trapped send gets asks to try again", () => {
     expect(replyOutcome(201, { received: true })).toEqual({ kind: "done" });
-    expect(replyOutcome(200, { received: true })).toEqual({ kind: "done" });
+    expect(replyOutcome(200, { received: true })).toEqual({ kind: "error", message: MESSAGES.server, retry: true });
   });
 
   it("shows the handler's own sentence on 400, a generic one when there is none, and no retry button", () => {

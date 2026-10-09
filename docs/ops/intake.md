@@ -7,12 +7,12 @@ Applications arrive by email, from a Google Form, from the hosted apply page or 
 ```
 jobs+<tag>@asajj.cz  (Gmail forward, Seznam copy, Jobs.cz, LinkedIn) -> worker email()  --+
 POST /api/intake/form              (Google Form via Apps Script, Bearer INTAKE_TOKEN)   --+
-POST /api/apply                    (hosted /apply/<tag> page, same-origin + honeypot)   --+--> ingestApplication --> applications --> run
+POST /api/apply                    (hosted /apply/<tag>: same-origin, honeypot, IP cap) --+--> ingestApplication --> applications --> run
 POST /api/intake/startupjobs/<token>  (StartupJobs webhook)                             --+
 ```
 
-- The **tag** is the position: `[a-z0-9][a-z0-9-]{1,39}`, one row in `intake_tags` (tag, role, goal, optional StartupJobs offer id). It is the plus-address, the apply page path, the Google Form "Position code" and the StartupJobs internal position name. An unknown tag never starts a run.
-- Idempotent per `(source, external_id)`: sending the same application twice returns the first row and starts no second run.
+- The **tag** is the position: `[a-z0-9][a-z0-9-]{1,39}`, one row in `intake_tags` (tag, role, goal, optional company shown on the apply page (migration `0015_intake_company.sql`), optional StartupJobs offer id). It is the plus-address, the apply page path, the Google Form "Position code" and the StartupJobs internal position name. An unknown tag never starts a run.
+- Idempotent per `(source, external_id)`: sending the same application twice returns the first row and starts no second run. A repeat that carries other details (another LinkedIn URL, CV file or text) keeps the first send and leaves a note on the row: `resent <time>Z with other details (LinkedIn ..., CV ...), the first send is kept` (only the latest). On the apply page the key is position + email, so this is how a candidate's correction, or someone applying under another person's email, shows up: check the note and contact the address.
 - Spend brakes: known tag required, `INTAKE_PER_HOUR_CAP` (default 10) intake runs per hour, on top of the global `RUNS_PER_HOUR_CAP` (20) and the per-run budget of $0.50.
 - The candidate never learns a run exists. The apply page and the webhook answer "received"; run ids appear only on `/intake` and in operator routes.
 - Statuses: `received` (inserted, not decided; stays here only when something threw: the row's note then says "delivery failed after it was stored; the next delivery resumes it", and the next delivery of the same source resumes it at once; an unmarked one after 5 minutes) -> `run-started` | `unmatched` (unknown or missing tag, sender not allowed) | `incomplete` (no LinkedIn URL and no readable CV text) | `capped`. The `note` column says why.
@@ -21,7 +21,9 @@ POST /api/intake/startupjobs/<token>  (StartupJobs webhook)                     
 
 ## Config
 
-**Wrangler vars** (`wrangler.jsonc`, no new bindings):
+**Binding** `APPLY_RATE_LIMIT` (`wrangler.jsonc` `ratelimits`, namespace `1001`): 5 apply-page sends per IP per minute; over it the page says "try again in a moment" (429). Every send can store a row and up to 10 MB in R2, and the hourly cap guards run spend, not storage.
+
+**Wrangler vars** (`wrangler.jsonc`):
 
 | Var | Default | Meaning |
 |---|---|---|
@@ -204,7 +206,7 @@ The endpoint answers 201 `{applicationId, status}` or, for a repeated response i
 
 ## Door 3: hosted apply page
 
-`https://oldboys.asajj.cz/apply/<tag>` (404 for an unknown tag). Public, candidate-facing, no mention of research. Fields: full name, email, LinkedIn URL and/or CV (one is enough), optional message, a hidden honeypot. Title and link preview say "Apply: <role> at <company>" (company from the tag's optional `company`, set in the `/intake` tag form); `?lang=cs` gives the Czech page for the Jobs.cz ad. Under the button: who uses the data, the 7-day deletion and a link to `/apply/<tag>/privacy`. The CV is a PDF, Word `.docx` or `.txt` file up to 10 MB, picked or dropped on one zone; an older `.doc` is kept but not read, so it needs LinkedIn beside it; images are refused on the spot with "Please attach your CV as a PDF, Word or text file.". Fallback: "No file at hand? Paste your CV text" swaps the zone for a textarea (up to 20,000 characters) that is sent as `cvText`; a file wins if both arrive. Text is read from PDF (`unpdf`), DOCX (`mammoth`) and TXT; a file without readable text (a phone scan) is answered on the spot with "We could not read any text in that PDF. Please add your LinkedIn profile or paste the text of your CV." unless a LinkedIn URL came with it (then it is stored and noted). The upload shows progress, a network error or 5xx offers "Try again" with the form still filled, and the done card says "Received. We'll reply to <email>." with what was attached. One application per email per position: a resubmit is a duplicate. The page says "Received" only once the application is stored (a capped one too: the cron starts it later); a send that failed after storing marks the row, and Try again resumes it at once; while an earlier send is still being stored it asks to try again. All invalid fields are marked at once, and a double tap sends once. This is the URL for LinkedIn "external website", the Jobs.cz ad text and StartupJobs ad text.
+`https://oldboys.asajj.cz/apply/<tag>` (404 for an unknown tag). Public, candidate-facing, no mention of research. Fields: full name, email, LinkedIn URL and/or CV (one is enough), optional message, a hidden honeypot (`hp_contact`) plus the time from page render to Send (`fill_ms`, under 3 s counts as a bot). Title and link preview say "Apply: <role> at <company>" (company from the tag's optional `company`, set in the `/intake` tag form); `?lang=cs` gives the Czech page for the Jobs.cz ad. Under the button: who uses the data, the 7-day deletion and a link to `/apply/<tag>/privacy`. The CV is a PDF, Word `.docx` or `.txt` file up to 10 MB, picked or dropped on one zone; an older `.doc` is kept but not read, so it needs LinkedIn beside it; images are refused on the spot with "Please attach your CV as a PDF, Word or text file.". Fallback: "No file at hand? Paste your CV text" swaps the zone for a textarea (up to 20,000 characters) that is sent as `cvText`; a file wins if both arrive. The kind is taken from the file's bytes when they show one (a `.docx` sent as a PDF is read as Word). Text is read from PDF (`unpdf`), DOCX (`mammoth`) and TXT (UTF-8, UTF-16 with a BOM, or Czech windows-1250; binary junk is refused); a `.docx` or PDF that would inflate past 40 MB (a decompression bomb) is never parsed; a file without readable text (a phone scan) is answered on the spot with "We could not read any text in that PDF. Please add your LinkedIn profile or paste the text of your CV." unless a LinkedIn URL came with it (then it is stored and noted). The upload shows progress and times out only after 90 s without progress, a network error or 5xx offers "Try again" with the form still filled, and the done card says "Received. We'll reply to <email>." with what was attached. One application per email per position: a resubmit is a duplicate (with other details it is noted on the row, see the rules above). The page 404s an unknown tag on purpose (a mistyped link should say so before anyone fills it in), while the API answers an unknown tag like a known one. The page says "Received" only once the application is stored (a capped one too: the cron starts it later); a send that failed after storing marks the row, and Try again resumes it at once; while an earlier send is still being stored it asks to try again. All invalid fields are marked at once, and a double tap sends once. This is the URL for LinkedIn "external website", the Jobs.cz ad text and StartupJobs ad text.
 
 ## Door 4: StartupJobs webhook
 
@@ -240,16 +242,16 @@ curl -i -X POST $H/api/intake/form \
   -H "Authorization: Bearer $INTAKE_TOKEN" -H "Content-Type: application/json" \
   -d "{\"tag\":\"senior-be\",\"externalId\":\"smoke-2\",\"name\":\"Test Candidate\",\"cvBase64\":\"$(base64 -w0 cv.pdf)\",\"cvFilename\":\"cv.pdf\"}"
 
-# Apply page endpoint (same-origin check needs these headers; honeypot "website" stays empty). 201 {received:true}
+# Apply page endpoint (same-origin check needs these headers; honeypot hp_contact stays empty, fill_ms >= 3000). 201 {received:true}
 curl -i -X POST $H/api/apply \
   -H "Origin: $H" -H "Sec-Fetch-Site: same-origin" \
   -F tag=nosuchtag -F name='Test Candidate' -F email=test@example.com \
-  -F linkedinUrl=https://www.linkedin.com/in/example-candidate -F coverLetter='Hello' -F website=
+  -F linkedinUrl=https://www.linkedin.com/in/example-candidate -F coverLetter='Hello' -F hp_contact= -F fill_ms=5000
 
 # Apply page with a PDF
 curl -i -X POST $H/api/apply \
   -H "Origin: $H" -H "Sec-Fetch-Site: same-origin" \
-  -F tag=senior-be -F name='Test Candidate' -F email=test@example.com -F 'cv=@cv.pdf;type=application/pdf' -F website=
+  -F tag=senior-be -F name='Test Candidate' -F email=test@example.com -F 'cv=@cv.pdf;type=application/pdf' -F hp_contact= -F fill_ms=5000
 
 # StartupJobs webhook, test payload (no tag -> unmatched, 200 {received:true,test:true})
 curl -i -X POST "$H/api/intake/startupjobs/$STARTUPJOBS_WEBHOOK_TOKEN" -H "Content-Type: application/json" \
@@ -301,7 +303,9 @@ Still manual, per section: Gmail filter and Seznam rule on the mailbox that rece
 | Form endpoint 400 on base64 or fields | Field over its cap, malformed email | Read the response body in Apps Script Executions; fix the form validation |
 | Apps Script execution failed | Any non-200/201 answer throws | Fix the cause, run `resendAll` (duplicates are ignored) |
 | Apply endpoint 403 | Request lacks same-origin `Origin` / `Sec-Fetch-Site`, or comes from another site | Use the hosted page, or add the two headers for curl |
-| Apply endpoint 200 `{received:true}` but no row | Honeypot `website` was filled (bot) | Expected; a real browser leaves it empty |
+| Apply endpoint 200 `{received:true}` but no row | Honeypot `hp_contact` was filled, or `fill_ms` was missing or under 3000 (bot) | Expected; our page shows "try again" for a 200 and clears the honeypot, so a person is never told an unstored send arrived |
+| Apply endpoint 429 | More than 5 sends from one IP within a minute (`APPLY_RATE_LIMIT`) | Nothing for a person (the page asks to try again in a moment); a burst from one IP is a script |
+| Apply endpoint 400 "We could not read that form" | No `Content-Length` (a chunked body) or an unparsable body | Browsers and `curl -F` always send one; a script must too |
 | Apply endpoint 503 | An earlier send of the same application is still being stored, or a racing retry won the resume | Nothing: the candidate's Try again gets 201 once it is stored |
 | Apply page 500 under `next dev` | `next dev` has no Workflow binding (`env.RESEARCH_RUN.create` is undefined), so every run start throws | Expected locally; to reach `run-started` run `pnpm exec opennextjs-cloudflare build` then `pnpm exec wrangler dev --port <port>` (no hot reload). Repeated local QA hits the hourly cap: `UPDATE investigations SET created_at='2026-01-01T00:00:00.000Z' WHERE via='intake'` on the local D1 |
 | `/apply/<tag>` 404 | Tag not in `intake_tags` or invalid | Create the tag |

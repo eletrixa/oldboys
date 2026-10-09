@@ -1,25 +1,32 @@
 /**
- * Small presentational pieces of the apply form: labelled field shell, inline error, send footer, progress and the done card.
+ * Small presentational pieces of the apply form: labelled field shell, inline error, honeypot, send footer, progress and the done card.
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/apply/[tag]/apply-parts.tsx
- * Deps:    react, src/app/ui (FIELD, BTN_PRIMARY, BTN_SECONDARY, LINK), ./apply-fields (ApplyField), ./apply-copy
+ * Deps:    react, src/app/ui (FIELD, BTN_PRIMARY, LINK), ./apply-fields (ApplyField, HONEYPOT), ./apply-copy
  * Tested:  n/a (visual; copy helpers in apply-fields.test.ts, the page is driven in the browser QA of specs/intake/apply-page.md)
  *
  * Key responsibilities:
  * - `Field`: label (+ "optional"), control, hint and the error under it, wired with ids and aria-describedby
  * - `FieldError`: an error sentence under its field; only the one passed `alert` is the `role=alert` region
- * - `SendFooter`: the form-level failure with "Try again", the send button, `SendProgress` and the privacy line
+ * - `Honeypot`: the `hp_contact` trap, visually hidden, out of tab order and the accessibility tree, with a label no
+ *   autofill heuristic maps to a person's data
+ * - `SendFooter`: the form-level failure, one send button ("Try again" after a retryable failure; aria-disabled, not
+ *   disabled, while sending so focus stays on it), `SendProgress` and the privacy line
  * - `SendProgress`: progressbar with "Uploading N%", then "Checking your CV" until the answer arrives
- * - `DoneCard`: "Received. We'll reply to <email>." plus what was attached and when to expect a reply; takes focus
+ * - `DoneCard`: "Received. We'll reply to <email>." plus what was attached and when to expect a reply; its heading
+ *   takes focus once, when it appears
  *
  * Design constraints:
  * - Radar tokens only; no emoji; candidate-facing copy never mentions research
- * - Server-safe module (no hooks); used only by the client form
+ * - Client module (DoneCard focuses in an effect); used only by the client form
  */
-import { BTN_PRIMARY, BTN_SECONDARY, FIELD, LINK } from "@/app/ui";
+"use client";
+
+import { useEffect, useRef, type RefObject } from "react";
+import { BTN_PRIMARY, FIELD, LINK } from "@/app/ui";
 import type { ApplyCopy } from "./apply-copy";
-import type { ApplyField } from "./apply-fields";
+import { HONEYPOT, type ApplyField } from "./apply-fields";
 
 export const fieldId = (field: ApplyField): string => `apply-${field}`;
 
@@ -63,6 +70,18 @@ export function Field({ field, label, optional, hint, error, alert, children }: 
   );
 }
 
+/** Bots fill every input; people never see this one. Its name and label say nothing autofill could match. */
+export function Honeypot({ inputRef }: Readonly<{ inputRef: RefObject<HTMLInputElement | null> }>): React.JSX.Element {
+  return (
+    <div aria-hidden="true" className="sr-only">
+      <label>
+        Leave this empty
+        <input ref={inputRef} name={HONEYPOT} type="text" tabIndex={-1} autoComplete="off" defaultValue="" />
+      </label>
+    </div>
+  );
+}
+
 type Progress = ApplyCopy["progress"];
 
 export function SendProgress({ percent, checking, copy }: Readonly<{ percent: number; checking: string; copy: Progress }>): React.JSX.Element {
@@ -96,6 +115,7 @@ export function SendProgress({ percent, checking, copy }: Readonly<{ percent: nu
 
 type Footer = {
   copy: ApplyCopy;
+  sendRef: RefObject<HTMLButtonElement | null>;
   failure: { message: string; retry: boolean } | null;
   /** Upload percent while sending, else null. */
   percent: number | null;
@@ -103,22 +123,19 @@ type Footer = {
   privacy: { line: string; href: string };
 };
 
-export function SendFooter({ copy, failure, percent, checking, privacy }: Readonly<Footer>): React.JSX.Element {
+export function SendFooter({ copy, sendRef, failure, percent, checking, privacy }: Readonly<Footer>): React.JSX.Element {
   const sending = percent !== null;
+  const label = sending ? copy.form.sending : failure?.retry === true ? copy.form.tryAgain : copy.form.send;
   return (
     <div className="flex flex-col gap-3">
       {failure !== null && (
-        <div className="flex flex-col items-start gap-3 rounded-lg border border-conflict/40 bg-conflict-bg p-4">
+        <div className="rounded-lg border border-conflict/40 bg-conflict-bg p-4">
           <FieldError field="form" message={failure.message} alert />
-          {failure.retry && (
-            <button type="submit" disabled={sending} className={BTN_SECONDARY}>
-              {copy.form.tryAgain}
-            </button>
-          )}
         </div>
       )}
-      <button type="submit" disabled={sending} aria-disabled={sending} className={`${BTN_PRIMARY} self-start`}>
-        {sending ? copy.form.sending : copy.form.send}
+      {/* aria-disabled, not disabled: the focused button keeps focus while sending; the form's ref guard ignores a 2nd tap */}
+      <button ref={sendRef} type="submit" aria-disabled={sending} className={`${BTN_PRIMARY} self-start aria-disabled:cursor-wait aria-disabled:opacity-60`}>
+        {label}
       </button>
       {sending && <SendProgress percent={percent} checking={checking} copy={copy.progress} />}
       <p className="text-xs leading-relaxed text-muted">
@@ -135,12 +152,14 @@ export function SendFooter({ copy, failure, percent, checking, privacy }: Readon
 type Done = { email: string; attached: string; copy: ApplyCopy["done"] };
 
 export function DoneCard({ email, attached, copy }: Readonly<Done>): React.JSX.Element {
+  const heading = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    heading.current?.focus();
+  }, []);
   return (
     <div role="status" className="flex flex-col gap-3">
       <h2
-        ref={(el) => {
-          el?.focus();
-        }}
+        ref={heading}
         tabIndex={-1}
         className="text-2xl [overflow-wrap:anywhere]"
       >

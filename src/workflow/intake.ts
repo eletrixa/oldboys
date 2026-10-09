@@ -8,8 +8,11 @@
  * Tested:  src/workflow/__tests__/intake.test.ts
  *
  * Key responsibilities:
- * - Idempotency per (source, externalId): a repeat (or an insert race) returns the first row, never a second run
- * - Store the CV file in R2 (intake/<id>/<safe name>) when the delivery can become a run, and extract its text
+ * - Idempotency per (source, externalId): a repeat (or an insert race) returns the first row, never a second run; a
+ *   repeat that carries other details (LinkedIn, CV file or text) leaves a "resent" note on the row for the operator,
+ *   since the first send is what counts (someone else may have applied under the candidate's email)
+ * - Store the CV file in R2 (intake/<id>/<safe name>) when the delivery can become a run, and extract its text unless
+ *   the connector already did (`cvText`, or `cvNote` when it found none: the file is never parsed twice)
  * - Decide the status (unknown tag / sender not allowed / incomplete / capped / run-started) and start the run in one
  *   tail (`decideAndStart`) shared by a new delivery, the re-decision of a capped duplicate and the resume of a row
  *   that a failed delivery left at 'received'
@@ -33,6 +36,7 @@ import {
   IntakeInput,
   IntakeTag,
   joinNotes,
+  safeFilename,
   type ApplicationStatus,
   type DecidedStatus,
 } from "@/domain/application";
@@ -60,7 +64,7 @@ export const DELIVERY_FAILED_NOTE = "delivery failed after it was stored; the ne
 /** Capped rows the cron re-decides per tick, oldest first. */
 const QUEUE_BATCH = 20;
 
-const EXISTING_COLUMNS = "id, status, run_id, note, tag, linkedin_url, received_at";
+const EXISTING_COLUMNS = "id, status, run_id, note, tag, linkedin_url, received_at, cv_key, cv_text";
 
 type ExistingRow = {
   id: string;
@@ -70,6 +74,8 @@ type ExistingRow = {
   tag: string | null;
   linkedin_url: string | null;
   received_at: string;
+  cv_key: string | null;
+  cv_text: string | null;
 };
 
 type Position = { role: string; goal: GoalId };
@@ -85,11 +91,14 @@ export async function ingestApplication(
 
   const existing = await findExisting(env.DB, input.source, input.externalId);
   if (existing) {
-    if (existing.status === "capped") return (await retryCapped(existing, env, now)).result;
-    if (existing.status === "received" && (await resumable(env.DB, existing, now))) {
-      return markOnFailure(env.DB, existing.id, () => resumeReceived(existing.id, input, env, now, senderAllowed));
+    if (existing.status === "received") {
+      if (await resumable(env.DB, existing, now)) {
+        return markOnFailure(env.DB, existing.id, () => resumeReceived(existing.id, input, env, now, senderAllowed));
+      }
+      return toResult(existing);
     }
-    return toResult(existing);
+    const row = await noteResend(env.DB, existing, input, now);
+    return row.status === "capped" ? (await retryCapped(row, env, now)).result : toResult(row);
   }
 
   const id = crypto.randomUUID();
@@ -182,7 +191,7 @@ async function decideAndWrite(
   // Independent work in parallel: unpdf reads its own copy of the bytes.
   const { cv } = input;
   const [extracted, position] = await Promise.all([
-    cv && input.cvText === undefined ? extractCvText(cv) : null,
+    cv && input.cvText === undefined && input.cvNote === undefined ? extractCvText(cv) : null,
     findPosition(env.DB, input.tag),
   ]);
   const cvText = input.cvText ?? extracted?.text ?? undefined;
@@ -196,7 +205,7 @@ async function decideAndWrite(
     linkedRunId === null
       ? await decideAndStart(env, { id, position, candidate, senderAllowed }, now)
       : { status: "run-started" as const, runId: linkedRunId, note: null };
-  const note = joinNotes(decision.note, extracted?.note, ...candidate.notes, input.note);
+  const note = joinNotes(decision.note, extracted?.note ?? input.cvNote, ...candidate.notes, input.note);
 
   await env.DB.prepare(
     "UPDATE applications SET status = ?, run_id = ?, note = ?, linkedin_url = ?, cv_key = ?, cv_text = ? WHERE id = ?",
@@ -244,6 +253,29 @@ async function findExisting(db: D1Database, source: string, externalId: string):
     .first<ExistingRow>();
 }
 
+/** The note a resend with other details leaves; only the latest one is kept. */
+export const RESENT_PREFIX = "resent ";
+
+/**
+ * A repeat of a decided application that carries other details than the stored row: the first send stays what counts
+ * (the status cannot tell a stranger that this email already applied), but the row's note says what the later send
+ * carried, so the operator can act on it. Returns the row with its note as now stored.
+ */
+async function noteResend(db: D1Database, row: ExistingRow, input: IntakeInput, now: Date): Promise<ExistingRow> {
+  const profileUrl = candidateInput({ linkedinUrl: input.linkedinUrl }).profileUrl ?? input.linkedinUrl?.trim() ?? null;
+  const fileName = input.cv ? safeFilename(input.cv.filename) : null;
+  const differs =
+    (profileUrl ?? null) !== row.linkedin_url ||
+    (fileName !== null && row.cv_key !== null && row.cv_key.split("/").pop() !== fileName) ||
+    (input.cvText !== undefined && row.cv_text !== null && input.cvText !== row.cv_text);
+  if (!differs) return row;
+  const cv = fileName ?? (input.cvText !== undefined ? "pasted text" : "none");
+  const resent = `${RESENT_PREFIX}${now.toISOString().slice(0, 16)}Z with other details (LinkedIn ${profileUrl ?? "none"}, CV ${cv}), the first send is kept`;
+  const note = joinNotes(...(row.note?.split("; ").filter((n) => !n.startsWith(RESENT_PREFIX)) ?? []), resent);
+  await db.prepare("UPDATE applications SET note = ? WHERE id = ?").bind(note, row.id).run();
+  return { ...row, note };
+}
+
 function toResult(row: ExistingRow): IntakeResult {
   return { applicationId: row.id, status: row.status, runId: row.run_id, duplicate: true, note: row.note };
 }
@@ -281,11 +313,8 @@ async function ensureRunInstance(env: IntakeEnv, runId: string): Promise<void> {
  * check passed when the row was capped.
  */
 async function retryCapped(row: ExistingRow, env: IntakeEnv, now: Date): Promise<{ result: IntakeResult; decided: DecidedStatus }> {
-  const [position, stored] = await Promise.all([
-    findPosition(env.DB, row.tag),
-    env.DB.prepare("SELECT cv_text FROM applications WHERE id = ?").bind(row.id).first<{ cv_text: string | null }>(),
-  ]);
-  const candidate = { profileUrl: row.linkedin_url ?? undefined, cvText: stored?.cv_text ?? undefined };
+  const position = await findPosition(env.DB, row.tag);
+  const candidate = { profileUrl: row.linkedin_url ?? undefined, cvText: row.cv_text ?? undefined };
   const decision = await decideAndStart(env, { id: row.id, position, candidate, senderAllowed: true }, now);
   if (decision.status !== "run-started") return { result: toResult(row), decided: decision.status };
 
