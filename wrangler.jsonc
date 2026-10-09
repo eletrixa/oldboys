@@ -57,7 +57,7 @@
     "RUN_BUDGET_CALLS": "16",
     "CALL_PROVIDER": "elevenlabs",
     "CALL_BUDGET_USD": "0.50",
-    "RUN_CALL_MAX": "3",
+    "RUN_CALL_MAX": "5",
     "ELEVENLABS_AGENT_ID": "agent_5401m4etsexkfy5r4p1bam6zaqnz",
     "ELEVENLABS_PHONE_NUMBER_ID": "phnum_7601m4eyf5tbf3svv7pwpvggw3v5",
     "POSITION_INGEST_USD": "0.05",
