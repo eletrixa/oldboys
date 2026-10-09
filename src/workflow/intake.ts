@@ -13,12 +13,15 @@
  * - Decide the status (unknown tag / sender not allowed / incomplete / capped / run-started) and start the run in one
  *   tail (`decideAndStart`) shared by a new delivery, the re-decision of a capped duplicate and the resume of a row
  *   that a failed delivery left at 'received'
+ * - `retryCappedApplications`: the cron's queue pass, so a capped application starts its run once the hour has room
+ *   without anyone delivering it again
  *
  * Design constraints:
  * - The only writer of `applications` and the only intake path to startRun (specs/intake/00-overview.md rule 1)
- * - No transaction: a failure after the INSERT propagates and leaves the row 'received'; the next delivery of the same
- *   message resumes it once it is older than STALE_RECEIVED_MS (an in-flight delivery takes seconds), and links a run
- *   the failed attempt had already started instead of starting a second one
+ * - No transaction: a failure after the INSERT propagates and leaves the row 'received' marked DELIVERY_FAILED_NOTE;
+ *   the next delivery of the same message claims the mark and resumes it at once (a row without the mark may still be
+ *   in flight and is resumed only once older than STALE_RECEIVED_MS). A resume stores the CV like a first delivery
+ *   and links a run the failed attempt had already inserted (creating its Workflow instance if that was what threw)
  * - Never returns anything to a candidate; callers decide what leaves the Worker
  * - No Next.js imports (called from the Worker email handler)
  */
@@ -48,8 +51,16 @@ export type IntakeResult = {
   note: string | null;
 };
 
-/** A row still 'received' after this long is not in flight: the delivery that inserted it threw. */
+/** A row still 'received' after this long is not in flight: the delivery that inserted it died without a trace. */
 export const STALE_RECEIVED_MS = 5 * 60_000;
+
+/** The note a delivery leaves on its row when it threw after the INSERT; the next delivery resumes such a row at once. */
+export const DELIVERY_FAILED_NOTE = "delivery failed after it was stored; the next delivery resumes it";
+
+/** Capped rows the cron re-decides per tick, oldest first. */
+const QUEUE_BATCH = 20;
+
+const EXISTING_COLUMNS = "id, status, run_id, note, tag, linkedin_url, received_at";
 
 type ExistingRow = {
   id: string;
@@ -74,8 +85,10 @@ export async function ingestApplication(
 
   const existing = await findExisting(env.DB, input.source, input.externalId);
   if (existing) {
-    if (existing.status === "capped") return retryCapped(existing, env, now);
-    if (existing.status === "received" && isStale(existing, now)) return resumeReceived(existing.id, input, env, now, senderAllowed);
+    if (existing.status === "capped") return (await retryCapped(existing, env, now)).result;
+    if (existing.status === "received" && (await resumable(env.DB, existing, now))) {
+      return markOnFailure(env.DB, existing.id, () => resumeReceived(existing.id, input, env, now, senderAllowed));
+    }
     return toResult(existing);
   }
 
@@ -104,10 +117,59 @@ export async function ingestApplication(
     throw err;
   }
 
-  return decideAndWrite(id, input, env, now, senderAllowed, false);
+  return markOnFailure(env.DB, id, () => decideAndWrite(id, input, env, now, senderAllowed, false));
 }
 
-/** Everything after the INSERT: CV text, tag lookup, the file put, the decision, the row update. */
+/**
+ * The queue half of the hourly cap: re-decide the oldest `capped` rows (the cron calls this) and start their runs while
+ * the hour has room. Stops at the first row that is still capped; a row whose tag has gone since is skipped, not
+ * blocking the rest. Returns how many runs it started.
+ */
+export async function retryCappedApplications(env: IntakeEnv, now: Date): Promise<number> {
+  const { results } = await env.DB.prepare(`SELECT ${EXISTING_COLUMNS} FROM applications WHERE status = 'capped' ORDER BY received_at LIMIT ?`)
+    .bind(QUEUE_BATCH)
+    .all<ExistingRow>();
+  let started = 0;
+  for (const row of results) {
+    const { decided } = await retryCapped(row, env, now);
+    if (decided === "capped") break;
+    if (decided === "run-started") started += 1;
+  }
+  return started;
+}
+
+/** Run a delivery's work after its INSERT; when it throws, mark the row so the next delivery resumes it at once. */
+async function markOnFailure(db: D1Database, id: string, work: () => Promise<IntakeResult>): Promise<IntakeResult> {
+  try {
+    return await work();
+  } catch (err) {
+    // Best effort: when D1 itself is down the mark fails too, and the stale window still resumes the row later.
+    await db
+      .prepare("UPDATE applications SET note = ? WHERE id = ?")
+      .bind(DELIVERY_FAILED_NOTE, id)
+      .run()
+      .catch(() => undefined);
+    throw err;
+  }
+}
+
+/**
+ * Whether a duplicate delivery may resume a 'received' row: a row marked failed is claimed atomically (two retries
+ * racing get one winner; the loser answers like an in-flight duplicate), an unmarked one only after the stale window.
+ */
+async function resumable(db: D1Database, row: ExistingRow, now: Date): Promise<boolean> {
+  if (row.note !== DELIVERY_FAILED_NOTE) return isStale(row, now);
+  const claim = await db
+    .prepare("UPDATE applications SET note = NULL WHERE id = ? AND note = ?")
+    .bind(row.id, DELIVERY_FAILED_NOTE)
+    .run();
+  return claim.meta.changes === 1;
+}
+
+/**
+ * Everything after the INSERT: CV text, tag lookup, the file put, the decision, the row update. `linkedRunId` is a run
+ * a failed attempt had already inserted: it is linked as `run-started` and no second run starts.
+ */
 async function decideAndWrite(
   id: string,
   input: IntakeInput,
@@ -115,6 +177,7 @@ async function decideAndWrite(
   now: Date,
   senderAllowed: boolean,
   duplicate: boolean,
+  linkedRunId: string | null = null,
 ): Promise<IntakeResult> {
   // Independent work in parallel: unpdf reads its own copy of the bytes.
   const { cv } = input;
@@ -129,7 +192,10 @@ async function decideAndWrite(
   if (cv && cvKey !== null) await env.SOURCES.put(cvKey, cv.bytes, { httpMetadata: { contentType: cv.contentType } });
 
   const candidate = candidateInput({ linkedinUrl: input.linkedinUrl, cvText });
-  const decision = await decideAndStart(env, { id, position, candidate, senderAllowed }, now);
+  const decision =
+    linkedRunId === null
+      ? await decideAndStart(env, { id, position, candidate, senderAllowed }, now)
+      : { status: "run-started" as const, runId: linkedRunId, note: null };
   const note = joinNotes(decision.note, extracted?.note, ...candidate.notes, input.note);
 
   await env.DB.prepare(
@@ -173,7 +239,7 @@ async function findPosition(db: D1Database, rawTag: string | null | undefined): 
 
 async function findExisting(db: D1Database, source: string, externalId: string): Promise<ExistingRow | null> {
   return db
-    .prepare("SELECT id, status, run_id, note, tag, linkedin_url, received_at FROM applications WHERE source = ? AND external_id = ?")
+    .prepare(`SELECT ${EXISTING_COLUMNS} FROM applications WHERE source = ? AND external_id = ?`)
     .bind(source, externalId)
     .first<ExistingRow>();
 }
@@ -188,16 +254,24 @@ function isStale(row: ExistingRow, now: Date): boolean {
 
 /**
  * A row left at 'received' is a delivery that threw after its INSERT (R2, D1 or the Workflow create). The next
- * delivery of the same message runs the same tail from its own payload, so the operator only has to re-send the
- * source. When the failed attempt had already started the run (the throw came after startRun's INSERT), that run is
- * linked and no second one starts.
+ * delivery of the same message runs the same tail from its own payload (CV file and text stored like a first
+ * delivery), so the candidate or operator only has to send it again. When the failed attempt had already inserted the
+ * run (the throw came after startRun's INSERT), that run is linked, its Workflow instance created if the create was
+ * what threw, and no second run starts.
  */
 async function resumeReceived(id: string, input: IntakeInput, env: IntakeEnv, now: Date, senderAllowed: boolean): Promise<IntakeResult> {
   const run = await env.DB.prepare("SELECT id FROM investigations WHERE application_id = ?").bind(id).first<{ id: string }>();
-  if (run === null) return decideAndWrite(id, input, env, now, senderAllowed, true);
+  if (run !== null) await ensureRunInstance(env, run.id);
+  return decideAndWrite(id, input, env, now, senderAllowed, true, run?.id ?? null);
+}
 
-  await env.DB.prepare("UPDATE applications SET status = ?, run_id = ? WHERE id = ?").bind("run-started", run.id, id).run();
-  return { applicationId: id, status: "run-started", runId: run.id, duplicate: true, note: null };
+/** `get` throws for an instance that does not exist; then the create that failed the first time is repeated. */
+async function ensureRunInstance(env: IntakeEnv, runId: string): Promise<void> {
+  try {
+    await env.RESEARCH_RUN.get(runId);
+  } catch {
+    await env.RESEARCH_RUN.create({ id: runId, params: { runId } });
+  }
 }
 
 /**
@@ -206,20 +280,20 @@ async function resumeReceived(id: string, input: IntakeInput, env: IntakeEnv, no
  * (parser and subject notes included, only the cap note goes), and is only written when the run starts. The sender
  * check passed when the row was capped.
  */
-async function retryCapped(row: ExistingRow, env: IntakeEnv, now: Date): Promise<IntakeResult> {
+async function retryCapped(row: ExistingRow, env: IntakeEnv, now: Date): Promise<{ result: IntakeResult; decided: DecidedStatus }> {
   const [position, stored] = await Promise.all([
     findPosition(env.DB, row.tag),
     env.DB.prepare("SELECT cv_text FROM applications WHERE id = ?").bind(row.id).first<{ cv_text: string | null }>(),
   ]);
   const candidate = { profileUrl: row.linkedin_url ?? undefined, cvText: stored?.cv_text ?? undefined };
   const decision = await decideAndStart(env, { id: row.id, position, candidate, senderAllowed: true }, now);
-  if (decision.status !== "run-started") return toResult(row);
+  if (decision.status !== "run-started") return { result: toResult(row), decided: decision.status };
 
   const note = joinNotes(decision.note, ...(row.note?.split("; ").filter((n) => n !== CAPPED_NOTE) ?? []));
   await env.DB.prepare("UPDATE applications SET status = ?, run_id = ?, note = ? WHERE id = ?")
     .bind(decision.status, decision.runId, note, row.id)
     .run();
-  return { applicationId: row.id, status: decision.status, runId: decision.runId, duplicate: true, note };
+  return { result: { applicationId: row.id, status: decision.status, runId: decision.runId, duplicate: true, note }, decided: decision.status };
 }
 
 function isUniqueViolation(err: unknown): boolean {

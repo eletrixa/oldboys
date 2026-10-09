@@ -7,7 +7,8 @@
  * Tested:  src/app/api/intake/tags/__tests__/tag-body.test.ts
  *
  * Key responsibilities:
- * - TagBody: {tag, role 1..300, goal hiring only (default), startupjobsOfferId? <= 40}; the tag is trimmed and lowercased, then checked against IntakeTag
+ * - TagBody: {tag, role 1..300, goal hiring only (default), company? 1..200 (the employer the apply page names),
+ *   startupjobsOfferId? <= 40}; the tag is trimmed and lowercased, then checked against IntakeTag
  * - duplicateField: which unique column (tag primary key or startupjobs_offer_id index) a D1 error names, else null
  *
  * Design constraints:
@@ -23,6 +24,8 @@ export const TagBody = z.object({
   goal: z
     .literal("hiring", { error: "intake tags are hiring-only: a due-diligence run needs subject and anchor, which an application does not carry" })
     .default("hiring"),
+  /** The employer as the candidate knows it; the apply page shows it in the title, under the heading and in the privacy line. */
+  company: z.string().trim().min(1).max(200).optional(),
   startupjobsOfferId: z.string().trim().min(1).max(40).optional(),
 });
 export type TagBody = z.infer<typeof TagBody>;

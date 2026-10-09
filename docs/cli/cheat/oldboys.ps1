@@ -66,6 +66,8 @@ function global:cheatoldboys {
     Write-Host "Bearer token required by POST /api/runs" -ForegroundColor White
     Write-Host "    cron 0 3 * * *                         " -NoNewline -ForegroundColor Green
     Write-Host "Nightly purge of expired raw sources (src/workflow/purge.ts)" -ForegroundColor White
+    Write-Host "    cron */15 * * * *                      " -NoNewline -ForegroundColor Green
+    Write-Host "Start runs for capped intake applications (src/workflow/intake.ts)" -ForegroundColor White
     Write-Host "    wrangler secret put ELEVENLABS_API_KEY " -NoNewline -ForegroundColor Green
     Write-Host "ElevenLabs API key (verification calls)" -ForegroundColor White
     Write-Host "    wrangler secret put ELEVENLABS_WEBHOOK_SECRET " -NoNewline -ForegroundColor Green

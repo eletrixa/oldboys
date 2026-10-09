@@ -8,7 +8,7 @@
  *
  * Key responsibilities:
  * - GET: all intake_tags rows newest first -> { tags }
- * - POST {tag, role, goal?, startupjobsOfferId?}: 201 with the stored tag, 400 invalid body, 409 when the tag or the StartupJobs offer id exists
+ * - POST {tag, role, goal?, company?, startupjobsOfferId?}: 201 with the stored tag, 400 invalid body, 409 when the tag or the StartupJobs offer id exists
  * - Bearer auth against RUN_TOKEN on both methods
  *
  * Design constraints:
@@ -22,7 +22,7 @@ import { parseJsonBody } from "@/app/api/_lib/body";
 import type { TagRow } from "@/app/intake/intake-rows";
 import { duplicateField, TagBody } from "./tag-body";
 
-const COLUMNS = "tag, role, goal, startupjobs_offer_id, created_at";
+const COLUMNS = "tag, role, goal, company, startupjobs_offer_id, created_at";
 
 export async function GET(request: Request): Promise<Response> {
   const { env } = getCloudflareContext();
@@ -40,18 +40,19 @@ export async function POST(request: Request): Promise<Response> {
 
   const body = await parseJsonBody(request, TagBody);
   if (body.error) return body.error;
-  const { tag, role, goal, startupjobsOfferId } = body.data;
+  const { tag, role, goal, company, startupjobsOfferId } = body.data;
 
   const created: TagRow = {
     tag,
     role,
     goal,
+    company: company ?? null,
     startupjobs_offer_id: startupjobsOfferId ?? null,
     created_at: new Date().toISOString(),
   };
   try {
-    await env.DB.prepare(`INSERT INTO intake_tags (${COLUMNS}) VALUES (?, ?, ?, ?, ?)`)
-      .bind(created.tag, created.role, created.goal, created.startupjobs_offer_id, created.created_at)
+    await env.DB.prepare(`INSERT INTO intake_tags (${COLUMNS}) VALUES (?, ?, ?, ?, ?, ?)`)
+      .bind(created.tag, created.role, created.goal, created.company, created.startupjobs_offer_id, created.created_at)
       .run();
   } catch (err) {
     const field = duplicateField(err);

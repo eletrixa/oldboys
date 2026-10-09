@@ -36,7 +36,7 @@ export type ApplicationListRow = {
 };
 
 /** One intake_tags row as GET /api/intake/tags returns it. */
-export type TagRow = { tag: string; role: string; goal: GoalId; startupjobs_offer_id: string | null; created_at: string };
+export type TagRow = { tag: string; role: string; goal: GoalId; company: string | null; startupjobs_offer_id: string | null; created_at: string };
 
 export type StatusTone = "ok" | "unsure" | "conflict" | "neutral";
 

@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/domain/email-intake.ts
- * Deps:    src/domain/application, src/domain/cv-text (isPdf), src/domain/profile-url, src/domain/html-text
+ * Deps:    src/domain/application, src/domain/cv-kind (isPdf), src/domain/profile-url, src/domain/html-text
  * Tested:  src/domain/__tests__/email-intake.test.ts
  *
  * Key responsibilities:
@@ -18,7 +18,7 @@
  * - Regexes stay linear in the body size (a mail reaches 10 MiB)
  */
 import { COVER_LETTER_MAX, IntakeInput, NAME_MAX, NOTE_MAX, toCvFile, type CvFile } from "./application";
-import { isPdf } from "./cv-text";
+import { isPdf } from "./cv-kind";
 import { htmlToText } from "./html-text";
 import { normalizeLinkedinProfile } from "./profile-url";
 
