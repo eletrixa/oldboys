@@ -82,9 +82,9 @@ describe("ProfileSections", () => {
     expect(out).toContain("from 1 source");
     expect(out).toContain("closes: <span class=\"text-ink\">Short tenures</span>");
     expect(out).toContain("Read only from their own posts, articles and interview answers, never an assessment of the person.");
-    expect(out).toMatch(/>DISC<\/dt><dd class="text-muted"><span class="text-ink">C<\/span>/);
+    expect(out).toMatch(/>DISC<\/dt><dd class="text-muted"><span class="font-medium text-ink">C<\/span>/);
     expect(out).not.toContain("DISC C");
-    expect(out.indexOf("Our read")).toBeLessThan(out.indexOf(">DISC<"));
+    expect(out.indexOf(">DISC<")).toBeLessThan(out.indexOf("Our read"));
     expect(out).toContain("No supporting quote kept");
     expect(out).toContain("· low confidence");
     expect(out).toContain("How the % is computed");

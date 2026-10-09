@@ -40,8 +40,13 @@ export type ReportText = { id: string; text: string };
 /** Ledger step of the translation call; its time is not research time (src/domain/run-cost.ts). */
 export const TRANSLATE_STEP = "translate";
 
-/** Most one translation may cost (USD), all batches together; a brief whose estimate is higher is not translated. */
-export const TRANSLATE_BUDGET_USD = 0.12;
+/**
+ * Most one translation may cost (USD), all batches together; a brief whose estimate is higher is not translated.
+ * Briefs since the plan 013 depth steps run 135–175 texts and 12–14k English characters: measured $0.25–0.29 on
+ * 2026-10-09, estimate $0.30–0.34 with the calibrated OUT_FACTOR; the cap leaves ~1.5x headroom over the longest one
+ * seen while a runaway brief is still refused.
+ */
+export const TRANSLATE_BUDGET_USD = 0.5;
 
 /**
  * One batch holds at most this many English characters and texts (about 1.5k Czech output tokens with ids and JSON,
@@ -57,8 +62,12 @@ const IN_USD = 2 / 1_000_000;
 const OUT_USD = 10 / 1_000_000;
 /** JSON framing of one call, in tokens; the system prompt is counted from its length (prompt grows, estimate grows). */
 const FRAME_TOKENS = 150;
-/** Czech output plus ids and JSON costs about this many tokens per English input token. */
-const OUT_FACTOR = 2.5;
+/**
+ * Czech output plus ids and JSON costs about this many tokens per English input token. Calibrated on three production
+ * briefs (2026-10-09): with 2.5 the estimate was 1.8–2.4x under the billed cost (Czech with diacritics tokenises at about
+ * two characters a token, and every id is repeated in the JSON); 8 puts the estimate 1.0–1.3x above all three.
+ */
+const OUT_FACTOR = 8;
 
 export const TranslateBody = z.object({ lang: z.literal("cs") });
 

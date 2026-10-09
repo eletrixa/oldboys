@@ -4,7 +4,7 @@
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/adapters/d1.ts
  * Deps:    D1Database, R2Bucket (bindings), zod, src/domain/cv-check, src/domain/role-catalog (role_templates rows), src/domain/position (roleFamilyOf)
- * Tested:  n/a (Workers bindings; exercised by `pnpm preview` runs)
+ * Tested:  src/adapters/__tests__/d1-source-store.test.ts (makeSourceStore); the rest n/a (Workers bindings; exercised by `pnpm preview` runs)
  *
  * Key responsibilities:
  * - `loadContext` rebuilds StepContext from D1 before every step (Workflow steps are stateless); questions = recipe
@@ -12,7 +12,8 @@
  *   synthesize see the CV question only on CV runs
  * - `persistOutcome` writes sources/candidates/claims/gaps/brief; claims_mode=replace rewrites the run's claims
  * - Raw payloads go to R2 under `<run>/<source>.json`; D1 keeps only the excerpt; `makeSourceStore` skips a url another
- *   step of the run already stored (collectors after the lineup run in parallel, the runner's dedup sees only earlier steps)
+ *   step of the run already stored (collectors after the lineup run in parallel, the runner's dedup sees only earlier steps);
+ *   for an enriching collector only the same actor's row blocks, so a second read by another provider is a second row
  * - `applySourceIdentity` re-marks sources after the lineup (merged / unverified by profile key, then name + employer
  *   corroboration with identity_reason; subject from investigations, employer/headline from the seed_profile ledger rows)
  *
@@ -64,18 +65,23 @@ export function makeLedgerAppend(db: D1Database): LedgerAppend {
 }
 
 export function makeSourceStore(db: D1Database, bucket: R2Bucket): SourceStore {
-  return async (source, raw) => {
+  return async (source, raw, opts) => {
     const r2_key = `${source.run_id}/${source.id}.json`;
     await bucket.put(r2_key, JSON.stringify(raw), { httpMetadata: { contentType: "application/json" } });
     const full = Source.parse({ ...source, r2_key });
+    // Steps after the lineup run in parallel and each dedups only against the sources persisted before it started:
+    // the same page stored by another step of this run wins, a retry of the same row (same id) still upserts.
+    // An enriching collector (second read of a page by another provider) is blocked only by its own actor's earlier row.
+    const enriches = opts?.enriches === true;
     await db
       .prepare(
-        // Steps after the lineup run in parallel and each dedups only against the sources persisted before it started:
-        // the same page stored by another step of this run wins, a retry of the same row (same id) still upserts.
         `INSERT OR REPLACE INTO sources (id, run_id, url, actor, fetched_at, excerpt, r2_key, expires_at, identity)
-         SELECT ?, ?, ?, ?, ?, ?, ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM sources WHERE run_id = ? AND url = ? AND id <> ?)`,
+         SELECT ?, ?, ?, ?, ?, ?, ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM sources WHERE run_id = ? AND url = ? AND id <> ?${enriches ? " AND actor = ?" : ""})`,
       )
-      .bind(full.id, full.run_id, full.url, full.actor, full.fetched_at, full.excerpt, full.r2_key, full.expires_at, full.identity, full.run_id, full.url, full.id)
+      .bind(
+        full.id, full.run_id, full.url, full.actor, full.fetched_at, full.excerpt, full.r2_key, full.expires_at, full.identity,
+        full.run_id, full.url, full.id, ...(enriches ? [full.actor] : []),
+      )
       .run();
     return full;
   };

@@ -55,8 +55,11 @@ export type LlmCall = <T>(input: {
 /** Append one ledger row; the store assigns seq and ts and returns the stored entry. */
 export type LedgerAppend = (entry: Omit<LedgerEntry, "seq" | "ts">) => Promise<LedgerEntry>;
 
-/** Persist a source's raw payload (R2) and its metadata row; returns the stored Source. */
-export type SourceStore = (source: Omit<Source, "r2_key">, raw: unknown) => Promise<Source>;
+/**
+ * Persist a source's raw payload (R2) and its metadata row; returns the stored Source. A url another step of the run already
+ * stored is skipped, unless `enriches` (a second read of the same page by another actor is a second Source).
+ */
+export type SourceStore = (source: Omit<Source, "r2_key">, raw: unknown, opts?: { enriches?: boolean }) => Promise<Source>;
 
 /**
  * Place one outbound verification call. Called exactly once per approved call, from a request

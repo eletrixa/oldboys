@@ -7,6 +7,7 @@
  * Tested:  n/a (this is the test)
  */
 import { describe, expect, it } from "vitest";
+import type { Ports } from "@/domain/ports";
 import { collectWith, executeStep } from "@/recipe/runner";
 import type { Collector } from "@/recipe/sources/types";
 import type { Step } from "@/recipe/step";
@@ -88,6 +89,17 @@ describe("executeStep collection", () => {
     const out = await collectWith(collector, { id: "ig", kind: "actor", actor: "fake/profile" }, earlier, fakePorts({ callActor: () => Promise.resolve({ items: [{}], cost_usd: 0 }) }));
     expect(out.sources.map((s) => s.excerpt)).toEqual(["Bio: data\nPost 1: hello"]);
     expect(out.notes).toContain("1 hits already in the run");
+  });
+
+  it("tells the store an enriching collector's page may sit beside the same URL from another actor", async () => {
+    const seen: (boolean | undefined)[] = [];
+    const storeSource: Ports["storeSource"] = (s, _raw, opts) => { seen.push(opts?.enriches); return Promise.resolve({ ...s, r2_key: "k" }); };
+    const parse = () => [{ url: "https://www.instagram.com/jana/", excerpt: "x", raw: {} }];
+    const req = () => [{ via: "actor" as const, actor: "fake", input: {}, maxTotalChargeUsd: 0.01, timeoutSecs: 10 }];
+    const ports = fakePorts({ storeSource, callActor: () => Promise.resolve({ items: [{}], cost_usd: 0 }) });
+    await collectWith({ id: "fake/profile", enriches: true, requests: req, parse }, { id: "a", kind: "actor", actor: "fake/profile" }, baseContext(), ports);
+    await collectWith({ id: "fake/search", requests: req, parse }, { id: "b", kind: "actor", actor: "fake/search" }, baseContext(), ports);
+    expect(seen).toEqual([true, false]);
   });
 
   it("lets the collector name why it made no request (skipReason)", async () => {

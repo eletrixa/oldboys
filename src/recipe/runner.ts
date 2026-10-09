@@ -8,6 +8,7 @@
  *
  * Key responsibilities:
  * - serp/actor/ares steps: collector.requests -> ports (callActor | fetchJson | callTreg) -> collector.parse -> ports.storeSource
+ *   (an `enriches` collector tells the store its page may sit beside the same URL stored by another actor)
  * - resolve/extract/verify/synthesize: delegate to the LLM seams
  * - A collector whose sources an earlier step already fetched (`alreadyFetched`) and that has nothing new to request
  *   returns those sources, not empty, with the note "already fetched at seed" and no request
@@ -183,7 +184,7 @@ export async function collectWith(collector: Collector, step: Step, ctx: StepCon
       while (next < fresh.length) {
         const i = next++;
         const f = fresh[i];
-        if (f) stored[i] = await ports.storeSource(f.source, f.raw);
+        if (f) stored[i] = await ports.storeSource(f.source, f.raw, { enriches: collector.enriches === true });
       }
     };
     await Promise.all(Array.from({ length: Math.min(FETCH_CONCURRENCY, fresh.length) }, worker));

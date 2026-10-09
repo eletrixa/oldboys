@@ -52,7 +52,7 @@ export type Signal = {
 export type ProfileSignals = {
   /** Sentences worth reading, salient first (asks before context). */
   signals: Signal[];
-  /** "LinkedIn does not publish the account creation date without login." and platforms with no facts. */
+  /** "LinkedIn does not publish the account creation date without login." (unless a reading has the month) and platforms with no facts. */
   not_checked: string[];
   /** Platforms whose facts were read (for the card's "checked" line). */
   checked: string[];
@@ -201,7 +201,8 @@ export function profileSignals(input: ProfileSignalsInput): ProfileSignals {
   }
 
   const checked = [...new Set(facts.map((f) => f.platform))];
-  const not_checked = [LINKEDIN_CREATION_NOTE];
+  // A second read (treg) can carry the LinkedIn creation month; the note holds only while no reading has it.
+  const not_checked = facts.some((f) => f.platform === "linkedin" && f.created_at !== null) ? [] : [LINKEDIN_CREATION_NOTE];
   for (const p of FACT_PLATFORMS) {
     if (!checked.includes(p) && merged.some((c) => c.platform === p)) not_checked.push(`${label(p)}: account details were not read on this run.`);
   }

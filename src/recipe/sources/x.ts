@@ -7,7 +7,8 @@
  * Tested:  src/recipe/__tests__/sources-audience.test.ts
  *
  * Key responsibilities:
- * - Request latest tweets for a candidate with platform x and a handle; one Source per tweet plus one author profile Source
+ * - Request the latest 40 tweets for a candidate with platform x and a handle (retweets included, so a feed of mostly
+ *   reposts still yields some own tweets); one Source per tweet plus one author profile Source
  * - `digest`: merged authors' ProfileFacts (followers, following, created_at, bio, verified, photo), one per handle
  *
  * Design constraints:
@@ -49,7 +50,7 @@ export const x: Collector = {
       {
         via: "actor",
         actor: "apidojo/tweet-scraper",
-        input: { twitterHandles: [handle], maxItems: 20, sort: "Latest" },
+        input: { twitterHandles: [handle], maxItems: 40, sort: "Latest" },
         maxTotalChargeUsd: 0.03,
         timeoutSecs: 90,
       },

@@ -191,6 +191,12 @@ describe("profileSignals", () => {
     expect(r.checked).toEqual(["x", "linkedin"]);
   });
 
+  it("drops the LinkedIn creation note once a second read gave the creation month", () => {
+    const r = run({ facts: [facts("linkedin", { created_at: "2013-04", connections: 400, earliest_experience_year: 2012, verified: null })] });
+    expect(r.not_checked).toEqual([]);
+    expect(r.signals).toEqual([]);
+  });
+
   it("puts signals with an ask before context, stable by rule order", () => {
     const r = run({
       facts: [facts("linkedin", { verified: true }), facts("x", { created_at: "2026-09-01", followers: 1, following: 800 })],
