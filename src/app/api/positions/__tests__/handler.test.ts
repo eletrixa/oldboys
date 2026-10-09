@@ -166,7 +166,7 @@ describe("positions functions", () => {
   it("getPosition names steps without an actor in plain words, never by their recipe id", async () => {
     const runs = [
       { id: "r1", position_id: "p1", subject: "", status: "running", created_at: "2026-10-09T10:00:00.000Z", last_step: null, last_at: "2099-01-01T00:00:00.000Z" },
-      { id: "r2", position_id: "p1", subject: "Bo", status: "running", created_at: "2026-10-09T11:00:00.000Z", last_step: "press_serp", last_at: "2099-01-01T00:00:00.000Z" },
+      { id: "r2", position_id: "p1", subject: "Bo", status: "running", created_at: "2026-10-09T11:00:00.000Z", last_step: "read_pages", last_at: "2099-01-01T00:00:00.000Z" },
     ];
     const apps = [
       { id: "a1", position_id: "p1", source: "manual", status: "run-started", run_id: "r1", received_at: "2026-10-08T10:00:00.000Z", linkedin_url: "https://www.linkedin.com/in/ada" },

@@ -242,6 +242,14 @@ export const GAP_LABEL: Record<string, string> = {
   github_deep: "GitHub contributions",
   github_apify: "GitHub profile page",
   cz_registries: "Czech public registries",
+  sec_edgar: "SEC EDGAR filings",
+  wikipedia: "Wikipedia",
+  podcast_episodes: "Podcast episodes",
+  regulatory_serp: "Regulatory and market search",
+  legal_serp: "Court and enforcement search",
+  business_press_serp: "Business press search",
+  boards_serp: "Board and founder search",
+  read_pages: "Page reading",
 };
 
 type Gap = Brief["not_searched"][number];
