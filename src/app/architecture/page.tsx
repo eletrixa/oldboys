@@ -46,7 +46,7 @@ const SECTIONS: { id: string; title: string; body: string[] }[] = [
     id: "ai",
     title: "Where AI is used, and how it is checked",
     body: [
-      "Models run only in fixed steps. Claude Opus reads the profile or CV, extracts claims and writes the brief. Claude Sonnet verifies the claims and plays devil's advocate.",
+      "Models run only in fixed steps. Claude Opus reads the profile or CV, extracts claims, writes the brief and, when the recruiter opens the call setup, drafts the verification call questions. Claude Sonnet verifies the claims and plays devil's advocate.",
       "A claim is a FACT only when its quote is found in the saved source text. The second model and the devil's advocate may only weaken a claim, never strengthen it.",
       "If the AI is unavailable, the brief lists only confirmed evidence and is marked NO AI.",
     ],
@@ -55,7 +55,7 @@ const SECTIONS: { id: string; title: string; body: string[] }[] = [
     id: "call",
     title: "Verification call",
     body: [
-      "The recruiter enters the number, records the candidate's consent and approves the call. An ElevenLabs voice agent makes it.",
+      "Claude Opus drafts 3 to 5 specific questions from the confirmed research, each with one follow-up and what a useful answer contains; a code filter drops sensitive topics, and if the AI fails the rule-based questions are used. The recruiter edits them, enters the number, records the candidate's consent and approves the call. An ElevenLabs voice agent makes it.",
       "VerificationCallWorkflow waits for the webhook with the result. Answers are stored as STATEMENT claims (said by the candidate), never as FACT.",
     ],
   },

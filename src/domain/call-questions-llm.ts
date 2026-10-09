@@ -10,8 +10,8 @@
  * Key responsibilities:
  * - drafterInput: the only research the model sees: role, must-haves with coverage and summary, to_verify (CV differences
  *   first, as the brief writes them), contradicted or low-confidence claim texts, profile risks / history / position fit
- *   gaps / profile questions, and plain "no … found" gaps; never personality, also_found, quotes with URLs, e-mails,
- *   tool errors or budget notes
+ *   gaps / profile questions, and plain "no … found" gaps; never personality, also_found, evidence quotes, URLs, e-mails,
+ *   tool or model errors, budget notes or bracketed pipeline annotations (a text carrying one is left out)
  * - draftPrompt + DraftOutput: one `primary`-model call; 3–5 spoken questions, each with why, listen_for, follow_up and
  *   the id it closes
  * - safeQuestions: deterministic safety after the model: one line, length caps, Art. 9 and off-limits topics dropped
@@ -39,7 +39,7 @@ import { failedCallCost } from "./report-translation";
 import type { Question } from "@/recipe/step";
 
 export const CALL_QUESTIONS_STEP = "call:questions";
-export const PROMPT_VERSION = "call-questions-v1";
+export const PROMPT_VERSION = "call-questions-v2";
 export const DRAFT_TIMEOUT_MS = 60_000;
 /** Output cap of the draft call: five questions with notes fit in ~1.5k tokens, the rest is room for thinking. */
 export const DRAFT_MAX_OUTPUT_TOKENS = 6000;
@@ -77,14 +77,19 @@ const URL_OR_EMAIL = /https?:\/\/|www\.|[\w.%+-]+@[a-z\d.-]+\.[a-z]{2,}/i;
 const OFF_LIMITS =
   /\b(salary|salaries|wage|wages|pay rise|compensation|how old|your age|married|marriage|spouse|children|kids|family|pregnan\w*|other candidates?|hiring decision|personality|emotion\w*|feel about yourself)\b/i;
 
+/** Tool or model notes ("summary model failed … 529 overloaded", budget, HTTP codes): internal, never research. */
+const TOOL_NOTE = /(AI summary unavailable|summary model|model (failed|unavailable)|overloaded|request failed|not searched|run budget|budget (reached|exceeded)|HTTP \d{3}|timed out|fallback)/i;
+/** Internal annotations the pipeline appends in brackets ("[names aliases of one organisation: A | B]"). */
+const BRACKET_NOTE = /\s*\[[^\]]*\]/g;
+
 function line(text: string, max: number): string {
   return text.replace(/\s+/g, " ").trim().slice(0, max).trim();
 }
 
-/** A text safe to show the model: one line, capped, no URL or e-mail, no Art. 9 topic. */
+/** A text safe to show the model: one line, capped, no bracket notes, URL, e-mail, tool note or Art. 9 topic. */
 function clean(text: string, max: number): string | null {
-  const t = line(text, max);
-  return t === "" || URL_OR_EMAIL.test(t) || containsArt9Topic(t) ? null : t;
+  const t = line(text.replace(BRACKET_NOTE, ""), max);
+  return t === "" || URL_OR_EMAIL.test(t) || TOOL_NOTE.test(t) || containsArt9Topic(t) ? null : t;
 }
 
 function plainNothingFound(reason: string): boolean {
@@ -118,11 +123,18 @@ export function drafterInput(inputs: DraftInputs): DrafterInput {
     const text = clean(t, 300);
     return text === null ? null : { id: `tv-${String(i + 1)}`, text };
   }));
-  const weak_claims = nonNull(
-    inputs.claims
-      .filter((c) => c.kind !== "STATEMENT" && (c.confidence < 0.6 || c.contradicts.length > 0))
-      .map((c) => clean(c.text, 300)),
-  ).slice(0, 10);
+  const verifying = new Set(to_verify.map((t) => t.text));
+  const weak_claims = [
+    ...new Set(
+      nonNull(
+        inputs.claims
+          .filter((c) => c.kind !== "STATEMENT" && (c.confidence < 0.6 || c.contradicts.length > 0))
+          .map((c) => clean(c.text, 300)),
+      ),
+    ),
+  ]
+    .filter((t) => !verifying.has(t))
+    .slice(0, 10);
   const profile = brief?.profile ?? null;
   const risks = nonNull((profile?.risks ?? []).map((r) => clean(r.detail === "" ? r.text : `${r.text}: ${r.detail}`, 300))).slice(0, 8);
   const history = nonNull(

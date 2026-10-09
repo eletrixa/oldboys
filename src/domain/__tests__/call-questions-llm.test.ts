@@ -139,6 +139,21 @@ describe("drafterInput", () => {
     }
   });
 
+  it("leaves out model failure notes and bracketed pipeline annotations, and a weak claim already in to_verify", () => {
+    const input = drafterInput({
+      ...inputs,
+      brief: { ...brief, per_question: [{ question_id: "mh-spark", coverage: "none", claim_ids: [], summary: "AI summary unavailable: summary model failed (recorded 529 overloaded)." }] },
+      claims: [
+        { ...weak, text: "LinkedIn names the employer Kontejnerka while GitHub names Plechovka. [names aliases of one organisation: Kontejnerka | Plechovka]" },
+        { ...weak, id: "c3", text: "LinkedIn and the CV give different start dates at Acme (2019 vs 2020)." },
+      ],
+    });
+    expect(input.must_haves).toEqual([{ id: "mh-spark", must_have: "Spark at scale", coverage: "none", found: "" }]);
+    expect(input.weak_claims).toEqual(["LinkedIn names the employer Kontejnerka while GitHub names Plechovka."]);
+    const plain = drafterInput({ ...inputs, claims: [{ ...weak, text: "Triaged feature requests after a failed launch." }] });
+    expect(plain.weak_claims).toEqual(["Triaged feature requests after a failed launch."]);
+  });
+
   it("drops an Art. 9 or URL text from the input", () => {
     const input = drafterInput({ ...inputs, brief: { ...brief, to_verify: ["Took medical leave in 2021.", "Writes at https://blog.example.org", "Worked at Acme."] } });
     expect(input.to_verify).toEqual([{ id: "tv-3", text: "Worked at Acme." }]);
