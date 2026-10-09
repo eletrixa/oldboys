@@ -21,9 +21,9 @@
  */
 import { z } from "zod";
 import type { Source } from "@/domain/claim";
-import { clipBio, emptyFacts, experienceYear, type ProfileFacts } from "@/domain/profile-facts";
+import { clipBio, count, experienceYear, facts, type ProfileFacts } from "@/domain/profile-facts";
 import { normalizeLinkedinProfile } from "@/domain/profile-url";
-import { count, digestOf } from "@/recipe/sources/facts";
+import { digestOf } from "@/recipe/sources/facts";
 import { lines, txt } from "@/recipe/sources/text";
 import type { Collector, CollectorRequest, StepContext } from "@/recipe/sources/types";
 import { clip, identityFor } from "@/recipe/sources/types";
@@ -73,18 +73,18 @@ export type HarvestProfile = z.infer<typeof HarvestProfile>;
 
 /** The public numbers and flags of one harvestapi profile (the seed seam and the linkedin_profile digest share it). */
 export function harvestFacts(p: HarvestProfile): ProfileFacts {
-  const f = emptyFacts("linkedin", p.linkedinUrl, p.linkedinUrl);
-  f.handle = /\/in\/([^/?#]+)/.exec(p.linkedinUrl)?.[1] ?? null;
-  f.display_name = [p.firstName, p.lastName].filter(Boolean).join(" ") || null;
-  f.bio = clipBio(p.headline);
-  f.connections = count(p.connectionsCount);
-  f.followers = count(p.followerCount);
-  f.verified = p.verified ?? null;
-  f.premium = p.premium ?? null;
-  f.open_to_work = p.openToWork ?? null;
-  f.photo_url = p.photo ?? null;
-  f.earliest_experience_year = experienceYear(p.experience.map((e) => e.startDate));
-  return f;
+  return facts("linkedin", p.linkedinUrl, {
+    handle: /\/in\/([^/?#]+)/.exec(p.linkedinUrl)?.[1] ?? null,
+    display_name: [p.firstName, p.lastName].filter(Boolean).join(" ") || null,
+    bio: clipBio(p.headline),
+    connections: count(p.connectionsCount),
+    followers: count(p.followerCount),
+    verified: p.verified ?? null,
+    premium: p.premium ?? null,
+    open_to_work: p.openToWork ?? null,
+    photo_url: p.photo ?? null,
+    earliest_experience_year: experienceYear(p.experience.map((e) => e.startDate)),
+  });
 }
 
 function expLine(title: unknown, company: unknown, start: unknown, end: unknown): string {
@@ -135,11 +135,15 @@ export type HarvestParsed = {
   employer: string;
 };
 
-/** Lenient parse of harvestapi items into excerpt plus the identity fields the seed step needs. */
-export function harvestProfiles(payload: unknown): HarvestParsed[] {
+/** Lenient parse of harvestapi items; [] when the payload is not a profile list. */
+export function harvestRaw(payload: unknown): HarvestProfile[] {
   const items = z.array(HarvestProfile).safeParse(payload);
-  if (!items.success) return [];
-  return items.data.map((p) => {
+  return items.success ? items.data : [];
+}
+
+/** harvestapi items as excerpt plus the identity fields the seed step needs. */
+export function harvestProfiles(payload: unknown): HarvestParsed[] {
+  return harvestRaw(payload).map((p) => {
     const name = [p.firstName, p.lastName].filter(Boolean).join(" ");
     const cur = p.experience[0];
     const current = cur ? `Current: ${expLine(cur.position ?? cur.title, cur.companyName, "", "")}` : "";
@@ -168,12 +172,14 @@ export const linkedinProfile: Collector = {
   },
   alreadyFetched: fetchedSources,
   parse: (payload, ctx) => harvestProfiles(payload).map((p) => ({ url: p.url, excerpt: p.excerpt, raw: p.raw, identity: identityFor(ctx, p.url) })),
-  digest: (fetched, ctx) => factsOf(fetched.map((f) => f.payload), ctx),
+  digest: (fetched, ctx) =>
+    digestOf(
+      fetched
+        .flatMap((f) => harvestRaw(f.payload))
+        .filter((p) => identityFor(ctx, p.linkedinUrl) === "merged")
+        .map(harvestFacts),
+    ),
 };
-
-export function factsOf(payloads: readonly unknown[], ctx: StepContext): ProfileFacts[] | null {
-  return digestOf(payloads.flatMap((pl) => harvestProfiles(pl)).filter((p) => identityFor(ctx, p.url) === "merged").map((p) => harvestFacts(p.raw)));
-}
 
 const MaestroProfile = z.object({
   basic_info: z

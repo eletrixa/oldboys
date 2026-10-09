@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/runs/[id]/profile-signals-card.tsx
- * Deps:    src/domain/profile-signals (types, caveats), ./profile-signals-text (safeHref), ../../ui (CARD, Eyebrow)
+ * Deps:    src/domain/profile-signals (types, caveats), src/domain/url (httpUrl), ../../ui (CARD, Eyebrow)
  * Tested:  src/app/runs/[id]/__tests__/profile-signals-card.test.ts
  *
  * Key responsibilities:
@@ -14,8 +14,8 @@
  * - No hooks, English only; no colour per signal, no counts, no badges, no icons, never a score
  */
 import { PROFILE_SIGNAL_CAVEATS, type ProfileSignals } from "@/domain/profile-signals";
+import { httpUrl } from "@/domain/url";
 import { CARD, Eyebrow } from "../../ui";
-import { safeHref } from "./profile-signals-text";
 
 export function ProfileSignalsCard({ signals }: { signals: ProfileSignals | null | undefined }): React.JSX.Element | null {
   if (signals === null || signals === undefined) return null;
@@ -31,7 +31,7 @@ export function ProfileSignalsCard({ signals }: { signals: ProfileSignals | null
       ) : (
         <ul className="mt-3 flex flex-col gap-3 text-sm">
           {signals.signals.map((s) => {
-            const href = safeHref(s.source_url);
+            const href = httpUrl(s.source_url);
             return (
               <li key={`${s.id}:${s.profile_url}`} className="break-words">
                 <span className="text-ink">{s.text}</span>

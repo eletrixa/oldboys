@@ -16,9 +16,9 @@
  * - Unauthenticated API (60 req/h); one to two requests per step
  */
 import { z } from "zod";
-import { clipBio, emptyFacts, type ProfileFacts } from "@/domain/profile-facts";
-import { count, digestOf } from "@/recipe/sources/facts";
-import type { Collector, StepContext } from "@/recipe/sources/types";
+import { clipBio, count, facts } from "@/domain/profile-facts";
+import { digestOf, parsedAll } from "@/recipe/sources/facts";
+import type { Collector } from "@/recipe/sources/types";
 import { acceptedCandidates, clip, identityFor } from "@/recipe/sources/types";
 
 const User = z.object({
@@ -99,23 +99,20 @@ export const github: Collector = {
     }
     return [];
   },
-  digest: (fetched, ctx) => factsOf(fetched.map((f) => f.payload), ctx),
+  digest: (fetched, ctx) =>
+    digestOf(
+      parsedAll(User, fetched)
+        .filter((u) => identityFor(ctx, u.html_url) === "merged")
+        .map((u) =>
+          facts("github", u.html_url, {
+            handle: u.login,
+            display_name: u.name ?? null,
+            bio: clipBio(u.bio),
+            created_at: u.created_at ?? null,
+            followers: count(u.followers),
+            following: count(u.following),
+            photo_url: u.avatar_url ?? null,
+          }),
+        ),
+    ),
 };
-
-export function factsOf(payloads: readonly unknown[], ctx: StepContext): ProfileFacts[] | null {
-  return digestOf(
-      payloads.flatMap((pl) => {
-        const u = User.safeParse(pl);
-        if (!u.success || identityFor(ctx, u.data.html_url) !== "merged") return [];
-        const f = emptyFacts("github", u.data.html_url, u.data.html_url);
-        f.handle = u.data.login;
-        f.display_name = u.data.name ?? null;
-        f.bio = clipBio(u.data.bio);
-        f.created_at = u.data.created_at ?? null;
-        f.followers = count(u.data.followers);
-        f.following = count(u.data.following);
-        f.photo_url = u.data.avatar_url ?? null;
-        return [f];
-      }),
-    );
-}

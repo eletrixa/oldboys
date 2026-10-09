@@ -53,7 +53,7 @@ describe("seedProfile with a LinkedIn profile URL", () => {
       expect.objectContaining({ platform: "linkedin", handle: "josef-buryan", profile_urls: [URL_IN], decision: "merge", score: 1, reasons: ["profile given by the manager"], name: "Josef Buryan" }),
     ]);
     expect(r.out.notes).toEqual([]);
-    expect(r.facts).toEqual([expect.objectContaining({ platform: "linkedin", handle: "josef-buryan", display_name: "Josef Buryan", earliest_experience_year: 2023 })]);
+    expect(r.out.digest).toEqual([expect.objectContaining({ platform: "linkedin", handle: "josef-buryan", display_name: "Josef Buryan", earliest_experience_year: 2023 })]);
   });
 
   it("does not fail when the actor throws: name from the handle, anchor = profile URL, candidate still merged", async () => {

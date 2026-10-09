@@ -7,10 +7,10 @@
  * Tested:  n/a (this is the test)
  */
 import { describe, expect, it } from "vitest";
-import { BIO_MAX, clipBio, emptyFacts, experienceYear, readProfileFacts } from "@/domain/profile-facts";
+import { BIO_MAX, clipBio, count, experienceYear, facts, readProfileFacts } from "@/domain/profile-facts";
 
 const row = (step: string, digest: unknown): { step: string; ref_json: string } => ({ step, ref_json: JSON.stringify({ digest }) });
-const f = (platform: string): ReturnType<typeof emptyFacts> => emptyFacts(platform, `https://${platform}.example/me`, `https://${platform}.example/api`);
+const f = (platform: string): ReturnType<typeof facts> => facts(platform, `https://${platform}.example/me`, { source_url: `https://${platform}.example/api` });
 
 describe("readProfileFacts", () => {
   it("returns [] for rows without a digest, a non-facts digest or malformed JSON", () => {
@@ -31,9 +31,9 @@ describe("readProfileFacts", () => {
     expect(readProfileFacts([row("x_profile", [older]), row("x_profile", [newer])])).toEqual([newer]);
   });
 
-  it("orders by FACTS_STEPS, unknown steps last", () => {
-    const out = readProfileFacts([row("zzz_other", [f("web")]), row("github_profile", [f("github")]), row("seed_profile", [f("linkedin")]), row("x_profile", [f("x")])]);
-    expect(out.map((p) => p.platform)).toEqual(["linkedin", "x", "github", "web"]);
+  it("keeps ledger order, a retried step staying at its first position", () => {
+    const out = readProfileFacts([row("seed_profile", [f("linkedin")]), row("x_profile", [f("x")]), row("github_profile", [f("github")]), row("x_profile", [f("x"), f("bluesky")])]);
+    expect(out.map((p) => p.platform)).toEqual(["linkedin", "x", "bluesky", "github"]);
   });
 
   it("skips a malformed row without dropping the others", () => {
@@ -50,6 +50,20 @@ describe("experienceYear", () => {
   it("returns null when nothing parses", () => {
     expect(experienceYear([])).toBeNull();
     expect(experienceYear(["no dates", 1801, null])).toBeNull();
+  });
+});
+
+describe("facts", () => {
+  it("defaults source_url to url and lets over set fields", () => {
+    expect(facts("x", "https://x.com/me")).toMatchObject({ platform: "x", url: "https://x.com/me", source_url: "https://x.com/me", followers: null });
+    expect(facts("x", "https://x.com/me", { followers: 3, source_url: "https://api/x" })).toMatchObject({ followers: 3, source_url: "https://api/x" });
+  });
+});
+
+describe("count", () => {
+  it("keeps non-negative integers, truncates, else null", () => {
+    expect(count(12.9)).toBe(12);
+    expect([count(-1), count(null), count(undefined), count(Number.NaN)]).toEqual([null, null, null, null]);
   });
 });
 

@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/domain/cz-registry.ts
- * Deps:    zod, src/domain/code-profile (readDigest)
+ * Deps:    zod, src/domain/ledger-digest (readDigest)
  * Tested:  src/domain/__tests__/cz-registry.test.ts
  *
  * Key responsibilities:
@@ -23,7 +23,7 @@
  * - "architect" alone never triggers the architects' chamber: software / solution / cloud / data / enterprise architects are excluded
  */
 import { z } from "zod";
-import { type LedgerRow, readDigest } from "./code-profile";
+import { type LedgerRow, readDigest } from "./ledger-digest";
 
 export const REGISTRY_IDS = [
   "isir",

@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/domain/profile-facts.ts
- * Deps:    zod
+ * Deps:    zod, src/domain/ledger-digest (readDigests)
  * Tested:  src/domain/__tests__/profile-facts.test.ts
  *
  * Key responsibilities:
@@ -13,7 +13,9 @@
  * - A platform step's ledger ref carries `digest: ProfileFacts[]` (Collector.digest, the github_deep pattern; the seed
  *   step writes the same shape for the manager's LinkedIn profile); `readProfileFacts` reads every row back defensively
  *   (a digest that is not a ProfileFacts array, e.g. github_deep's CodeProfile, is ignored; newest row per step wins;
- *   malformed rows skipped; runs before this feature give [])
+ *   malformed rows skipped; ledger order; runs before this feature give [])
+ * - `facts` builds one ProfileFacts (every field present), `count` normalises a platform number, `PLATFORM_LABEL` and
+ *   `FACT_PLATFORMS` name the platforms for the report
  * - `experienceYear`: earliest four-digit start year in LinkedIn experience lines ("Title @ Company (2012–2015)")
  *
  * Design constraints:
@@ -22,6 +24,7 @@
  * - No D1 schema change: the record lives in the append-only ledger ref, read by the run state route
  */
 import { z } from "zod";
+import { type LedgerRow, readDigests } from "./ledger-digest";
 
 export const ProfileFacts = z.object({
   /** linkedin, x, instagram, tiktok, github, youtube, bluesky (platformOf vocabulary) */
@@ -50,16 +53,25 @@ export const ProfileFacts = z.object({
 });
 export type ProfileFacts = z.infer<typeof ProfileFacts>;
 
-export const FACTS_REF_KEY = "digest";
 export const BIO_MAX = 300;
 
-/** Display order of platforms (the seed step writes the manager's LinkedIn profile first); other steps follow. */
-export const FACTS_STEPS: readonly string[] = ["seed_profile", "linkedin_profile", "x_profile", "instagram_profile", "tiktok_profile", "github_profile", "youtube_channel", "bluesky_profile"];
+/** Display names of the platforms (platformOf vocabulary). */
+export const PLATFORM_LABEL: Record<string, string> = {
+  linkedin: "LinkedIn",
+  github: "GitHub",
+  instagram: "Instagram",
+  x: "X",
+  tiktok: "TikTok",
+  youtube: "YouTube",
+  bluesky: "Bluesky",
+  facebook: "Facebook",
+};
 
-type LedgerRow = { step?: string | null; ref_json?: string | null };
+/** Platforms whose collectors record ProfileFacts; a merged candidate there without facts is reported as not checked. */
+export const FACT_PLATFORMS: readonly string[] = ["linkedin", "x", "instagram", "tiktok", "github", "youtube", "bluesky"];
 
-/** A ProfileFacts with every optional field present (collectors fill what they have). */
-export function emptyFacts(platform: string, url: string, sourceUrl: string): ProfileFacts {
+/** A ProfileFacts with every field present: `over` sets what the collector read, `source_url` defaults to `url`. */
+export function facts(platform: string, url: string, over: Partial<ProfileFacts> = {}): ProfileFacts {
   return {
     platform,
     url,
@@ -76,8 +88,14 @@ export function emptyFacts(platform: string, url: string, sourceUrl: string): Pr
     bio: null,
     photo_url: null,
     earliest_experience_year: null,
-    source_url: sourceUrl,
+    source_url: url,
+    ...over,
   };
+}
+
+/** A platform number as the non-negative integer ProfileFacts wants, else null. */
+export function count(n: number | null | undefined): number | null {
+  return n === null || n === undefined || !Number.isFinite(n) || n < 0 ? null : Math.trunc(n);
 }
 
 export function clipBio(text: string | null | undefined): string | null {
@@ -99,26 +117,7 @@ export function experienceYear(starts: readonly unknown[]): number | null {
   return min;
 }
 
-/**
- * Every `ref.facts` entry among ledger rows, newest row per step winning (a retried step overwrites its earlier
- * facts), ordered by FACTS_STEPS then by first appearance; rows that do not parse are skipped.
- */
+/** Every step's newest `ref.digest` that is a ProfileFacts array, in ledger order (recipe order, the seed step first). */
 export function readProfileFacts(rows: readonly LedgerRow[]): ProfileFacts[] {
-  const byStep = new Map<string, ProfileFacts[]>();
-  for (const row of rows) {
-    if (typeof row.step !== "string" || typeof row.ref_json !== "string") continue;
-    try {
-      const ref: unknown = JSON.parse(row.ref_json);
-      if (typeof ref !== "object" || ref === null || !(FACTS_REF_KEY in ref)) continue;
-      const parsed = z.array(ProfileFacts).safeParse((ref as Record<string, unknown>)[FACTS_REF_KEY]);
-      if (parsed.success) byStep.set(row.step, parsed.data);
-    } catch {
-      /* malformed row: skip */
-    }
-  }
-  const order = (step: string): number => {
-    const i = FACTS_STEPS.indexOf(step);
-    return i === -1 ? FACTS_STEPS.length : i;
-  };
-  return [...byStep.entries()].sort((a, b) => order(a[0]) - order(b[0])).flatMap(([, facts]) => facts);
+  return [...readDigests(rows, z.array(ProfileFacts)).values()].flat();
 }
