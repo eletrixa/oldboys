@@ -1,0 +1,389 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Oldboys: high-level architecture",
+    "quality_profile": "showcase",
+    "views": [
+      {
+        "id": "entry",
+        "label": "Entry points",
+        "focus": [
+          "candidate",
+          "intake",
+          "ui",
+          "ext",
+          "api"
+        ],
+        "note": "The candidate applies through intake, the recruiter works in the web app, the extension sends a LinkedIn profile."
+      },
+      {
+        "id": "research-run",
+        "label": "Research run",
+        "focus": [
+          "api",
+          "research",
+          "sources",
+          "anthropic"
+        ],
+        "note": "ResearchRun Workflow calls sources within $0.50 and 18 paid calls. LLM only in fixed seams."
+      },
+      {
+        "id": "verify-call",
+        "label": "Verification call",
+        "focus": [
+          "api",
+          "call",
+          "elevenlabs",
+          "d1"
+        ],
+        "note": "The manager approves the call, ElevenLabs calls the candidate, the transcript becomes STATEMENT claims."
+      },
+      {
+        "id": "data",
+        "label": "Data and GDPR",
+        "focus": [
+          "research",
+          "call",
+          "cron",
+          "d1",
+          "r2"
+        ],
+        "note": "Ledger and claims in D1, raw data and CVs in R2, cron deletes everything after 7 days."
+      }
+    ],
+    "locale": "en"
+  },
+  "components": [
+    {
+      "id": "candidate",
+      "type": "external",
+      "label": "Candidate",
+      "sublabel": "email · /apply · StartupJobs",
+      "pos": [
+        40,
+        110
+      ],
+      "size": [
+        180,
+        64
+      ]
+    },
+    {
+      "id": "ui",
+      "type": "frontend",
+      "label": "Web app",
+      "sublabel": "recruiter browser",
+      "pos": [
+        40,
+        240
+      ],
+      "size": [
+        180,
+        64
+      ]
+    },
+    {
+      "id": "ext",
+      "type": "frontend",
+      "label": "WXT extension",
+      "sublabel": "LinkedIn · Chrome · Firefox",
+      "pos": [
+        40,
+        370
+      ],
+      "size": [
+        180,
+        64
+      ]
+    },
+    {
+      "id": "intake",
+      "type": "backend",
+      "label": "Intake funnel",
+      "sublabel": "email() · form · webhook",
+      "pos": [
+        320,
+        110
+      ],
+      "size": [
+        180,
+        64
+      ]
+    },
+    {
+      "id": "api",
+      "type": "backend",
+      "label": "Next.js API routes",
+      "sublabel": "auth · positions · runs · SSE",
+      "pos": [
+        320,
+        240
+      ],
+      "size": [
+        180,
+        64
+      ]
+    },
+    {
+      "id": "call",
+      "type": "backend",
+      "label": "Verification call",
+      "sublabel": "VerificationCall Workflow",
+      "pos": [
+        320,
+        500
+      ],
+      "size": [
+        180,
+        64
+      ],
+      "tag": "consent only"
+    },
+    {
+      "id": "research",
+      "type": "backend",
+      "label": "ResearchRun Workflow",
+      "sublabel": "recipe · collectors · verify",
+      "pos": [
+        600,
+        240
+      ],
+      "size": [
+        180,
+        64
+      ],
+      "tag": "$0.50 / 18 calls"
+    },
+    {
+      "id": "sources",
+      "type": "external",
+      "label": "Data sources",
+      "sublabel": "Apify · GitHub · ORCID · ARES",
+      "pos": [
+        1160,
+        110
+      ],
+      "size": [
+        180,
+        64
+      ]
+    },
+    {
+      "id": "anthropic",
+      "type": "external",
+      "label": "Anthropic",
+      "sublabel": "Opus · Sonnet verify",
+      "pos": [
+        1160,
+        240
+      ],
+      "size": [
+        180,
+        64
+      ]
+    },
+    {
+      "id": "cron",
+      "type": "backend",
+      "label": "Cron",
+      "sublabel": "purge · intake queue",
+      "pos": [
+        880,
+        370
+      ],
+      "size": [
+        180,
+        64
+      ]
+    },
+    {
+      "id": "elevenlabs",
+      "type": "external",
+      "label": "ElevenLabs",
+      "sublabel": "voice agent · phone",
+      "pos": [
+        40,
+        500
+      ],
+      "size": [
+        180,
+        64
+      ]
+    },
+    {
+      "id": "d1",
+      "type": "database",
+      "label": "D1",
+      "sublabel": "ledger · claims · accounts",
+      "pos": [
+        600,
+        500
+      ],
+      "size": [
+        180,
+        64
+      ]
+    },
+    {
+      "id": "r2",
+      "type": "database",
+      "label": "R2",
+      "sublabel": "raw data · CV · translations",
+      "pos": [
+        880,
+        500
+      ],
+      "size": [
+        180,
+        64
+      ],
+      "tag": "TTL 7 days"
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "Cloudflare Worker · oldboys.asajj.cz",
+      "wraps": [
+        "intake",
+        "api",
+        "call",
+        "research",
+        "cron",
+        "d1",
+        "r2"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "candidate-intake",
+      "from": "candidate",
+      "to": "intake",
+      "label": "application"
+    },
+    {
+      "id": "ui-api",
+      "from": "ui",
+      "to": "api",
+      "label": "fetch · SSE",
+      "variant": "emphasis"
+    },
+    {
+      "id": "ext-api",
+      "from": "ext",
+      "to": "api",
+      "label": "start · polling"
+    },
+    {
+      "id": "intake-research",
+      "from": "intake",
+      "to": "research",
+      "label": "startRun",
+      "fromSide": "right",
+      "toSide": "top"
+    },
+    {
+      "id": "api-research",
+      "from": "api",
+      "to": "research",
+      "label": "start · lineup",
+      "variant": "emphasis"
+    },
+    {
+      "id": "research-sources",
+      "from": "research",
+      "to": "sources",
+      "label": "apify-client · HTTPS",
+      "fromSide": "top",
+      "toSide": "bottom"
+    },
+    {
+      "id": "research-anthropic",
+      "from": "research",
+      "to": "anthropic",
+      "label": "LLM seams",
+      "variant": "emphasis"
+    },
+    {
+      "id": "research-d1",
+      "from": "research",
+      "to": "d1",
+      "label": "ledger",
+      "labelAt": [
+        690,
+        402
+      ]
+    },
+    {
+      "id": "research-r2",
+      "from": "research",
+      "to": "r2",
+      "label": "payload"
+    },
+    {
+      "id": "api-call",
+      "from": "api",
+      "to": "call",
+      "label": "approval",
+      "labelAt": [
+        410,
+        402
+      ]
+    },
+    {
+      "id": "call-elevenlabs",
+      "from": "call",
+      "to": "elevenlabs",
+      "label": "call · webhook",
+      "variant": "dashed"
+    },
+    {
+      "id": "call-d1",
+      "from": "call",
+      "to": "d1",
+      "label": "STATEMENT"
+    },
+    {
+      "id": "cron-r2",
+      "from": "cron",
+      "to": "r2",
+      "label": "delete",
+      "variant": "security",
+      "labelAt": [
+        970,
+        467
+      ]
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Three entry points, one run",
+      "items": [
+        "Web app, extension and intake all end in startRun",
+        "The candidate never sees the run",
+        "Hourly caps on start and intake"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "We score the research, not the person",
+      "items": [
+        "FACT only with a quote in the source excerpt",
+        "Second model and devil's advocate in verify",
+        "Gaps and namesakes are visible in the brief"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Privacy",
+      "items": [
+        "Public data only, no sensitive traits",
+        "Call only with consent and after approval",
+        "Cron deletes the run, its data and the CV after 7 days"
+      ]
+    }
+  ]
+}
