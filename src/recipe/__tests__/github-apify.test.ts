@@ -39,14 +39,14 @@ const full = {
   first_year_commit: "2014",
   pinned_repos: [
     { name: "etl-kit", url: "https://github.com/janad/etl-kit", languages: ["Python", "SQL"], stars: "1.2k", forks: 30 },
-    { name: "dotfiles", url: "https://github.com/janad/dotfiles", languages: [], stars: 3, forks: "x" },
+    { name: "dotfiles", url: "", languages: [], stars: 3, forks: "x" },
   ],
   achievements: ["Arctic Code Vault Contributor", "Pull Shark"],
 };
 
 describe("githubApify.requests", () => {
   it("returns nothing for a non-technical family", () => {
-    const ctx = baseContext({ roleFamily: "sales", candidates: [cand("github", "janad")] });
+    const ctx = baseContext({ roleFamily: "sales", role: "Brand Manager", candidates: [cand("github", "janad")] });
     expect(githubApify.requests(ctx, step)).toEqual([]);
   });
 
@@ -126,7 +126,7 @@ describe("githubApify.digest", () => {
         { name: "dotfiles", url: "https://github.com/janad/dotfiles", stars: 3, forks: 0, languages: [] },
       ],
       achievements: ["Arctic Code Vault Contributor", "Pull Shark"],
-      source_url: "https://apify.com/saswave/github-profile-scraper?profile=janad",
+      source_url: "https://github.com/janad",
     });
   });
 

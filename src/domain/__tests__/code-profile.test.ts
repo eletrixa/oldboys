@@ -15,7 +15,7 @@
  * - Pure, no I/O
  */
 import { describe, expect, it } from "vitest";
-import { APIFY_PROFILE_STEP, CODE_PROFILE_CAVEATS, CODE_PROFILE_STEP, codeTotals, isTechnicalFamily, readCodeProfile, type CodeProfile } from "@/domain/code-profile";
+import { APIFY_PROFILE_STEP, CODE_PROFILE_CAVEATS, CODE_PROFILE_STEP, codeTotals, isTechnicalFamily, isTechnicalRole, readCodeProfile, technicalSkipReason, type CodeProfile } from "@/domain/code-profile";
 
 const digest = (handle: string): CodeProfile => ({
   handle,
@@ -43,6 +43,17 @@ describe("isTechnicalFamily", () => {
     expect(isTechnicalFamily("data")).toBe(true);
     expect(isTechnicalFamily("marketing")).toBe(false);
     expect(isTechnicalFamily(null)).toBe(false);
+  });
+  it("names the skip reason for the others", () => {
+    expect(technicalSkipReason({ roleFamily: "engineering", role: null })).toBeNull();
+    expect(technicalSkipReason({ roleFamily: "sales", role: "Account Manager" })).toBe('role family "sales" is not technical');
+    expect(technicalSkipReason({ roleFamily: null, role: null })).toContain("no role given");
+  });
+  it("isTechnicalRole accepts a technical title in a non-technical family", () => {
+    expect(isTechnicalRole({ roleFamily: "product", role: "Product Engineer" })).toBe(true);
+    expect(isTechnicalRole({ roleFamily: "operations", role: "Support Engineer" })).toBe(true);
+    expect(isTechnicalRole({ roleFamily: "marketing", role: "Growth Lead" })).toBe(false);
+    expect(technicalSkipReason({ roleFamily: "product", role: "Product Engineer" })).toBeNull();
   });
 });
 

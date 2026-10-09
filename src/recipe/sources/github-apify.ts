@@ -16,7 +16,7 @@
  * - Cost capped at maxTotalChargeUsd 0.05 and 45s per request
  */
 import { z } from "zod";
-import { ApifyGithubProfile, isTechnicalFamily } from "@/domain/code-profile";
+import { ApifyGithubProfile, isTechnicalRole, technicalSkipReason } from "@/domain/code-profile";
 import type { Collector, ParsedSource } from "@/recipe/sources/types";
 import { clip, githubHandles, identityFor } from "@/recipe/sources/types";
 
@@ -76,10 +76,10 @@ function profileOf(item: Item, username: string): ApifyGithubProfile {
     pinned_repos: (item.pinned_repos ?? []).flatMap((p) => {
       const name = (p.name ?? "").trim();
       if (name === "") return [];
-      return [{ name, url: p.url ?? `https://github.com/${username}/${name}`, stars: parseCount(p.stars) ?? 0, forks: parseCount(p.forks) ?? 0, languages: p.languages ?? [] }];
+      return [{ name, url: (p.url ?? "").trim() || `https://github.com/${username}/${name}`, stars: parseCount(p.stars) ?? 0, forks: parseCount(p.forks) ?? 0, languages: p.languages ?? [] }];
     }),
     achievements: item.achievements ?? [],
-    source_url: `https://apify.com/${ACTOR}?profile=${username}`,
+    source_url: `https://github.com/${username}`,
   };
 }
 
@@ -101,8 +101,9 @@ function excerptOf(item: Item, p: ApifyGithubProfile): string {
 
 export const githubApify: Collector = {
   id: ACTOR,
+  skipReason: (ctx) => technicalSkipReason(ctx),
   requests: (ctx) => {
-    if (!isTechnicalFamily(ctx.roleFamily)) return [];
+    if (!isTechnicalRole(ctx)) return [];
     const handles = githubHandles(ctx);
     if (handles.length === 0) return [];
     return [{ via: "actor", actor: ACTOR, input: { peoples_links: handles.map((h) => `https://github.com/${h}`) }, maxTotalChargeUsd: 0.05, timeoutSecs: 45 }];

@@ -11,7 +11,8 @@
  *   base + questions_json, plus `cv-consistency` once the run has a CV source (withCvQuestion), so extract, verify and
  *   synthesize see the CV question only on CV runs
  * - `persistOutcome` writes sources/candidates/claims/gaps/brief; claims_mode=replace rewrites the run's claims
- * - Raw payloads go to R2 under `<run>/<source>.json`; D1 keeps only the excerpt
+ * - Raw payloads go to R2 under `<run>/<source>.json`; D1 keeps only the excerpt; `makeSourceStore` skips a url another
+ *   step of the run already stored (collectors after the lineup run in parallel, the runner's dedup sees only earlier steps)
  * - `applySourceIdentity` re-marks sources after the lineup (merged / unverified by profile key, then name + employer
  *   corroboration with identity_reason; subject from investigations, employer/headline from the seed_profile ledger rows)
  *
@@ -69,9 +70,12 @@ export function makeSourceStore(db: D1Database, bucket: R2Bucket): SourceStore {
     const full = Source.parse({ ...source, r2_key });
     await db
       .prepare(
-        `INSERT OR REPLACE INTO sources (id, run_id, url, actor, fetched_at, excerpt, r2_key, expires_at, identity) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        // Steps after the lineup run in parallel and each dedups only against the sources persisted before it started:
+        // the same page stored by another step of this run wins, a retry of the same row (same id) still upserts.
+        `INSERT OR REPLACE INTO sources (id, run_id, url, actor, fetched_at, excerpt, r2_key, expires_at, identity)
+         SELECT ?, ?, ?, ?, ?, ?, ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM sources WHERE run_id = ? AND url = ? AND id <> ?)`,
       )
-      .bind(full.id, full.run_id, full.url, full.actor, full.fetched_at, full.excerpt, full.r2_key, full.expires_at, full.identity)
+      .bind(full.id, full.run_id, full.url, full.actor, full.fetched_at, full.excerpt, full.r2_key, full.expires_at, full.identity, full.run_id, full.url, full.id)
       .run();
     return full;
   };

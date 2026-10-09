@@ -49,7 +49,7 @@ export function statGroups(p: CodeProfile, now: Date = new Date()): StatGroup[] 
     { label: "Stars received", value: fmtInt(p.stars_received), source: src("repos") },
     { label: "PRs merged elsewhere", value: fmtInt(p.merged_prs_elsewhere), source: src("search") },
     {
-      label: "Public events, last 90 days",
+      label: e.since === null ? "Public events, last 90 days" : `Public events since ${e.since.slice(0, 10)}`,
       value: `${fmtInt(e.pushes)} pushes, ${fmtInt(e.pull_requests)} PRs, ${fmtInt(e.issues)} issues, ${fmtInt(e.reviews)} reviews`,
       source: src("events"),
     },

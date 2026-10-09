@@ -11,7 +11,8 @@
  * - Collector: `requests()` decides what to fetch (empty array = nothing to do, triggers onEmpty); `parse()` maps one payload to sources;
  *   optional `alreadyFetched()` names sources an earlier step (seed) fetched, so the step does not scrape them twice;
  *   optional `followUp()` computes a second wave of requests from the first wave's request/payload pairs (`Fetched`); optional
- *   `digest()` summarises every pair into StepOutcome.digest
+ *   `digest()` summarises every pair into StepOutcome.digest; optional `skipReason()` names why `requests()` is empty when the
+ *   default "no confirmed handle or id to look up" would be untrue (e.g. role not technical)
  * - githubHandles(): accepted github handles (deduped case-insensitively, `@` stripped, max 2), shared by the GitHub collectors
  * - identityFor(): "merged" only for urls under a merged candidate (profile url prefix or handle segment), else "unverified"
  *
@@ -64,6 +65,8 @@ export type Collector = {
   /** Matches Step.actor. */
   id: string;
   requests: (ctx: StepContext, step: Step) => CollectorRequest[];
+  /** Why `requests()` returned nothing, when it is not the missing handle (becomes the "not searched" gap); null = the default note. */
+  skipReason?: (ctx: StepContext) => string | null;
   /** Sources an earlier step already fetched for this collector (seed); with no requests left the step reuses them. */
   alreadyFetched?: (ctx: StepContext) => Source[];
   /** `req` is the request that produced the payload (a stats payload carries no repo name; the URL does). */

@@ -9,7 +9,7 @@
  * Key responsibilities:
  * - `CodeProfile`: Zod schema of the digest the `rest/github-deep` collector writes into its ledger ref (`ref.digest`)
  * - `TECHNICAL_FAMILIES`: role families for which the hiring recipe scrapes GitHub in depth (engineering, data; AI falls
- *   under one of them in `familyOf`)
+ *   under one of them in `familyOf`); `isTechnicalRole` also accepts a technical title in another family ("Product Engineer"); `technicalSkipReason` is the truthful "not searched" text for the others
  * - `ApifyGithubProfile`: what the Apify profile actor step (`github_apify`) adds (last-year contributions, pinned repos, achievements)
  * - `readDigest` (shared with src/domain/cz-registry): latest `ref.digest` of a step among ledger rows
  * - `readCodeProfile`: latest `github_deep` digest from ledger rows with the `github_apify` digest attached (same handle), parsed
@@ -28,6 +28,22 @@ export const TECHNICAL_FAMILIES: readonly Family[] = ["engineering", "data"];
 
 export function isTechnicalFamily(family: Family | null): boolean {
   return family !== null && TECHNICAL_FAMILIES.includes(family);
+}
+
+/** The GitHub collectors' `skipReason`: why no request was made for this family; null when the family is technical. */
+/** Titles that are technical whatever family the keyword table picked ("Product Engineer" is product by family, engineer by title). */
+const TECHNICAL_TITLE = /engineer|developer|vývojář|programátor|devops|architect|data scientist|\bml\b|machine learning|\bai\b/i;
+
+export type RoleGate = { roleFamily: Family | null; role: string | null };
+
+/** The GitHub deep steps run for a technical family or a technical title. */
+export function isTechnicalRole({ roleFamily, role }: RoleGate): boolean {
+  return isTechnicalFamily(roleFamily) || (role !== null && TECHNICAL_TITLE.test(role));
+}
+
+export function technicalSkipReason(gate: RoleGate): string | null {
+  if (isTechnicalRole(gate)) return null;
+  return gate.roleFamily === null ? "no role given, GitHub statistics are collected for technical roles only" : `role family "${gate.roleFamily}" is not technical`;
 }
 
 export const RepoContribution = z.object({
@@ -68,7 +84,7 @@ export const ApifyGithubProfile = z.object({
   first_commit_year: z.number().int().nullable(),
   pinned_repos: z.array(z.object({ name: z.string().min(1), url: z.string().min(1), stars: z.number().int().nonnegative(), forks: z.number().int().nonnegative(), languages: z.array(z.string()) })),
   achievements: z.array(z.string()),
-  /** Apify dataset or run URL the numbers were read from. */
+  /** The GitHub profile page the actor read the numbers from (the adapter exposes no run or dataset URL). */
   source_url: z.string().min(1),
 });
 export type ApifyGithubProfile = z.infer<typeof ApifyGithubProfile>;

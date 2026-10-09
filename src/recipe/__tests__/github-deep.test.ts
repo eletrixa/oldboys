@@ -61,8 +61,11 @@ describe("kindOf", () => {
 });
 
 describe("githubDeep requests", () => {
-  it("asks for nothing on a non-technical family", () => {
-    expect(githubDeep.requests(baseContext({ roleFamily: "marketing", candidates: [cand("jd")] }), step)).toEqual([]);
+  it("asks for nothing on a non-technical family and says so", () => {
+    const ctx = baseContext({ roleFamily: "marketing", role: "Brand Manager", candidates: [cand("jd")] });
+    expect(githubDeep.requests(ctx, step)).toEqual([]);
+    expect(githubDeep.skipReason?.(ctx)).toBe('role family "marketing" is not technical');
+    expect(githubDeep.skipReason?.(ctx1)).toBeNull();
   });
   it("asks for nothing without a handle", () => {
     expect(githubDeep.requests(baseContext(), step)).toEqual([]);
@@ -103,6 +106,13 @@ describe("githubDeep parse", () => {
     expect(out[0]?.excerpt).toBe("jd/etl: jd made 10 commits, +150 lines added, −25 lines removed, between 2024-01-07 and 2024-01-14 (share of all commits 25%)");
     expect(out[0]?.identity).toBe("merged");
   });
+  it("keeps only the handle's row in raw, plus the all-authors commit total", () => {
+    const out = parse(stats, ctx1, step, req(U.stats("etl")));
+    expect(out[0]?.raw).toEqual({ ...stats[1], total_commits_all_authors: 40 });
+    const none = parse([stats[0]], ctx1, step, req(U.stats("etl")));
+    expect(none[0]?.raw).toEqual({ total_commits_all_authors: 30 });
+    expect(none[0]?.excerpt).toContain("made 0 commits");
+  });
   it("parses a pending (null) stats payload to nothing", () => {
     expect(parse(null, ctx1, step, req(U.stats("etl")))).toEqual([]);
   });
@@ -114,9 +124,11 @@ describe("githubDeep parse", () => {
     const repos = parse([repo("jd", "a"), repo("jd", "b", { language: "Go", stargazers_count: 3 }), repo("jd", "c", { fork: true })], ctx1, step, req(U.repos));
     expect(repos[0]?.url).toBe("https://github.com/jd?tab=repositories");
     expect(repos[0]?.excerpt).toBe("3 public repositories owned, 1 fork excluded, languages: Go (1 repo), TypeScript (1 repo), 5 stars received across own repos");
-    expect(parse(search, ctx1, step, req(U.search))[0]?.excerpt).toBe("93 pull requests by jd merged into repositories of others, e.g. acme/lib: Fix leak (merged 2024-05-01)");
+    expect(parse(search, ctx1, step, req(U.search))[0]?.excerpt).toBe("93 pull requests by jd merged outside their own account (GitHub's count; may include their organisations' repositories), e.g. acme/lib: Fix leak (merged 2024-05-01)");
     const events = [{ type: "PushEvent", created_at: "2026-09-01T00:00:00Z", actor: { login: "jd" } }, { type: "PushEvent", created_at: "2026-08-01T00:00:00Z" }, { type: "PullRequestEvent", created_at: "2026-09-02T00:00:00Z" }];
     expect(parse(events, ctx1, step, req(U.events))[0]?.excerpt).toBe("last 90 days of public activity: 2 pushes, 1 pull request, 0 issues, 0 reviews, since 2026-08-01");
+    const full = Array.from({ length: 100 }, () => ({ type: "PushEvent", created_at: "2026-09-01T00:00:00Z" }));
+    expect(parse(full, ctx1, step, req(U.events))[0]?.excerpt).toBe("the 100 most recent public events: 100 pushes, 0 pull requests, 0 issues, 0 reviews, since 2026-09-01");
     const orgs = parse([{ login: "acme" }, { login: "oss" }], ctx1, step, req(U.orgs));
     expect(orgs[0]?.url).toBe("https://api.github.com/users/jd/orgs");
     expect(orgs[0]?.excerpt).toBe("member of organizations: acme, oss");

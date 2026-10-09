@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/runs/[id]/identity-map.ts
- * Deps:    src/domain/claim (Candidate types), ./state (sortLineup, PLATFORM_LABEL)
+ * Deps:    src/domain/claim (Candidate types), src/domain/url (httpUrl), ./state (sortLineup, PLATFORM_LABEL)
  * Tested:  src/app/runs/[id]/__tests__/identity-map.test.ts
  *
  * Key responsibilities:
@@ -18,6 +18,7 @@
  * - Every circle and label stays inside the viewBox (labels estimated at LABEL_CHAR_W px per character)
  */
 import type { Candidate, CandidateDecision } from "@/domain/claim";
+import { httpUrl } from "@/domain/url";
 import { PLATFORM_LABEL, sortLineup } from "./state";
 
 export type MapNode = {
@@ -83,16 +84,6 @@ function host(url: string): string {
   }
 }
 
-function safeHref(url: string | undefined): string | null {
-  if (url === undefined) return null;
-  try {
-    const { protocol } = new URL(url);
-    return protocol === "http:" || protocol === "https:" ? url : null;
-  } catch {
-    return null;
-  }
-}
-
 function toNode(c: Candidate, decision: CandidateDecision, x: number, y: number): MapNode {
   const reason = c.reasons[0]?.replace(/^fallback:\s*/i, "") ?? "";
   const tooltip = [c.snippet.trim(), reason.trim()].filter((s) => s !== "").join(" · ");
@@ -104,7 +95,7 @@ function toNode(c: Candidate, decision: CandidateDecision, x: number, y: number)
     decision,
     label: clip(PLATFORM_LABEL[c.platform] ?? host(c.profile_urls[0] ?? "web"), MAX_LABEL),
     handle,
-    href: safeHref(c.profile_urls[0]),
+    href: c.profile_urls[0] === undefined ? null : httpUrl(c.profile_urls[0]),
     tooltip: clip(tooltip, MAX_TOOLTIP),
     supplied: /you supplied/i.test(c.reasons[0] ?? ""),
   };
