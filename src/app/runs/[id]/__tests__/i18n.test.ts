@@ -44,6 +44,17 @@ describe("REPORT_DICT", () => {
     expect(REPORT_DICT.cs.ui.noEvidenceTitle(0, 4)).toBe("Bez veřejného dokladu: 0 ze 4 kritérií pozice");
   });
 
+  it("translates the header intake line, the CACHED detail and the research numbers of the Czech brief", () => {
+    const intake = { source: "manual" as const, tag: null, receivedAt: "2026-10-09T02:46:39Z" };
+    expect(REPORT_DICT.en.ui.intakeLine(intake)).toBe("Added by hand · 2026-10-09");
+    expect(REPORT_DICT.cs.ui.intakeLine(intake)).toBe("Přidáno ručně · 9. 10. 2026");
+    expect(REPORT_DICT.cs.ui.intakeLine({ source: "email", tag: "cmo", receivedAt: "2026-10-09T02:46:39Z" })).toBe("Z e-mailu · cmo · 9. 10. 2026");
+    expect(REPORT_DICT.en.ui.costValue(0.784)).toBe("$0.78");
+    expect(REPORT_DICT.cs.ui.costValue(0.784)).toBe("0,78 USD");
+    expect(REPORT_DICT.cs.ui.cachedFrom("2026-10-09 02:46")).toBe("běh z 2026-10-09 02:46 UTC");
+    expect(Object.keys(REPORT_DICT.cs.ui.aboutRows)).toEqual(Object.keys(REPORT_DICT.en.ui.aboutRows));
+  });
+
   it("keeps the English labels the page always had", () => {
     const { en } = REPORT_DICT;
     expect(en.band).toEqual({ strong: "Strong evidence", fair: "Some evidence", weak: "Thin evidence" });
