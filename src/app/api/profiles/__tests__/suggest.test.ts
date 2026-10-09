@@ -45,7 +45,7 @@ describe("suggestProfiles", () => {
     const u = new URL(calls[0]?.url ?? "");
     expect(`${u.origin}${u.pathname}`).toBe(BRAVE_SEARCH_URL);
     expect(u.searchParams.get("q")).toBe('site:linkedin.com/in "Jan Novák" Seznam');
-    expect(u.searchParams.get("country")).toBe("cz");
+    expect(u.searchParams.has("country")).toBe(false);
     expect(calls[0]?.headers).toEqual({ "X-Subscription-Token": "k1" });
   });
 
