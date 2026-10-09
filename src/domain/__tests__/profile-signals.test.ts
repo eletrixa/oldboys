@@ -252,6 +252,13 @@ describe("mergeAccounts (plans/016 second source)", () => {
     expect(rest).toEqual([]);
     expect(m).toMatchObject({ followers: 1234, posts: 78, bio: "runner", verified: false, url: "https://www.instagram.com/jana/" });
   });
+  it("merges two readings whose URLs differ only in path case", () => {
+    const apify = base({ platform: "x", url: "https://x.com/RobertVojacek", followers: 1200 });
+    const treg = base({ platform: "x", url: "https://x.com/robertvojacek", followers: 1234, verified: false });
+    const [m, ...rest] = mergeAccounts([apify, treg]);
+    expect(rest).toEqual([]);
+    expect(m).toMatchObject({ followers: 1234, verified: false, url: "https://x.com/RobertVojacek" });
+  });
   it("keeps different accounts apart", () => {
     expect(mergeAccounts([base({}), base({ url: "https://www.instagram.com/other/" })])).toHaveLength(2);
   });

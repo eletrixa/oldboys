@@ -264,7 +264,8 @@ export class ResearchRunWorkflow extends WorkflowEntrypoint<CloudflareEnv, Resea
       const started = Date.now();
       if (recipeStep.kind === "extract" || recipeStep.actor === READ_ACTOR) await applySourceIdentity(this.env.DB, runId);
       const ctx = await loadContext(this.env.DB, runId, questions);
-      if (COLLECTOR_KINDS.has(recipeStep.kind) && (ctx.spent.calls >= ctx.budget.calls || ctx.spent.usd >= ctx.budget.usd)) {
+      // The Apify run cap stops paid actor steps only; free REST and treg steps (USD-gated in the runner) still run while USD is left
+      if (COLLECTOR_KINDS.has(recipeStep.kind) && ((isPaid(recipeStep) && ctx.spent.calls >= ctx.budget.calls) || ctx.spent.usd >= ctx.budget.usd)) {
         await this.ledger(runId, recipeStep.id, "decision", 0, 0, { skipped: "run budget reached", spent: ctx.spent });
         return { empty: true, skipped: "run budget reached", unconfirmed: false };
       }

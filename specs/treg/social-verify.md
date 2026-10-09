@@ -24,15 +24,15 @@ Requests, one per merged candidate per platform, all `{ via: "treg", maxCostUsd:
 | instagram | `tikhub.instagram.user.profile` | GET | `username` = handle without `@` | $0.001 |
 | tiktok | `tikhub.tiktok.user.profile` | GET | `uniqueId` = handle without `@` | $0.001 |
 | x | `anyapi.x.user.profile` | POST | `handle` = handle without `@` | $0.00022 |
-| youtube | `scrapecreators.youtube.channel.profile` | GET | `handle`; `channelId` instead when the handle matches `^UC[\w-]{20,}$` | $0.00188 |
+| youtube | `scrapecreators.youtube.channel.profile` | GET | `handle`; `channelId` when the handle matches `^UC[\w-]{20,}$`; `url` = the candidate's own profile URL when it is a legacy `/c/…` or `/user/…` URL | $0.00188 |
 | facebook | `scrapecreators.x.v1-facebook-profile` | GET | `url` = `profile_urls[0]`, `cache_max_age: "7d"` | $0.00188 |
 
 - Dedupe by platform + handle (profile URL for linkedin and facebook), case-insensitive; at most 6 requests (`MAX_REQUESTS`).
 - Candidate without handle (or without profile URL for linkedin/facebook) or with another platform: no request.
 - `skipReason`: "no confirmed social account to read a second time".
 - `parse`: one `ParsedSource` per successful read:
-  - `url` = canonical profile URL (`https://www.instagram.com/<h>/`, `https://www.tiktok.com/@<h>`, `https://x.com/<h>`, `https://www.youtube.com/@<h>` or `/channel/<id>`, the given LinkedIn/Facebook URL).
-  - `excerpt` = `clip(plain sentences)`: `The <Platform> <kind> @<handle> (<name>) has N followers, follows N accounts, has N connections and has N <posts|videos>.`, then `Verified badge: yes|no.`, `Premium: …`, `Open to work: …`, `Created: …`, `The earliest listed position starts in YYYY.`, platform extras (Facebook `Category:`, `The page has N likes.`, `Website:`), `Bio: …`, and a closing `Read by <provider> via treg …`. Every number the read has is in a sentence so a FACT can quote it; the provider name (Fetchin, TikHub, AnyAPI, ScrapeCreators) is always present. Kind: profile (linkedin), account (instagram, tiktok, x, youtube), page (facebook).
+  - `url` = canonical profile URL (`https://www.instagram.com/<h>/`, `https://www.tiktok.com/@<h>`, `https://x.com/<h>`, `https://www.youtube.com/@<h>` or `/channel/<id>` (a legacy `/c/` or `/user/` URL stays the candidate's own URL), the given LinkedIn/Facebook URL).
+  - `excerpt` = `clip(plain sentences)`: `The <Platform> <kind> @<handle> (<name>) has N followers, follows N accounts, has N connections and has N <posts|videos>.`, then `Verified badge: yes|no.`, `Premium: …`, `Open to work: …`, `Created: …`, `The earliest listed position starts in YYYY.`, platform extras (Facebook `Category:`, `The account has N likes.`, `Website:`), `Bio: …`, and a closing `Read by <provider> via treg …`. Every number the read has is in a sentence so a FACT can quote it; the provider name (Fetchin, TikHub, AnyAPI, ScrapeCreators) is always present. Kind: profile (linkedin), account (all others; Facebook is always "account" because the endpoint serves pages and profiles).
   - `raw` = `{ endpoint, ...Read }`, allow-listed fields only.
   - `identity` = `identityFor(ctx, url)`.
   - Because `enriches: true`, the runner stores this page as a second Source beside the Apify one for the same URL.

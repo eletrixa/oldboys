@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/recipe/sources/treg/person-enrich.ts
- * Deps:    zod, src/domain/url (httpUrl), src/recipe/seams/resolve (canonicalProfile), src/recipe/sources/text (txt), src/recipe/sources/types
+ * Deps:    zod, src/domain/url (httpUrl), src/recipe/seams/resolve (canonicalProfile), src/recipe/sources/text (txt), src/recipe/sources/treg/lines, src/recipe/sources/types
  * Tested:  src/recipe/__tests__/treg-search.test.ts
  *
  * Key responsibilities:
@@ -21,6 +21,7 @@ import { z } from "zod";
 import { httpUrl } from "@/domain/url";
 import { canonicalProfile } from "@/recipe/seams/resolve";
 import { txt } from "@/recipe/sources/text";
+import { historyLine, roleOf } from "@/recipe/sources/treg/lines";
 import type { Collector, Fetched, ParsedSource, StepContext } from "@/recipe/sources/types";
 import { acceptedCandidates, clip, identityFor, platformOf } from "@/recipe/sources/types";
 
@@ -86,21 +87,16 @@ function fullName(p: PersonRecord, ctx: StepContext): string {
   return txt(p.name) || joined || ctx.subject.trim();
 }
 
-/** `<title> @ <org>` or whichever part exists; "" when neither. */
-function titleAtOrg(title: string, org: string): string {
-  return [title, org].filter((s) => s !== "").join(" @ ");
-}
-
 /** Excerpt lines: name – headline, the literal confirmed LinkedIn URL (cross-link rule), current job, place, up to 5 history entries. */
 function excerptLines(p: PersonRecord, linkedin: string, ctx: StepContext): string[] {
   const org = txt(p.organization?.name);
   const title = txt(p.title);
-  const headline = txt(p.headline) || (title === "" ? "" : titleAtOrg(title, org)); // an org alone is no headline
+  const headline = txt(p.headline) || (title === "" ? "" : roleOf(title, org)); // an org alone is no headline
   const place = [txt(p.city), txt(p.country)].filter((s) => s !== "").join(", ");
   const history = (p.employment_history ?? [])
     .filter((j) => txt(j.title) !== "" || txt(j.organization_name) !== "")
     .slice(0, 5)
-    .map((j) => `${txt(j.title)} @ ${txt(j.organization_name)} (${txt(j.start_date)}–${txt(j.end_date) || "now"})`);
+    .map((j) => historyLine(txt(j.title), txt(j.organization_name), txt(j.start_date), txt(j.end_date)));
   const lines = [
     headline === "" ? fullName(p, ctx) : `${fullName(p, ctx)} – ${headline}`,
     `Linked from the confirmed LinkedIn profile ${linkedin} by Apollo people enrichment via treg`,

@@ -8,6 +8,7 @@ Plan: `plans/016-treg-enrichment/00-SYNTHESIS.md` (step `treg_people_search`, pr
 
 ## Files
 - `src/recipe/sources/treg/people-search.ts` (export `tregPeopleSearch: Collector`, id `treg/people-search`)
+- `src/recipe/sources/treg/lines.ts` (`roleOf`, `historyLine`, shared with `treg/person-enrich`: no parenthesis without a start date)
 - Tests: `src/recipe/__tests__/treg-search.test.ts` (`describe("tregPeopleSearch")`)
 - Uses: `mentionsFullName` (`src/domain/corroborate.ts`), `acceptedCandidates`, `clip`, `identityFor` (`src/recipe/sources/types.ts`)
 

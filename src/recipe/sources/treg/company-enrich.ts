@@ -3,15 +3,16 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/recipe/sources/treg/company-enrich.ts
- * Deps:    zod, src/domain/url (httpUrl), src/recipe/sources/types
+ * Deps:    zod, src/recipe/sources/types
  * Tested:  src/recipe/__tests__/treg-company.test.ts
  *
  * Key responsibilities:
- * - One `thecompaniesapi.companies.enrich` GET by `domain` (host of the anchor URL, `www.` stripped; $0.0019, capped at $0.005)
+ * - One `thecompaniesapi.companies.enrich` GET by `domain` (host of the anchor URL or bare domain, `www.` stripped; $0.0019, capped at $0.005)
  * - One Source (the company website) whose excerpt states name, legal name, industry, founding year, employees and HQ in plain sentences
  * - Digest `{ provider, domain, employees, founded, hq, socials }` for the state route
  *
  * Design constraints:
+ * - Anchor rule mirrors `anchorKey` in src/recipe/seams/resolve.ts (a dot and no spaces = the website, scheme optional); http(s) only
  * - Pure: no fetch; identity from identityFor (the anchor site is not a candidate profile, so usually "unverified")
  * - Allow-list parse: about, headquarters city and country, social URLs, domain; nothing else of the 80+ datapoints
  * - Source URL is always https://<anchor host>/; the provider's domain.domain only feeds the digest (anchor host when absent)
@@ -19,7 +20,6 @@
  * - A domain with no company behind it answers an empty object, parsed to no source
  */
 import { z } from "zod";
-import { httpUrl } from "@/domain/url";
 import type { Collector, Fetched, ParsedSource, StepContext } from "@/recipe/sources/types";
 import { clip, identityFor } from "@/recipe/sources/types";
 
@@ -45,10 +45,16 @@ const Company = z.object({
 const filled = (x: string | null | undefined): x is string => x !== undefined && x !== null && x !== "";
 
 function anchorDomain(anchor: string): string | null {
-  const url = httpUrl(anchor);
-  if (url === null) return null;
-  const host = new URL(url).hostname.replace(/^www\./, "");
-  return host.includes(".") ? host : null;
+  const a = anchor.trim();
+  if (!a.includes(".") || /\s/.test(a)) return null;
+  try {
+    const u = new URL(a.includes("://") ? a : `https://${a}`);
+    if (u.protocol !== "http:" && u.protocol !== "https:") return null;
+    const host = u.hostname.replace(/^www\./, "");
+    return host.includes(".") ? host : null;
+  } catch {
+    return null;
+  }
 }
 
 function read(payload: unknown, ctx: StepContext) {

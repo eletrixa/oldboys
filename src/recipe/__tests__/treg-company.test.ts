@@ -72,8 +72,15 @@ describe("tregCompanyEnrich", () => {
     expect(tregCompanyEnrich.digest?.([{ req, payload: {} }], ctx)).toBeNull();
   });
 
+  it("takes a bare domain anchor as the company website", () => {
+    for (const anchor of ["https://acme.cz/x", "acme.cz", "www.acme.cz", " Acme.CZ "]) {
+      const c = baseContext({ goal: "due-diligence", anchor });
+      expect(tregCompanyEnrich.requests(c, step).map((r) => (r.via === "treg" ? r.params : null))).toEqual([{ domain: "acme.cz" }]);
+    }
+  });
+
   it("skips a non-http anchor and a dotless host with the exact reason", () => {
-    for (const anchor of ["ftp://x", "ftp://files.example.com", "http://localhost"]) {
+    for (const anchor of ["ftp://x", "ftp://files.example.com", "http://localhost", "Brno", "Prague, Czechia", "acme.cz is a firm"]) {
       const c = baseContext({ goal: "due-diligence", anchor });
       expect(tregCompanyEnrich.requests(c, step)).toEqual([]);
       expect(tregCompanyEnrich.skipReason?.(c)).toBe("the anchor is not the company's website (no domain to look up)");

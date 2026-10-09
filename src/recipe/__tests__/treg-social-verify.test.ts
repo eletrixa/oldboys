@@ -84,6 +84,23 @@ describe("treg/social-verify requests", () => {
     ] }), step);
     expect(r).toEqual([treg("scrapecreators.youtube.channel.profile", "GET", { channelId: uc }), treg("anyapi.x.user.profile", "POST", { handle: "Jana" })]);
   });
+  it("sends a legacy /c/ or /user/ YouTube URL whole and keeps it as the Source URL", () => {
+    for (const kind of ["c", "user"]) {
+      const url = `https://www.youtube.com/${kind}/JanaTV`;
+      const lctx = baseContext({ candidates: [cand("youtube", "JanaTV", url)] });
+      const [req] = c.requests(lctx, step);
+      expect(req).toEqual(treg("scrapecreators.youtube.channel.profile", "GET", { url }));
+      const [s] = c.parse(payloads["scrapecreators.youtube.channel.profile"], lctx, step, req);
+      expect(s?.url).toBe(url);
+      expect(s?.identity).toBe("merged");
+      expect(s?.excerpt).not.toContain("@JanaTV");
+    }
+  });
+  it("resolves the identifier by param name even when an extra key comes first", () => {
+    const req = treg("scrapecreators.x.v1-facebook-profile", "GET", { cache_max_age: "7d", url: FB });
+    const [s] = c.parse(payloads["scrapecreators.x.v1-facebook-profile"], ctx, step, req);
+    expect(s?.url).toBe(FB);
+  });
   it("collapses the same handle on one platform in any case but keeps other platforms apart", () => {
     const r = c.requests(baseContext({ candidates: [
       cand("youtube", "JanaTV", "https://www.youtube.com/@JanaTV"), cand("youtube", "janatv", "https://www.youtube.com/@janatv", { id: "c2" }),
@@ -126,6 +143,11 @@ describe("treg/social-verify parse", () => {
     const [s] = parse("x", { output: { found: true, data: { handle: "someoneelse", followers: 1 } } });
     expect(s?.url).toBe("https://x.com/jana");
     expect(s?.url).not.toContain("someoneelse");
+  });
+  it("describes every Facebook read as an account, never a page", () => {
+    const [s] = parse("facebook");
+    expect(s?.excerpt).toContain("The Facebook account (Jana Page) has 777 followers");
+    expect(s?.excerpt).not.toContain("page");
   });
   it("never lets a sensitive Facebook field into the excerpt or raw", () => {
     const [s] = parse("facebook");

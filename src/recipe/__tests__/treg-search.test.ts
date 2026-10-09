@@ -22,6 +22,7 @@
  */
 import { describe, expect, it } from "vitest";
 import type { Candidate } from "@/domain/claim";
+import { historyLine, roleOf } from "@/recipe/sources/treg/lines";
 import { tregPeopleSearch } from "@/recipe/sources/treg/people-search";
 import { tregPersonEnrich } from "@/recipe/sources/treg/person-enrich";
 import { corroboration } from "@/recipe/seams/resolve";
@@ -93,6 +94,17 @@ describe("tregPersonEnrich", () => {
     expect(lines).toContain("Senior Data Engineer @ Kiwi.com (2021-03-01–now)");
     expect(lines).toContain("Data Engineer @ Red Hat (2018-01-01–2021-02-01)");
     expect(out[0]?.identity).toBe("unverified");
+  });
+
+  it("renders history entries like the Exa collector: no parenthesis without a start date, empty title", () => {
+    const employment_history = [
+      { title: "Dev", organization_name: "Acme", start_date: null, end_date: null },
+      { title: "", organization_name: "Acme", start_date: "2019", end_date: null },
+    ];
+    const lines = tregPersonEnrich.parse({ person: { ...apollo.person, employment_history } }, baseContext({ candidates: [linkedin()] }), step)[0]?.excerpt.split("\n") ?? [];
+    expect(lines).toContain("Dev @ Acme");
+    expect(lines).toContain("Acme (2019–now)");
+    expect(lines.join("\n")).not.toMatch(/ @ $|^ @ |\(–/m);
   });
 
   it("keeps no contact or personal fields in raw", () => {
@@ -251,6 +263,17 @@ describe("tregPeopleSearch", () => {
     expect(parse(hit("https://www.linkedin.com/in/xy", "", {}, "Jana Dvořáková"))).toHaveLength(1);
     expect(parse(hit("https://www.linkedin.com/in/xy", undefined))).toEqual([]);
     expect(parse({ results: [{ url: "https://www.linkedin.com/in/xy", title: "Jana Dvořáková" }] })).toHaveLength(1);
+  });
+
+  it("builds the same history line as the Apollo collector for the same title, company and dates", () => {
+    const item = { title: "Dev", company: { name: "Acme" }, dates: { from: "2019", to: "2021" } };
+    const exa = parse(hit("https://www.linkedin.com/in/xy", "Jana Dvořáková", { workHistory: [item] }))[0]?.excerpt.split("\n") ?? [];
+    const apolloJob = { title: "Dev", organization_name: "Acme", start_date: "2019", end_date: "2021" };
+    const enriched = tregPersonEnrich.parse({ person: { ...apollo.person, employment_history: [apolloJob] } }, baseContext({ candidates: [linkedin()] }), step)[0]?.excerpt.split("\n") ?? [];
+    expect(exa).toContain("Dev @ Acme (2019–2021)");
+    expect(enriched).toContain("Dev @ Acme (2019–2021)");
+    expect(historyLine("Dev", "Acme", "2019", "2021")).toBe("Dev @ Acme (2019–2021)");
+    expect(historyLine("Dev", "Acme", "", "2021")).toBe(roleOf("Dev", "Acme"));
   });
 
   it("omits missing parts of history lines", () => {

@@ -27,11 +27,13 @@ export type Reader = {
   method: "GET" | "POST";
   provider: string;
   /** The noun of the excerpt's first sentence. */
-  kind: "profile" | "account" | "page";
+  kind: "profile" | "account";
   /** What the posts count counts ("posts", "videos"). */
   postsLabel: string;
   /** Request param name for an identifier. */
   param: (id: string) => string;
+  /** Every name `param` can return; `readOf` finds the identifier among the request params by these, not by position. */
+  paramNames: readonly string[];
   /** Fixed params sent beside the identifier. */
   extra?: Record<string, string>;
   /** The handle, URL or channel id to read, or null when the candidate has none. */

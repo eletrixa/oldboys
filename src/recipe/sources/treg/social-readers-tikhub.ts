@@ -37,7 +37,7 @@ const isoDay = (unixSeconds: number | null | undefined): string | null => {
 
 const instagramReader: Reader = {
   platform: "instagram", endpoint: "tikhub.instagram.user.profile", method: "GET", provider: "TikHub", kind: "account", postsLabel: "posts",
-  param: () => "username",
+  param: () => "username", paramNames: ["username"],
   request: (c) => bare(c.handle) || null,
   profileUrl: (id) => `https://www.instagram.com/${id}/`,
   read: (payload, id) => {
@@ -52,7 +52,7 @@ const instagramReader: Reader = {
 };
 const tiktokReader: Reader = {
   platform: "tiktok", endpoint: "tikhub.tiktok.user.profile", method: "GET", provider: "TikHub", kind: "account", postsLabel: "videos",
-  param: () => "uniqueId",
+  param: () => "uniqueId", paramNames: ["uniqueId"],
   request: (c) => bare(c.handle) || null,
   profileUrl: (id) => `https://www.tiktok.com/@${id}`,
   read: (payload, id) => {

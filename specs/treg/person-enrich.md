@@ -2,7 +2,7 @@
 
 ## Purpose
 - Before the identity lineup, find the candidate's other public accounts (x, github, facebook) from the confirmed LinkedIn profile, so the lineup has hits that cross-link to a merged profile.
-- Dossier: `plans/016-treg-enrichment/00-SYNTHESIS.md` (step `treg_person_enrich`, hiring search pool). Code: `src/recipe/sources/treg/person-enrich.ts` (`tregPersonEnrich: Collector`). Tests: `src/recipe/__tests__/treg-search.test.ts`.
+- Dossier: `plans/016-treg-enrichment/00-SYNTHESIS.md` (step `treg_person_enrich`, hiring search pool). Code: `src/recipe/sources/treg/person-enrich.ts` (`tregPersonEnrich: Collector`), with `lines.ts` for role and history lines. Tests: `src/recipe/__tests__/treg-search.test.ts`.
 - Pure collector: no fetch; the runner executes the `via: "treg"` request through `Ports.callTreg`.
 
 ## Inputs

@@ -67,9 +67,9 @@ describe("makeTregCall", () => {
   });
 
   it("throws with status and a body snippet on 402", async () => {
-    stub(new Response('{"detail":{"error":"insufficient_balance",\n "x":"y"}}', { status: 402 }));
+    stub(new Response('{"detail":"no\n balance",\n "x":"y"}', { status: 402 }));
     await expect(makeTregCall("tok")({ endpoint: "e", method: "GET", params: {}, maxCostUsd: 0.001 })).rejects.toThrow(
-      'treg e: HTTP 402 {"detail":{"error":"insufficient_balance", "x":"y"}}',
+      'treg e: HTTP 402 {"detail":"no balance", "x":"y"}',
     );
   });
 
@@ -95,9 +95,46 @@ describe("makeTregCall", () => {
     expect(e2.message).not.toContain("SECRET123");
   });
 
-  it("throws on 503 provider capacity", async () => {
+  it("throws on 503 provider capacity (flat body keeps the snippet form)", async () => {
     stub(new Response('{"error":"provider_capacity_unavailable"}', { status: 503 }));
     await expect(makeTregCall("tok")(req)).rejects.toThrow('treg e: HTTP 503 {"error":"provider_capacity_unavailable"}');
+  });
+
+  it("redacts the URL-encoded token too", async () => {
+    const token = "ab+cd/ef=gh";
+    const enc = encodeURIComponent(token);
+    stub(new Response(`bad request ?token=${enc} and raw ${token}`, { status: 400 }));
+    const e = await makeTregCall(token)(req).then(() => new Error("no throw"), (x: unknown) => x as Error);
+    expect(e.message).toBe("treg e: HTTP 400 bad request ?token=[token] and raw [token]");
+    expect(e.message).not.toContain(enc);
+    expect(e.message).not.toContain("ab+cd");
+  });
+
+  it("states a detail.error and detail.message as a plain sentence", async () => {
+    const body = {
+      detail: {
+        error: "insufficient_balance",
+        message: "apollo.people.enrich would cost ~$0.026 on treg's apollo key and this team's balance is $0.000141.\n add funds ".padEnd(400, "x"),
+        balance_micro: 141,
+      },
+    };
+    stub(new Response(JSON.stringify(body), { status: 402 }));
+    const e = await makeTregCall("tok")({ ...req, endpoint: "apollo.people.enrich" }).then(() => new Error("no throw"), (x: unknown) => x as Error);
+    expect(e.message.startsWith("treg apollo.people.enrich: HTTP 402 insufficient_balance: apollo.people.enrich would cost ~$0.026 on treg's apollo key and this team's balance is $0.000141. add funds")).toBe(true);
+    expect(e.message).toBe(`treg apollo.people.enrich: HTTP 402 insufficient_balance: ${body.detail.message.replace(/\s+/g, " ").slice(0, 160)}`);
+    expect(e.message).not.toMatch(/[{}"]/);
+  });
+
+  it("states a 503 detail without a message, and redacts the token in the message", async () => {
+    stub(
+      new Response('{"detail":{"error":"provider_capacity_unavailable","resets_at":"2026-10-10T00:00:00Z"}}', { status: 503 }),
+      new Response('{"detail":{"error":"bad","message":"key SECRET123 rejected"}}', { status: 401 }),
+    );
+    const call = makeTregCall("SECRET123");
+    const e1 = await call(req).then(() => new Error("no throw"), (x: unknown) => x as Error);
+    expect(e1.message).toBe("treg e: HTTP 503 provider_capacity_unavailable");
+    const e2 = await call(req).then(() => new Error("no throw"), (x: unknown) => x as Error);
+    expect(e2.message).toBe("treg e: HTTP 401 bad: key [token] rejected");
   });
 
   it("does not retry after a failure", async () => {

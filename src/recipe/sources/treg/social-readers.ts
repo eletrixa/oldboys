@@ -39,10 +39,12 @@ const YouTube = z.object({
 const Facebook = z.object({ success: flag, id: text, name: text, creationDate: text, followerCount: num, likeCount: num, category: text, website: text });
 
 const isChannelId = (id: string): boolean => /^UC[\w-]{20,}$/.test(id);
+const isUrl = (id: string): boolean => id.startsWith("http");
+const LEGACY_YOUTUBE = /^https?:\/\/(?:www\.)?youtube\.com\/(?:c|user)\/[^/?#]+/i;
 
 const linkedinReader: Reader = {
   platform: "linkedin", endpoint: "fetchinio.linkedin.user.profile", method: "GET", provider: "Fetchin", kind: "profile", postsLabel: "posts",
-  param: () => "profileUrlOrUrn",
+  param: () => "profileUrlOrUrn", paramNames: ["profileUrlOrUrn"],
   request: (c) => c.profile_urls[0] ?? null,
   profileUrl: (id) => id,
   read: (payload) => {
@@ -61,7 +63,7 @@ const linkedinReader: Reader = {
 };
 const xReader: Reader = {
   platform: "x", endpoint: "anyapi.x.user.profile", method: "POST", provider: "AnyAPI", kind: "account", postsLabel: "posts",
-  param: () => "handle",
+  param: () => "handle", paramNames: ["handle"],
   request: (c) => bare(c.handle) || null,
   profileUrl: (id) => `https://x.com/${id}`,
   read: (payload, id) => {
@@ -76,21 +78,23 @@ const xReader: Reader = {
 };
 const youtubeReader: Reader = {
   platform: "youtube", endpoint: "scrapecreators.youtube.channel.profile", method: "GET", provider: "ScrapeCreators", kind: "account", postsLabel: "videos",
-  param: (id) => (isChannelId(id) ? "channelId" : "handle"),
-  request: (c) => bare(c.handle) || null,
-  profileUrl: (id) => (isChannelId(id) ? `https://www.youtube.com/channel/${id}` : `https://www.youtube.com/@${id}`),
+  param: (id) => (isUrl(id) ? "url" : isChannelId(id) ? "channelId" : "handle"),
+  paramNames: ["url", "channelId", "handle"],
+  /** A legacy /c/ or /user/ URL is sent whole (the endpoint resolves it); otherwise the handle or channel id. */
+  request: (c) => c.profile_urls.find((u) => LEGACY_YOUTUBE.test(u)) ?? (bare(c.handle) || null),
+  profileUrl: (id) => (isUrl(id) ? id : isChannelId(id) ? `https://www.youtube.com/channel/${id}` : `https://www.youtube.com/@${id}`),
   read: (payload, id) => {
     const d = YouTube.safeParse(payload).data;
     if (nil(d) || d.success === false || (nil(d.channelId) && nil(d.name))) return null;
     return {
-      handle: isChannelId(id) ? null : id, display_name: d.name ?? null, bio: clipBio(d.description), followers: count(d.subscriberCount), posts: count(d.videoCount),
+      handle: isChannelId(id) || isUrl(id) ? null : id, display_name: d.name ?? null, bio: clipBio(d.description), followers: count(d.subscriberCount), posts: count(d.videoCount),
       verified: d.isVerified ?? null, created_at: d.joinedDateText?.replace(/^Joined\s+/i, "") ?? null, photo_url: d.avatar?.image?.sources?.[0]?.url ?? null,
     };
   },
 };
 const facebookReader: Reader = {
-  platform: "facebook", endpoint: "scrapecreators.x.v1-facebook-profile", method: "GET", provider: "ScrapeCreators", kind: "page", postsLabel: "posts",
-  param: () => "url",
+  platform: "facebook", endpoint: "scrapecreators.x.v1-facebook-profile", method: "GET", provider: "ScrapeCreators", kind: "account", postsLabel: "posts",
+  param: () => "url", paramNames: ["url"],
   extra: { cache_max_age: "7d" },
   request: (c) => c.profile_urls[0] ?? null,
   profileUrl: (id) => id,
@@ -102,7 +106,7 @@ const facebookReader: Reader = {
       display_name: d.name ?? null, followers: count(d.followerCount), created_at: d.creationDate ?? null,
       extras: [
         ...(nil(d.category) ? [] : [`Category: ${d.category}.`]),
-        ...(likes === null ? [] : [`The page has ${String(likes)} likes.`]),
+        ...(likes === null ? [] : [`The account has ${String(likes)} likes.`]),
         ...(nil(d.website) ? [] : [`Website: ${d.website}.`]),
       ],
     };

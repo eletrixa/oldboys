@@ -13,8 +13,8 @@ Plan: `plans/016-treg-enrichment/00-SYNTHESIS.md`. Step id `treg_company_enrich`
 
 ## Inputs
 - `StepContext.anchor`: the due-diligence anchor URL.
-- Domain = `new URL(anchor).hostname` with a leading `www.` removed. Valid only for `http:` / `https:` and a host containing a dot.
-- Anchor that is not such a URL (a place such as "Brno", other scheme, dotless host) → `requests` returns `[]`.
+- Domain = hostname of the anchor with a leading `www.` removed. The anchor is trimmed and must contain a dot and no whitespace (same rule as `anchorKey` in `resolve.ts`); the scheme is optional, so `https://acme.cz/x`, `acme.cz` and `www.acme.cz` all give `acme.cz`. A scheme, if present, must be `http:` / `https:`.
+- Anchor that is not such a website (a place such as "Brno" or "Prague, Czechia", other scheme, dotless host, text with spaces) → `requests` returns `[]`.
 - Skip reason (exact): `the anchor is not the company's website (no domain to look up)`.
 - Payload from the adapter: `unknown`.
 
@@ -41,7 +41,8 @@ Plan: `plans/016-treg-enrichment/00-SYNTHESIS.md`. Step id `treg_company_enrich`
 
 ## Tests that prove it (`treg-company.test.ts`)
 - Request: `https://www.stripe.com/en-cz` → params `{ domain: "stripe.com" }`, endpoint, method GET, `maxCostUsd 0.005`.
-- Place anchor ("Brno") → `[]` and the exact skip reason.
+- Bare domain anchors (`acme.cz`, `www.acme.cz`, `https://acme.cz/x`) → `{ domain: "acme.cz" }`.
+- Place anchor ("Brno", "Prague, Czechia") → `[]` and the exact skip reason.
 - Excerpt equals the exact sentence for the Stripe fixture; url `https://stripe.com/`; `raw` lacks `emailPatterns`.
 - `{}`, `null`, `"nope"`, `{ about: { name: 5 } }` → `[]`.
 - Digest equals `{ provider, domain, employees: 8000, founded: 2010, hq, socials: [twitter, github] }` (non-URL social entries dropped); `{}` payload → `null`.

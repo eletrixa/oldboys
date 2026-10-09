@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/recipe/sources/treg/people-search.ts
- * Deps:    zod, src/domain/corroborate (mentionsFullName), src/domain/profile-url (normalizeLinkedinProfile), src/recipe/sources/text (txt), src/recipe/sources/types
+ * Deps:    zod, src/domain/corroborate (mentionsFullName), src/domain/profile-url (normalizeLinkedinProfile), src/recipe/sources/text (txt), src/recipe/sources/treg/lines, src/recipe/sources/types
  * Tested:  src/recipe/__tests__/treg-search.test.ts
  *
  * Key responsibilities:
@@ -22,6 +22,7 @@ import { mentionsFullName } from "@/domain/corroborate";
 import { normalizeLinkedinProfile } from "@/domain/profile-url";
 import { txt } from "@/recipe/sources/text";
 import type { Collector, ParsedSource, StepContext } from "@/recipe/sources/types";
+import { historyLine, roleOf } from "@/recipe/sources/treg/lines";
 import { acceptedCandidates, clip, identityFor } from "@/recipe/sources/types";
 
 const Work = z.object({
@@ -35,18 +36,9 @@ const Payload = z.object({ results: z.array(z.unknown()) });
 
 type WorkItem = z.infer<typeof Work>;
 
-/** `<title> @ <company>`, empty parts omitted. */
-function roleOf(j: WorkItem): string {
-  return [txt(j.title), txt(j.company?.name)].filter((s) => s !== "").join(" @ ");
-}
-
-/** `<title> @ <company> (<from>–<to>)`, empty parts omitted; no parenthesis without a start date. */
-function historyLine(j: WorkItem): string {
-  const role = roleOf(j);
-  const from = txt(j.dates?.from);
-  const to = txt(j.dates?.to);
-  return from === "" ? role : `${role} (${from}–${to === "" ? "now" : to})`;
-}
+/** The shared role / history line of a work item. */
+const roleLine = (j: WorkItem): string => roleOf(txt(j.title), txt(j.company?.name));
+const historyOf = (j: WorkItem): string => historyLine(txt(j.title), txt(j.company?.name), txt(j.dates?.from), txt(j.dates?.to));
 
 const query = (ctx: StepContext): string => `${ctx.subject} ${ctx.anchor}`.trim();
 
@@ -62,13 +54,13 @@ function sourceOf(item: unknown, ctx: StepContext): ParsedSource | null {
     const j = Work.safeParse(w);
     return j.success && (txt(j.data.title) !== "" || txt(j.data.company?.name) !== "") ? [j.data] : [];
   });
-  const headline = work[0] === undefined ? "" : roleOf(work[0]);
+  const headline = work[0] === undefined ? "" : roleLine(work[0]);
   const location = txt(props?.location);
   const lines = [
     headline === "" ? name : `${name} – ${headline}`,
     `Found by Exa people search for "${query(ctx)}" via treg`,
     location === "" ? "" : `Location: ${location}`,
-    ...work.slice(0, 4).map(historyLine),
+    ...work.slice(0, 4).map(historyOf),
   ].filter((l) => l !== "");
   return { url, excerpt: clip(lines.join("\n")), raw: { url, name, location, workHistory: work }, identity: identityFor(ctx, url) };
 }

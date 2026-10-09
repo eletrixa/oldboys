@@ -22,9 +22,10 @@ Plan: `plans/016-treg-enrichment/00-SYNTHESIS.md` (Port, Adapter rows).
   - `cost_usd` = `Number(X-Treg-Cost-Micro) / 1e6`; header missing or not finite (NaN, Infinity) = `0`.
 
 ## Rules
-- The token is sent in the `X-Treg-Token` header only; never in the URL, body, error message or any note.
+- The token is sent in the `X-Treg-Token` header only; never in the URL, body, error message or any note. Errors redact both the raw token and `encodeURIComponent(token)` as `[token]`.
 - `signal: AbortSignal.timeout(TIMEOUT_MS)` on every request; no retry, no fallback; the runner turns a throw into a note.
-- Non-2xx throws `Error("treg <endpoint>: HTTP <status> <snippet>")`; snippet = body with whitespace runs collapsed to one space, trimmed, first 160 characters. 402 = balance exhausted, 503 = provider capacity; both are uncharged.
+- Non-2xx whose body is JSON with `detail.error` (string) throws `Error("treg <endpoint>: HTTP <status> <detail.error>: <detail.message>")` (no braces or quotes; message optional and then the `: ` part is omitted; message whitespace collapsed, token-redacted, first 160 characters), e.g. `treg apollo.people.enrich: HTTP 402 insufficient_balance: apollo.people.enrich would cost ~$0.026 on treg's apollo key and this team's balance is $0.000141.`; also for the 503 `provider_capacity_unavailable` detail.
+- Any other non-2xx body throws `Error("treg <endpoint>: HTTP <status> <snippet>")`; snippet = body with whitespace runs collapsed to one space, trimmed, first 160 characters. 402 = balance exhausted, 503 = provider capacity; both are uncharged.
 - A failed call returns no cost (the throw carries none); the runner reserves `maxCostUsd` and settles on success only.
 - The adapter does not parse provider payloads and does not know endpoints; allow-list parsing lives in the collectors.
 - The adapter does not check budget; `maxCostUsd` is only forwarded as the provider-side cap.
@@ -51,4 +52,6 @@ To add:
 - `X-Treg-Route-Max-Cost` plain decimal for `10`, `0.00022`, `1e-7` (never `1e-7`).
 - A request carries an abort signal (`fetch` init `signal` is an `AbortSignal`); no second `fetch` call after a failure (no retry).
 - Negative cost header gives `0`.
+- URL-encoded token (`+`, `/`, `=`) echoed in a body is redacted in both forms.
+- `detail.error` + `detail.message` gives the plain sentence (message cut at 160, no braces or quotes); 503 detail without message gives `HTTP 503 provider_capacity_unavailable`; token in the message is redacted.
 - POST url has no `?` even with params.

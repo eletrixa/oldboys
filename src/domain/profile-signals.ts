@@ -14,7 +14,7 @@
  *   neutral interview question or null
  * - `PROFILE_SIGNAL_CAVEATS`: fixed honesty lines shown with the card
  * - `mergeAccounts`: two readings of one account (Apify scrape, treg second source) become one fact set per
- *   platform + canonical URL; later non-null fields win, a null never erases an earlier number
+ *   platform + lower-cased canonical URL; later non-null fields win, a null never erases an earlier number
  *
  * Design constraints:
  * - Pure, no I/O, no model; thresholds are constants in one table, relative to `now`, conjunctive where the
@@ -120,7 +120,7 @@ const ageDays = (c: Created, nowMs: number): number => (nowMs - c.ms) / DAY_MS;
 export function mergeAccounts(all: readonly ProfileFacts[]): ProfileFacts[] {
   const accounts = new Map<string, ProfileFacts>();
   for (const f of all) {
-    const key = `${f.platform}|${canonicalUrl(f.url)}`;
+    const key = `${f.platform}|${canonicalUrl(f.url).toLowerCase()}`;
     const prev = accounts.get(key);
     if (prev === undefined) {
       accounts.set(key, f);

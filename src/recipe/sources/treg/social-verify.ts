@@ -33,9 +33,11 @@ type Read = { reader: Reader; params: Params; url: string; a: Partial<ProfileFac
 function readOf(payload: unknown, req: CollectorRequest | undefined): Read | null {
   if (req?.via !== "treg") return null;
   const reader = READERS.find((r) => r.endpoint === req.endpoint);
-  const id = String(Object.values(req.params)[0] ?? "");
-  const read = reader?.read(payload, id) ?? null;
-  if (reader === undefined || read === null) return null;
+  if (reader === undefined) return null;
+  const key = Object.keys(req.params).find((k) => reader.paramNames.includes(k));
+  const id = key === undefined ? "" : String(req.params[key]);
+  const read = reader.read(payload, id);
+  if (read === null) return null;
   const { extras = [], ...a } = read;
   return { reader, params: req.params, url: reader.profileUrl(id), a, extras };
 }
