@@ -1,54 +1,30 @@
 /**
- * Landing story: the problem, the product (a readable sample brief) and the before/during interview moments.
+ * Landing story: the product (a readable sample brief) and the before/during interview moments.
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/landing/story.tsx
- * Deps:    ./parts, ./sample-brief, ../ui
+ * Deps:    ./parts, ./sample-brief, ./evidence-data, ../ui
  * Tested:  n/a (visual)
  *
  * Key responsibilities:
- * - Problem: three short cards beside the "too many tabs" photo (photo shorter on phones, where it carries no information)
  * - Product: the live SampleBrief with three numbered callouts (sticky on desktop) that point at its summary, requirement cards and limits line
- * - Moments: Before (read one page) and During (ask what matters, copy the questions into your kit or ATS)
+ * - Moments: Before (the brief at a glance: one row per requirement with its coverage word) and During (questions with
+ *   the reason to ask them), each as a snippet over a photo; photos add human context, the snippet carries the point
  *
  * Design constraints:
  * - Copy only claims what the run page does today (evidence per criterion, to-verify list, not searched, kit)
  * - Each section adds a new concrete detail instead of repeating the hero's sentence
  */
-import { Eyebrow } from "../ui";
+import { Eyebrow, Pill, type Tone } from "../ui";
+import { NONE, PARTIAL } from "./evidence-data";
 import { Photo, Section, Title } from "./parts";
 import { SampleBrief } from "./sample-brief";
-
-const PROBLEMS: readonly (readonly [string, string])[] = [
-  ["Thirty minutes with a stranger", "A CV, a profile page and half an hour. The best questions usually come to you after the interview."],
-  ["Ten tabs, nothing to share", "You search, skim and remember a few things. None of it reaches the hiring manager in a form they can check."],
-  ["Unsure what is fair to look at", "Some of what turns up online should not count. In a hurry, the line is hard to see."],
-];
 
 const CALLOUTS: readonly (readonly [string, string])[] = [
   ["The 30-second summary", "Confirmed, missing and the one question to ask first. Read it in the corridor."],
   ["Evidence per requirement", "Evidenced, partial or none, in words. Each fact opens the quote and the page it came from, with the date Radar read it."],
   ["Research limits", "Which sources were searched, which were skipped, and that nothing about private life was collected."],
 ];
-
-export function Problem(): React.JSX.Element {
-  return (
-    <Section id="problem" hairline={false} className="grid items-start gap-10 md:grid-cols-2 md:gap-14">
-      <div className="flex flex-col gap-8">
-        <Title lead="The CV says a lot." rest="It proves little." />
-        <div className="flex flex-col gap-3">
-          {PROBLEMS.map(([t, b]) => (
-            <div key={t} className="rounded-2xl border border-divider bg-surface/70 p-5">
-              <h3 className="font-semibold">{t}</h3>
-              <p className="mt-1 text-sm leading-relaxed text-pretty text-muted">{b}</p>
-            </div>
-          ))}
-        </div>
-      </div>
-      <Photo src="/marketing/problem.jpg" alt="A laptop crowded with open browser tabs late in the evening." className="aspect-[16/9] md:aspect-[4/4.6]" />
-    </Section>
-  );
-}
 
 export function Product(): React.JSX.Element {
   return (
@@ -82,41 +58,63 @@ export function Product(): React.JSX.Element {
   );
 }
 
+const GLANCE: readonly (readonly [string, Tone, string])[] = [
+  ["Writes production SQL", "ok", "evidenced"],
+  ["Python", "ok", "evidenced"],
+  ["Cloud data platforms", "unsure", "partial"],
+  ["Has led a team of at least three engineers", "neutral", "none"],
+];
+
+const SNIP = "relative mx-3 -mt-12 flex flex-col gap-2 rounded-xl border border-divider bg-[#fffefb] p-4 shadow-[0_18px_44px_rgba(40,45,43,0.14)] sm:mx-4";
+const SNIP_K = "text-[11px] font-semibold tracking-[0.07em] text-muted uppercase";
+
 function Moment({ when, title, body, children }: Readonly<{ when: string; title: string; body: string; children: React.ReactNode }>): React.JSX.Element {
   return (
     <div className="flex flex-col gap-3">
-      <div className="relative">{children}</div>
-      <p className="mt-2 text-xs font-semibold tracking-[0.08em] text-action uppercase">{when}</p>
-      <h3 className="font-serif text-2xl text-balance">{title}</h3>
+      <p className="text-xs font-semibold tracking-[0.08em] text-action uppercase">{when}</p>
+      <h3 className="font-serif text-2xl text-balance md:text-[1.75rem]">{title}</h3>
       <p className="max-w-[46ch] text-pretty text-muted">{body}</p>
+      <div className="mt-3">{children}</div>
     </div>
   );
 }
 
 export function Moments(): React.JSX.Element {
+  const partial = PARTIAL;
+  const none = NONE;
   return (
     <Section id="day">
       <div className="flex max-w-[40rem] flex-col gap-3">
         <Eyebrow>Before and during the interview</Eyebrow>
-        <Title lead="Prepared in minutes, present for the conversation." />
+        <Title lead="Less time searching." rest="More of the conversation that matters." />
       </div>
-      <div className="mt-12 grid gap-12 md:grid-cols-2 md:gap-10">
-        <Moment
-          when="Before"
-          title="Read one page, not ten tabs"
-          body="The brief arrives a few minutes after you add the candidate. Each requirement is marked evidenced, partial or none, with the quote underneath."
-        >
-          <Photo src="/marketing/moment-prepare.jpg" alt="Hands underlining a highlighted line on a printed brief." className="aspect-[4/3]" />
+      <div className="mt-12 grid gap-14 md:grid-cols-2 md:gap-10">
+        <Moment when="Before" title="Read one page, not ten tabs." body="Each requirement sits next to its coverage word and its source, so you know what is backed up before the candidate walks in.">
+          <Photo src="/marketing/moment-prepare.jpg" alt="Hands underlining a highlighted line on a printed one-page brief." className="aspect-[16/10]" />
+          <div className={SNIP}>
+            <span className={SNIP_K}>Jan&apos;s brief at a glance</span>
+            <ul className="flex flex-col divide-y divide-divider text-[15px]">
+              {GLANCE.map(([t, tone, word]) => (
+                <li key={t} className="flex items-center justify-between gap-3 py-2">
+                  <span>{t}</span>
+                  <Pill tone={tone}>{word}</Pill>
+                </li>
+              ))}
+            </ul>
+          </div>
         </Moment>
-        <Moment
-          when="During"
-          title="Ask what actually matters"
-          body="Open points become questions you can copy into your interview kit, your ATS or a reference check. Start where the brief ends: the project they shipped, the team they say they led."
-        >
-          <Photo src="/marketing/moment-interview.jpg" alt="Two people talking across a table in a bright meeting room, faces not visible." className="aspect-[4/3]" />
-          <div className="absolute right-4 bottom-4 left-4 rounded-xl bg-surface/95 p-4 shadow-lg backdrop-blur md:left-auto md:max-w-[19rem]">
-            <p className="font-serif text-[15px] leading-snug text-pretty">“Have you led other engineers? Tell me about one decision you made for the team.”</p>
-            <p className="mt-1 text-xs text-muted">Suggested interview question</p>
+        <Moment when="During" title="Ask questions that start from the evidence." body="Each question carries the reason to ask it. Copy them into your interview kit, your ATS or a reference check.">
+          <Photo src="/marketing/moment-interview.jpg" alt="Two people talking across a table in a bright meeting room, faces not visible." className="aspect-[16/10]" />
+          <div className={SNIP}>
+            <span className={SNIP_K}>Questions with a reason</span>
+            <div className="flex flex-col gap-1 border-b border-divider pb-3">
+              <p className="font-serif text-[17px] leading-snug text-pretty">“{partial.question}”</p>
+              <span className="text-[13px] text-muted">Why ask: partial. {partial.why.open}</span>
+            </div>
+            <div className="flex flex-col gap-1 pt-1">
+              <p className="font-serif text-[17px] leading-snug text-pretty">“{none.question}”</p>
+              <span className="text-[13px] text-muted">Why ask: none. No public source mentions leading a team.</span>
+            </div>
           </div>
         </Moment>
       </div>

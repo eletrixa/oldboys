@@ -133,6 +133,9 @@ function rowOf(step: string): number {
   return 2;
 }
 
+/** Wireframe: one easy question at a time, and never more than a few; the rest keep the server's decision. */
+export const LINEUP_MAX_QUESTIONS = 3;
+
 /**
  * Candidates worth a question: the highest-scored open profile per platform (one question per platform, so three
  * questions reach three different profiles); plain web hits only fill up to `max` when fewer profiles are open.

@@ -1,5 +1,5 @@
 /**
- * Landing trust half: how it works, careful by design, FAQ and the closing call to action.
+ * Landing trust half: how it works, FAQ and the closing call to action (careful by design lives in careful.tsx).
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/landing/trust.tsx
@@ -7,8 +7,7 @@
  * Tested:  n/a (visual)
  *
  * Key responsibilities:
- * - Three real steps (position, candidate, brief) with a second Create account action under them
- * - Four "careful by design" rows beside the folder photo (photo hidden on phones, where it only costs scroll)
+ * - Three real steps (position, candidate, brief) on hairlines, with a second Create account action under them
  * - Seven FAQ answers, the first (surveillance) open by default, GDPR legal basis answered in plain words
  * - Closing band on solid ink with the same two actions as the hero and the four proof points beside them, then the fictional-candidate / AI-photo disclosure
  *
@@ -19,19 +18,12 @@
  */
 import Link from "next/link";
 import { BTN_PRIMARY, Chevron, Eyebrow } from "../ui";
-import { Ctas, Photo, PROOF, Section, Title } from "./parts";
+import { Ctas, PROOF, Section, Title } from "./parts";
 
 const STEPS: readonly (readonly [string, string])[] = [
   ["Add the position", "Paste a job link or describe the role. Radar lists the must-haves, and you can edit them."],
   ["Add the candidate", "Their LinkedIn profile or CV. Radar reads public professional work for this role only."],
   ["Get one page", "Summary, evidence per must-have, and the gaps to ask about. Usually in a few minutes."],
-];
-
-const CAREFUL: readonly (readonly [string, string])[] = [
-  ["Never looked at", "Private accounts, closed groups, health, beliefs, family, origin or political views. Faces are never matched."],
-  ["No scores, ever", "Status words describe the research, not the person. Radar never rates, ranks or rejects anyone."],
-  ["The candidate is told", "A plain-language notice says who looked, why, which sources, and how to object. In English or Czech."],
-  ["Gone in seven days", "The research, saved excerpts and any CV are deleted automatically a week after the brief."],
 ];
 
 const FAQ: readonly (readonly [string, string])[] = [
@@ -53,11 +45,11 @@ export function How(): React.JSX.Element {
         <Eyebrow>How it works</Eyebrow>
         <Title lead="Three steps, a few minutes." />
       </div>
-      <ol className="mt-10 grid gap-4 md:grid-cols-3">
+      <ol className="mt-10 grid gap-8 md:grid-cols-3 md:gap-6">
         {STEPS.map(([t, b], i) => (
-          <li key={t} className="flex flex-col gap-3 rounded-2xl border border-divider bg-surface p-6 shadow-[0_8px_30px_rgba(40,45,43,0.06)]">
-            <span className="font-serif text-4xl text-action tabular-nums">{i + 1}</span>
-            <h3 className="font-semibold">{t}</h3>
+          <li key={t} className="flex flex-col gap-2.5 border-t-2 border-ink pt-4">
+            <span className="font-serif text-4xl leading-none text-action tabular-nums">{i + 1}</span>
+            <h3 className="text-lg font-semibold">{t}</h3>
             <p className="text-sm leading-relaxed text-pretty text-muted">{b}</p>
           </li>
         ))}
@@ -67,25 +59,6 @@ export function How(): React.JSX.Element {
           Create account
         </Link>
         <p className="text-sm text-muted">Your first brief takes a job link and a LinkedIn profile.</p>
-      </div>
-    </Section>
-  );
-}
-
-export function Careful(): React.JSX.Element {
-  return (
-    <Section id="trust" className="grid items-center gap-10 md:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] md:gap-14">
-      <Photo src="/marketing/fair.jpg" alt="A tidy stack of printed pages held by a brass paper clip on a sage folder." className="hidden md:block md:aspect-[4/5]" />
-      <div className="flex flex-col gap-8">
-        <Title lead="Careful by design." rest="The way hiring research should work." />
-        <dl className="flex flex-col border-t border-divider">
-          {CAREFUL.map(([t, b]) => (
-            <div key={t} className="grid gap-1 border-b border-divider py-4 sm:grid-cols-[11rem_minmax(0,1fr)] sm:gap-6">
-              <dt className="font-semibold">{t}</dt>
-              <dd className="text-pretty text-muted">{b}</dd>
-            </div>
-          ))}
-        </dl>
       </div>
     </Section>
   );
