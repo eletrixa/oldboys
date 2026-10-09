@@ -607,8 +607,15 @@ function SummaryBox({ profile, fits, all, ctx, present }: { profile: Profile; fi
   );
 }
 
+/** The degraded line in plain words; the model's own error text stays in the ledger notes, never on the brief. */
+export function profileDegradedText(reason: string): string {
+  return reason === "no verified claims"
+    ? "Profile not built: no verified claims to build it from."
+    : "Profile not built: the AI step that writes it failed on this run. The evidence and questions above are not affected.";
+}
+
 export function ProfileSections({ profile, evidence, role = null }: { profile: Profile; evidence: Evidence; role?: string | null }): React.JSX.Element {
-  if (profile.degraded !== null) return <p className="text-sm text-muted">Profile not built: {profile.degraded}</p>;
+  if (profile.degraded !== null) return <p className="text-sm text-muted">{profileDegradedText(profile.degraded)}</p>;
   const p = profile.personality;
   const all = allEvidence(profile);
   const ctx: Ctx = { evidence, cite: citeOf(all, evidence) };

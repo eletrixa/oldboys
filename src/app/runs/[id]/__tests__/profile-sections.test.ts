@@ -10,7 +10,7 @@
  * - Verdict strip, Robert's section order, caps with "Show N more", run's role first, empty sections omitted
  * - Evidence lines: kind, direction, strength pill, [n] deep link, note, "source missing"; independent count per item
  * - Fit recomputed as Σ(weight × status) ÷ Σ(weight)
- * - A degraded profile renders only "Profile not built: <reason>"
+ * - A degraded profile renders only "Profile not built: …" in plain words, never the model's error text
  * - Every animation and transition for the profile sits behind prefers-reduced-motion: no-preference (CSS and classes)
  *
  * Design constraints:
@@ -160,10 +160,11 @@ describe("ProfileSections", () => {
   });
 
   it("renders only the degraded line when the profile was not built", () => {
-    const out = html({ ...profile, degraded: "model timeout" });
-    expect(out).toContain("Profile not built: ");
-    expect(out).toContain("model timeout");
+    const out = html({ ...profile, degraded: "profile model failed: The compiled grammar is too large" });
+    expect(out).toContain("Profile not built: the AI step that writes it failed on this run.");
+    expect(out).not.toContain("compiled grammar");
     expect(out).not.toContain("Achievements");
+    expect(html({ ...profile, degraded: "no verified claims" })).toContain("Profile not built: no verified claims to build it from.");
   });
 
   it("names evidence summaries for screen readers, keeps \"·\" off line starts, stacks the fit table on phones with evidence in its own full-width row", () => {
