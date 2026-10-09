@@ -7,16 +7,18 @@
  * Tested:  src/domain/__tests__/auth-limits.test.ts
  *
  * Key responsibilities:
- * - Window sizes and caps for register, failed login and ARES lookups
+ * - Window sizes and caps for register, failed login, ARES lookups and profile suggestions
  * - since(): ISO lower bound of a window; clientIp(): CF-Connecting-IP
  *
  * Design constraints:
  * - Counters live in D1 auth_attempts; this file holds no state
  */
-export type AttemptKind = "register" | "login_fail" | "ares";
+export type AttemptKind = "register" | "login_fail" | "ares" | "suggest";
 
 export const REGISTER_PER_HOUR_PER_IP = 10;
 export const ARES_PER_HOUR_PER_IP = 30;
+/** Profile suggestions (plans/011): web-search lookups per signed-in account per hour. */
+export const SUGGEST_PER_HOUR_PER_ACCOUNT = 60;
 export const LOGIN_FAILS_PER_WINDOW = 5;
 export const LOGIN_WINDOW_MS = 15 * 60 * 1000;
 export const HOUR_MS = 60 * 60 * 1000;

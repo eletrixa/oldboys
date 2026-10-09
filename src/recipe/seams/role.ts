@@ -3,12 +3,14 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/recipe/seams/role.ts
- * Deps:    zod, src/domain/position (shapeMustHaves, fallbackMustHaves, mustHavesToQuestions)
+ * Deps:    zod, src/domain/position (shapeMustHaves, fallbackMustHaves, mustHavesToQuestions), src/domain/role-catalog (matchRoleTemplate)
  * Tested:  src/recipe/__tests__/role.test.ts
  *
  * Key responsibilities:
  * - `roleQuestions`: observable, web-searchable must-have questions with `mh-` ids; deterministic fallback on LLM failure;
  *   `calls` = successful model calls (0 when the model threw), so the header count stays true
+ * - `roleQuestionsFor`: a catalog template that names the role answers without a model call (cost 0, calls 0);
+ *   otherwise `roleQuestions`
  * - `profileFor`: ordered keyword rules mapping a role to an evidence profile
  *
  * Design constraints:
@@ -17,6 +19,7 @@
  */
 import { z } from "zod";
 import { errorMessage, fallbackMustHaves, mustHavesToQuestions, shapeMustHaves } from "@/domain/position";
+import { matchRoleTemplate, type RoleTemplate } from "@/domain/role-catalog";
 import type { Ports } from "@/domain/ports";
 import type { Question } from "@/recipe/step";
 
@@ -77,4 +80,15 @@ export async function roleQuestions(
     const why = errorMessage(e);
     return { questions: fallback(role, anchor), cost_usd: 0, calls: 0, notes: [`role questions: LLM failed (${why}), used generic fallback`] };
   }
+}
+
+export type RoleQuestionsResult = { questions: Question[]; cost_usd: number; calls: number; notes: string[]; template: string | null };
+
+/** Template first (deterministic, free), model second; `template` is the matched catalog key or null. */
+export async function roleQuestionsFor(role: string, templates: readonly RoleTemplate[], ports: Pick<Ports, "llm">, anchor = ""): Promise<RoleQuestionsResult> {
+  const hit = matchRoleTemplate(role, templates);
+  if (hit !== null) {
+    return { questions: mustHavesToQuestions(hit), cost_usd: 0, calls: 0, notes: [`role template: ${hit.key}`], template: hit.key };
+  }
+  return { ...(await roleQuestions(role, ports, anchor)), template: null };
 }

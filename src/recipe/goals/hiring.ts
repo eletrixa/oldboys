@@ -8,6 +8,7 @@
  *
  * Key responsibilities:
  * - Question list and ordered step list for goal "hiring"; `seed_profile` first (manager's LinkedIn URL or CV, plans/006)
+ * - `role_sites_serp`: the matched role template's evidence sites (src/domain/role-catalog) as one `site:` search
  *
  * Design constraints:
  * - Must call `github_profile`; must never call ARES (that is due-diligence's step)
@@ -42,6 +43,7 @@ export const hiringRecipe: Recipe = {
     { id: "youtube_channel", kind: "actor", actor: "streamers/youtube-scraper", onEmpty: { gap: "no YouTube videos or channel found" } },
     { id: "bluesky_profile", kind: "actor", actor: "rest/bluesky", onEmpty: { gap: "no Bluesky account found" } },
     { id: "personal_site_crawl", kind: "actor", actor: "apify/website-content-crawler", onEmpty: { gap: "no personal site found" } },
+    { id: "role_sites_serp", kind: "serp", actor: "apify/google-search-scraper", query: '"{subject}" {role_sites}', onEmpty: { gap: "no hits on the role's evidence sites (or the role matched no template)" } },
     { id: "talks_serp", kind: "serp", actor: "apify/google-search-scraper", query: '{subject} talk OR podcast OR conference OR blog OR interview', onEmpty: { gap: "no talks, podcasts or posts found in web search" } },
     { id: "extract_claims", kind: "extract" },
     { id: "verify_claims", kind: "verify" },

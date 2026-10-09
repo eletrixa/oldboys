@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/runs/[id]/parts.tsx
- * Deps:    react (client component, imported only by run-view.tsx), src/domain/claim (types), src/domain/run-cost, ../../ui (Radar vocabulary), ./sections, ./state, ./call-panel-view
+ * Deps:    react (client component, imported only by run-view.tsx), src/domain/claim (types), src/domain/run-cost, ../../ui (Radar vocabulary), ./sections, ./evidence, ./challenge, ./state, ./call-panel-view
  * Tested:  n/a
  *
  * Key responsibilities:
@@ -14,10 +14,13 @@
  * - Gap list reads "Searched, nothing confirmed" when any searched gap is a namesake-only one
  * - Confirmed evidence grouped by the URL's platform (evidenceGroup), not by the actor that fetched it; the pasted CV
  *   is plain text, not a link (SourceLink)
+ * - "To verify" rows of challenged findings carry the devil's advocate reason (toVerifyItems, idea #8), followed by one
+ *   muted line "Devil's advocate: checked N findings, M held, K moved to the interview" (challengeLine)
  * - Phone verification panel (CallPanel, client) right after "To verify"; it fetches its own data
  * - Interview kit exports (KitActions) after the gap lists, one block with AlsoFound and the removed line;
  *   gap rows split "Label: reason" into a medium label and muted reason; Check rows hang under a grid; gap labels come from state.ts (GAP_LABEL, gapLine)
- * - Findings as sections by confidence (SectionList); briefs stored before sections render per question
+ * - Findings as sections by confidence (SectionList); briefs stored before sections render per question; both get the
+ *   per-run evidence lookup (evidenceOf: sources with retrieval dates, saved text around quotes) for "Show evidence"
  * - Accessibility: labelled progressbar with status text, QuestionCard focuses its heading on mount, 44px summary and link targets
  *
  * Design constraints:
@@ -31,7 +34,9 @@ import type { Brief, Candidate, CandidateDecision } from "@/domain/claim";
 import { formatDuration, type RunCost } from "@/domain/run-cost";
 import { BTN_PRIMARY, BTN_QUIET, BTN_SECONDARY, CARD, CARD_PEACH, CARD_UNSURE, Chevron, Pill, SUMMARY, SourceLink, type Tone } from "../../ui";
 import { CallPanel } from "./call-panel-view";
+import { challengeLine, toVerifyItems } from "./challenge";
 import { KitActions } from "./kit-actions";
+import { evidenceOf } from "./evidence";
 import { ClaimList, SectionList } from "./sections";
 import { SummaryCard } from "./summary-card";
 import { STEP_LABEL } from "./source-labels";
@@ -242,7 +247,7 @@ function List({
   check = false,
 }: {
   title: string;
-  items: (string | { text: string; hint: string })[];
+  items: (string | { text: string; hint?: string; note?: string | null })[];
   numbered?: boolean;
   check?: boolean;
 }): React.JSX.Element | null {
@@ -275,7 +280,10 @@ function List({
             return (
               <li key={text} className="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-x-2 py-2 text-sm">
                 <Pill tone="unsure" className="mt-0.5">Check</Pill>
-                <span className="min-w-0">{text}</span>
+                <span className="min-w-0">
+                  {text}
+                  {typeof t !== "string" && typeof t.note === "string" && <span className="mt-0.5 block text-xs text-muted">{t.note}</span>}
+                </span>
               </li>
             );
           }
@@ -414,18 +422,18 @@ function RoleCriteria({ texts }: { texts: string[] }): React.JSX.Element {
 export function BriefView({ state }: { state: RunState }): React.JSX.Element | null {
   const { brief } = state;
   if (!brief) return null;
-  const urlOf = new Map(state.sources.map((s) => [s.id, s.url]));
-  const noteOf = new Map(state.sources.flatMap((s) => (typeof s.identity_reason === "string" && s.identity_reason !== "" ? [[s.id, s.identity_reason] as const] : [])));
+  const evidence = evidenceOf(state);
   const textOf = new Map(state.questions.map((q) => [q.id, q.text]));
   const allUnavailable = brief.per_question.length > 0 && brief.per_question.every((q) => q.summary.startsWith("AI summary unavailable"));
   const sections = briefSections(brief);
+  const devilsAdvocate = challengeLine(state.challenge_summary);
   return (
     <div id="brief" className="flex scroll-mt-6 flex-col gap-4">
       <SummaryCard state={state} />
       <TopLine headline={brief.headline ?? null} locationNote={brief.location_note ?? null} role={hiringFor(state)} />
       {brief.degraded !== null && <DegradedNotice reason={brief.degraded} />}
       {brief.degraded !== null && <ConfirmedEvidence items={brief.evidence} />}
-      {sections !== null && <SectionList sections={sections} claims={state.claims} urlOf={urlOf} noteOf={noteOf} />}
+      {sections !== null && <SectionList sections={sections} claims={state.claims} evidence={evidence} />}
       {allUnavailable ? (
         <RoleCriteria texts={roleCriteria(state.questions)} />
       ) : (
@@ -437,12 +445,13 @@ export function BriefView({ state }: { state: RunState }): React.JSX.Element | n
               <Pill tone={COVERAGE[q.coverage]}>{q.coverage}</Pill>
             </div>
             <p className="mt-2 text-sm text-ink">{q.summary}</p>
-            <ClaimList claims={state.claims.filter((c) => q.claim_ids.includes(c.id))} urlOf={urlOf} noteOf={noteOf} />
+            <ClaimList claims={state.claims.filter((c) => q.claim_ids.includes(c.id))} evidence={evidence} />
           </section>
         ))
       )}
       <List title="Interview questions" items={brief.interview_questions} numbered />
-      <List title="To verify" items={brief.to_verify} check />
+      <List title="To verify" items={toVerifyItems(brief, state.claims, evidence.challengeOf).map((i) => ({ text: i.text, note: i.reason }))} check />
+      {devilsAdvocate !== null && <p className="text-xs text-muted">{devilsAdvocate}</p>}
       <CallPanel state={state} />
       <List title={searchedTitle(searchedEmpty(brief))} items={searchedEmpty(brief).map(gapItem)} />
       <List title="Not searched, and why" items={brief.not_searched.map(gapItem)} />

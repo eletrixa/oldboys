@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/recipe/sources/types.ts
- * Deps:    none
+ * Deps:    none (types from src/domain)
  * Tested:  src/recipe/__tests__/sources-identity.test.ts, src/recipe/__tests__/runner.test.ts (through fake collectors)
  *
  * Key responsibilities:
@@ -16,6 +16,7 @@
  * - Collectors are pure: no fetch, no LLM; the runner performs I/O through ports
  * - Excerpts are capped at EXCERPT_MAX chars so Workflow step payloads stay small
  */
+import type { ChallengeRecord } from "@/domain/challenge";
 import type { Brief, Candidate, Claim, Gap, GoalId, Source, SourceIdentity } from "@/domain/claim";
 import type { Question, Step } from "@/recipe/step";
 
@@ -27,6 +28,8 @@ export type StepContext = {
   anchor: string;
   goal: GoalId;
   role: string | null;
+  /** Evidence sites of the matched role template (bare domains); empty without a template. */
+  roleSites: readonly string[];
   questions: readonly Question[];
   candidates: readonly Candidate[];
   sources: readonly Source[];
@@ -69,6 +72,8 @@ export type StepOutcome = {
   cost_usd: number;
   calls: number;
   notes: string[];
+  /** verify only: the devil's advocate record (idea #8), written into the step's ledger ref as `challenge`. */
+  challenge?: ChallengeRecord;
 };
 
 /** Accepted identities only: the profiles the manager (or the threshold) confirmed. */
@@ -116,8 +121,12 @@ export function clip(text: string, max = EXCERPT_MAX): string {
   return text.length <= max ? text : `${text.slice(0, max - 1)}…`;
 }
 
+/** `{subject}`, `{anchor}` and `{role_sites}` (a `site:a OR site:b` clause) substituted. */
 export function fillQuery(template: string, ctx: StepContext): string {
-  return template.replaceAll("{subject}", ctx.subject).replaceAll("{anchor}", ctx.anchor);
+  return template
+    .replaceAll("{subject}", ctx.subject)
+    .replaceAll("{anchor}", ctx.anchor)
+    .replaceAll("{role_sites}", ctx.roleSites.map((s) => `site:${s}`).join(" OR "));
 }
 
 /** Platform key of a URL; the pasted CV's pseudo-URL "cv:<runId>" is "cv", anything unparsable "web". */

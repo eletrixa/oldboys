@@ -3,15 +3,21 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/api/runs/[id]/state/route.ts
- * Deps:    @opennextjs/cloudflare (getCloudflareContext), bindings DB, src/recipe/goals, src/domain/run-cost, src/app/intake/intake-rows (type)
- * Tested:  n/a
+ * Deps:    @opennextjs/cloudflare (getCloudflareContext), bindings DB, src/recipe/goals, src/domain/run-cost, src/domain/quote, src/domain/cv-check, src/domain/challenge, src/app/runs/[id]/challenge, src/app/intake/intake-rows (type)
+ * Tested:  n/a (withCvQuestion: src/domain/__tests__/cv-check.test.ts; readChallenge: src/domain/__tests__/challenge.test.ts; challengeState: src/app/runs/[id]/__tests__/challenge.test.ts)
  *
  * Key responsibilities:
  * - Read investigation, candidates, claims, sources, brief and last ledger step from D1
- * - Questions = recipe base questions + investigations.questions_json; mentions = COUNT(sources)
+ * - Questions = recipe base questions + investigations.questions_json, plus `cv-consistency` when the run has a CV
+ *   source (withCvQuestion, same rule as the Workflow's loadContext); mentions = COUNT(sources)
  * - step_index/step_count from the recipe; failed_step = first recipe step without a ledger row on a failed run
  * - role = investigations.role (the brief's "Hiring for" line); subject is "" until the seed step derived it;
- *   headline = what the seed_profile ledger row recorded (plans/006); sources carry identity_reason (migration 0008)
+ *   headline = what the seed_profile ledger row recorded (plans/006); sources carry identity_reason (migration 0008),
+ *   fetched_at and expires_at
+ * - quote_contexts = quoteContexts over the claims and the source excerpts (idea #5): the saved text around each
+ *   claim's quote, only for sources the claim cites; whole excerpts never leave this handler
+ * - challenges / challenge_summary = the devil's advocate record (idea #8) read from the verify ledger row's
+ *   `ref.challenge` (readChallenge, challengeState); [] / null for runs before it, no migration
  * - position = LEFT JOIN positions on investigations.position_id ({id, title}); null without one or once purged (migration 0009)
  * - organization_name = LEFT JOIN organizations (null for bearer/extension runs)
  * - cost = runCost over the ledger rows (seq order) from investigations.created_at
@@ -22,10 +28,14 @@
  */
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import type { Brief, Candidate, Claim } from "@/domain/claim";
+import { readChallenge } from "@/domain/challenge";
 import { GoalId } from "@/domain/claim";
+import { withCvQuestion } from "@/domain/cv-check";
+import { quoteContexts } from "@/domain/quote";
 import { type CostRow, runCost } from "@/domain/run-cost";
 import { recipeFor } from "@/recipe/goals";
 import type { RunIntake } from "@/app/intake/intake-rows";
+import { challengeState } from "@/app/runs/[id]/challenge";
 import { type RunState, type RunStatus, seedHeadline } from "@/app/runs/[id]/state";
 
 type HeadRow = {
@@ -45,6 +55,7 @@ type HeadRow = {
 };
 type CandidateRow = Omit<Candidate, "profile_urls" | "reasons"> & { profile_urls_json: string; reasons_json: string };
 type ClaimRow = Omit<Claim, "supports" | "contradicts"> & { supports_json: string; contradicts_json: string };
+type SourceRow = { id: string; url: string; identity_reason: string | null; fetched_at: string; expires_at: string; excerpt: string };
 
 function parseList<T>(json: string | null): T[] {
   if (json === null || json === "") return [];
@@ -81,7 +92,7 @@ export async function GET(
   const [cands, claims, sources, brief, ledger] = await Promise.all([
     env.DB.prepare("SELECT * FROM candidates WHERE run_id = ? ORDER BY score DESC").bind(id).all<CandidateRow>(),
     env.DB.prepare("SELECT * FROM claims WHERE run_id = ? ORDER BY rank").bind(id).all<ClaimRow>(),
-    env.DB.prepare("SELECT id, url, identity_reason FROM sources WHERE run_id = ?").bind(id).all<{ id: string; url: string; identity_reason: string | null }>(),
+    env.DB.prepare("SELECT id, url, identity_reason, fetched_at, expires_at, excerpt FROM sources WHERE run_id = ?").bind(id).all<SourceRow>(),
     env.DB.prepare("SELECT brief_json FROM briefs WHERE run_id = ?").bind(id).first<{ brief_json: string }>(),
     env.DB.prepare("SELECT step, ts, kind, cost_usd, ms, ref_json FROM ledger_entries WHERE run_id = ? ORDER BY seq")
       .bind(id)
@@ -107,6 +118,12 @@ export async function GET(
   const stepIndex = last === undefined ? 0 : recipeSteps.findIndex((s) => s.id === last.step) + 1;
   const extra = parseList<{ id: string; text: string; title?: string }>(head.questions_json);
 
+  const runClaims = claims.results.map(({ supports_json, contradicts_json, ...c }) => ({
+    ...c,
+    supports: parseList<string>(supports_json),
+    contradicts: parseList<string>(contradicts_json),
+  }));
+
   const state: RunState = {
     id: head.id,
     subject: head.subject,
@@ -123,13 +140,11 @@ export async function GET(
       profile_urls: parseList<string>(profile_urls_json),
       reasons: parseList<string>(reasons_json),
     })),
-    claims: claims.results.map(({ supports_json, contradicts_json, ...c }) => ({
-      ...c,
-      supports: parseList<string>(supports_json),
-      contradicts: parseList<string>(contradicts_json),
-    })),
-    sources: sources.results,
-    questions: [...base, ...extra],
+    claims: runClaims,
+    sources: sources.results.map(({ excerpt: _excerpt, ...s }) => s),
+    quote_contexts: quoteContexts(runClaims, new Map(sources.results.map((s) => [s.id, s.excerpt]))),
+    ...challengeState(readChallenge(ledger.results), new Set(runClaims.map((c) => c.id))),
+    questions: withCvQuestion(head.goal, [...base, ...extra], sources.results),
     brief: brief ? (JSON.parse(brief.brief_json) as Brief) : null,
     cost: runCost(ledger.results, head.created_at),
     failure: failure ?? null,

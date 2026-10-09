@@ -100,7 +100,7 @@ describe("candidateCopy", () => {
     expect(md).toContain("- <https://www.linkedin.com/in/jnovak>");
     expect(md).toContain("- <https://x.com/jnovak>");
     expect(md).toContain("deleted on 2026-10-15");
-    expect(md).not.toContain("if we do not continue with your application");
+    expect(md).toContain("or earlier, as soon as you are no longer considered for the role");
     expect(md).toContain("Reply to this email");
     const order = [
       "## Why",
@@ -230,9 +230,9 @@ describe("candidateCopy (cs)", () => {
   });
 
   it("Czech deletion date, and the plain sentence when the date is unknown", () => {
-    expect(cs()).toContain("Všechna data z průzkumu smažeme 15. 10. 2026 (7 dní po průzkumu).");
+    expect(cs()).toContain("Všechna data z průzkumu smažeme 15. 10. 2026 (7 dní po průzkumu), nebo dříve, jakmile už ve výběrovém řízení nebudete pokračovat.");
     expect(cs({ created_at: "2026-01-01T08:00:00.000Z" })).toContain("smažeme 8. 1. 2026 (7 dní");
-    expect(cs({ created_at: "yesterday" })).toContain("Všechna data z průzkumu smažeme 7 dní po průzkumu.");
+    expect(cs({ created_at: "yesterday" })).toContain("Všechna data z průzkumu smažeme 7 dní po průzkumu, nebo dříve,");
   });
 
   it("translates generic labels, keeps platform names, marks searched-empty sources", () => {

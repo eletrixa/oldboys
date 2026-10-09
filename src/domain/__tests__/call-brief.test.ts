@@ -70,6 +70,44 @@ describe("buildCallBrief", () => {
     ]);
   });
 
+  it("never reads a failed request (URL, e-mail, HTTP code) to the candidate", () => {
+    const reason =
+      "not searched: request failed: https://api.openalex.org/authors?search=Jan%20Novak&per-page=5&mailto=someone@example.org: HTTP 429 Too Many Requests";
+    const b = buildCallBrief({ ...base, gaps: [{ run_id: "r1", question_id: "openalex_author", reason }] });
+    expect(b.questions).toEqual([]);
+    const out = [b.script, b.first_message, b.agent_prompt, ...b.questions.map((q) => q.text)].join("\n");
+    for (const leak of ["http", "mailto", "@", "request failed", "HTTP 429"]) expect(out).not.toContain(leak);
+  });
+
+  it("skips budget, fallback and namesake-only gaps and keeps a plain nothing-found gap", () => {
+    const stepGap = (question_id: string, reason: string): Gap => ({ run_id: "r1", question_id, reason });
+    const b = buildCallBrief({
+      ...base,
+      gaps: [
+        stepGap("x_profile", "not searched: run budget reached"),
+        stepGap("serp_person", "fallback social_serp also empty"),
+        stepGap("linkedin_profile", "no usable fallback"),
+        stepGap("orcid_search", "hits found, none confirmed (same name, identity not verified)"),
+        stepGap("github_profile", "  no public GitHub profile found"),
+      ],
+    });
+    expect(b.questions.map((q) => q.question_id)).toEqual(["github_profile"]);
+    expect(b.agent_prompt).not.toContain("budget");
+    expect(b.agent_prompt).not.toContain("fallback");
+    expect(b.agent_prompt).not.toContain("none confirmed");
+  });
+
+  it("scrubs a kept step-gap reason down to the host", () => {
+    const b = buildCallBrief({
+      ...base,
+      gaps: [{ run_id: "r1", question_id: "personal_site_crawl", reason: "no personal site found at https://jane.example.com/about?ref=cv" }],
+    });
+    expect(b.questions).toHaveLength(1);
+    expect(b.questions[0]?.text).toBe(
+      "Our public research found nothing here: no personal site found at jane.example.com. Can you confirm that, or tell me what we missed?",
+    );
+  });
+
   it("includes low-confidence and contradicted claims, excludes confident ones", () => {
     const b = buildCallBrief({
       ...base,

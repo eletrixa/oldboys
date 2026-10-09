@@ -3,8 +3,8 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/recipe/seams/synthesize.ts
- * Deps:    zod, src/domain/art9, src/recipe/seams/sections, src/recipe/seams/verify
- * Tested:  src/recipe/__tests__/seams.test.ts
+ * Deps:    zod, src/domain/art9, src/domain/cv-check, src/recipe/seams/sections, src/recipe/seams/verify
+ * Tested:  src/recipe/__tests__/seams.test.ts, src/recipe/__tests__/cv-consistency.test.ts (CV check)
  *
  * Key responsibilities:
  * - Drop claims about GDPR Art. 9 categories before anything is summarised (count only, content never stored)
@@ -14,6 +14,9 @@
  * - Model interview questions: at most 5, only for questions interviewAllowed admits (unevidenced must-haves,
  *   surviving contradictions; `public-code` only for a technical role)
  * - also_found (hiring): a hit must name the subject's surname in excerpt or URL, otherwise it is noise and dropped
+ * - `cv-consistency` (only on CV runs): never a model interview question; each difference (cvOutcome "differs") yields
+ *   one templated question (cvInterviewQuestion, at most CV_INTERVIEW_MAX, after the others) and goes first into
+ *   to_verify; not-found items stay in the section only; runs without a CV get exactly the old brief
  *
  * Design constraints:
  * - Never scores or ranks the person; summaries restate evidence per question
@@ -34,6 +37,7 @@
 import { z } from "zod";
 import { containsArt9Topic } from "@/domain/art9";
 import type { Brief, Candidate, Claim, Coverage, Source } from "@/domain/claim";
+import { CV_QUESTION_ID, cvInterviewQuestion, cvOutcome, isCvSource } from "@/domain/cv-check";
 import type { Ports } from "@/domain/ports";
 import { emptyOutcome } from "@/recipe/runner";
 import { recipeFor } from "@/recipe/goals";
@@ -287,11 +291,22 @@ export function interviewAllowed(ctx: Pick<StepContext, "questions" | "role">, b
   const hasMustHaves = ctx.questions.some((q) => q.id.startsWith("mh-"));
   return (id) => {
     const cs = byQ.get(id) ?? [];
+    // CV differences get a templated question (cvQuestions), never a model one
+    if (id === CV_QUESTION_ID) return false;
     if (id === "contradictions") return cs.length > 0;
     if (coverageOf(cs) === "evidenced") return false;
     if (hasMustHaves) return id.startsWith("mh-");
     return id !== "public-code" || TECH_ROLE.test(ctx.role ?? "");
   };
+}
+
+const CV_INTERVIEW_MAX = 3;
+const TO_VERIFY_MAX = 8;
+
+/** CV check claims that differ from a public source (cvOutcome), in claim order. */
+function cvDifferences(claims: readonly Claim[], sources: readonly Source[]): Claim[] {
+  const cvIds = new Set(sources.filter(isCvSource).map((s) => s.id));
+  return claims.filter((c) => c.question_id === CV_QUESTION_ID && cvOutcome(c, cvIds) === "differs");
 }
 
 export async function synthesizeBrief(ctx: StepContext, ports: Ports): Promise<StepOutcome> {
@@ -320,6 +335,9 @@ export async function synthesizeBrief(ctx: StepContext, ports: Ports): Promise<S
             "Write the hiring-manager brief. For each question give a 1-3 sentence summary restating only the evidence (FACT = sourced, INFERENCE = our reading). Never rate the person.",
             "Interview questions: only where `interview_question_allowed=yes`, write one concrete question for the role that would close the gap; otherwise null. Never ask the candidate to explain something the evidence already resolves, and never ask about tasks the role does not need.",
             "Contradictions: only incompatible statements about the same measure or fact (same metric, same period, same role) count. Different measures or granularity are not contradictions; names joined by '|', 'formerly', 'now', 'dříve', 'nyní' or in one title line are aliases of one organisation.",
+            ...(byQ.has(CV_QUESTION_ID)
+              ? [`${CV_QUESTION_ID}: say how many CV statements match the public sources, differ from them or were not found publicly. A difference is a question for the interview, never a verdict: no judgement of the person, no words like fake, lie or inflated.`]
+              : []),
           ].join("\n"),
         prompt: `Role: ${ctx.role ?? "(none)"}\n\n${ctx.questions
           .map((q) => {
@@ -354,18 +372,22 @@ export async function synthesizeBrief(ctx: StepContext, ports: Ports): Promise<S
     const summary = q.id === CONTRADICTIONS && cs.length === 0 ? NO_DISAGREEMENT : (summaries.get(q.id)?.summary ?? fallbackSummary(cs));
     return { question_id: q.id, coverage: coverageOf(cs), claim_ids: cs.map((c) => c.id), summary };
   });
+  const differences = cvDifferences(kept, ctx.sources);
+  const cvQuestions = [...new Set(differences.map((c) => cvInterviewQuestion(c.text)))].slice(0, CV_INTERVIEW_MAX);
+  const baseQuestions =
+    degraded === null
+      ? ctx.questions
+          .filter((q) => askable(q.id))
+          .map((q) => summaries.get(q.id)?.interview_question ?? null)
+          .filter((x): x is string => x !== null && x.trim() !== "")
+          .slice(0, MODEL_INTERVIEW_MAX)
+      : templatedQuestions(ctx, byQ);
   const brief: Brief = {
     run_id: ctx.runId,
     per_question: perQuestion,
-    interview_questions:
-      degraded === null
-        ? ctx.questions
-            .filter((q) => askable(q.id))
-            .map((q) => summaries.get(q.id)?.interview_question ?? null)
-            .filter((x): x is string => x !== null && x.trim() !== "")
-            .slice(0, MODEL_INTERVIEW_MAX)
-        : templatedQuestions(ctx, byQ),
-    to_verify: kept.filter((c) => c.kind === "INFERENCE").slice(0, 8).map((c) => c.text),
+    interview_questions: [...baseQuestions, ...cvQuestions.filter((q) => !baseQuestions.includes(q))],
+    // CV differences first; other CV check items (not found publicly) stay in their section
+    to_verify: [...differences, ...kept.filter((c) => c.kind === "INFERENCE" && c.question_id !== CV_QUESTION_ID)].slice(0, TO_VERIFY_MAX).map((c) => c.text),
     not_searched: ctx.gaps
       .filter((g) => g.reason.startsWith(NOT_SEARCHED))
       .map((g) => ({ source: g.question_id, reason: g.reason.slice(NOT_SEARCHED.length).trim() || "no reason recorded" }))

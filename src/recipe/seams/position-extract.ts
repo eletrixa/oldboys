@@ -30,12 +30,13 @@ const Extract = z.object({
 const SYSTEM =
   `Read a job posting and extract: title, company, location (city), family (one of ${FAMILIES.join(", ")}), and 3 to 5 must-haves about a candidate. ` +
   'Each must-have is observable: answerable from public web evidence (repos, talks, job history, profiles). `id` is kebab-case starting with "mh-". `title` is a 2 to 5 word label. `accepted_evidence` lists short evidence types. ' +
+  "Skip hygiene items almost every candidate meets (version control, a degree, basic English, teamwork) unless the posting stresses them; prefer the skills that distinguish this role. " +
   "Never use criteria about health, politics, religion, ethnicity or sexuality, and never personality or trustworthiness traits.";
 
 // Order matters: the first matching family wins ("data engineer" is data, not engineering).
 const FAMILY_RULES: readonly [Family, RegExp][] = [
   ["data", /data|analyst|analytik|\bml\b|machine learning|\bbi\b/],
-  ["marketing", /marketing|\bseo\b|content|\bpr\b|brand/],
+  ["marketing", /marketing|growth|\bseo\b|content|\bpr\b|brand|\bcmo\b/],
   ["product", /product|produkt/],
   ["design", /design|\bux\b|\bui\b/],
   ["finance", /financ|účetn|accountant|accounting|controller/],

@@ -3,12 +3,12 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/api/roles/route.ts
- * Deps:    @opennextjs/cloudflare (getCloudflareContext), binding DB, secret RUN_TOKEN, src/app/api/_lib/{auth,session,role-rows}, src/domain/role-overview
+ * Deps:    @opennextjs/cloudflare (getCloudflareContext), binding DB, secret RUN_TOKEN, src/app/api/_lib/{session,session-or-bearer,role-rows}, src/domain/role-overview
  * Tested:  projection in src/domain/__tests__/role-overview.test.ts; route n/a
  *
  * Key responsibilities:
  * - Session first: a signed-in recruiter sees only runs of their organization
- * - Otherwise bearer auth against RUN_TOKEN (401/503 like POST /api/runs), unscoped
+ * - Otherwise requireSessionOrBearer: 401 without a session or a right bearer, 503 only for a bearer when RUN_TOKEN is unset; the bearer is unscoped
  * - One D1 read: hiring investigations with a role, their brief and confirmed (identity merged) source count
  * - roleOverview over the rows; never cached
  *
@@ -18,16 +18,17 @@
  * - Unconfirmed (namesake) sources are never counted or returned
  */
 import { getCloudflareContext } from "@opennextjs/cloudflare";
-import { requireBearer } from "@/app/api/_lib/auth";
 import { loadRoleRunRows } from "@/app/api/_lib/role-rows";
 import { sessionFromRequest } from "@/app/api/_lib/session";
+import { requireSessionOrBearer } from "@/app/api/_lib/session-or-bearer";
 import { roleOverview } from "@/domain/role-overview";
 
 export async function GET(request: Request): Promise<Response> {
   const { env } = getCloudflareContext();
   const user = await sessionFromRequest(request, env.DB);
   if (user === null) {
-    const denied = requireBearer(request, env.RUN_TOKEN);
+    // No session: the shared guard answers 401 "login required" or judges the bearer.
+    const denied = await requireSessionOrBearer(request, env);
     if (denied) return denied;
   }
   const organizationId = user?.organizationId ?? null;

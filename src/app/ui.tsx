@@ -7,7 +7,8 @@
  * Tested:  n/a (visual; docs/design/radar-ui.md is the spec)
  *
  * Key responsibilities:
- * - Class strings for cards (plain, flush, peach, sage, conflict, unsure), buttons, fields and links so pages do not drift
+ * - Class strings for cards (plain, flush, peach, sage, conflict, unsure), buttons (primary, secondary, quiet, danger), fields
+ *   and links so pages do not drift
  * - Eyebrow, Pill (semantic tone), SourceLink, and the SUMMARY + Chevron disclosure pattern
  *
  * Design constraints:
@@ -31,6 +32,8 @@ const BTN = "inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rou
 export const BTN_PRIMARY = `${BTN} bg-action px-5 font-semibold text-white hover:bg-action-hover active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-action`;
 export const BTN_SECONDARY = `${BTN} border border-line bg-surface px-4 font-medium text-ink hover:border-ink hover:bg-sage/60 active:bg-sage`;
 export const BTN_QUIET = `${BTN} px-3 font-medium text-muted hover:bg-sage/60 hover:text-ink active:bg-sage`;
+/** Irreversible actions only (delete candidate data); conflict tone so it never looks like the primary path. */
+export const BTN_DANGER = `${BTN} bg-conflict px-5 font-semibold text-white hover:bg-conflict/90 active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50`;
 
 /** Border and placeholder meet 3:1 / 4.5:1; focus uses the global :focus-visible ring. */
 export const FIELD = "w-full rounded-lg border border-line bg-surface px-4 py-3 text-ink placeholder:text-muted";

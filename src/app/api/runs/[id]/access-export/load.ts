@@ -3,13 +3,14 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/api/runs/[id]/access-export/load.ts
- * Deps:    D1Database, zod, src/domain/access-export, src/domain/claim, src/recipe/goals, src/workflow/calls (CALL_SOURCE_ACTOR)
+ * Deps:    D1Database, zod, src/domain/access-export, src/domain/claim, src/domain/cv-check, src/recipe/goals, src/workflow/calls (CALL_SOURCE_ACTOR)
  * Tested:  n/a (I/O only; the projection is tested in src/domain/__tests__/access-export.test.ts)
  *
  * Key responsibilities:
  * - Read the investigation head (LEFT JOIN organizations for the controller name), sources, candidates, claims
  *   (rank order) and the stored brief, and project them with accessExport
- * - Question text = recipeFor(goal).questions + investigations.questions_json (parsed with Zod)
+ * - Question text = recipeFor(goal).questions + investigations.questions_json (parsed with Zod), plus
+ *   `cv-consistency` when the run has a CV source (withCvQuestion)
  *
  * Design constraints:
  * - Explicit column lists only: never ledger rows, gaps, calls, accounts or sessions
@@ -24,6 +25,7 @@ import {
   accessExport,
 } from "@/domain/access-export";
 import { GoalId } from "@/domain/claim";
+import { withCvQuestion } from "@/domain/cv-check";
 import { recipeFor } from "@/recipe/goals";
 import { CALL_SOURCE_ACTOR } from "@/workflow/calls";
 
@@ -60,7 +62,7 @@ export async function loadAccessExport(db: D1Database, id: string, now: Date): P
   return accessExport(
     {
       run: head,
-      questions: [...base, ...extraQuestions(questions_json)],
+      questions: withCvQuestion(run.goal, [...base, ...extraQuestions(questions_json)], sources.results),
       sources: sources.results,
       candidates: candidates.results,
       claims: claims.results,

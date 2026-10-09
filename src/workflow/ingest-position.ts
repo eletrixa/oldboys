@@ -3,12 +3,14 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/workflow/ingest-position.ts
- * Deps:    D1Database, R2Bucket (passed in), src/recipe/seams/{posting-plan,posting-parse,posting-strip,position-extract}, src/domain/audit (RETENTION_DAYS), src/domain/position (errorMessage), src/adapters/fetch (UA, TIMEOUT_MS)
+ * Deps:    D1Database, R2Bucket (passed in), src/recipe/seams/{posting-plan,posting-parse,posting-jobscz-widget,posting-strip,position-extract}, src/domain/audit (RETENTION_DAYS), src/domain/position (errorMessage, fallbackMustHaves), src/adapters/fetch (UA, TIMEOUT_MS)
  * Tested:  src/workflow/__tests__/ingest-position.test.ts
  *
  * Key responsibilities:
  * - Order: fetch plan, dedupe on (board, external_id), resolve text (fetch with a 20 s abort, parse, paste fallback), strip boilerplate, one capped LLM extract, then insert and R2 put together
  * - Paste always works: a failed fetch falls back to the pasted text with a note, a failed LLM or R2 put never fails the ingest
+ * - Jobs.cz career sites (`<company>.jobs.cz`) carry no posting in the HTML: the widget chain of `posting-jobscz-widget` is tried before giving up
+ * - Manual entry (title alone, optional company and location, no text): method `manual`, the generic must-haves, no LLM call
  * - A lost insert (UNIQUE race) deletes the R2 object written in parallel, so no orphan remains
  * - Records the single LLM call's cost in `ingest_cost_usd`; the raw payload goes to R2 `positions/<id>.json` and is purged with the row
  *
@@ -20,8 +22,9 @@ import { TIMEOUT_MS, UA } from "@/adapters/fetch";
 import type { CreatePositionBody } from "@/app/api/_lib/position-body";
 import { RETENTION_DAYS } from "@/domain/audit";
 import type { Ports } from "@/domain/ports";
-import { errorMessage } from "@/domain/position";
-import { extractPosition } from "@/recipe/seams/position-extract";
+import { errorMessage, fallbackMustHaves } from "@/domain/position";
+import { extractPosition, familyOf } from "@/recipe/seams/position-extract";
+import { fetchJobsCzWidget } from "@/recipe/seams/posting-jobscz-widget";
 import { parsePosting, type ParsedPosting } from "@/recipe/seams/posting-parse";
 import { type PostingMethod, postingFetchPlan } from "@/recipe/seams/posting-plan";
 import { stripBoilerplate } from "@/recipe/seams/posting-strip";
@@ -62,31 +65,64 @@ const hostOf = (url: string): string => {
   }
 };
 
-async function fetchText(fetchFn: typeof fetch, url: string): Promise<string> {
-  const res = await fetchFn(url, { signal: AbortSignal.timeout(TIMEOUT_MS), headers: { "user-agent": UA } });
+const init = (): RequestInit => ({ signal: AbortSignal.timeout(TIMEOUT_MS), headers: { "user-agent": UA } });
+
+/** Body and final URL (after redirects; the request URL when the response carries none). */
+async function fetchPage(fetchFn: typeof fetch, url: string): Promise<{ body: string; url: string }> {
+  const res = await fetchFn(url, init());
   if (!res.ok) throw new Error(`HTTP ${String(res.status)}`);
-  return res.text();
+  return { body: await res.text(), url: res.url === "" ? url : res.url };
 }
 
 type Resolved = { ok: true; method: PostingMethod; parsed: ParsedPosting; raw: string; notes: string[] } | { ok: false; error: string };
 
-/** The fetch path when the plan has one, else (or when it fails and text was pasted) the pasted text. */
-async function resolveText(fetchFn: typeof fetch, plan: ReturnType<typeof postingFetchPlan>, pasted: string): Promise<Resolved> {
+/** The fetch path when the plan has one, else (or when it fails and text was pasted) the pasted text; a bare title is a manual entry. */
+async function resolveText(fetchFn: typeof fetch, plan: ReturnType<typeof postingFetchPlan>, pasted: string, manual: boolean): Promise<Resolved> {
   const paste: Resolved = { ok: true, method: "pasted", parsed: { text: pasted }, raw: pasted, notes: [] };
   if (!plan.request) {
-    return pasted === "" ? { ok: false, error: "no posting text and the URL cannot be fetched; paste the posting text instead" } : paste;
+    if (pasted !== "") return paste;
+    if (manual) return { ok: true, method: "manual", parsed: { text: "" }, raw: "", notes: [] };
+    return { ok: false, error: "no posting text and the URL cannot be fetched; paste the posting text instead" };
   }
   try {
-    const payload = await fetchText(fetchFn, plan.request.url);
-    const parsed = parsePosting(plan.method, payload, plan.externalId);
+    const page = await fetchPage(fetchFn, plan.request.url);
+    let parsed = parsePosting(plan.method, page.body, plan.externalId);
+    let raw = page.body;
+    if (plan.method === "jobs-cz" && parsed.text.length < MIN_FETCHED_CHARS) {
+      ({ parsed, raw } = await fetchJobsCzWidget(fetchFn, { html: page.body, url: page.url }, plan.externalId ?? "", init()));
+    }
     if (parsed.text.length < MIN_FETCHED_CHARS) throw new Error("posting text not found in the response");
-    return { ok: true, method: plan.method, parsed, raw: payload, notes: [] };
+    return { ok: true, method: plan.method, parsed, raw, notes: [] };
   } catch (e) {
     if (pasted === "") {
       return { ok: false, error: `could not read the posting at ${hostOf(plan.request.url)}: ${errorMessage(e)}; paste the posting text instead` };
     }
     return { ...paste, notes: [`fetch via ${plan.method} failed (${errorMessage(e)}), used the pasted text`] };
   }
+}
+
+type Hint = { title?: string; company?: string; location?: string };
+
+/** One capped LLM extract; manual entries and texts over the cap get the generic must-haves without a call. */
+async function extractOrGeneric(deps: IngestDeps, method: PostingMethod, text: string, hint: Hint, notes: string[]): ReturnType<typeof extractPosition> {
+  if (method === "manual") {
+    const title = hint.title ?? "";
+    return {
+      title,
+      ...(hint.company !== undefined ? { company: hint.company } : {}),
+      ...(hint.location !== undefined ? { location: hint.location } : {}),
+      family: familyOf(title),
+      must_haves: fallbackMustHaves(title, hint.location ?? null),
+      extraction: "fallback",
+      cost_usd: 0,
+      notes: [],
+    };
+  }
+  const overCap = deps.estimateUsd(text) > deps.capUsd;
+  const ports = overCap ? { llm: () => Promise.reject(new Error("over cap")) } : deps.ports;
+  const extracted = await extractPosition(text, ports, hint);
+  notes.push(...(overCap ? ["position extract: estimated cost over POSITION_INGEST_USD, used generic fallback"] : extracted.notes));
+  return extracted;
 }
 
 const existingId = (db: D1Database, board: string, externalId: string) =>
@@ -102,22 +138,19 @@ export async function ingestPosition(deps: IngestDeps, body: CreatePositionBody)
     if (hit) return { ok: true, id: hit.id, reused: true, notes: [] };
   }
 
-  const resolved = await resolveText(deps.fetchFn, plan, pasted);
+  const resolved = await resolveText(deps.fetchFn, plan, pasted, body.title !== undefined);
   if (!resolved.ok) return { ok: false, status: 422, error: resolved.error };
   const { method, parsed, raw, notes } = resolved;
   const fetchedAt = now.toISOString();
 
   const stripped = stripBoilerplate(parsed.text).trim();
   const text = (stripped === "" ? parsed.text : stripped).slice(0, MAX_TEXT_CHARS);
-  const hint = { title: body.title ?? parsed.title, company: parsed.company, location: parsed.location };
-  const overCap = deps.estimateUsd(text) > deps.capUsd;
-  const ports = overCap ? { llm: () => Promise.reject(new Error("over cap")) } : deps.ports;
-  const extracted = await extractPosition(text, ports, hint);
-  notes.push(...(overCap ? ["position extract: estimated cost over POSITION_INGEST_USD, used generic fallback"] : extracted.notes));
+  const hint = { title: body.title ?? parsed.title, company: body.company ?? parsed.company, location: body.location ?? parsed.location };
+  const extracted = await extractOrGeneric(deps, method, text, hint, notes);
 
   const id = deps.newId();
   const r2Key = `positions/${id}.json`;
-  const served = method === "pasted" ? undefined : plan;
+  const served = method === "pasted" || method === "manual" ? undefined : plan;
   const insert = db
     .prepare(
       `INSERT INTO positions (id, title, family, company, location, board, posting_url, external_id, must_haves_json, excerpt, r2_key, ingest_method, ingest_cost_usd, created_at, expires_at, extraction)

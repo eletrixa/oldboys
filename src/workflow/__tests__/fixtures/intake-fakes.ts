@@ -28,7 +28,9 @@ export type Row = Record<string, unknown>;
 
 export type IntakeFakeOpts = {
   /** tag -> position; defaults to senior-be, a hiring role. */
-  tags?: Record<string, { role: string; goal: string }>;
+  tags?: Record<string, { role: string; goal: string; position_id?: string | null }>;
+  /** position id -> title, for manual adds; defaults to none. */
+  positions?: Record<string, string>;
   /** StartupJobs offer id -> tag. */
   offerTags?: Record<string, string>;
   /** What the hourly cap query counts. */
@@ -57,7 +59,10 @@ export type IntakeFakes = {
 };
 
 export function makeIntakeFakes(opts: IntakeFakeOpts = {}): IntakeFakes {
-  const tags = new Map(Object.entries(opts.tags ?? { "senior-be": { role: "Senior backend engineer", goal: "hiring" } }));
+  // Read per call like the other opts, so a test can bind a tag to a position between deliveries.
+  const tags = (): Map<string, { role: string; goal: string; position_id?: string | null }> =>
+    new Map(Object.entries(opts.tags ?? { "senior-be": { role: "Senior backend engineer", goal: "hiring" } }));
+  const positions = new Map(Object.entries(opts.positions ?? {}));
   const offerTags = new Map(Object.entries(opts.offerTags ?? {}));
   const apps = new Map<string, Row>();
   const investigations: Row[] = [];
@@ -105,9 +110,13 @@ export function makeIntakeFakes(opts: IntakeFakeOpts = {}): IntakeFakes {
       apps.set(row.id as string, row);
       return { rows: [], changes: 1 };
     }
-    if (sql.startsWith("SELECT role, goal FROM intake_tags WHERE tag = ?")) {
-      const t = tags.get(args[0] as string);
-      return { rows: t ? [t] : [], changes: 0 };
+    if (sql.startsWith("SELECT role, goal, position_id FROM intake_tags WHERE tag = ?")) {
+      const t = tags().get(args[0] as string);
+      return { rows: t ? [{ position_id: null, ...t }] : [], changes: 0 };
+    }
+    if (sql.startsWith("SELECT id, title FROM positions WHERE id = ?")) {
+      const title = positions.get(args[0] as string);
+      return { rows: title === undefined ? [] : [{ id: args[0], title }], changes: 0 };
     }
     if (sql.startsWith("SELECT COUNT(*) AS n FROM investigations")) {
       countArgs.push(args);

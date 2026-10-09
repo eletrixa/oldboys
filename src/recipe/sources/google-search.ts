@@ -8,6 +8,7 @@
  *
  * Key responsibilities:
  * - Build one query from the step's template; parse organicResults into one Source per hit
+ * - A `{role_sites}` query makes no request when the run has no matched role template (no sites to search)
  *
  * Design constraints:
  * - One page per query (10 hits) keeps cost ≈ $0.002 per step
@@ -24,7 +25,10 @@ const SerpItem = z.object({
 
 export const googleSearch: Collector = {
   id: "apify/google-search-scraper",
-  requests: (ctx, step) => [
+  requests: (ctx, step) =>
+    step.query?.includes("{role_sites}") === true && ctx.roleSites.length === 0
+      ? []
+      : [
     {
       via: "actor",
       actor: "apify/google-search-scraper",
@@ -32,7 +36,7 @@ export const googleSearch: Collector = {
       maxTotalChargeUsd: 0.02,
       timeoutSecs: 90,
     },
-  ],
+        ],
   parse: (payload) => {
     const pages = z.array(SerpItem).safeParse(payload);
     if (!pages.success) return [];

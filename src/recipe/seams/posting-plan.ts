@@ -7,7 +7,7 @@
  * Tested:  src/recipe/__tests__/posting-plan.test.ts
  *
  * Key responsibilities:
- * - `postingFetchPlan`: method, request URL, board and external id for Jobs.cz, Greenhouse, Lever, Ashby, any other http(s) page
+ * - `postingFetchPlan`: method, request URL, board and external id for Jobs.cz (www, beta, `<company>.jobs.cz` career sites), StartupJobs, Greenhouse, Lever, Ashby, any other http(s) page
  *
  * Design constraints:
  * - Pure and never throws; an unparsable or non-http(s) string is treated as no URL (`pasted`)
@@ -46,16 +46,32 @@ function greenhouse(board: string, id: string): PostingPlan {
   };
 }
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Ad id of a Jobs.cz URL: `/rpd/<id>`, `/fp/<company>/<id>`, `/share/<id>`, `?id=<id>` on a career site, or the uuid of `beta.jobs.cz/nabidka/<uuid>`. */
+function jobsCzId(host: string, segs: (string | undefined)[], idParam: string | null): string | undefined {
+  const [first, second, third] = segs;
+  const digits = (v: string | null | undefined): string | undefined => (v !== null && v !== undefined && /^\d+$/.test(v) ? v : undefined);
+  if (first === "rpd" || first === "share") return digits(second);
+  if (first === "fp") return digits(third);
+  if (first === "nabidka" && second !== undefined && UUID.test(second)) return second.toLowerCase();
+  return host === "jobs.cz" ? undefined : digits(idParam);
+}
+
 export function postingFetchPlan(input: string | null): PostingPlan {
   const url = parseHttpUrl(input);
   if (!url) return PASTED;
   const host = url.hostname.toLowerCase().replace(/^www\./, "");
   const [first, second, third] = url.pathname.split("/").filter((seg) => seg !== "");
 
-  if (host === "jobs.cz" && first === "rpd" && second !== undefined && /^\d+$/.test(second)) {
-    const clean = new URL(url);
-    clean.hash = "";
-    return { method: "jobs-cz", request: { url: clean.href }, board: "jobs.cz", externalId: second };
+  const clean = new URL(url);
+  clean.hash = "";
+  if (host === "jobs.cz" || host.endsWith(".jobs.cz")) {
+    const id = jobsCzId(host, [first, second, third], url.searchParams.get("id"));
+    if (id !== undefined) return { method: "jobs-cz", request: { url: clean.href }, board: "jobs.cz", externalId: id };
+  }
+  if (host === "startupjobs.cz" && first === "nabidka" && second !== undefined && /^\d+$/.test(second)) {
+    return { method: "startupjobs", request: { url: clean.href }, board: "startupjobs.cz", externalId: second };
   }
   if (GREENHOUSE_HOSTS.has(host) && first !== undefined) {
     const id = second === "jobs" ? third : url.searchParams.get("gh_jid");

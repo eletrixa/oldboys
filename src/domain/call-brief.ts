@@ -3,13 +3,14 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/domain/call-brief.ts
- * Deps:    src/domain/art9 (types from call.ts, claim.ts and recipe/step.ts)
+ * Deps:    src/domain/art9, src/domain/scrub (types from call.ts, claim.ts and recipe/step.ts)
  * Tested:  src/domain/__tests__/call-brief.test.ts
  *
  * Key responsibilities:
  * - Pick at most MAX_CALL_QUESTIONS questions: role must-haves without evidence, then with partial evidence,
  *   then the brief's "to verify" items, then gaps, then low-confidence or contradicted claims
- * - A gap keyed by a recipe question asks that question; a gap keyed by a source step asks about its reason
+ * - A gap keyed by a recipe question asks that question; a gap keyed by a source step asks about its reason only
+ *   when it is a plain "no … found" statement (scrubbed); tool failures, budget, fallback and namesake gaps are skipped
  * - composeCallBrief: the script (display), the agent's first message (AI disclosure, purpose, recording,
  *   skip/stop, consent question) and the agent system prompt (steps, questions in order, rules)
  * - briefFromHrQuestions: the operator's edited questions, validated (1–5, 5–300 chars, no Art. 9 topic)
@@ -17,6 +18,7 @@
  *
  * Design constraints:
  * - Pure and deterministic: no I/O, no LLM, same input gives the same output
+ * - Never read internal tool output (URLs, e-mails, HTTP codes, budget notes) to the candidate
  * - Never ask about Art. 9 data (shared denylist in art9.ts); an operator question that touches one is an
  *   error with its index, never a silent drop
  * - Without a brief the selection is gaps then weak claims, exactly as before the brief existed
@@ -24,6 +26,7 @@
 import { containsArt9Topic } from "@/domain/art9";
 import type { CallBrief, CallQuestion } from "@/domain/call";
 import type { Brief, Claim, Gap, GoalId } from "@/domain/claim";
+import { scrubReason } from "@/domain/scrub";
 import type { Question } from "@/recipe/step";
 
 export const MAX_CALL_QUESTIONS = 5;
@@ -147,6 +150,12 @@ function coverageQuestions(brief: Brief, questions: readonly Question[]): CallQu
   return [...pick("none"), ...pick("partial")];
 }
 
+/** A source-step gap reason worth asking about: a plain recipe "no … found" statement, never tool output or a note. */
+function plainNothingFound(reason: string): boolean {
+  const r = reason.trim().toLowerCase();
+  return r.startsWith("no ") && !r.includes("request failed") && !r.includes("not searched") && !r.includes("fallback");
+}
+
 function toVerifyQuestions(brief: Brief): CallQuestion[] {
   return brief.to_verify.map((text, i) => {
     const point = oneLine(text, 250).replace(/[.?!]+$/, "");
@@ -180,8 +189,14 @@ export function buildCallBrief(input: {
   const byId = new Map(input.questions.map((q) => [q.id, q]));
   for (const gap of input.gaps) {
     const q = byId.get(gap.question_id);
-    // The runner keys collector gaps by step id (e.g. github_profile) with a human reason; ask about the reason.
-    const text = q ? q.text : `Our public research found nothing here: ${gap.reason}. Can you confirm that, or tell me what we missed?`;
+    if (q) {
+      add({ question_id: gap.question_id, text: q.text, expected: "" });
+      continue;
+    }
+    // The runner keys collector gaps by step id (e.g. github_profile). Only a plain "nothing found" reason is a
+    // topic for the candidate; failures, budget, fallback and namesake notes are internal and never read out.
+    if (!plainNothingFound(gap.reason)) continue;
+    const text = `Our public research found nothing here: ${scrubReason(gap.reason)}. Can you confirm that, or tell me what we missed?`;
     add({ question_id: gap.question_id, text, expected: "" });
   }
   for (const claim of input.claims) {

@@ -39,3 +39,7 @@ POST /api/intake/startupjobs/<token> (webhook carries the full application; CV f
 | StartupJobs connector | [startupjobs.md](startupjobs.md) | 2 |
 | Operator UI | [ui.md](ui.md) | 3 |
 | Ops, docs, config | [ops.md](ops.md) | 2 |
+
+## Evolution: plan 010 — candidate pool
+
+When a tag is bound to a position (via `intake_tags.position_id`), the application pools instead of auto-starting. Statuses expand to include `pooled`; the recruiter manually adds candidates and triggers enrichment per position (see [plans/010-candidate-pool/00-SYNTHESIS.md](../../plans/010-candidate-pool/00-SYNTHESIS.md)). Tags without a position keep the original auto-start behaviour and are routed to `/intake` instead of the position page. Migration 0012 rebuilds the `applications` table.

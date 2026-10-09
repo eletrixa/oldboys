@@ -3,14 +3,15 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/api/positions/handler.ts
- * Deps:    src/app/api/_lib/{position-body,role-rows}, src/domain/{position,role-overview}
+ * Deps:    src/app/api/_lib/{position-body,role-rows}, src/domain/{application (types),position,role-overview}, src/app/intake/intake-rows (TagRow type)
  * Tested:  src/app/api/positions/__tests__/handler.test.ts
  *
  * Key responsibilities:
  * - `loadPosition`: the single read path for one position (also used by the public summary); never returns `r2_key`
  * - `listPositions`, `getPosition`, `patchPosition`: plain D1 reads and writes
  * - `must_haves_json` is parsed on the way out; a malformed value becomes `[]` and never throws
- * - `getPosition`: `runs` and the overview `group` both come from the position's hiring run rows (one query)
+ * - `getPosition`: `runs` and the overview `group` both come from the position's hiring run rows; `candidates` (the pool, newest first, max 200,
+ *   never CV text, cover letter or external id) and the bound intake `tags` are two more reads
  *
  * Design constraints:
  * - Takes the D1 binding as a parameter so tests run under plain Node; no Next.js imports
@@ -19,13 +20,29 @@
  */
 import { loadRoleRunRows } from "@/app/api/_lib/role-rows";
 import type { PatchPositionBody } from "@/app/api/_lib/position-body";
+import type { TagRow } from "@/app/intake/intake-rows";
+import type { ApplicationSource, ApplicationStatus } from "@/domain/application";
 import { parseMustHaves, POSITION_ID, type Position, type PositionListItem } from "@/domain/position";
 import { buildGroup, type RoleGroup } from "@/domain/role-overview";
 
 export type PositionRun = { id: string; subject: string; status: string; created_at: string };
-export type PositionDetail = { position: Position; runs: PositionRun[]; group: RoleGroup | null };
+/** One pooled person; `has_*` are 0/1 so the page can show presence without the CV or profile text. */
+export type PoolRow = {
+  id: string;
+  source: ApplicationSource;
+  name: string | null;
+  email: string | null;
+  status: ApplicationStatus;
+  run_id: string | null;
+  note: string | null;
+  received_at: string;
+  has_profile: number;
+  has_cv: number;
+};
+export type PositionDetail = { position: Position; runs: PositionRun[]; group: RoleGroup | null; candidates: PoolRow[]; tags: TagRow[] };
 
 const MAX_LIST = 500;
+const MAX_POOL = 200;
 const COLUMNS =
   "id, title, family, company, location, board, posting_url, external_id, must_haves_json, excerpt, ingest_method, ingest_cost_usd, created_at, expires_at, extraction";
 
@@ -73,12 +90,28 @@ export async function listPositions(db: D1Database): Promise<PositionListItem[]>
 
 export async function getPosition(db: D1Database, id: string): Promise<PositionDetail | null> {
   if (!POSITION_ID.safeParse(id).success) return null;
-  const [position, rows] = await Promise.all([loadPosition(db, id), loadRoleRunRows(db, "i.position_id = ? AND i.goal = 'hiring'", [id])]);
+  const [position, rows, candidates, tags] = await Promise.all([
+    loadPosition(db, id),
+    loadRoleRunRows(db, "i.position_id = ? AND i.goal = 'hiring'", [id]),
+    db
+      .prepare(
+        `SELECT id, source, name, email, status, run_id, note, received_at, linkedin_url IS NOT NULL AS has_profile, cv_text IS NOT NULL AS has_cv
+         FROM applications WHERE position_id = ? ORDER BY received_at DESC, id DESC LIMIT ?`,
+      )
+      .bind(id, MAX_POOL)
+      .all<PoolRow>(),
+    db
+      .prepare("SELECT tag, role, goal, company, startupjobs_offer_id, position_id, created_at FROM intake_tags WHERE position_id = ? ORDER BY created_at DESC, tag")
+      .bind(id)
+      .all<TagRow>(),
+  ]);
   if (!position) return null;
   return {
     position,
     runs: rows.map(({ id: runId, subject, status, created_at }) => ({ id: runId, subject, status, created_at })),
     group: rows.length === 0 ? null : { ...buildGroup(position.id, rows), role: position.title },
+    candidates: candidates.results,
+    tags: tags.results,
   };
 }
 
