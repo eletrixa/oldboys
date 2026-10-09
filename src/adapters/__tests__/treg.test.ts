@@ -70,6 +70,68 @@ describe("makeTregCall", () => {
     stub(new Response(null, { status: 200 }));
     await expect(makeTregCall("tok")({ endpoint: "e", method: "GET", params: {}, maxCostUsd: 0.001 })).resolves.toEqual({ payload: null, cost_usd: 0 });
   });
+
+  const req = { endpoint: "e", method: "GET", params: {}, maxCostUsd: 0.001 } as const;
+
+  it("cuts the error snippet at 160 characters", async () => {
+    stub(new Response("x".repeat(500), { status: 500 }));
+    await expect(makeTregCall("tok")(req)).rejects.toThrow(`treg e: HTTP 500 ${"x".repeat(160)}`);
+    stub(new Response("x".repeat(500), { status: 500 }));
+    await expect(makeTregCall("tok")(req)).rejects.not.toThrow("x".repeat(161));
+  });
+
+  it("never puts the token in an error message", async () => {
+    stub(new Response("bad token SECRET123 and SECRET123", { status: 403 }), new Response("SECRET123 not json", { status: 200 }));
+    const call = makeTregCall("SECRET123");
+    const e1 = await call(req).then(() => new Error("no throw"), (e: unknown) => e as Error);
+    expect(e1.message).toBe("treg e: HTTP 403 bad token [token] and [token]");
+    const e2 = await call(req).then(() => new Error("no throw"), (e: unknown) => e as Error);
+    expect(e2.message).toMatch(/^treg e: /);
+    expect(e2.message).not.toContain("SECRET123");
+  });
+
+  it("throws on 503 provider capacity", async () => {
+    stub(new Response('{"error":"provider_capacity_unavailable"}', { status: 503 }));
+    await expect(makeTregCall("tok")(req)).rejects.toThrow('treg e: HTTP 503 {"error":"provider_capacity_unavailable"}');
+  });
+
+  it("does not retry after a failure", async () => {
+    const fn = stub(new Response("no", { status: 503 }));
+    await expect(makeTregCall("tok")(req)).rejects.toThrow("HTTP 503");
+    expect(fn).toHaveBeenCalledTimes(1);
+  });
+
+  it("throws a prefixed error for invalid JSON on 2xx", async () => {
+    stub(new Response("<html>oops</html>", { status: 200 }));
+    await expect(makeTregCall("tok")(req)).rejects.toThrow("treg e: invalid JSON <html>oops</html>");
+  });
+
+  it.each([
+    [10, "10"],
+    [0.00022, "0.00022"],
+    [1e-7, "0.0000001"],
+  ])("sends the max cost %s as plain decimal %s", async (cost, text) => {
+    const fn = stub(Response.json({}));
+    await makeTregCall("tok")({ ...req, maxCostUsd: cost });
+    expect(headersOf(fn).get("x-treg-route-max-cost")).toBe(text);
+  });
+
+  it("passes an abort signal", async () => {
+    const fn = stub(Response.json({}));
+    await makeTregCall("tok")(req);
+    expect(fn.mock.calls[0]?.[1]?.signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it("clamps a negative cost header to 0", async () => {
+    stub(Response.json({}, { headers: { "x-treg-cost-micro": "-500" } }));
+    expect((await makeTregCall("tok")(req)).cost_usd).toBe(0);
+  });
+
+  it("has no query string on a POST url even with params", async () => {
+    const fn = stub(Response.json({}));
+    await makeTregCall("tok")({ endpoint: "e", method: "POST", params: { a: "1" }, maxCostUsd: 0.01 });
+    expect(fn.mock.calls[0]?.[0]).toBe("https://treg.to/call/e");
+  });
 });
 
 describe("tregUrl", () => {

@@ -41,7 +41,6 @@
 - Host lower-cased, leading `www.` stripped for twitter/x.
 - `twitter.com` and `x.com` (with or without `www.`): `https://x.com/<first path segment>`.
 - Other hosts: `https://<host>/<path segments>`; scheme forced to https, no query, no fragment, no trailing slash.
-- Deviation in code: other hosts keep `www.` (`www.github.com` stays `https://www.github.com/...`) and keep every path segment (`github.com/janad/repo` is not reduced to the profile `github.com/janad`); the dossier says "canonical profile URL".
 
 ### digest(fetched, ctx)
 - First fetched payload with a person and at least one social URL wins; otherwise `null` (also for `[]`).

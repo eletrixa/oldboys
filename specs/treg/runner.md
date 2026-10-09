@@ -54,7 +54,5 @@ Plan: `plans/016-treg-enrichment/00-SYNTHESIS.md` (rows Request, Port, Runner, P
 
 ## Deviations in code
 - Deviation in code: none against the dossier for the runner, `isPaid` or `ports()`. Gaps are only in test coverage.
-- Deviation in code: the mixed-collector (null port, fetch kept) test, the cumulative-reservation test, the concurrency-of-treg-with-fetch test and the failed-treg-request test are missing from `runner.test.ts`.
-- Deviation in code: no Workflow-level test pins the "not searched: TREG_TOKEN not set" gap or the ledger `cost_usd` for a treg step.
-- Deviation in code: `run budget reached` is pushed once per dropped request (duplicate notes); the dossier is silent, spec allows dedup to one note.
-- Deviation in code: actor budget check uses `<` (`budgetLeft`), treg reservation uses `>` (exact fit allowed); harmless, kept as written.
+- Deviation in code: no Workflow-level test pins the "not searched: TREG_TOKEN not set" gap or the ledger `cost_usd` for a treg step. (still open)
+- Deviation in code: actor budget check uses `<` (`budgetLeft`), treg reservation uses `>` (exact fit allowed); harmless, kept as written. (still open)

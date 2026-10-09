@@ -64,8 +64,5 @@ Requests, one per merged candidate per platform, all `{ via: "treg", maxCostUsd:
 - `mergeAccounts` (in `profile-signals` tests): Apify + treg of one URL give one fact set, later non-null wins, null does not erase, first `url` kept.
 
 ## Deviations in code (for the refactor pass)
-- Deviation in code: the closing sentence is "Read by <provider> via treg (second source; the Apify scrape is the first)." with no read date; the dossier says "read by TikHub via treg on <date>".
-- Deviation in code: dedupe key is `endpoint:lowercased JSON of params`, not platform+handle; equivalent for single-key params, but a youtube handle and the same channel as `channelId` do not collapse.
-- Deviation in code: `FACT_PLATFORMS` (profile-facts.ts) lacks `facebook`, so a merged Facebook candidate without facts is never listed under "not checked", although the collector emits facts for it.
-- Deviation in code: `mergeAccounts` also lets the later reading replace `source_url`, so the Apify payload URL is lost from the merged fact; dossier only requires the first `url` kept.
-- Deviation in code: `parse` raw includes `photo_url` and `extras`, beyond the dossier's "allow-listed raw" (still allow-listed, but not named in the dossier).
+- Deviation in code: `mergeAccounts` also lets the later reading replace `source_url`, so the Apify payload URL is lost from the merged fact; dossier only requires the first `url` kept. (still open)
+- Deviation in code: `parse` raw includes `photo_url` and `extras`, beyond the dossier's "allow-listed raw" (still allow-listed, but not named in the dossier). (still open)

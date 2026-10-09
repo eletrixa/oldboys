@@ -68,7 +68,7 @@ export const PLATFORM_LABEL: Record<string, string> = {
 };
 
 /** Platforms whose collectors record ProfileFacts; a merged candidate there without facts is reported as not checked. */
-export const FACT_PLATFORMS: readonly string[] = ["linkedin", "x", "instagram", "tiktok", "github", "youtube", "bluesky"];
+export const FACT_PLATFORMS: readonly string[] = ["linkedin", "x", "instagram", "tiktok", "github", "youtube", "bluesky", "facebook"];
 
 /** A ProfileFacts with every field present: `over` sets what the collector read, `source_url` defaults to `url`. */
 export function facts(platform: string, url: string, over: Partial<ProfileFacts> = {}): ProfileFacts {

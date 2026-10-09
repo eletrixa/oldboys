@@ -14,6 +14,8 @@
  * Design constraints:
  * - Pure: no fetch; identity from identityFor (the anchor site is not a candidate profile, so usually "unverified")
  * - Allow-list parse: about, headquarters city and country, social URLs, domain; nothing else of the 80+ datapoints
+ * - Source URL is always https://<anchor host>/; the provider's domain.domain only feeds the digest (anchor host when absent)
+ * - Documented fallbacks: employee range string when the exact count is missing, industries[0] when industry is missing
  * - A domain with no company behind it answers an empty object, parsed to no source
  */
 import { z } from "zod";
@@ -56,8 +58,8 @@ function read(payload: unknown, ctx: StepContext) {
   if (!r.success || name === undefined || name === null || name === "") return null;
   const a = r.data.about;
   const hq = r.data.locations?.headquarters;
-  const domain = r.data.domain?.domain ?? anchorDomain(ctx.anchor);
-  if (domain === null) return null;
+  const host = anchorDomain(ctx.anchor);
+  if (host === null) return null;
   const place = [hq?.city?.name, hq?.country?.name].filter((x): x is string => x !== undefined && x !== null && x !== "");
   const socials = Object.values(r.data.socials ?? {})
     .map((s) => s?.url)
@@ -71,7 +73,8 @@ function read(payload: unknown, ctx: StepContext) {
     range: a?.totalEmployees ?? null,
     hq: place.length > 0 ? place.join(", ") : null,
     socials,
-    domain,
+    host,
+    domain: r.data.domain?.domain ?? host,
   };
 }
 
@@ -86,7 +89,7 @@ export const tregCompanyEnrich: Collector = {
   parse: (payload, ctx): ParsedSource[] => {
     const c = read(payload, ctx);
     if (c === null) return [];
-    const url = `https://${c.domain}/`;
+    const url = `https://${c.host}/`;
     const size = c.employees !== null ? `about ${String(c.employees)} employees` : c.range !== null ? `${c.range} employees` : null;
     const parts = [
       `${c.name}${c.legal !== null && c.legal !== c.name ? ` (legal name ${c.legal})` : ""} is ${c.industry !== null ? `a ${c.industry.replaceAll("-", " ")} company` : "a company"}`,

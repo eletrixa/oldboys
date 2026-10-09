@@ -69,6 +69,14 @@ function sentences({ reader, account: a }: Read): string {
 const sourceUrl = (endpoint: string, params: TregParams): string =>
   `https://treg.to/call/${endpoint}?${new URLSearchParams(Object.entries(params).map(([k, v]) => [k, String(v)])).toString()}`;
 
+/** Platform + the lower-cased handle (channel id, profile URL): the first param is always that identifier. */
+function dedupeKey(r: CollectorRequest): string {
+  if (r.via !== "treg") return "";
+  const id = Object.values(r.params)[0];
+  const platform = READERS.find((x) => x.endpoint === r.endpoint)?.platform ?? r.endpoint;
+  return id === undefined ? "" : `${platform}|${String(id).toLowerCase()}`;
+}
+
 export const tregSocialVerify: Collector = {
   id: "treg/social-verify",
   enriches: true,
@@ -78,7 +86,7 @@ export const tregSocialVerify: Collector = {
       const params = reader?.request(c) ?? null;
       return reader === undefined || params === null ? [] : [{ via: "treg", endpoint: reader.endpoint, method: reader.method, params, maxCostUsd: 0.005 }];
     });
-    return dedupeBy(reqs, (r) => (r.via === "treg" ? `${r.endpoint}:${JSON.stringify(r.params).toLowerCase()}` : "")).slice(0, MAX_REQUESTS);
+    return dedupeBy(reqs, dedupeKey).slice(0, MAX_REQUESTS);
   },
   skipReason: () => "no confirmed social account to read a second time",
   parse: (payload, ctx, _step, req): ParsedSource[] => {

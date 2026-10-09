@@ -70,4 +70,37 @@ describe("tregCompanyEnrich", () => {
     });
     expect(tregCompanyEnrich.digest?.([{ req, payload: {} }], ctx)).toBeNull();
   });
+  it("skips a non-http anchor and a dotless host with the exact reason", () => {
+    for (const anchor of ["Brno", "ftp://x", "ftp://files.example.com", "http://localhost"]) {
+      const c = baseContext({ goal: "due-diligence", anchor });
+      expect(tregCompanyEnrich.requests(c, step)).toEqual([]);
+      expect(tregCompanyEnrich.skipReason?.(c)).toBe("the anchor is not the company's website (no domain to look up)");
+    }
+  });
+
+  it("falls back to the employee range and industries[0]", () => {
+    const { totalEmployeesExact: _x, industry: _i, ...about } = record.about;
+    const [s] = tregCompanyEnrich.parse({ ...record, about: { ...about, industries: ["software-development"] } }, ctx, step);
+    expect(s?.excerpt).toBe(
+      "Stripe (legal name Stripe, Inc.) is a software development company, founded in 2010, with 1k-5k employees, headquartered in San Francisco, United States. Read by The Companies API via treg.",
+    );
+  });
+
+  it("keeps the anchor host as the Source URL and the provider domain only in the digest", () => {
+    const other = { ...record, domain: { domain: "stripe.network" } };
+    const [s] = tregCompanyEnrich.parse(other, ctx, step);
+    expect(s?.url).toBe("https://stripe.com/");
+    const req = tregCompanyEnrich.requests(ctx, step)[0];
+    if (req === undefined) throw new Error("no request");
+    expect(tregCompanyEnrich.digest?.([{ req, payload: other }], ctx)).toMatchObject({ domain: "stripe.network" });
+  });
+
+  it("uses the anchor host when the payload has no domain.domain", () => {
+    const { domain: _d, ...noDomain } = record;
+    const [s] = tregCompanyEnrich.parse(noDomain, ctx, step);
+    expect(s?.url).toBe("https://stripe.com/");
+    const req = tregCompanyEnrich.requests(ctx, step)[0];
+    if (req === undefined) throw new Error("no request");
+    expect(tregCompanyEnrich.digest?.([{ req, payload: noDomain }], ctx)).toMatchObject({ domain: "stripe.com" });
+  });
 });

@@ -9,11 +9,12 @@
  * Key responsibilities:
  * - Runs before the lineup when no LinkedIn candidate is merged: one `exa.people.search` call
  *   (`<subject> <anchor>`, category people, 5 results, linkedin.com only; cost $0.007, capped at $0.01)
- * - One Source per linkedin.com/in/ result whose entity name or title spells the full name: canonical profile URL,
+ * - One Source per linkedin.com/in/ result whose entity name spells the full name (result title only when the entity name is missing): canonical profile URL,
  *   excerpt line 1 `<name> – <latest title> @ <company>`, search note, location, up to 4 work history lines
  *
  * Design constraints:
  * - Pure: no fetch; identity stays "unverified" (the lineup scores the hit against the anchor and employers)
+ * - Name rule: entity name only; a title never rescues a result whose entity name is someone else
  * - Allow-list parse: name, location and work history only
  */
 import { z } from "zod";
@@ -40,9 +41,20 @@ function canonicalProfile(raw: string): string | null {
   } catch {
     return null;
   }
-  if (!u.hostname.toLowerCase().endsWith("linkedin.com")) return null;
+  const host = u.hostname.toLowerCase();
+  if (host !== "linkedin.com" && !host.endsWith(".linkedin.com")) return null;
   const [first, slug] = u.pathname.split("/").filter((s) => s !== "");
   return first === "in" && slug !== undefined ? `https://www.linkedin.com/in/${slug}/` : null;
+}
+
+type WorkItem = z.infer<typeof Work>;
+
+/** `<title> @ <company> (<from>–<to>)`, empty parts omitted; no parenthesis without a start date. */
+function historyLine(j: WorkItem): string {
+  const role = [text(j.title), text(j.company?.name)].filter((s) => s !== "").join(" @ ");
+  const from = text(j.dates?.from);
+  const to = text(j.dates?.to);
+  return from === "" ? role : `${role} (${from}–${to === "" ? "now" : to})`;
 }
 
 const query = (ctx: { subject: string; anchor: string }): string => `${ctx.subject} ${ctx.anchor}`.trim();
@@ -73,8 +85,8 @@ export const tregPeopleSearch: Collector = {
       if (!r.success) continue;
       const url = canonicalProfile(r.data.url);
       const props = r.data.entities?.[0]?.properties;
-      const name = text(props?.name) || text(r.data.title);
-      if (url === null || seen.has(url) || !(mentionsFullName(ctx.subject, name) || mentionsFullName(ctx.subject, text(r.data.title)))) continue;
+      const name = text(props?.name) || text(r.data.title); // title only when the entity name is missing
+      if (url === null || seen.has(url) || !mentionsFullName(ctx.subject, name)) continue;
       seen.add(url);
       const work = (props?.workHistory ?? []).flatMap((w) => {
         const j = Work.safeParse(w);
@@ -86,7 +98,7 @@ export const tregPeopleSearch: Collector = {
         headline === "" ? name : `${name} – ${headline}`,
         `Found by Exa people search for "${query(ctx)}" via treg`,
         text(props?.location) === "" ? "" : `Location: ${text(props?.location)}`,
-        ...work.slice(0, 4).map((j) => `${text(j.title)} @ ${text(j.company?.name)} (${text(j.dates?.from)}–${text(j.dates?.to) || "now"})`),
+        ...work.slice(0, 4).map(historyLine),
       ].filter((l) => l !== "");
       out.push({ url, excerpt: clip(lines.join("\n")), raw: { url, name, location: text(props?.location), workHistory: work }, identity: identityFor(ctx, url) });
     }

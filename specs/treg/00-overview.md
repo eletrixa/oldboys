@@ -101,11 +101,9 @@ Collectors are pure (no fetch); each endpoint id and its params are constants in
 - `src/recipe/goals/hiring.ts`, `src/recipe/goals/due-diligence.ts`: step placement and gap texts.
 - `docs/ops/treg.md`: runbook; `CLAUDE.md` row "treg second source (016)".
 
-Deviation in code: `social-readers.ts` and `social-readers-more.ts` hold per-platform tables, not collectors; the dossier names five pure collectors while the code has four collector objects plus a reader table (informational, no fix needed).
-Deviation in code: the dossier does not fix the HTTP method of `apollo.people.enrich`; the code and runbook use POST with `linkedin_url`. Keep POST; write it in the dossier at the next edit.
-Deviation in code: the dossier gives no due-diligence pool placement; the code places `treg_company_enrich` and `treg_social_verify` after `resolve_lineup`. Keep.
-Deviation in code: the request dispatch throws "TREG_TOKEN not set" as a second guard besides the earlier filter; harmless, but only the filter's note is contractual.
-Deviation in code: `docs/ops/treg.md` lists live-test `live-treg` as pending in the dossier; no `live-treg` test exists yet (waits for balance).
+Deviation in code: `social-readers.ts` and `social-readers-more.ts` hold per-platform tables, not collectors; the dossier names five pure collectors while the code has four collector objects plus a reader table (informational, no fix needed). (still open)
+Deviation in code: the request dispatch throws "TREG_TOKEN not set" as a second guard besides the earlier filter; harmless, but only the filter's note is contractual. (still open)
+Deviation in code: `docs/ops/treg.md` lists live-test `live-treg` as pending in the dossier; no `live-treg` test exists yet (waits for balance). (still open)
 
 ## Tests that prove it
 - `src/adapters/__tests__/treg.test.ts`: GET url with params and array join, POST body, headers (token, max cost, accept), cost from `X-Treg-Cost-Micro` (missing = 0), empty body = null, non-2xx error text with 160-char snippet, token never in the URL.

@@ -84,6 +84,17 @@ describe("treg/social-verify requests", () => {
     ] }), step);
     expect(r).toEqual([treg("scrapecreators.youtube.channel.profile", "GET", { channelId: uc }), treg("anyapi.x.user.profile", "POST", { handle: "Jana" })]);
   });
+  it("collapses the same handle on one platform in any case but keeps other platforms apart", () => {
+    const r = c.requests(baseContext({ candidates: [
+      cand("youtube", "JanaTV", "https://www.youtube.com/@JanaTV"), cand("youtube", "janatv", "https://www.youtube.com/@janatv", { id: "c2" }),
+      cand("x", "janatv", "https://x.com/janatv", { id: "c3" }),
+    ] }), step);
+    expect(r.map((x) => (x.via === "treg" ? x.endpoint : ""))).toEqual(["scrapecreators.youtube.channel.profile", "anyapi.x.user.profile"]);
+  });
+  it("cuts seven merged candidates to six requests", () => {
+    const seven = Array.from({ length: 7 }, (_, i) => cand("x", `h${String(i)}`, `https://x.com/h${String(i)}`, { id: `c${String(i)}` }));
+    expect(c.requests(baseContext({ candidates: seven }), step)).toHaveLength(6);
+  });
   it("is empty without merged candidates and says why", () => {
     expect(c.requests(baseContext(), step)).toEqual([]);
     expect(c.skipReason?.(baseContext())).toBe("no confirmed social account to read a second time");
@@ -111,6 +122,11 @@ describe("treg/social-verify parse", () => {
     for (const n of needles) expect(s?.excerpt).toContain(n);
     expect(s?.excerpt).toContain("via treg (second source; the Apify scrape is the first)");
   });
+  it("takes the handle from the request, never from the payload", () => {
+    const [s] = parse("x", { output: { found: true, data: { handle: "someoneelse", followers: 1 } } });
+    expect(s?.url).toBe("https://x.com/jana");
+    expect(s?.url).not.toContain("someoneelse");
+  });
   it("never lets a sensitive Facebook field into the excerpt or raw", () => {
     const [s] = parse("facebook");
     const all = `${s?.excerpt ?? ""}${JSON.stringify(s?.raw)}`;
@@ -136,7 +152,7 @@ describe("treg/social-verify digest", () => {
     expect(d[1]).toMatchObject({ followers: 1234, url: "https://www.instagram.com/jana/", source_url: "https://treg.to/call/tikhub.instagram.user.profile?username=jana" });
     expect(d[0]).toMatchObject({ earliest_experience_year: 2011, created_at: "2013-05" });
     expect(d[5]?.source_url).toBe(`https://treg.to/call/scrapecreators.x.v1-facebook-profile?url=${encodeURIComponent(FB)}&cache_max_age=7d`);
-    for (const f of d) expect(f.source_url).not.toMatch(/token/i);
+    for (const f of d) expect(f.source_url).not.toMatch(/token|x-treg/i);
   });
   it("skips accounts that are not merged and returns null when nothing is left", () => {
     const f = fetched();

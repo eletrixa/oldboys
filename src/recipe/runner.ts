@@ -129,6 +129,7 @@ export async function collectWith(collector: Collector, step: Step, ctx: StepCon
   let parsedHits = 0;
   let deduped = 0;
   let replaced = 0;
+  let tregDropNoted = false; // one "run budget reached" per step however many treg requests are dropped
   const attempt = (req: CollectorRequest): Promise<Attempt> => perform(req, ports).then((ok) => ({ ok }), (error: unknown) => ({ error }));
   // Applies one performed request: tallies, parse, dedup, store. Called in request order whatever order the fetches finished in.
   const apply = async (req: CollectorRequest, res: Attempt): Promise<void> => {
@@ -207,7 +208,8 @@ export async function collectWith(collector: Collector, step: Step, ctx: StepCon
       const chunk = taken.filter((r) => {
         if (r.via !== "treg") return true;
         if (ctx.spent.usd + out.cost_usd + reserved + r.maxCostUsd > ctx.budget.usd) {
-          out.notes.push("run budget reached");
+          if (!tregDropNoted) out.notes.push("run budget reached");
+          tregDropNoted = true;
           return false;
         }
         reserved += r.maxCostUsd;

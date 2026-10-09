@@ -17,6 +17,7 @@ import { describe, expect, it } from "vitest";
 import type { Candidate } from "@/domain/claim";
 import { tregPeopleSearch } from "@/recipe/sources/treg/people-search";
 import { normaliseSocialUrl, tregPersonEnrich } from "@/recipe/sources/treg/person-enrich";
+import { corroboration } from "@/recipe/seams/resolve";
 import { baseContext } from "./fakes";
 
 const step = { id: "x", kind: "actor" as const };
@@ -112,6 +113,22 @@ describe("tregPersonEnrich", () => {
     expect(normaliseSocialUrl("garbage")).toBeNull();
   });
 
+  it("yields the canonical profile URL for every host", () => {
+    expect(normaliseSocialUrl("https://www.github.com/janad")).toBe("https://github.com/janad");
+    expect(normaliseSocialUrl("https://github.com/janad/repo")).toBe("https://github.com/janad");
+    expect(normaliseSocialUrl("https://github.com/janad/repo?tab=x")).toBe("https://github.com/janad");
+    expect(normaliseSocialUrl("https://www.facebook.com/jana.d/?ref=x")).toBe("https://facebook.com/jana.d");
+    expect(normaliseSocialUrl("http://www.facebook.com/profile.php?id=123&ref=x")).toBe("https://facebook.com/profile.php?id=123");
+    expect(normaliseSocialUrl("https://Example.COM/Jana/?q=1#h")).toBe("https://example.com/Jana");
+  });
+
+  it("makes corroboration() report a cross-link to the merged LinkedIn candidate", () => {
+    const ctx = baseContext({ candidates: [linkedin()] });
+    const [src] = tregPersonEnrich.parse(apollo, ctx, step);
+    if (src === undefined) throw new Error("no source");
+    expect(corroboration(src, ctx)).toBe("cross-link");
+  });
+
   it("digests provider, LinkedIn URL, accounts found, employer and title", () => {
     const ctx = baseContext({ candidates: [linkedin()] });
     const req = tregPersonEnrich.requests(ctx, step)[0];
@@ -200,5 +217,53 @@ describe("tregPeopleSearch", () => {
     expect(tregPeopleSearch.parse(null, baseContext(), step)).toEqual([]);
     expect(tregPeopleSearch.parse({ results: "x" }, baseContext(), step)).toEqual([]);
     expect(tregPeopleSearch.parse({ results: [{ nope: 1 }, 5] }, baseContext(), step)).toEqual([]);
+  });
+
+  const hit = (url: string, name: string | undefined, extra: Record<string, unknown> = {}, title?: string) => ({
+    results: [{ url, ...(title === undefined ? {} : { title }), entities: name === undefined ? [] : [{ properties: { name, ...extra } }] }],
+  });
+  const parse = (payload: unknown) => tregPeopleSearch.parse(payload, baseContext(), step);
+
+  it("accepts only linkedin.com and its subdomains", () => {
+    expect(parse(hit("https://notlinkedin.com/in/x", "Jana Dvořáková"))).toEqual([]);
+    expect(parse(hit("https://linkedin.com.evil.io/in/x", "Jana Dvořáková"))).toEqual([]);
+    expect(parse(hit("https://linkedin.com/in/x", "Jana Dvořáková"))).toHaveLength(1);
+  });
+
+  it("drops LinkedIn paths that are not /in/", () => {
+    expect(parse(hit("https://www.linkedin.com/company/acme", "Jana Dvořáková"))).toEqual([]);
+    expect(parse(hit("https://www.linkedin.com/pulse/post-1", "Jana Dvořáková"))).toEqual([]);
+    expect(parse(hit("https://www.linkedin.com/in/", "Jana Dvořáková"))).toEqual([]);
+  });
+
+  it("uses the entity name only, falling back to the title when the entity name is missing", () => {
+    expect(parse(hit("https://www.linkedin.com/in/x", "Petr Novák", {}, "Jana Dvořáková - CEO"))).toEqual([]);
+    expect(parse(hit("https://www.linkedin.com/in/x", undefined, {}, "Jana Dvořáková - CEO"))).toHaveLength(1);
+    expect(parse(hit("https://www.linkedin.com/in/x", "", {}, "Jana Dvořáková"))).toHaveLength(1);
+    expect(parse(hit("https://www.linkedin.com/in/x", undefined))).toEqual([]);
+    expect(parse({ results: [{ url: "https://www.linkedin.com/in/x", title: "Jana Dvořáková" }] })).toHaveLength(1);
+  });
+
+  it("omits missing parts of history lines", () => {
+    const workHistory = [
+      { title: "Analyst" },
+      { company: { name: "Acme" }, dates: { from: "2019" } },
+      { title: "Dev", company: { name: "Beta" }, dates: { to: "2020" } },
+      { title: "CTO", company: { name: "Gamma" }, dates: { from: "2021" } },
+    ];
+    const lines = parse(hit("https://www.linkedin.com/in/x", "Jana Dvořáková", { workHistory }))[0]?.excerpt.split("\n") ?? [];
+    expect(lines).toContain("Analyst");
+    expect(lines).toContain("Acme (2019–now)");
+    expect(lines).toContain("Dev @ Beta");
+    expect(lines).toContain("CTO @ Gamma (2021–now)");
+    expect(lines.join("\n")).not.toMatch(/ @ $|^ @ |\(–/m);
+  });
+
+  it("handles a history of only truncation markers and caps history at 4 lines", () => {
+    const only = parse(hit("https://www.linkedin.com/in/x", "Jana Dvořáková", { workHistory: ["… 5 more item(s) truncated", 3] }));
+    expect(only[0]?.excerpt.split("\n")[0]).toBe("Jana Dvořáková");
+    const workHistory = Array.from({ length: 7 }, (_, n) => ({ title: `T${String(n)}`, company: { name: "C" } }));
+    const lines = parse(hit("https://www.linkedin.com/in/x", "Jana Dvořáková", { workHistory }))[0]?.excerpt.split("\n") ?? [];
+    expect(lines.filter((l) => l.startsWith("T"))).toHaveLength(4);
   });
 });

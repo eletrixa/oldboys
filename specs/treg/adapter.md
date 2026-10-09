@@ -33,9 +33,6 @@ Plan: `plans/016-treg-enrichment/00-SYNTHESIS.md` (Port, Adapter rows).
 - 402 / 503 / any non-2xx: Error as above (message never contains the token, even if the provider echoes it in the body).
 - Timeout / network error: the `fetch` rejection propagates unchanged (`TimeoutError` / `TypeError`).
 - 2xx with a non-JSON body: throws an Error whose message starts `treg <endpoint>:` (no raw token, no body longer than the snippet).
-- Deviation in code: a body that echoes the token is put in the error snippet unredacted. Fix: replace every occurrence of `token` in the snippet with `[token]`.
-- Deviation in code: invalid JSON on a 2xx throws the bare `SyntaxError` from `JSON.parse`, without the `treg <endpoint>:` prefix. Fix: catch and rethrow `treg <endpoint>: invalid JSON <snippet>`.
-- Deviation in code: a negative `X-Treg-Cost-Micro` is accepted as a negative cost. Fix: treat a negative value as `0`.
 
 ## Tests that prove it (`treg.test.ts`, fake global `fetch`, no network)
 Existing:

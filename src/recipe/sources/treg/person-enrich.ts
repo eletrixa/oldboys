@@ -58,7 +58,7 @@ function confirmedLinkedin(ctx: StepContext): string | null {
   return null;
 }
 
-/** https, no www for x.com, no query, no trailing slash; twitter.com becomes x.com/<handle>; null when not a URL. */
+/** Canonical profile URL: https, no www for github/x/facebook, handle only for github and x (twitter.com becomes x.com), no query (Facebook keeps profile.php?id=), no trailing slash; null when not a URL or no path. */
 export function normaliseSocialUrl(raw: string): string | null {
   let u: URL;
   try {
@@ -66,11 +66,16 @@ export function normaliseSocialUrl(raw: string): string | null {
   } catch {
     return null;
   }
-  const host = u.hostname.toLowerCase().replace(/^www\./, "");
+  const lower = u.hostname.toLowerCase();
+  const host = /^www\.(?:github|twitter|x|facebook)\.com$/.test(lower) ? lower.slice(4) : lower;
   const segs = u.pathname.split("/").filter((s) => s !== "");
-  if (segs.length === 0) return null;
-  if (host === "twitter.com" || host === "x.com") return `https://x.com/${segs[0] ?? ""}`;
-  return `https://${u.hostname.toLowerCase()}/${segs.join("/")}`;
+  const first = segs[0];
+  if (first === undefined) return null;
+  if (host === "twitter.com" || host === "x.com") return `https://x.com/${first}`;
+  if (host === "github.com") return `https://github.com/${first}`;
+  const id = u.searchParams.get("id");
+  const query = host === "facebook.com" && first === "profile.php" && id !== null ? `?id=${id}` : "";
+  return `https://${host}/${segs.join("/")}${query}`;
 }
 
 function personOf(payload: unknown): PersonRecord | null {

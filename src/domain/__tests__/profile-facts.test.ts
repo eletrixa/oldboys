@@ -7,7 +7,7 @@
  * Tested:  n/a (this is the test)
  */
 import { describe, expect, it } from "vitest";
-import { BIO_MAX, clipBio, count, experienceYear, facts, readProfileFacts } from "@/domain/profile-facts";
+import { BIO_MAX, FACT_PLATFORMS, clipBio, count, experienceYear, facts, readProfileFacts } from "@/domain/profile-facts";
 
 const row = (step: string, digest: unknown): { step: string; ref_json: string } => ({ step, ref_json: JSON.stringify({ digest }) });
 const f = (platform: string): ReturnType<typeof facts> => facts(platform, `https://${platform}.example/me`, { source_url: `https://${platform}.example/api` });
@@ -80,5 +80,11 @@ describe("clipBio", () => {
     expect(out).toHaveLength(BIO_MAX);
     expect(out?.endsWith("…")).toBe(true);
     expect(clipBio("a".repeat(BIO_MAX))).toHaveLength(BIO_MAX);
+  });
+});
+
+describe("FACT_PLATFORMS", () => {
+  it("lists facebook so a merged page without facts is reported as not checked", () => {
+    expect(FACT_PLATFORMS).toContain("facebook");
   });
 });

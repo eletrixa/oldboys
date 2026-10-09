@@ -45,11 +45,6 @@ Plan: `plans/016-treg-enrichment/00-SYNTHESIS.md`. Step id `treg_company_enrich`
 - Excerpt equals the exact sentence for the Stripe fixture; url `https://stripe.com/`; `raw` lacks `emailPatterns`.
 - `{}`, `null`, `"nope"`, `{ about: { name: 5 } }` → `[]`.
 - Digest equals `{ provider, domain, employees: 8000, founded: 2010, hq, socials: [twitter, github] }` (non-URL social entries dropped); `{}` payload → `null`.
-- Missing (add in refactor): range-only employees, `industries[0]` fallback, `ftp:` and dotless-host anchors skip, `domain.domain` absent falls back to the anchor host.
 
-## Deviations (dossier vs code)
-- Deviation in code: the dossier says the Source URL is the company website (the anchor host); the code uses the provider's `domain.domain` when present, so a redirecting or differently-spelled provider domain changes the Source URL away from the anchor. Decide: prefer the anchor host and keep `domain.domain` only in the digest.
-- Deviation in code: the dossier allow-list names `domain.domain` for parsing only; the code also lets it override the digest `domain` (same cause).
-- Deviation in code: the excerpt has no read date, while the dossier's social-verify wording ends "read by <provider> via treg on <date>"; company excerpt ends without a date.
-- Deviation in code: the dossier lists "employee count" only; the code also accepts the range string `totalEmployees` as fallback and `industries[0]` as industry fallback (beyond the dossier, harmless, undocumented there).
-- Deviation in code: tests do not cover the fallbacks or non-http anchors listed under "Missing" above.
+
+- Fallbacks (documented in the code header, covered by tests): range string `totalEmployees` when `totalEmployeesExact` is missing, `industries[0]` when `industry` is missing.

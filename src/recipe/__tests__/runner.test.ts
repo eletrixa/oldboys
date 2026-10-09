@@ -269,6 +269,61 @@ describe("treg requests", () => {
     expect(ports.calls.treg).toHaveLength(1);
     expect(out.sources).toHaveLength(1);
   });
+
+  const mixed = (treg: ReturnType<typeof tregReq>[]): Collector => ({
+    id: "treg/fake",
+    requests: () => [{ via: "fetch", url: "https://api.example.com/a" }, ...treg],
+    parse: () => [{ url: `https://example.com/${String(Math.random())}`, excerpt: "hit", raw: {} }],
+  });
+
+  it("pushes run budget reached once per step however many treg requests are dropped", async () => {
+    const ports = fakePorts();
+    const ctx = baseContext({ budget: { usd: 0.02, calls: 12 }, spent: { usd: 0.02, calls: 0 } });
+    const out = await collectWith(collectorOf([tregReq(0.01), tregReq(0.01), tregReq(0.01)]), tregStep, ctx, ports);
+    expect(out.notes.filter((n) => n === "run budget reached")).toEqual(["run budget reached"]);
+    expect(ports.calls.treg).toEqual([]);
+  });
+
+  it("keeps and performs the fetch request of a mixed collector when callTreg is null, noting TREG_TOKEN not set once", async () => {
+    const ports = fakePorts({ callTreg: null });
+    const out = await collectWith(mixed([tregReq(0.01), tregReq(0.01)]), tregStep, baseContext(), ports);
+    expect(ports.calls.fetch).toEqual(["https://api.example.com/a"]);
+    expect(out.notes.filter((n) => n === "TREG_TOKEN not set")).toHaveLength(1);
+    expect(out.empty).toBe(false);
+    expect(out.sources).toHaveLength(1);
+  });
+
+  it("reserves cumulatively inside one chunk: two of three fit, one dropped, one note", async () => {
+    const ports = fakePorts();
+    const ctx = baseContext({ budget: { usd: 0.02, calls: 12 }, spent: { usd: 0.01, calls: 0 } });
+    const out = await collectWith(collectorOf([tregReq(0.004), tregReq(0.004), tregReq(0.004)]), tregStep, ctx, ports);
+    expect(ports.calls.treg).toHaveLength(2);
+    expect(out.notes.filter((n) => n === "run budget reached")).toHaveLength(1);
+  });
+
+  it("performs treg and fetch requests of the same chunk", async () => {
+    const ports = fakePorts();
+    const out = await collectWith(mixed([tregReq(0.01)]), tregStep, baseContext(), ports);
+    expect(ports.calls.fetch).toHaveLength(1);
+    expect(ports.calls.treg).toHaveLength(1);
+    expect(out.sources).toHaveLength(2);
+  });
+
+  it("records a rejected treg request as a request failed note, adds no cost, and is not empty when another request produced sources", async () => {
+    const ports = fakePorts({ callTreg: () => Promise.reject(new Error("402 payment required")) });
+    const out = await collectWith(mixed([tregReq(0.01)]), tregStep, baseContext(), ports);
+    expect(out.notes).toContain("request failed: 402 payment required");
+    expect(out.cost_usd).toBe(0);
+    expect(out.empty).toBe(false);
+    expect(out.sources).toHaveLength(1);
+  });
+
+  it("adds a treg cost to cost_usd and never to calls", async () => {
+    const ports = fakePorts({ callTreg: () => Promise.resolve({ payload: {}, cost_usd: 0.003 }) });
+    const out = await collectWith(collectorOf([tregReq(0.01), tregReq(0.01)]), tregStep, baseContext(), ports);
+    expect(out.cost_usd).toBeCloseTo(0.006);
+    expect(out.calls).toBe(0);
+  });
 });
 
 describe("collectWith replaces", () => {
