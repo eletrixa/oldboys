@@ -6,7 +6,7 @@
  * Deps:    vitest, node:fs
  * Tested:  n/a (this is the test)
  */
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { BASE_IDS, FAMILIES, MustHaves } from "@/domain/position";
 import { filterRoleOptions, HIRING_EVIDENCE_STEPS, matchRoleTemplate, normalizeRoleTitle, ROLE_CATALOG, ROLE_OPTIONS, ROLE_TITLES, roleSitesQuery, templateFromRow, templateToRow } from "@/domain/role-catalog";
@@ -63,11 +63,15 @@ describe("ROLE_CATALOG", () => {
     }
   });
 
-  it("is seeded by migration 0013 (every key, INSERT OR REPLACE)", () => {
-    const sql = readFileSync("migrations/0013_role_templates.sql", "utf8");
-    for (const t of ROLE_CATALOG) expect(sql, t.key).toContain(`VALUES ('${t.key}', `);
-    expect(sql).toContain("CREATE TABLE role_templates");
-    expect(sql).toContain("ALTER TABLE investigations ADD COLUMN role_template");
+  it("is created by migration 0013 and seeded by the latest role_templates migration (every key, INSERT OR REPLACE)", () => {
+    const create = readFileSync("migrations/0013_role_templates.sql", "utf8");
+    expect(create).toContain("CREATE TABLE role_templates");
+    expect(create).toContain("ALTER TABLE investigations ADD COLUMN role_template");
+    const seeds = readdirSync("migrations").filter((f) => /^\d{4}_role_templates.*\.sql$/.test(f)).sort();
+    const latest = seeds.at(-1);
+    if (latest === undefined) throw new Error("no role_templates seed migration");
+    const sql = readFileSync(`migrations/${latest}`, "utf8");
+    for (const t of ROLE_CATALOG) expect(sql, `${t.key} in ${latest}`).toContain(`VALUES ('${t.key}', `);
   });
 });
 
@@ -95,6 +99,46 @@ describe("matchRoleTemplate", () => {
     expect(keyOf("Senior Product Manager, Prague")).toBe("senior-product-manager");
     expect(keyOf("Tech Lead (m/ž)")).toBe("tech-lead");
     expect(keyOf("Product Manager II ")).toBe("product-manager");
+  });
+
+  // Live Czech job-board titles (2026-10-09) that used to misroute through over-generic aliases ("po", "architect",
+  // "konzultant", "vývojář", "tester", "asistentka", ...): a wrong template poisons the questions, so null is the right answer
+  // for anything the catalog does not name.
+  it.each([
+    ["Řezník (PO - PÁ, směny 3:00 - 11:30 hod.) Amulle, Brno (M/Ž)", null],
+    ["Technik BOZP a PO (M/Ž)", null],
+    ["Customer Value Architect", null],
+    ["INTERIÉROVÝ ARCHITEKT", null],
+    ["Technical Consultant", null],
+    ["BEAUTY KONZULTANT - prodavač(ka) v SEPHORA - PRAHA", null],
+    ["PORODNÍ ASISTENTKA pro VYHLÁŠENOU PORODNICI", null],
+    ["Revízny technik výťahov - Tester", null],
+    ["Designér a vývojář batohů a obuvi (m/ž)", null],
+    ["Řidič/ka MHD", null],
+    ["Strategic Buyer", null],
+    ["Strategy Analyst", null],
+    ["Marketing Specialist & Content Creator (ž/m)", null],
+    ["Cloud Architect", "solutions-architect"],
+    ["Head of Sales", "vp-sales-cro"],
+    ["Obchodní zástupce – slévárenství/strojírenství", "account-executive"],
+    ["Java vývojář / vývojářka", "java-developer"],
+    ["React vývojář", "frontend-engineer"],
+    ["C#/.NET backend vývojář – medior", "dotnet-developer"],
+    ["Senior Data Platform Engineer", "data-engineer"],
+    ["VIDEO EDITOR", "video-producer"],
+    ["Finanční účetní / Financial Accountant", "accountant"],
+    ["MZDOVÝ/Á ÚČETNÍ A PERSONALISTA/KA", "payroll-specialist"],
+    ["Personální konzultant/ka - získej praxi v HR (HPP i brigáda)", "recruiter-talent-acquisition-partner"],
+    ["Test analytik / Tester (m/ž) - O2 CRM Services", "manual-qa-engineer"],
+    ["Produktový manažer/manažerka - lékař/ka", "product-manager"],
+    ["Consumer Care Specialist (zdravotní sestra, nutriční terapeut apod.) – linka pro pacienty", "customer-support-specialist"],
+    ["Senior Legal Counsel (Product and Business Development)", "general-counsel-in-house-lawyer"],
+    ["Partner Development Manager CEE", "partnerships-manager"],
+    ["HR manager skupiny", "head-of-people-chro"],
+    ["HR & People Operations Manager: pomozte budovat HR, které má smysl", "people-operations-specialist"],
+    ["Head of Data Governance", "data-steward"],
+  ])("routes the board title %j to %s", (title, key) => {
+    expect(matchRoleTemplate(title, ROLE_CATALOG)?.key ?? null).toBe(key);
   });
 
   it("prefers the longest alias on containment", () => {

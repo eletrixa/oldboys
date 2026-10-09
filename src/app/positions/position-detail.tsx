@@ -10,6 +10,7 @@
  * - GET /api/positions/:id; show title, company, location, family chip, ingest label
  * - Actions: Research a candidate (primary), Search people on LinkedIn, Open posting
  * - Notes: fallback must-haves (AI was off), "edited by hand"
+ * - Registry checks section (which Czech public registries every candidate of this position is checked against, from the title)
  * - Candidates (pool) and Intake channels sections; reload re-GETs the detail after an add, bind or enrichment start
  * - Coverage table via RoleTable with its disclaimer, or "No candidates researched yet."
  *
@@ -31,6 +32,7 @@ import { CandidatePool } from "./candidate-pool";
 import { IntakeChannels } from "./intake-channels";
 import { MustHaveEditor } from "./must-have-editor";
 import { PositionBasics } from "./position-basics";
+import { RegistryChecks } from "./registry-checks";
 
 const HINT = "Positions are shared by the team, so they need the team token. Kept only in this tab.";
 
@@ -72,6 +74,7 @@ function Body({ detail, onChange }: { detail: PositionDetail; onChange: (d: Posi
         </p>
       )}
       <MustHaveEditor position={position} onSaved={saved} />
+      <RegistryChecks title={position.title} />
       <CandidatePool positionId={position.id} rows={detail.candidates} onReload={reload} />
       <IntakeChannels positionId={position.id} title={position.title} tags={detail.tags} onReload={reload} />
       {group === null ? <p className="text-muted">No candidates researched yet.</p> : <RoleTable group={group} />}

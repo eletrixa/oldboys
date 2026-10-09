@@ -20,7 +20,7 @@ export const PEOPLE: RoleTemplate[] = [
     key: "recruiter-talent-acquisition-partner",
     title: "Recruiter / Talent Acquisition Partner",
     family: "people",
-    aliases: ["recruiter", "náborář", "recruiterka", "talent acquisition partner", "ta partner", "ta", "náborový specialista", "personalista náborář"],
+    aliases: ["recruiter", "náborář", "recruiterka", "talent acquisition partner", "ta partner", "náborový specialista", "personalista náborář", "personální konzultant", "personální konzultant/ka", "personální konzultantka"],
     profile: "track-record",
     must_haves: [
       { id: "mh-hiring-track-record", title: "Hiring track record", text: "Held recruiter or TA roles at named companies with stated roles filled", accepted_evidence: ["job history", "company filing"] },
@@ -76,7 +76,7 @@ export const PEOPLE: RoleTemplate[] = [
     key: "hr-generalist",
     title: "HR Generalist",
     family: "people",
-    aliases: ["hr specialist", "personalista", "personální specialista", "hr manager", "hr administrator", "specialista lidských zdrojů"],
+    aliases: ["hr specialist", "personalista", "personální specialista", "hr administrator", "specialista lidských zdrojů", "human resources specialist", "human resources generalist", "hr generalistka", "hr specialistka", "personalistka", "specialista/ka lidských zdrojů"],
     profile: "verify-only",
     must_haves: [
       { id: "mh-hr-experience", title: "HR experience", text: "Stated HR generalist work at named employers", accepted_evidence: ["job history", "company filing"] },
@@ -90,7 +90,7 @@ export const PEOPLE: RoleTemplate[] = [
     key: "head-of-people-chro",
     title: "Head of People / CHRO",
     family: "people",
-    aliases: ["chro", "chief people officer", "hr director", "personální ředitel", "ředitel lidských zdrojů", "vp people", "head of hr"],
+    aliases: ["chro", "chief people officer", "hr director", "personální ředitel", "ředitel lidských zdrojů", "vp people", "head of hr", "hr manager", "human resources manager", "hr manažer", "hr manažer/ka", "hr manažerka"],
     profile: "track-record",
     must_haves: [
       { id: "mh-people-executive", title: "People executive role", text: "Held CHRO, HR director or head-of-people title at a named company", accepted_evidence: ["job history", "company filing", "press mention"] },
@@ -104,7 +104,7 @@ export const PEOPLE: RoleTemplate[] = [
     key: "people-operations-specialist",
     title: "People Operations Specialist",
     family: "people",
-    aliases: ["people ops", "people operations", "hr operations specialist", "hr operations", "specialista people operations"],
+    aliases: ["people ops", "people operations", "hr operations specialist", "hr operations", "specialista people operations", "people operations manager", "hr operations manager"],
     profile: "verify-only",
     must_haves: [
       { id: "mh-peopleops-experience", title: "People ops experience", text: "Stated people operations or HR operations work at named employers", accepted_evidence: ["job history", "company filing"] },

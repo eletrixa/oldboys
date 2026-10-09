@@ -44,6 +44,18 @@ describe("makeFetchJson", () => {
     await expect(f("https://isir.justice.cz/y", { headers: { accept: "text/xml" } })).resolves.toBe("<xml/>");
   });
 
+  it("follows a text request's 302 once with the cookies the redirect set", async () => {
+    const redirect = new Response(null, { status: 302, headers: { location: "/Home/SearchResult", "set-cookie": "ASP.NET_SessionId=abc; path=/; HttpOnly" } });
+    const fn = stub(redirect, new Response("<html>results</html>"));
+    const f = makeFetchJson();
+    await expect(f("https://vyhledavac.cak.cz/", { method: "POST", headers: { accept: "text/html", "content-type": "application/x-www-form-urlencoded" }, body: "Surname=x" })).resolves.toBe("<html>results</html>");
+    expect(fn.mock.calls[0]?.[1]?.redirect).toBe("manual");
+    expect(fn.mock.calls[1]?.[0]).toBe("https://vyhledavac.cak.cz/Home/SearchResult");
+    expect(fn.mock.calls[1]?.[1]?.method).toBe("GET");
+    expect(headersOf(fn, 1).get("cookie")).toBe("ASP.NET_SessionId=abc");
+    expect(headersOf(fn, 1).get("content-type")).toBeNull();
+  });
+
   it("adds no authorization header without a token", async () => {
     const fn = stub(Response.json({}));
     await makeFetchJson()("https://api.github.com/users/x");

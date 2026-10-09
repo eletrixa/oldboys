@@ -33,6 +33,7 @@ import type { Brief, Candidate, Claim } from "@/domain/claim";
 import { readChallenge } from "@/domain/challenge";
 import { GoalId } from "@/domain/claim";
 import { readCodeProfile } from "@/domain/code-profile";
+import { readRegistryChecks } from "@/domain/cz-registry";
 import { withCvQuestion } from "@/domain/cv-check";
 import { TRANSLATE_STEP } from "@/domain/report-translation";
 import { type CostRow, runCost } from "@/domain/run-cost";
@@ -151,6 +152,7 @@ export async function loadRunState(db: D1Database, id: string): Promise<RunState
     quote_contexts: open.quote_contexts,
     ...challengeState(readChallenge(ledger.results), new Set(open.claims.map((c) => c.id))),
     code_profile: readCodeProfile(ledger.results),
+    registry_checks: readRegistryChecks(ledger.results),
     questions: withCvQuestion(head.goal, [...base, ...extra], sources.results),
     brief: open.brief,
     cost: runCost(ledger.results, head.created_at),

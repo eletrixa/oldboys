@@ -11,9 +11,12 @@
  * - `github_deep` (technical roles only: engineering, data; src/domain/code-profile TECHNICAL_FAMILIES) scrapes every confirmed GitHub account in depth;
  *   `github_apify` then adds the profile page's own numbers (saswave/github-profile-scraper)
  * - `role_sites_serp`: the matched role template's evidence sites (src/domain/role-catalog) as one `site:` search
+ * - `cz_registries` (`rest/cz-registries`): Czech public registries for every position (insolvency, ARES, public register
+ *   persons, Police wanted list) plus the chamber the role title names (src/domain/cz-registry); free REST / HTML, no Apify
  *
  * Design constraints:
- * - Must call `github_profile`; must never call ARES (that is due-diligence's step)
+ * - Must call `github_profile`; must never call the company ARES steps (`kind: "ares"`, due-diligence's); the person check
+ *   in `cz_registries` is a different question (records under the candidate's name)
  * - Shares fewer than half of its step ids with due-diligence (goal switch must change substance)
  */
 import type { Recipe } from "@/recipe/step";
@@ -27,6 +30,7 @@ export const hiringRecipe: Recipe = {
     { id: "code-contributions", text: "What do the candidate's public code contributions show: own repositories, lines added and removed, commits, pull requests merged into other projects, main languages, how recent the activity is?", title: "Code contributions" },
     { id: "public-talks", text: "What public talks, posts or writing show how they think?" },
     { id: "location-match", text: "Does their stated location match the anchor?" },
+    { id: "public-registries", text: "What do Czech public registries list under the candidate's name: insolvency proceedings, own businesses or statutory-body seats, the Police wanted list, and the professional chamber the role requires?", title: "Public registries" },
     { id: "contradictions", text: "Which sources disagree with each other?" },
   ],
   steps: [
@@ -49,6 +53,7 @@ export const hiringRecipe: Recipe = {
     { id: "bluesky_profile", kind: "actor", actor: "rest/bluesky", onEmpty: { gap: "no Bluesky account found" } },
     { id: "personal_site_crawl", kind: "actor", actor: "apify/website-content-crawler", onEmpty: { gap: "no personal site found" } },
     { id: "role_sites_serp", kind: "serp", actor: "apify/google-search-scraper", query: '"{subject}" {role_sites}', onEmpty: { gap: "no hits on the role's evidence sites (or the role matched no template)" } },
+    { id: "cz_registries", kind: "actor", actor: "rest/cz-registries", onEmpty: { gap: "Czech public registries not checked (name could not be split into given name and surname)" } },
     { id: "talks_serp", kind: "serp", actor: "apify/google-search-scraper", query: '{subject} talk OR podcast OR conference OR blog OR interview', onEmpty: { gap: "no talks, podcasts or posts found in web search" } },
     { id: "extract_claims", kind: "extract" },
     { id: "verify_claims", kind: "verify" },

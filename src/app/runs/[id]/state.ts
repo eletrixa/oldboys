@@ -28,6 +28,7 @@
  */
 import type { Challenge } from "@/domain/challenge";
 import type { CodeProfile } from "@/domain/code-profile";
+import type { RegistryChecks } from "@/domain/cz-registry";
 import type { Brief, BriefSection, Candidate, Claim } from "@/domain/claim";
 import type { ClaimQuoteContext } from "@/domain/quote";
 import type { RunCost } from "@/domain/run-cost";
@@ -68,6 +69,8 @@ export type RunState = {
   challenge_summary?: { checked: number; held: number; moved: number } | null;
   /** GitHub deep scrape digest (technical roles); null or absent otherwise. */
   code_profile?: CodeProfile | null;
+  /** Czech public registry checks (cz_registries step digest); null or absent for older runs. */
+  registry_checks?: RegistryChecks | null;
   questions: { id: string; text: string; title?: string }[];
   brief: Brief | null;
   /** Reason recorded by the Workflow when status is failed; null otherwise. */

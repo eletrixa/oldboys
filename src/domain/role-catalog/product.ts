@@ -19,7 +19,7 @@ export const PRODUCT: RoleTemplate[] = [
     key: "product-manager",
     title: "Product Manager",
     family: "product",
-    aliases: ["produktový manažer", "produktová manažerka", "pm", "product lead", "manažer produktu"],
+    aliases: ["produktový manažer", "produktová manažerka", "pm", "product lead", "manažer produktu", "produktový manažer/manažerka", "produktový manažer/ka"],
     profile: "track-record",
     must_haves: [
       { id: "mh-shipped", title: "Products shipped", text: "Has shipped named products or features, visible in launches, press or release notes", accepted_evidence: ["product launch", "press", "case study", "job history"] },
@@ -75,7 +75,7 @@ export const PRODUCT: RoleTemplate[] = [
     key: "product-owner",
     title: "Product Owner",
     family: "product",
-    aliases: ["vlastník produktu", "po", "agile product owner", "produkt owner", "business owner"],
+    aliases: ["vlastník produktu", "agile product owner", "produkt owner", "business owner"],
     profile: "track-record",
     must_haves: [
       { id: "mh-backlog", title: "Backlog ownership", text: "Has owned a product backlog for a named product or team", accepted_evidence: ["job history", "case study", "portfolio"] },
@@ -117,7 +117,7 @@ export const PRODUCT: RoleTemplate[] = [
     key: "scrum-master",
     title: "Scrum Master",
     family: "product",
-    aliases: ["scrum master / agile coach", "agilní kouč", "agile coach", "scrum mistr", "sm", "agilní trenér"],
+    aliases: ["scrum master / agile coach", "agilní kouč", "agile coach", "scrum mistr", "agilní trenér"],
     profile: "credentialed",
     must_haves: [
       { id: "mh-certification", title: "Scrum certification", text: "Holds a Scrum or agile credential (PSM, CSM, SAFe, ICAgile)", accepted_evidence: ["certification listing", "registry entry"] },

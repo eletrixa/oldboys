@@ -9,7 +9,8 @@
  * Key responsibilities:
  * - Editorial heading, sub copy and the client start form (Screen 1) in a white card
  * - Three plain steps (what Radar does) and the "never a score" line
- * - Logged-out visitors see the landing (src/app/landing); with `?positionId=` they go to /login with it carried in `next`
+ * - Logged-out visitors see the landing (src/app/landing); with `?positionId=` or `?role=` they go to /login with it carried in `next`
+ * - `?role=<title>` (a catalog title picked on /positions) prefills and focuses the role field
  * - Small link to /positions (pick or add a position; /roles stays reachable by URL)
  *
  * Design constraints:
@@ -31,12 +32,14 @@ const STEPS: readonly (readonly [string, string])[] = [
   ["Prepare the conversation", "Gaps become suggested interview questions. You make the decision."],
 ];
 
-export default async function HomePage({ searchParams }: { searchParams: Promise<{ positionId?: string }> }): Promise<React.JSX.Element> {
+export default async function HomePage({ searchParams }: { searchParams: Promise<{ positionId?: string; role?: string }> }): Promise<React.JSX.Element> {
   const user = await currentUser();
+  const { positionId, role } = await searchParams;
+  const initialRole = typeof role === "string" ? role.trim().slice(0, 300) : "";
   if (user === null) {
-    const { positionId } = await searchParams;
-    if (typeof positionId !== "string" || positionId === "") return <Landing />;
-    redirect(loginHref(`/?positionId=${encodeURIComponent(positionId)}`));
+    if (typeof positionId === "string" && positionId !== "") redirect(loginHref(`/?positionId=${encodeURIComponent(positionId)}`));
+    if (initialRole !== "") redirect(loginHref(`/?role=${encodeURIComponent(initialRole)}`));
+    return <Landing />;
   }
   return (
     <main className="mx-auto grid max-w-5xl gap-10 px-4 py-12 md:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] md:items-start md:py-16">
@@ -67,7 +70,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
         <div className={`${CARD} md:p-8`}>
           <h2 className="mb-1 text-2xl">Start a brief</h2>
           <p className="mb-5 text-sm text-muted">Hiring at {user.organizationName}</p>
-          <StartForm roleOptions={ROLE_OPTIONS} />
+          <StartForm roleOptions={ROLE_OPTIONS} initialRole={initialRole} autoFocusRole={initialRole !== ""} />
         </div>
         <p className="px-1 text-sm text-muted">
           Hiring for a position?{" "}

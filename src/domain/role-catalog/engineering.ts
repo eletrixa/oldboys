@@ -25,7 +25,7 @@ const LEAD = ["linkedin_profile", "talks_serp", "x_profile", "youtube_channel"] 
 export const ENGINEERING: RoleTemplate[] = [
   {
     key: "backend-engineer", title: "Backend Engineer", family: "engineering", profile: "makers",
-    aliases: ["backend developer", "vývojář backendu", "backend programátor", "server-side developer", "be engineer"],
+    aliases: ["backend developer", "vývojář backendu", "backend programátor", "server-side developer", "be engineer", "backend vývojář", "backend vývojář/ka", "back-end vývojář"],
     must_haves: [
       mh("production-services", "Production services", "Has shipped production backend services in Go, Java, Python or Node.js", "repo", "job history", "blog post"),
       mh("api-design", "API design", "Has designed or documented public REST, GraphQL or gRPC APIs", "docs site", "repo", "talk"),
@@ -36,7 +36,7 @@ export const ENGINEERING: RoleTemplate[] = [
   },
   {
     key: "frontend-engineer", title: "Frontend Engineer", family: "engineering", profile: "makers",
-    aliases: ["frontend developer", "front-end developer", "vývojář frontendu", "frontend programátor", "ui developer", "react developer"],
+    aliases: ["frontend developer", "front-end developer", "vývojář frontendu", "frontend programátor", "react developer", "react vývojář", "react vývojář/ka", "frontend vývojář", "frontend vývojář/ka", "front-end vývojář", "front-end vývojář/ka"],
     must_haves: [
       mh("framework-delivery", "Framework delivery", "Has shipped web apps in React, Vue, Angular or Svelte", "repo", "live site", "job history"),
       mh("typescript", "TypeScript use", "Public code written in TypeScript with typed components", "repo", "package"),
@@ -47,7 +47,7 @@ export const ENGINEERING: RoleTemplate[] = [
   },
   {
     key: "full-stack-engineer", title: "Full-Stack Engineer", family: "engineering", profile: "makers",
-    aliases: ["full stack developer", "fullstack developer", "fullstack programátor", "full-stack vývojář", "web developer", "webový vývojář"],
+    aliases: ["full stack developer", "fullstack developer", "fullstack programátor", "full-stack vývojář", "web developer", "webový vývojář", "full stack engineer", "fullstack engineer", "full-stack developer", "fullstack vývojář", "full-stack vývojář/ka", "fullstack vývojář/ka", "full stack vývojář"],
     must_haves: [
       mh("end-to-end-apps", "End-to-end apps", "Has built and deployed web apps covering UI, API and database", "repo", "live site", "job history"),
       mh("backend-and-frontend", "Both stacks", "Public code in both a frontend framework and a server language", "repo", "package"),
@@ -58,7 +58,7 @@ export const ENGINEERING: RoleTemplate[] = [
   },
   {
     key: "ios-engineer", title: "iOS Engineer", family: "engineering", profile: "makers",
-    aliases: ["ios developer", "mobile engineer ios", "vývojář ios", "ios programátor", "swift developer", "iphone developer"],
+    aliases: ["ios developer", "mobile engineer ios", "vývojář ios", "ios programátor", "swift developer", "iphone developer", "software engineer ios", "ios software engineer", "ios vývojář"],
     must_haves: [
       mh("app-store-apps", "App Store apps", "Has apps or SDKs published on the Apple App Store", "app store listing", "repo", "job history"),
       mh("swift-swiftui", "Swift and SwiftUI", "Public code in Swift using SwiftUI or UIKit", "repo", "package", "blog post"),
@@ -91,7 +91,7 @@ export const ENGINEERING: RoleTemplate[] = [
   },
   {
     key: "devops-engineer", title: "DevOps Engineer", family: "engineering", profile: "makers",
-    aliases: ["devops", "vývojář devops", "devops inženýr", "ci/cd engineer", "infrastructure engineer"],
+    aliases: ["vývojář devops", "devops inženýr", "ci/cd engineer", "infrastructure engineer", "devops specialist", "devops specialista", "devops developer"],
     must_haves: [
       mh("ci-cd-pipelines", "CI/CD pipelines", "Has built CI/CD pipelines with GitHub Actions, GitLab CI or Jenkins", "repo", "job history", "blog post"),
       mh("infrastructure-as-code", "Infrastructure as code", "Public Terraform, Pulumi or Ansible code for real environments", "repo", "package"),
@@ -113,7 +113,7 @@ export const ENGINEERING: RoleTemplate[] = [
   },
   {
     key: "platform-engineer", title: "Platform Engineer", family: "engineering", profile: "makers",
-    aliases: ["internal platform engineer", "platform developer", "platformní inženýr", "developer platform engineer", "idp engineer"],
+    aliases: ["internal platform engineer", "platformní inženýr", "developer platform engineer", "idp engineer"],
     must_haves: [
       mh("internal-platform", "Internal platform", "Has built internal developer platforms or self-service tooling", "job history", "talk", "blog post"),
       mh("kubernetes-ops", "Kubernetes tooling", "Public Kubernetes operators, controllers or Helm charts", "repo", "package"),
@@ -168,7 +168,7 @@ export const ENGINEERING: RoleTemplate[] = [
   },
   {
     key: "manual-qa-engineer", title: "QA Engineer (Manual)", family: "engineering", profile: "makers",
-    aliases: ["manual tester", "qa tester", "tester", "softwarový tester", "manuální tester", "qa specialist"],
+    aliases: ["manual tester", "qa tester", "softwarový tester", "manuální tester", "qa specialist", "software tester", "sw tester", "test analytik", "test analyst", "qa analyst"],
     must_haves: [
       mh("test-design", "Test design", "Has written test plans, cases or exploratory testing reports", "blog post", "job history", "docs site"),
       mh("defect-reporting", "Defect reporting", "Has filed bugs in public issue trackers or bug-bounty programs", "issue tracker", "bounty profile"),
@@ -190,7 +190,7 @@ export const ENGINEERING: RoleTemplate[] = [
   },
   {
     key: "embedded-engineer", title: "Embedded Engineer", family: "engineering", profile: "makers",
-    aliases: ["embedded developer", "embedded software engineer", "vývojář embedded", "embedded programátor", "mcu developer", "vestavěné systémy"],
+    aliases: ["embedded developer", "embedded software engineer", "vývojář embedded", "embedded programátor", "mcu developer", "vestavěné systémy", "embedded vývojář", "embedded vývojář/ka", "embedded hw/sw vývojář", "embedded linux vývojář", "embedded linux vývojář/ka"],
     must_haves: [
       mh("c-cpp-embedded", "C/C++ embedded", "Public embedded code in C, C++ or Rust for microcontrollers", "repo", "package"),
       mh("rtos-experience", "RTOS experience", "Shows work with FreeRTOS, Zephyr or similar real-time systems", "repo", "blog post", "talk"),
@@ -234,7 +234,7 @@ export const ENGINEERING: RoleTemplate[] = [
   },
   {
     key: "solutions-architect", title: "Solutions Architect", family: "engineering", profile: "makers",
-    aliases: ["solution architect", "řešitelský architekt", "architekt řešení", "cloud solutions architect", "technical architect"],
+    aliases: ["solution architect", "řešitelský architekt", "architekt řešení", "cloud solutions architect", "technical architect", "cloud architect", "cloud architekt", "infrastructure architect", "it architect", "it architekt", "system architect", "systems architect", "systémový architekt"],
     must_haves: [
       mh("architecture-delivery", "Architecture delivery", "Has designed and delivered multi-system solutions for named organisations", "job history", "case study", "talk"),
       mh("cloud-architecture-cert", "Architect certification", "Holds a listed architect-level cloud certification", "certification listing", "profile"),
@@ -256,7 +256,7 @@ export const ENGINEERING: RoleTemplate[] = [
   },
   {
     key: "engineering-manager", title: "Engineering Manager", family: "engineering", profile: "track-record",
-    aliases: ["em", "software engineering manager", "vedoucí vývoje", "manažer vývoje", "development manager", "team manager engineering"],
+    aliases: ["software engineering manager", "vedoucí vývoje", "manažer vývoje", "team manager engineering", "software development manager"],
     must_haves: [
       mh("team-leadership", "Team leadership", "Has led an engineering team at a named company", "job history", "profile", "press"),
       mh("delivery-outcomes", "Delivery outcomes", "Products or platforms shipped under their leadership are publicly documented", "press", "product page", "job history"),
@@ -376,7 +376,7 @@ export const ENGINEERING: RoleTemplate[] = [
   },
   {
     key: "sap-consultant", title: "SAP Consultant / Developer", family: "engineering", profile: "credentialed",
-    aliases: ["sap developer", "sap konzultant", "abap developer", "sap vývojář", "sap specialist", "s/4hana consultant"],
+    aliases: ["sap developer", "sap konzultant", "abap developer", "sap vývojář", "sap specialist", "s/4hana consultant", "sap konzultant/ka", "sap consultant"],
     must_haves: [
       mh("sap-certified", "SAP certification", "Holds a listed SAP certification for a relevant module", "certification listing", "profile"),
       mh("module-expertise", "Module expertise", "Has implemented SAP modules such as FI/CO, MM, SD or S/4HANA", "job history", "case study", "profile"),
@@ -387,7 +387,7 @@ export const ENGINEERING: RoleTemplate[] = [
   },
   {
     key: "wordpress-php-developer", title: "WordPress / PHP Developer", family: "engineering", profile: "makers",
-    aliases: ["wordpress developer", "php developer", "php programátor", "vývojář wordpressu", "php vývojář", "laravel developer"],
+    aliases: ["wordpress developer", "php developer", "php programátor", "vývojář wordpressu", "php vývojář", "laravel developer", "php backend developer"],
     must_haves: [
       mh("wordpress-plugins", "WordPress plugins", "Has plugins or themes listed on wordpress.org", "plugin listing", "repo"),
       mh("php-frameworks", "PHP frameworks", "Public PHP code in Laravel, Symfony or WordPress core style", "repo", "package"),
@@ -398,7 +398,7 @@ export const ENGINEERING: RoleTemplate[] = [
   },
   {
     key: "dotnet-developer", title: ".NET Developer", family: "engineering", profile: "makers",
-    aliases: ["dotnet developer", "c# developer", "vývojář .net", "c# programátor", "asp.net developer", ".net programátor"],
+    aliases: ["dotnet developer", "c# developer", "vývojář .net", "c# programátor", "asp.net developer", ".net programátor", "programátor .net", ".net vývojář", "c# vývojář", "c#/.net vývojář", "c#/.net backend vývojář", "c#/.net developer"],
     must_haves: [
       mh("csharp-code", "C# code", "Public C# code on .NET 6 or later with tests", "repo", "package"),
       mh("nuget-packages", "NuGet packages", "Has packages published on NuGet or contributions to .NET projects", "package", "repo"),
@@ -409,7 +409,7 @@ export const ENGINEERING: RoleTemplate[] = [
   },
   {
     key: "java-developer", title: "Java Developer", family: "engineering", profile: "makers",
-    aliases: ["java engineer", "vývojář javy", "java programátor", "spring developer", "kotlin/java developer", "jvm developer"],
+    aliases: ["java engineer", "vývojář javy", "java programátor", "spring developer", "kotlin/java developer", "jvm developer", "java vývojář", "java vývojář/ka", "java vývojářka", "java vývojář / vývojářka"],
     must_haves: [
       mh("java-spring-services", "Java services", "Has shipped production services in Java with Spring or Quarkus", "repo", "job history", "blog post"),
       mh("maven-central", "Published artifacts", "Has libraries published on Maven Central", "package", "repo"),
@@ -472,5 +472,39 @@ export const ENGINEERING: RoleTemplate[] = [
       mh("tw-community", "Community involvement", "Has talks or posts in technical communication communities", "talk", "blog post", "conference bio"),
     ],
     sources: { steps: ["personal_site_crawl", "github_profile", "linkedin_profile", "talks_serp", "stackexchange_profile"], sites: ["github.com", "medium.com", "writethedocs.org", "dev.to", "readthedocs.io"] },
+  },
+  {
+    key: "software-engineer", title: "Software Engineer", family: "engineering", profile: "makers",
+    aliases: ["software developer", "softwarový inženýr", "softwarový vývojář", "software programátor", "application developer", "aplikační vývojář", "aplikační vývojář/ka", "vývojář aplikací", "vývojář/ka aplikací", "softwarový vývojář/ka"],
+    must_haves: [
+      mh("shipped-software", "Shipped software", "Has shipped production software at a named company or as a public product", "job history", "repo", "product page"),
+      mh("public-code", "Public code", "Public repositories with tests, documentation and recent commits", "repo", "package"),
+      mh("language-depth", "Language depth", "Shows depth in at least one mainstream language, such as Java, C#, Python, TypeScript or Go", "repo", "stackexchange profile", "blog post"),
+      mh("engineering-practice", "Engineering practice", "Shows code review, CI or design write-ups in public work", "repo", "blog post", "talk"),
+    ],
+    sources: { steps: ["github_profile", "github_deep", "stackexchange_profile", "linkedin_profile", "personal_site_crawl", "talks_serp"], sites: ["github.com", "stackoverflow.com", "dev.to", "medium.com"] },
+  },
+  {
+    key: "soc-analyst", title: "SOC Analyst", family: "engineering", profile: "credentialed",
+    aliases: ["soc specialist", "soc&noc specialist", "noc specialist", "security operations analyst", "security operations engineer", "detection engineer", "threat detection engineer", "incident responder", "blue team analyst", "analytik soc", "specialista soc", "analytik bezpečnostního dohledu", "specialista bezpečnostního dohledu"],
+    must_haves: [
+      mh("soc-certs", "Security operations certification", "Holds a listed certification such as CompTIA Security+, CySA+, GCIA, GCIH or CCNA Security", "certification listing", "profile"),
+      mh("siem-tooling", "SIEM and detection tooling", "Shows work with Splunk, Sentinel, Elastic, QRadar or Sigma rules", "repo", "job history", "blog post"),
+      mh("detection-content", "Detection content", "Has published detection rules, playbooks or threat-hunting write-ups", "repo", "blog post", "talk"),
+      mh("soc-experience", "SOC experience", "Has held SOC, NOC or incident response roles at named organisations", "job history", "profile"),
+      mh("ctf-labs", "Lab and CTF record", "Has public results on TryHackMe, Hack The Box or CTF platforms", "ctf profile", "blog post"),
+    ],
+    sources: { steps: ["linkedin_profile", "github_profile", "talks_serp", "x_profile", "personal_site_crawl"], sites: ["github.com", "credly.com", "tryhackme.com", "app.hackthebox.com", "medium.com"] },
+  },
+  {
+    key: "mechanical-design-engineer", title: "Mechanical Design Engineer", family: "engineering", profile: "credentialed",
+    aliases: ["konstruktér", "konstruktér/ka", "konstruktérka", "strojní konstruktér", "konstruktér strojních zařízení", "konstruktér/ka strojních zařízení", "mechanical engineer", "strojní inženýr", "cad konstruktér", "design engineer mechanical", "strojírenský konstruktér"],
+    must_haves: [
+      mh("cad-tools", "CAD tooling", "Lists or shows work in SolidWorks, Inventor, CATIA, Creo or NX", "profile", "portfolio", "job history"),
+      mh("delivered-machines", "Delivered machines", "Has designed machines, fixtures or products built by named manufacturers", "job history", "product page", "case study"),
+      mh("engineering-degree", "Engineering degree", "Holds a mechanical engineering degree (Ing./Bc.) from a listed university", "profile", "thesis listing"),
+      mh("patents-models", "Patents or utility models", "Is named on patents, utility models or published designs", "patent", "register entry"),
+    ],
+    sources: { steps: ["linkedin_profile", "personal_site_crawl", "talks_serp", "github_profile"], sites: ["linkedin.com", "grabcad.com", "patents.google.com", "theses.cz"] },
   },
 ];
