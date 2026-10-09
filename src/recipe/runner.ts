@@ -11,6 +11,8 @@
  * - resolve/extract/verify/synthesize: delegate to the LLM seams
  * - A collector whose sources an earlier step already fetched (`alreadyFetched`) and that has nothing new to request
  *   returns those sources, not empty, with the note "already fetched at seed" and no request
+ * - `collectWith(collector, ...)` is `collect` for an explicit collector: a first wave, then once `collector.followUp(payloads)`
+ *   through the same per-request path (budget, calls, error note, dedup), then `collector.digest` into StepOutcome.digest
  * - Budget: refuse a paid (actor) request once calls or USD are exhausted (note + empty); free REST fetches are not gated
  * - One source per page: a hit whose canonical URL (no locale / trailing slash) is already in the run is not stored again;
  *   deduped hits add the note "N hits already in the run" and do not make the step empty (no onEmpty gap)
@@ -29,7 +31,7 @@ import { resolveCandidates } from "@/recipe/seams/resolve";
 import { synthesizeBrief } from "@/recipe/seams/synthesize";
 import { verifyClaims } from "@/recipe/seams/verify";
 import { collectorFor } from "@/recipe/sources";
-import type { CollectorRequest, ParsedSource, StepContext, StepOutcome } from "@/recipe/sources/types";
+import type { Collector, CollectorRequest, ParsedSource, StepContext, StepOutcome } from "@/recipe/sources/types";
 import type { Step } from "@/recipe/step";
 
 export const SOURCE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -77,7 +79,11 @@ async function perform(req: CollectorRequest, ports: Ports): Promise<{ payload: 
 
 async function collect(step: Step, ctx: StepContext, ports: Ports): Promise<StepOutcome> {
   if (step.actor === undefined) throw new Error(`step ${step.id} has no actor`);
-  const collector = collectorFor(step.actor);
+  return collectWith(collectorFor(step.actor), step, ctx, ports);
+}
+
+/** `collect` for an explicit collector (test seam): first wave, optional followUp wave, optional digest. */
+export async function collectWith(collector: Collector, step: Step, ctx: StepContext, ports: Ports): Promise<StepOutcome> {
   const requests = collector.requests(ctx, step);
   const out = emptyOutcome();
   const fetched = collector.alreadyFetched?.(ctx) ?? [];
@@ -93,23 +99,25 @@ async function collect(step: Step, ctx: StepContext, ports: Ports): Promise<Step
     return out;
   }
   const seen = new Set(ctx.sources.map((s) => canonicalUrl(s.url)));
+  const payloads: unknown[] = [];
   let parsedHits = 0;
   let deduped = 0;
-  for (const req of requests) {
+  const run = async (req: CollectorRequest): Promise<boolean> => {
     if (req.via === "actor" && !budgetLeft(ctx, out.calls, out.cost_usd)) {
       out.notes.push("run budget reached");
-      break;
+      return false;
     }
     let parsed: ParsedSource[];
     try {
       const { payload, cost_usd } = await perform(req, ports);
       if (req.via === "actor") out.calls += 1; // only paid actor runs count toward RUN_BUDGET_CALLS
       out.cost_usd += cost_usd;
-      parsed = collector.parse(payload, ctx, step);
+      parsed = collector.parse(payload, ctx, step, req);
+      payloads.push(payload);
     } catch (error) {
       if (req.via === "actor") out.calls += 1;
       out.notes.push(`request failed: ${error instanceof Error ? error.message : String(error)}`);
-      continue;
+      return true;
     }
     parsedHits += parsed.length;
     for (const p of parsed) {
@@ -119,22 +127,30 @@ async function collect(step: Step, ctx: StepContext, ports: Ports): Promise<Step
         continue;
       }
       seen.add(key);
-      const fetched = ports.now();
+      const at = ports.now();
       const source: Omit<Source, "r2_key"> = {
         id: ports.newId(),
         run_id: ctx.runId,
         url: p.url,
-        actor: step.actor,
-        fetched_at: fetched,
+        actor: step.actor ?? collector.id,
+        fetched_at: at,
         excerpt: p.excerpt,
-        expires_at: new Date(Date.parse(fetched) + SOURCE_TTL_MS).toISOString(),
+        expires_at: new Date(Date.parse(at) + SOURCE_TTL_MS).toISOString(),
         identity: p.identity ?? "unverified",
       };
       out.sources.push(await ports.storeSource(source, p.raw));
     }
-  }
+    return true;
+  };
+  const wave = async (reqs: readonly CollectorRequest[]): Promise<void> => {
+    for (const req of reqs) if (!(await run(req))) break;
+  };
+  await wave(requests);
+  if (collector.followUp) await wave(collector.followUp(ctx, step, [...payloads]));
   if (deduped > 0) out.notes.push(`${String(deduped)} hits already in the run`);
   // Pages found but all stored by an earlier step are not "nothing found": empty only when parse returned nothing
   out.empty = parsedHits === 0;
+  const digest = collector.digest?.(payloads, ctx);
+  if (digest !== undefined && digest !== null) out.digest = digest;
   return out;
 }

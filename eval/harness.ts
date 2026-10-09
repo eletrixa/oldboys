@@ -26,6 +26,7 @@ import type { LlmCall, Ports } from "@/domain/ports";
 import { canonicalUrl } from "@/domain/url";
 import { hiringRecipe } from "@/recipe/goals/hiring";
 import { executeStep } from "@/recipe/runner";
+import { familyOf } from "@/recipe/seams/position-extract";
 import { CHALLENGE_SYSTEM } from "@/recipe/seams/challenge";
 import { noneConfirmed, profileKey, sourceIdentityUpdates, UNCONFIRMED_GAP } from "@/recipe/seams/resolve";
 import { seedProfile } from "@/recipe/seams/seed";
@@ -163,6 +164,7 @@ export async function runPersona(p: Persona): Promise<PipelineResult> {
     anchor: seed.anchor,
     goal: "hiring",
     role: p.role,
+    roleFamily: familyOf(p.role),
     roleSites: [],
     questions: withCvQuestion("hiring", [...hiringRecipe.questions, ...p.mustHaves], seed.out.sources),
     candidates: seed.out.candidates,

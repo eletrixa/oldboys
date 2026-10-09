@@ -15,6 +15,8 @@
 import { aresSearch, aresVr } from "@/recipe/sources/ares";
 import { bluesky } from "@/recipe/sources/bluesky";
 import { github } from "@/recipe/sources/github";
+import { githubApify } from "@/recipe/sources/github-apify";
+import { githubDeep } from "@/recipe/sources/github-deep";
 import { googleSearch } from "@/recipe/sources/google-search";
 import { huggingface } from "@/recipe/sources/huggingface";
 import { instagram } from "@/recipe/sources/instagram";
@@ -34,6 +36,8 @@ const all: readonly Collector[] = [
   aresSearch,
   aresVr,
   github,
+  githubDeep,
+  githubApify,
   stackexchange,
   huggingface,
   orcid,

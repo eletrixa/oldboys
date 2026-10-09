@@ -32,6 +32,7 @@ import { intakeLine } from "@/app/intake/intake-rows";
 import type { Candidate, CandidateDecision } from "@/domain/claim";
 import { BTN_SECONDARY, CARD_CONFLICT, Chevron, Eyebrow, LINK, SimulatedPill, SUMMARY } from "../../ui";
 import type { DeletionReceipt } from "@/domain/deletion";
+import { CodeProfileCard } from "./code-profile-card";
 import { DeleteCard, DeletedView } from "./delete-card";
 import { IdentityMapCard } from "./identity-map-card";
 import { type Answer, BriefView, CostLine, ProfileList, ProgressSteps, QuestionCard } from "./parts";
@@ -234,6 +235,7 @@ export function RunView({ id }: { id: string }): React.JSX.Element {
       {briefFirst ? (
         <>
           <BriefView state={state} />
+          <CodeProfileCard profile={state.code_profile} />
           <details className="group border-t border-divider pt-4">
             <summary className={`${SUMMARY} text-base text-ink`}>
               <Chevron />

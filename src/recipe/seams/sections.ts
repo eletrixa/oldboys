@@ -33,6 +33,7 @@ const QUESTION_TITLE: Record<string, string> = {
   "current-role": "Current role",
   "career-history": "Career history",
   "public-code": "Public code",
+  "code-contributions": "Code contributions",
   "public-talks": "Talks and writing",
   "location-match": "Location",
   contradictions: "Where sources disagree",

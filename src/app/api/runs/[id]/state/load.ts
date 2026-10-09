@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/api/runs/[id]/state/load.ts
- * Deps:    D1Database (passed in), src/domain/report-translation (TRANSLATE_STEP), src/recipe/goals, src/domain/run-cost, src/domain/quote, src/domain/cv-check, src/domain/challenge, src/app/runs/[id]/challenge, src/app/intake/intake-rows (type)
+ * Deps:    D1Database (passed in), src/domain/code-profile (readCodeProfile), src/domain/report-translation (TRANSLATE_STEP), src/recipe/goals, src/domain/run-cost, src/domain/quote, src/domain/cv-check, src/domain/challenge, src/app/runs/[id]/challenge, src/app/intake/intake-rows (type)
  * Tested:  src/app/api/runs/[id]/state/__tests__/route.test.ts (through the route; withCvQuestion: src/domain/__tests__/cv-check.test.ts; readChallenge: src/domain/__tests__/challenge.test.ts; challengeState: src/app/runs/[id]/__tests__/challenge.test.ts)
  *
  * Key responsibilities:
@@ -23,6 +23,7 @@
  * - organization_name = LEFT JOIN organizations (null for bearer/extension runs)
  * - cost = runCost over the ledger rows (seq order) from investigations.created_at
  * - intake = the applications row LEFT JOINed into the head query on investigations.application_id ({source, tag, receivedAt}), null for runs started by hand; never cv_text or cover_letter
+ * - code_profile = readCodeProfile over the same ledger rows (the github_deep step's `ref.digest`); null for runs before it or non-technical roles
  *
  * Design constraints:
  * - Pure read; no Next.js imports; null for an unknown run (callers answer 404)
@@ -30,6 +31,7 @@
 import type { Brief, Candidate, Claim } from "@/domain/claim";
 import { readChallenge } from "@/domain/challenge";
 import { GoalId } from "@/domain/claim";
+import { readCodeProfile } from "@/domain/code-profile";
 import { withCvQuestion } from "@/domain/cv-check";
 import { quoteContexts } from "@/domain/quote";
 import { TRANSLATE_STEP } from "@/domain/report-translation";
@@ -141,6 +143,7 @@ export async function loadRunState(db: D1Database, id: string): Promise<RunState
     sources: sources.results.map(({ excerpt: _excerpt, ...s }) => s),
     quote_contexts: quoteContexts(runClaims, new Map(sources.results.map((s) => [s.id, s.excerpt]))),
     ...challengeState(readChallenge(ledger.results), new Set(runClaims.map((c) => c.id))),
+    code_profile: readCodeProfile(ledger.results),
     questions: withCvQuestion(head.goal, [...base, ...extra], sources.results),
     brief: brief ? (JSON.parse(brief.brief_json) as Brief) : null,
     cost: runCost(ledger.results, head.created_at),

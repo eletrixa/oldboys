@@ -8,6 +8,8 @@
  *
  * Key responsibilities:
  * - Question list and ordered step list for goal "hiring"; `seed_profile` first (manager's LinkedIn URL or CV, plans/006)
+ * - `github_deep` (technical roles only: engineering, data; src/domain/code-profile TECHNICAL_FAMILIES) scrapes every confirmed GitHub account in depth;
+ *   `github_apify` then adds the profile page's own numbers (saswave/github-profile-scraper)
  * - `role_sites_serp`: the matched role template's evidence sites (src/domain/role-catalog) as one `site:` search
  *
  * Design constraints:
@@ -22,6 +24,7 @@ export const hiringRecipe: Recipe = {
     { id: "current-role", text: "What is the subject's current role and employer?" },
     { id: "career-history", text: "What roles and tenures precede it?" },
     { id: "public-code", text: "What public code or technical output exists (GitHub, packages)?" },
+    { id: "code-contributions", text: "What do the candidate's public code contributions show: own repositories, lines added and removed, commits, pull requests merged into other projects, main languages, how recent the activity is?", title: "Code contributions" },
     { id: "public-talks", text: "What public talks, posts or writing show how they think?" },
     { id: "location-match", text: "Does their stated location match the anchor?" },
     { id: "contradictions", text: "Which sources disagree with each other?" },
@@ -33,6 +36,8 @@ export const hiringRecipe: Recipe = {
     { id: "resolve_lineup", kind: "resolve" },
     { id: "linkedin_profile", kind: "actor", actor: "harvestapi/linkedin-profile-scraper", onEmpty: { gap: "no LinkedIn profile URL known or profile not scrapable" } },
     { id: "github_profile", kind: "actor", actor: "rest/github", onEmpty: { gap: "no public GitHub profile found" } },
+    { id: "github_deep", kind: "actor", actor: "rest/github-deep", onEmpty: { gap: "no public GitHub contribution statistics (role not technical, no confirmed GitHub account, or statistics not ready)" } },
+    { id: "github_apify", kind: "actor", actor: "saswave/github-profile-scraper", onEmpty: { gap: "GitHub profile page not scraped (role not technical or no confirmed GitHub account)" } },
     { id: "stackexchange_profile", kind: "actor", actor: "rest/stackexchange", onEmpty: { gap: "no Stack Exchange activity found" } },
     { id: "huggingface_profile", kind: "actor", actor: "rest/huggingface", onEmpty: { gap: "no Hugging Face models or datasets found" } },
     { id: "orcid_search", kind: "actor", actor: "rest/orcid", onEmpty: { gap: "no ORCID record found" } },

@@ -23,6 +23,7 @@ export type RoleProfileId = "makers" | "audience" | "credentialed" | "track-reco
 export const HIRING_EVIDENCE_STEPS = [
   "linkedin_profile",
   "github_profile",
+  "github_deep",
   "stackexchange_profile",
   "huggingface_profile",
   "orcid_search",

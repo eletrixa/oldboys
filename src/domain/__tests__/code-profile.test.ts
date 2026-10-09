@@ -1,0 +1,88 @@
+/**
+ * Code profile tests: technical-family gate, defensive digest reading, fixed caveats.
+ *
+ * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
+ * Module:  src/domain/__tests__/code-profile.test.ts
+ * Deps:    vitest
+ * Tested:  n/a (this is the test)
+ *
+ * Key responsibilities:
+ * - `isTechnicalFamily` true for engineering and data only
+ * - `readCodeProfile` returns the latest valid digest of step github_deep, null otherwise
+ * - `CODE_PROFILE_CAVEATS` has 5 lines, none naming the person
+ *
+ * Design constraints:
+ * - Pure, no I/O
+ */
+import { describe, expect, it } from "vitest";
+import { APIFY_PROFILE_STEP, CODE_PROFILE_CAVEATS, CODE_PROFILE_STEP, isTechnicalFamily, readCodeProfile, type CodeProfile } from "@/domain/code-profile";
+
+const digest = (handle: string): CodeProfile => ({
+  handle,
+  profile_url: `https://github.com/${handle}`,
+  repos_sampled: 1,
+  repos_owned: 2,
+  forks_excluded: 1,
+  commits: 10,
+  additions: 100,
+  deletions: 20,
+  stats_pending: [],
+  repos: [],
+  languages: [{ name: "TypeScript", repos: 1 }],
+  stars_received: 3,
+  merged_prs_elsewhere: 0,
+  merged_prs_sample: [],
+  recent_events: { pushes: 1, pull_requests: 0, issues: 0, reviews: 0, since: null },
+  orgs: [],
+  apify: null,
+  account_created: null,
+  source_urls: [`https://api.github.com/users/${handle}`],
+});
+const apifyDigest = (handle: string) => ({ handle, last_year_contributions: 412, first_commit_year: 2015, pinned_repos: [], achievements: ["Arctic Code Vault Contributor"], source_url: "https://api.apify.com/v2/datasets/d1" });
+const row = (ref: unknown, step: string = CODE_PROFILE_STEP) => ({ step, ref_json: typeof ref === "string" ? ref : JSON.stringify(ref) });
+
+describe("isTechnicalFamily", () => {
+  it("is true for engineering and data, false for others and null", () => {
+    expect(isTechnicalFamily("engineering")).toBe(true);
+    expect(isTechnicalFamily("data")).toBe(true);
+    expect(isTechnicalFamily("marketing")).toBe(false);
+    expect(isTechnicalFamily(null)).toBe(false);
+  });
+});
+
+describe("readCodeProfile", () => {
+  it("returns the latest valid digest", () => {
+    const got = readCodeProfile([row({ digest: digest("old") }), row({ digest: digest("new") })]);
+    expect(got?.handle).toBe("new");
+  });
+
+  it("skips a newer invalid row and falls back to an older valid one", () => {
+    expect(readCodeProfile([row({ digest: digest("good") }), row({ digest: { handle: "x" } })])?.handle).toBe("good");
+  });
+
+  it("attaches the github_apify digest when handles match, case-insensitively", () => {
+    const got = readCodeProfile([row({ digest: digest("Alice") }), row({ digest: apifyDigest("alice") }, APIFY_PROFILE_STEP)]);
+    expect(got?.apify?.last_year_contributions).toBe(412);
+  });
+
+  it("ignores a github_apify digest of another handle or a malformed one", () => {
+    expect(readCodeProfile([row({ digest: digest("alice") }), row({ digest: apifyDigest("bob") }, APIFY_PROFILE_STEP)])?.apify).toBeNull();
+    expect(readCodeProfile([row({ digest: digest("alice") }), row({ digest: { handle: "alice" } }, APIFY_PROFILE_STEP)])?.apify).toBeNull();
+  });
+
+  it("returns null for no rows, other steps, malformed JSON and schema-failing digests", () => {
+    expect(readCodeProfile([])).toBeNull();
+    expect(readCodeProfile([row({ digest: digest("a") }, "github_profile")])).toBeNull();
+    expect(readCodeProfile([row("{not json")])).toBeNull();
+    expect(readCodeProfile([row({ digest: { handle: "x" } })])).toBeNull();
+    expect(readCodeProfile([row({ nodigest: true })])).toBeNull();
+    expect(readCodeProfile([{ step: CODE_PROFILE_STEP, ref_json: null }])).toBeNull();
+  });
+});
+
+describe("CODE_PROFILE_CAVEATS", () => {
+  it("has five lines and names no person", () => {
+    expect(CODE_PROFILE_CAVEATS).toHaveLength(5);
+    for (const line of CODE_PROFILE_CAVEATS) expect(line).not.toMatch(/\b(he|she|his|her|candidate|\{subject\})\b/i);
+  });
+});

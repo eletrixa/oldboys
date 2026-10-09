@@ -3,13 +3,15 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/recipe/sources/types.ts
- * Deps:    none (types from src/domain)
+ * Deps:    none (types from src/domain, Family from src/domain/position)
  * Tested:  src/recipe/__tests__/sources-identity.test.ts, src/recipe/__tests__/runner.test.ts (through fake collectors)
  *
  * Key responsibilities:
  * - StepContext: everything a step may read (never mutate)
  * - Collector: `requests()` decides what to fetch (empty array = nothing to do, triggers onEmpty); `parse()` maps one payload to sources;
- *   optional `alreadyFetched()` names sources an earlier step (seed) fetched, so the step does not scrape them twice
+ *   optional `alreadyFetched()` names sources an earlier step (seed) fetched, so the step does not scrape them twice;
+ *   optional `followUp()` computes a second wave of requests from the first wave's payloads; optional `digest()` summarises
+ *   every payload into StepOutcome.digest
  * - identityFor(): "merged" only for urls under a merged candidate (profile url prefix or handle segment), else "unverified"
  *
  * Design constraints:
@@ -18,6 +20,7 @@
  */
 import type { ChallengeRecord } from "@/domain/challenge";
 import type { Brief, Candidate, Claim, Gap, GoalId, Source, SourceIdentity } from "@/domain/claim";
+import type { Family } from "@/domain/position";
 import type { Question, Step } from "@/recipe/step";
 
 export const EXCERPT_MAX = 2000;
@@ -28,6 +31,8 @@ export type StepContext = {
   anchor: string;
   goal: GoalId;
   role: string | null;
+  /** Family of the role being hired for: the matched role template's family, else familyOf(role); null without a role. */
+  roleFamily: Family | null;
   /** Evidence sites of the matched role template (bare domains); empty without a template. */
   roleSites: readonly string[];
   questions: readonly Question[];
@@ -57,7 +62,12 @@ export type Collector = {
   requests: (ctx: StepContext, step: Step) => CollectorRequest[];
   /** Sources an earlier step already fetched for this collector (seed); with no requests left the step reuses them. */
   alreadyFetched?: (ctx: StepContext) => Source[];
-  parse: (payload: unknown, ctx: StepContext, step: Step) => ParsedSource[];
+  /** `req` is the request that produced the payload (a stats payload carries no repo name; the URL does). */
+  parse: (payload: unknown, ctx: StepContext, step: Step, req?: CollectorRequest) => ParsedSource[];
+  /** Second wave of requests computed from the first wave's payloads (e.g. per-repo stats after the repo list); runs once, after every first-wave request. */
+  followUp?: (ctx: StepContext, step: Step, payloads: readonly unknown[]) => CollectorRequest[];
+  /** Pure summary of all payloads of both waves (null = nothing). */
+  digest?: (payloads: readonly unknown[], ctx: StepContext) => unknown;
 };
 
 export type StepOutcome = {
@@ -74,6 +84,8 @@ export type StepOutcome = {
   notes: string[];
   /** verify only: the devil's advocate record (idea #8), written into the step's ledger ref as `challenge`. */
   challenge?: ChallengeRecord;
+  /** Collector summary of everything it fetched (Collector.digest), written into the step's ledger ref as `digest`; read back by the run state route. */
+  digest?: unknown;
 };
 
 /** Accepted identities only: the profiles the manager (or the threshold) confirmed. */
