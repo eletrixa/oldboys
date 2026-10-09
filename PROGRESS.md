@@ -370,3 +370,6 @@ Each agent appends: what it starts, progress, what it finishes. Newest at the bo
 - Checked: pnpm check green (2211 + 21 tests); the guide's label drift test still green; walk screens at 1440 and 390 px.
 - Files: src/app/guide/guide-content.ts, docs/usability/first-brief.md (new), JURY.md, CHANGELOG.md, PROGRESS.md.
 - Left for the team: (1) welcome page role field shows no list (`src/app/onboarding/page.tsx` passes no `roleOptions` to StartForm); (2) a new company reuses other companies' positions and gets "already started" + a link to their brief (positions-org-scope Part B); (3) "0 of 4" in In 30 seconds vs "1 of 4, 3 partly" in the Evidence tab; (4) raw HTTP/JSON/Apify reasons in Sources and gaps; (5) "See the evidence" does not scroll to the tab; (6) Big Five / DISC / MBTI and "scorecard … pts" in the first brief (JURY known issues 1, 2); (7) "Country (2 letters)" without an example; (8) a real non-technical tester with the script in docs/usability/first-brief.md.
+
+## 2026-10-09 · guide-fixes agent (Minas)
+- Started: 05:46. Welcome-page role list, honest guide wording, guide tips, registration country hint.
