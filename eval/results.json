@@ -1,0 +1,884 @@
+{
+  "headline": {
+    "passed": 89,
+    "total": 95,
+    "unsafe_misses": 3,
+    "conservative_misses": 3
+  },
+  "personas": [
+    {
+      "id": "p1-data-engineer",
+      "title": "Data engineer in Brno: namesakes on LinkedIn and GitHub, forked repo, quote not in source",
+      "passed": 21,
+      "total": 21
+    },
+    {
+      "id": "p2-frontend",
+      "title": "Frontend engineer in Praha: same-name GitHub in the same city, hedged FACT, unconfirmed page",
+      "passed": 16,
+      "total": 19
+    },
+    {
+      "id": "p3-product-cv",
+      "title": "Product manager with a CV: CV differs from LinkedIn, CV-only quote, course homework, no GitHub",
+      "passed": 22,
+      "total": 23
+    },
+    {
+      "id": "p4-devops-degraded",
+      "title": "DevOps engineer in Plzeň, AI summary down: 2016 evidence, alias employer, no on-call evidence",
+      "passed": 16,
+      "total": 16
+    },
+    {
+      "id": "p5-ux-thin",
+      "title": "UX researcher in Liberec, thin footprint: overstated number, same-field namesake, two open must-haves",
+      "passed": 14,
+      "total": 16
+    }
+  ],
+  "by_category": [
+    {
+      "category": "identity",
+      "label": "Identity (namesakes)",
+      "passed": 16,
+      "total": 18
+    },
+    {
+      "category": "false-fact",
+      "label": "Traps caught (no false FACT)",
+      "passed": 14,
+      "total": 16
+    },
+    {
+      "category": "true-fact",
+      "label": "True findings kept",
+      "passed": 11,
+      "total": 11
+    },
+    {
+      "category": "must-have",
+      "label": "Must-have coverage",
+      "passed": 19,
+      "total": 21
+    },
+    {
+      "category": "honest-gap",
+      "label": "Honest gaps",
+      "passed": 19,
+      "total": 19
+    },
+    {
+      "category": "invariant",
+      "label": "FACT invariants",
+      "passed": 10,
+      "total": 10
+    }
+  ],
+  "misses": [
+    {
+      "persona": "p2-frontend",
+      "category": "identity",
+      "label": "Namesake not merged: firmware developer with the same name in Praha",
+      "detail": "merged with score 0.85 (Name matches; Location Praha matches)",
+      "severity": "unsafe"
+    },
+    {
+      "persona": "p2-frontend",
+      "category": "identity",
+      "label": "Namesake pages never confirmed evidence: firmware developer with the same name in Praha",
+      "detail": "confirmed as evidence: https://github.com/evalp-tsmysleny, https://github.com/evalp-tsmysleny/thermo-fw",
+      "severity": "unsafe"
+    },
+    {
+      "persona": "p2-frontend",
+      "category": "false-fact",
+      "label": "FACT from a same-city namesake's GitHub: \"Writes firmware for heating controllers in C.\"",
+      "detail": "ended FACT, in the brief",
+      "severity": "unsafe"
+    },
+    {
+      "persona": "p3-product-cv",
+      "category": "false-fact",
+      "label": "CV check shows \"not-found\": \"Led the pricing redesign that raised conversion by 18 %.\"",
+      "detail": "shown as \"differs\"",
+      "severity": "conservative"
+    },
+    {
+      "persona": "p5-ux-thin",
+      "category": "must-have",
+      "label": "Must-have evidenced: mh-usability",
+      "detail": "coverage partial",
+      "severity": "conservative"
+    },
+    {
+      "persona": "p5-ux-thin",
+      "category": "must-have",
+      "label": "No interview question for the evidenced mh-usability",
+      "detail": "asked anyway",
+      "severity": "conservative"
+    }
+  ],
+  "checks": [
+    {
+      "persona": "p1-data-engineer",
+      "category": "identity",
+      "label": "Namesake not merged: LinkedIn accountant in Ostrava",
+      "pass": true,
+      "detail": "decision rejected",
+      "severity": "unsafe"
+    },
+    {
+      "persona": "p1-data-engineer",
+      "category": "identity",
+      "label": "Namesake pages never confirmed evidence: LinkedIn accountant in Ostrava",
+      "pass": true,
+      "detail": "kept out of the evidence",
+      "severity": "unsafe"
+    },
+    {
+      "persona": "p1-data-engineer",
+      "category": "identity",
+      "label": "Namesake not merged: GitHub account in Ostrava",
+      "pass": true,
+      "detail": "decision possibly-same-as",
+      "severity": "unsafe"
+    },
+    {
+      "persona": "p1-data-engineer",
+      "category": "identity",
+      "label": "Namesake pages never confirmed evidence: GitHub account in Ostrava",
+      "pass": true,
+      "detail": "kept out of the evidence",
+      "severity": "unsafe"
+    },
+    {
+      "persona": "p1-data-engineer",
+      "category": "identity",
+      "label": "Own profile kept (merged or asked): own GitHub",
+      "pass": true,
+      "detail": "decision merge",
+      "severity": "conservative"
+    },
+    {
+      "persona": "p1-data-engineer",
+      "category": "identity",
+      "label": "Own profile kept (merged or asked): own meetup talk page",
+      "pass": true,
+      "detail": "decision possibly-same-as",
+      "severity": "conservative"
+    },
+    {
+      "persona": "p1-data-engineer",
+      "category": "true-fact",
+      "label": "True finding: \"Senior Data Engineer at Datamlýn since 2021.\"",
+      "pass": true,
+      "detail": "kept as FACT",
+      "severity": "conservative"
+    },
+    {
+      "persona": "p1-data-engineer",
+      "category": "true-fact",
+      "label": "True finding: \"Maintains a public Python repository with Airflow DAGs and dbt models.\"",
+      "pass": true,
+      "detail": "kept as FACT",
+      "severity": "conservative"
+    },
+    {
+      "persona": "p1-data-engineer",
+      "category": "true-fact",
+      "label": "True finding: \"Spoke about Airflow at Brno Data Meetup in March 2025.\"",
+      "pass": true,
+      "detail": "kept as FACT",
+      "severity": "conservative"
+    },
+    {
+      "persona": "p1-data-engineer",
+      "category": "false-fact",
+      "label": "Forked repository: \"Built a Kubernetes operator for Spark jobs.\"",
+      "pass": true,
+      "detail": "moved to To verify",
+      "severity": "conservative"
+    },
+    {
+      "persona": "p1-data-engineer",
+      "category": "false-fact",
+      "label": "Quote not in the source: \"Led a team of 12 data engineers at Kódovna Brno.\"",
+      "pass": true,
+      "detail": "moved to To verify",
+      "severity": "conservative"
+    },
+    {
+      "persona": "p1-data-engineer",
+      "category": "false-fact",
+      "label": "Claim from a namesake's page: \"Works as an accountant in Ostrava.\"",
+      "pass": true,
+      "detail": "not shown (dropped)",
+      "severity": "unsafe"
+    },
+    {
+      "persona": "p1-data-engineer",
+      "category": "must-have",
+      "label": "Must-have evidenced: mh-python",
+      "pass": true,
+      "detail": "coverage evidenced",
+      "severity": "conservative"
+    },
+    {
+      "persona": "p1-data-engineer",
+      "category": "must-have",
+      "label": "No interview question for the evidenced mh-python",
+      "pass": true,
+      "detail": "not asked",
+      "severity": "conservative"
+    },
+    {
+      "persona": "p1-data-engineer",
+      "category": "must-have",
+      "label": "Must-have evidenced: mh-airflow",
+      "pass": true,
+      "detail": "coverage evidenced",
+      "severity": "conservative"
+    },
+    {
+      "persona": "p1-data-engineer",
+      "category": "must-have",
+      "label": "No interview question for the evidenced mh-airflow",
+      "pass": true,
+      "detail": "not asked",
+      "severity": "conservative"
+    },
+    {
+      "persona": "p1-data-engineer",
+      "category": "must-have",
+      "label": "Must-have not shown as evidenced: mh-kubernetes",
+      "pass": true,
+      "detail": "coverage partial",
+      "severity": "unsafe"
+    },
+    {
+      "persona": "p1-data-engineer",
+      "category": "honest-gap",
+      "label": "Open must-have reaches the interview: mh-kubernetes",
+      "pass": true,
+      "detail": "interview question or To verify item",
+      "severity": "conservative"
+    },
+    {
+      "persona": "p1-data-engineer",
+      "category": "honest-gap",
+      "label": "Gap stated: stackexchange_profile",
+      "pass": true,
+      "detail": "no Stack Exchange activity found",
+      "severity": "conservative"
+    },
+    {
+      "persona": "p1-data-engineer",
+      "category": "invariant",
+      "label": "Every FACT cites only confirmed sources",
+      "pass": true,
+      "detail": "3 FACTs",
+      "severity": "unsafe"
+    },
+    {
+      "persona": "p1-data-engineer",
+      "category": "invariant",
+      "label": "Every FACT quote is inside a cited excerpt",
+      "pass": true,
+      "detail": "3 FACTs",
+      "severity": "unsafe"
+    },
+    {
+      "persona": "p2-frontend",
+      "category": "identity",
+      "label": "Own profile kept (merged or asked): own blog",
+      "pass": true,
+      "detail": "decision merge",
+      "severity": "conservative"
+    },
+    {
+      "persona": "p2-frontend",
+      "category": "identity",
+      "label": "Namesake not merged: real-estate agent with the same name in Praha",
+      "pass": true,
+      "detail": "decision possibly-same-as",
+      "severity": "unsafe"
+    },
+    {
+      "persona": "p2-frontend",
+      "category": "identity",
+      "label": "Namesake pages never confirmed evidence: real-estate agent with the same name in Praha",
+      "pass": true,
+      "detail": "kept out of the evidence",
+      "severity": "unsafe"
+    },
+    {
+      "persona": "p2-frontend",
+      "category": "identity",
+      "label": "Namesake not merged: firmware developer with the same name in Praha",
+      "pass": false,
+      "detail": "merged with score 0.85 (Name matches; Location Praha matches)",
+      "severity": "unsafe"
+    },
+    {
+      "persona": "p2-frontend",
+      "category": "identity",
+      "label": "Namesake pages never confirmed evidence: firmware developer with the same name in Praha",
+      "pass": false,
+      "detail": "confirmed as evidence: https://github.com/evalp-tsmysleny, https://github.com/evalp-tsmysleny/thermo-fw",
+      "severity": "unsafe"
+    },
+    {
+      "persona": "p2-frontend",
+      "category": "true-fact",
+      "label": "True finding: \"Frontend Engineer at Vzorek Labs since 2022.\"",
+      "pass": true,
+      "detail": "kept as FACT",
+      "severity": "conservative"
+    },
+    {
+      "persona": "p2-frontend",
+      "category": "true-fact",
+      "label": "True finding: \"Writes a blog about React and design systems.\"",
+      "pass": true,
+      "detail": "kept as FACT",
+      "severity": "conservative"
+    },
+    {
+      "persona": "p2-frontend",
+      "category": "false-fact",
+      "label": "Hedged FACT: \"Probably the main author of the Vzorek Labs design system.\"",
+      "pass": true,
+      "detail": "moved to To verify",
+      "severity": "conservative"
+    },
+    {
+      "persona": "p2-frontend",
+      "category": "false-fact",
+      "label": "FACT from a same-city namesake's GitHub: \"Writes firmware for heating controllers in C.\"",
+      "pass": false,
+      "detail": "ended FACT, in the brief",
+      "severity": "unsafe"
+    },
+    {
+      "persona": "p2-frontend",
+      "category": "false-fact",
+      "label": "Claim backed only by an unconfirmed page: \"Based in Praha 6.\"",
+      "pass": true,
+      "detail": "not shown (dropped)",
+      "severity": "unsafe"
+    },
+    {
+      "persona": "p2-frontend",
+      "category": "must-have",
+      "label": "Must-have evidenced: mh-react",
+      "pass": true,
+      "detail": "coverage evidenced",
+      "severity": "conservative"
+    },
+    {
+      "persona": "p2-frontend",
+      "category": "must-have",
+      "label": "No interview question for the evidenced mh-react",
+      "pass": true,
+      "detail": "not asked",
+      "severity": "conservative"
+    },
+    {
+      "persona": "p2-frontend",
+      "category": "must-have",
+      "label": "Must-have not shown as evidenced: mh-design-system",
+      "pass": true,
+      "detail": "coverage partial",
+      "severity": "unsafe"
+    },
+    {
+      "persona": "p2-frontend",
+      "category": "honest-gap",
+      "label": "Open must-have reaches the interview: mh-design-system",
+      "pass": true,
+      "detail": "interview question or To verify item",
+      "severity": "conservative"
+    },
+    {
+      "persona": "p2-frontend",
+      "category": "must-have",
+      "label": "Must-have not shown as evidenced: mh-typescript",
+      "pass": true,
+      "detail": "coverage none",
+      "severity": "unsafe"
+    },
+    {
+      "persona": "p2-frontend",
+      "category": "honest-gap",
+      "label": "Open must-have reaches the interview: mh-typescript",
+      "pass": true,
+      "detail": "interview question or To verify item",
+      "severity": "conservative"
+    },
+    {
+      "persona": "p2-frontend",
+      "category": "honest-gap",
+      "label": "Gap stated: stackexchange_profile",
+      "pass": true,
+      "detail": "no Stack Exchange activity found",
+      "severity": "conservative"
+    },
+    {
+      "persona": "p2-frontend",
+      "category": "invariant",
+      "label": "Every FACT cites only confirmed sources",
+      "pass": true,
+      "detail": "3 FACTs",
+      "severity": "unsafe"
+    },
+    {
+      "persona": "p2-frontend",
+      "category": "invariant",
+      "label": "Every FACT quote is inside a cited excerpt",
+      "pass": true,
+      "detail": "3 FACTs",
+      "severity": "unsafe"
+    },
+    {
+      "persona": "p3-product-cv",
+      "category": "identity",
+      "label": "Own profile kept (merged or asked): own course homework page",
+      "pass": true,
+      "detail": "decision possibly-same-as",
+      "severity": "conservative"
+    },
+    {
+      "persona": "p3-product-cv",
+      "category": "identity",
+      "label": "Namesake not merged: photographer with the same name in Olomouc",
+      "pass": true,
+      "detail": "decision possibly-same-as",
+      "severity": "unsafe"
+    },
+    {
+      "persona": "p3-product-cv",
+      "category": "identity",
+      "label": "Namesake pages never confirmed evidence: photographer with the same name in Olomouc",
+      "pass": true,
+      "detail": "kept out of the evidence",
+      "severity": "unsafe"
+    },
+    {
+      "persona": "p3-product-cv",
+      "category": "true-fact",
+      "label": "True finding: \"Senior Product Manager at Mapovna since 2024.\"",
+      "pass": true,
+      "detail": "kept as FACT",
+      "severity": "conservative"
+    },
+    {
+      "persona": "p3-product-cv",
+      "category": "true-fact",
+      "label": "True finding: \"Owns the roadmap for the Mapovna mobile app.\"",
+      "pass": true,
+      "detail": "kept as FACT",
+      "severity": "conservative"
+    },
+    {
+      "persona": "p3-product-cv",
+      "category": "true-fact",
+      "label": "True finding: \"Senior Product Manager at Mapovna since 2024, as the CV says.\"",
+      "pass": true,
+      "detail": "kept as FACT",
+      "severity": "conservative"
+    },
+    {
+      "persona": "p3-product-cv",
+      "category": "false-fact",
+      "label": "CV check shows \"matches\": \"Senior Product Manager at Mapovna since 2024, as the CV says.\"",
+      "pass": true,
+      "detail": "shown as \"matches\"",
+      "severity": "conservative"
+    },
+    {
+      "persona": "p3-product-cv",
+      "category": "false-fact",
+      "label": "Course homework shown as work evidence: \"Ran customer discovery interviews for Mapovna.\"",
+      "pass": true,
+      "detail": "moved to To verify",
+      "severity": "conservative"
+    },
+    {
+      "persona": "p3-product-cv",
+      "category": "false-fact",
+      "label": "CV differs from the public record: \"CV: Head of Product at Lumenfold from 2019 to 2024. Public LinkedIn: Product Manager at Lumenfold from 2021 to 2024, Business Analyst from 2019 to 2021.\"",
+      "pass": true,
+      "detail": "moved to To verify",
+      "severity": "conservative"
+    },
+    {
+      "persona": "p3-product-cv",
+      "category": "false-fact",
+      "label": "CV check shows \"differs\": \"CV: Head of Product at Lumenfold from 2019 to 2024. Public LinkedIn: Product Manager at Lumenfold from 2021 to 2024, Business Analyst from 2019 to 2021.\"",
+      "pass": true,
+      "detail": "shown as \"differs\"",
+      "severity": "conservative"
+    },
+    {
+      "persona": "p3-product-cv",
+      "category": "false-fact",
+      "label": "FACT quoted only from the CV: \"Led the pricing redesign that raised conversion by 18 %.\"",
+      "pass": true,
+      "detail": "not a FACT (INFERENCE, in the brief, under To verify)",
+      "severity": "unsafe"
+    },
+    {
+      "persona": "p3-product-cv",
+      "category": "false-fact",
+      "label": "CV check shows \"not-found\": \"Led the pricing redesign that raised conversion by 18 %.\"",
+      "pass": false,
+      "detail": "shown as \"differs\"",
+      "severity": "conservative"
+    },
+    {
+      "persona": "p3-product-cv",
+      "category": "must-have",
+      "label": "Must-have evidenced: mh-roadmap",
+      "pass": true,
+      "detail": "coverage evidenced",
+      "severity": "conservative"
+    },
+    {
+      "persona": "p3-product-cv",
+      "category": "must-have",
+      "label": "No interview question for the evidenced mh-roadmap",
+      "pass": true,
+      "detail": "not asked",
+      "severity": "conservative"
+    },
+    {
+      "persona": "p3-product-cv",
+      "category": "must-have",
+      "label": "Must-have not shown as evidenced: mh-discovery",
+      "pass": true,
+      "detail": "coverage partial",
+      "severity": "unsafe"
+    },
+    {
+      "persona": "p3-product-cv",
+      "category": "honest-gap",
+      "label": "Open must-have reaches the interview: mh-discovery",
+      "pass": true,
+      "detail": "interview question or To verify item",
+      "severity": "conservative"
+    },
+    {
+      "persona": "p3-product-cv",
+      "category": "must-have",
+      "label": "Must-have not shown as evidenced: mh-sql",
+      "pass": true,
+      "detail": "coverage none",
+      "severity": "unsafe"
+    },
+    {
+      "persona": "p3-product-cv",
+      "category": "honest-gap",
+      "label": "Open must-have reaches the interview: mh-sql",
+      "pass": true,
+      "detail": "interview question or To verify item",
+      "severity": "conservative"
+    },
+    {
+      "persona": "p3-product-cv",
+      "category": "honest-gap",
+      "label": "Gap stated: github_profile",
+      "pass": true,
+      "detail": "no public GitHub profile found",
+      "severity": "conservative"
+    },
+    {
+      "persona": "p3-product-cv",
+      "category": "honest-gap",
+      "label": "Gap stated: stackexchange_profile",
+      "pass": true,
+      "detail": "no Stack Exchange activity found",
+      "severity": "conservative"
+    },
+    {
+      "persona": "p3-product-cv",
+      "category": "honest-gap",
+      "label": "Interview question about \"Head of Product\"",
+      "pass": true,
+      "detail": "asked",
+      "severity": "conservative"
+    },
+    {
+      "persona": "p3-product-cv",
+      "category": "invariant",
+      "label": "Every FACT cites only confirmed sources",
+      "pass": true,
+      "detail": "3 FACTs",
+      "severity": "unsafe"
+    },
+    {
+      "persona": "p3-product-cv",
+      "category": "invariant",
+      "label": "Every FACT quote is inside a cited excerpt",
+      "pass": true,
+      "detail": "3 FACTs",
+      "severity": "unsafe"
+    },
+    {
+      "persona": "p4-devops-degraded",
+      "category": "identity",
+      "label": "Own profile kept (merged or asked): own GitHub",
+      "pass": true,
+      "detail": "decision merge",
+      "severity": "conservative"
+    },
+    {
+      "persona": "p4-devops-degraded",
+      "category": "true-fact",
+      "label": "True finding: \"DevOps Engineer at Kontejnerka since 2020.\"",
+      "pass": true,
+      "detail": "kept as FACT",
+      "severity": "conservative"
+    },
+    {
+      "persona": "p4-devops-degraded",
+      "category": "true-fact",
+      "label": "True finding: \"Maintains Helm charts for services on Kubernetes.\"",
+      "pass": true,
+      "detail": "kept as FACT",
+      "severity": "conservative"
+    },
+    {
+      "persona": "p4-devops-degraded",
+      "category": "false-fact",
+      "label": "2016 evidence for a current skill: \"Writes Terraform modules for AWS.\"",
+      "pass": true,
+      "detail": "moved to To verify",
+      "severity": "conservative"
+    },
+    {
+      "persona": "p4-devops-degraded",
+      "category": "false-fact",
+      "label": "Alias shown as a contradiction: \"LinkedIn names the employer Kontejnerka while GitHub names Plechovka.\"",
+      "pass": true,
+      "detail": "not shown (INFERENCE)",
+      "severity": "unsafe"
+    },
+    {
+      "persona": "p4-devops-degraded",
+      "category": "must-have",
+      "label": "Must-have evidenced: mh-kubernetes",
+      "pass": true,
+      "detail": "coverage evidenced",
+      "severity": "conservative"
+    },
+    {
+      "persona": "p4-devops-degraded",
+      "category": "must-have",
+      "label": "No interview question for the evidenced mh-kubernetes",
+      "pass": true,
+      "detail": "not asked",
+      "severity": "conservative"
+    },
+    {
+      "persona": "p4-devops-degraded",
+      "category": "must-have",
+      "label": "Must-have not shown as evidenced: mh-terraform",
+      "pass": true,
+      "detail": "coverage partial",
+      "severity": "unsafe"
+    },
+    {
+      "persona": "p4-devops-degraded",
+      "category": "honest-gap",
+      "label": "Open must-have reaches the interview: mh-terraform",
+      "pass": true,
+      "detail": "interview question or To verify item",
+      "severity": "conservative"
+    },
+    {
+      "persona": "p4-devops-degraded",
+      "category": "must-have",
+      "label": "Must-have not shown as evidenced: mh-oncall",
+      "pass": true,
+      "detail": "coverage none",
+      "severity": "unsafe"
+    },
+    {
+      "persona": "p4-devops-degraded",
+      "category": "honest-gap",
+      "label": "Open must-have reaches the interview: mh-oncall",
+      "pass": true,
+      "detail": "interview question or To verify item",
+      "severity": "conservative"
+    },
+    {
+      "persona": "p4-devops-degraded",
+      "category": "honest-gap",
+      "label": "Gap stated: serp_person",
+      "pass": true,
+      "detail": "no search hits for subject + anchor",
+      "severity": "conservative"
+    },
+    {
+      "persona": "p4-devops-degraded",
+      "category": "honest-gap",
+      "label": "Gap stated: stackexchange_profile",
+      "pass": true,
+      "detail": "no Stack Exchange activity found",
+      "severity": "conservative"
+    },
+    {
+      "persona": "p4-devops-degraded",
+      "category": "honest-gap",
+      "label": "Degraded brief says the AI summary is unavailable and still links evidence",
+      "pass": true,
+      "detail": "summary model failed: summary model unavailable (recorded 529 overloaded)",
+      "severity": "unsafe"
+    },
+    {
+      "persona": "p4-devops-degraded",
+      "category": "invariant",
+      "label": "Every FACT cites only confirmed sources",
+      "pass": true,
+      "detail": "2 FACTs",
+      "severity": "unsafe"
+    },
+    {
+      "persona": "p4-devops-degraded",
+      "category": "invariant",
+      "label": "Every FACT quote is inside a cited excerpt",
+      "pass": true,
+      "detail": "2 FACTs",
+      "severity": "unsafe"
+    },
+    {
+      "persona": "p5-ux-thin",
+      "category": "identity",
+      "label": "Own profile kept (merged or asked): own team page at the employer",
+      "pass": true,
+      "detail": "decision merge",
+      "severity": "conservative"
+    },
+    {
+      "persona": "p5-ux-thin",
+      "category": "identity",
+      "label": "Namesake not merged: UX designer with the same name in Praha",
+      "pass": true,
+      "detail": "decision possibly-same-as",
+      "severity": "unsafe"
+    },
+    {
+      "persona": "p5-ux-thin",
+      "category": "identity",
+      "label": "Namesake pages never confirmed evidence: UX designer with the same name in Praha",
+      "pass": true,
+      "detail": "kept out of the evidence",
+      "severity": "unsafe"
+    },
+    {
+      "persona": "p5-ux-thin",
+      "category": "true-fact",
+      "label": "True finding: \"UX Researcher at Hnízdo Studio since 2023.\"",
+      "pass": true,
+      "detail": "kept as FACT",
+      "severity": "conservative"
+    },
+    {
+      "persona": "p5-ux-thin",
+      "category": "false-fact",
+      "label": "FACT adds a number the quote does not state: \"Ran 40 usability studies for the e-shop redesign.\"",
+      "pass": true,
+      "detail": "moved to To verify",
+      "severity": "conservative"
+    },
+    {
+      "persona": "p5-ux-thin",
+      "category": "false-fact",
+      "label": "Claim from a same-field namesake's LinkedIn: \"UX Designer at Grafika Praha.\"",
+      "pass": true,
+      "detail": "not shown (dropped)",
+      "severity": "unsafe"
+    },
+    {
+      "persona": "p5-ux-thin",
+      "category": "must-have",
+      "label": "Must-have evidenced: mh-usability",
+      "pass": false,
+      "detail": "coverage partial",
+      "severity": "conservative"
+    },
+    {
+      "persona": "p5-ux-thin",
+      "category": "must-have",
+      "label": "No interview question for the evidenced mh-usability",
+      "pass": false,
+      "detail": "asked anyway",
+      "severity": "conservative"
+    },
+    {
+      "persona": "p5-ux-thin",
+      "category": "must-have",
+      "label": "Must-have not shown as evidenced: mh-survey",
+      "pass": true,
+      "detail": "coverage none",
+      "severity": "unsafe"
+    },
+    {
+      "persona": "p5-ux-thin",
+      "category": "honest-gap",
+      "label": "Open must-have reaches the interview: mh-survey",
+      "pass": true,
+      "detail": "interview question or To verify item",
+      "severity": "conservative"
+    },
+    {
+      "persona": "p5-ux-thin",
+      "category": "must-have",
+      "label": "Must-have not shown as evidenced: mh-figma",
+      "pass": true,
+      "detail": "coverage none",
+      "severity": "unsafe"
+    },
+    {
+      "persona": "p5-ux-thin",
+      "category": "honest-gap",
+      "label": "Open must-have reaches the interview: mh-figma",
+      "pass": true,
+      "detail": "interview question or To verify item",
+      "severity": "conservative"
+    },
+    {
+      "persona": "p5-ux-thin",
+      "category": "honest-gap",
+      "label": "Gap stated: github_profile",
+      "pass": true,
+      "detail": "no public GitHub profile found",
+      "severity": "conservative"
+    },
+    {
+      "persona": "p5-ux-thin",
+      "category": "honest-gap",
+      "label": "Gap stated: stackexchange_profile",
+      "pass": true,
+      "detail": "no Stack Exchange activity found",
+      "severity": "conservative"
+    },
+    {
+      "persona": "p5-ux-thin",
+      "category": "invariant",
+      "label": "Every FACT cites only confirmed sources",
+      "pass": true,
+      "detail": "1 FACTs",
+      "severity": "unsafe"
+    },
+    {
+      "persona": "p5-ux-thin",
+      "category": "invariant",
+      "label": "Every FACT quote is inside a cited excerpt",
+      "pass": true,
+      "detail": "1 FACTs",
+      "severity": "unsafe"
+    }
+  ]
+}

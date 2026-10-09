@@ -25,7 +25,7 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import Link from "next/link";
 import { loadAuditRecord } from "@/app/api/runs/[id]/audit/load";
 import type { AuditRecord, LineupAnswer, SourceStatus } from "@/domain/audit";
-import { BTN_PRIMARY, BTN_QUIET, BTN_SECONDARY, CARD, Chevron, Eyebrow, Pill, SUMMARY, type Tone } from "@/app/ui";
+import { BTN_PRIMARY, BTN_QUIET, BTN_SECONDARY, CARD, Chevron, Eyebrow, Pill, SimulatedPill, SUMMARY, type Tone } from "@/app/ui";
 import { STEP_LABEL } from "../source-labels";
 import { GAP_LABEL, PLATFORM_LABEL } from "../state";
 
@@ -202,7 +202,7 @@ function CallsCard({ record }: { record: AuditRecord }): React.JSX.Element {
           {record.verification_calls.map((c, i) => (
             <li key={String(i)} className="flex items-center gap-3">
               <span>{c.status}</span>
-              {c.mock && <Pill tone="unsure">MOCK</Pill>}
+              {c.mock && <SimulatedPill kind="mock" />}
               {whenOrNull(c.created_at) !== null && <span className="text-xs text-muted tabular-nums">{when(c.created_at)}</span>}
             </li>
           ))}
