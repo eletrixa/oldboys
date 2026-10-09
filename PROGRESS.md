@@ -326,3 +326,6 @@ Each agent appends: what it starts, progress, what it finishes. Newest at the bo
 
 ## 2026-10-09 · qa-fixes agent (Minas)
 - Started: 04:44. Fixes from prod-flow-qa: namesake address on the registries card, positions scoped to the company, honest run duration text, Czech leftovers on the brief, link for "already started", catalog position label.
+
+## 2026-10-09 · phone-kit-cs agent (Minas)
+- Started: 04:45. Czech UI text for the phone panel and the interview-kit sidebar when the report language is CZ.
