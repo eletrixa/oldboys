@@ -41,7 +41,7 @@ test("paste a posting, research from it, find it in the list", async ({ page }) 
   await expect(page.getByRole("list", { name: "Must-haves" }).getByRole("listitem")).not.toHaveCount(0);
 
   await page.getByRole("link", { name: "Research a candidate" }).click();
-  await expect(page).toHaveURL(`/?positionId=${id}`);
+  await expect(page).toHaveURL(`/briefs/new?positionId=${id}`); // home carries the position into the New brief wizard
   await expect(page.getByText(TITLE)).toBeVisible();
   await expect(page.locator("input[name=role]")).toHaveCount(0);
 
