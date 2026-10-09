@@ -8,7 +8,8 @@
  *
  * Key responsibilities:
  * - Mounted once in the root layout; reads the tray list from sessionStorage and re-reads on TRAY_EVENT
- * - Polls GET /api/runs/:id/state every 4 s for every live run, stops per run once it is done or failed
+ * - Polls GET /api/runs/:id/state every 4 s for every live run, stops per run once it is done or failed; a 404 (run
+ *   deleted) untracks the run so a deleted brief does not sit in the tray as "Starting"
  * - Each row: name, what it is hiring for, status pill, a progress bar and five step dots, one line with the remaining
  *   time range and what is read now (plans/015, ticking once a second), "Answer now" when the run waits for the
  *   recruiter, Open brief link, dismiss
@@ -76,6 +77,11 @@ function useRunRow(id: string): TrayRow | null {
     const tick = async (): Promise<void> => {
       try {
         const res = await fetch(`/api/runs/${encodeURIComponent(id)}/state`, { cache: "no-store" });
+        if (res.status === 404) {
+          // The run was deleted (or never existed): drop it instead of showing "Starting" forever.
+          if (!stopped) untrackRun(id);
+          return;
+        }
         if (res.ok) {
           const next = trayRow(await res.json<RunState>(), Date.now());
           if (stopped) return;

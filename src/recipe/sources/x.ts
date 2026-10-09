@@ -18,7 +18,7 @@ import { z } from "zod";
 import { clipBio, count, facts } from "@/domain/profile-facts";
 import { dedupeBy, digestOf, parsedAll } from "@/recipe/sources/facts";
 import type { Collector } from "@/recipe/sources/types";
-import { clip, identityFor } from "@/recipe/sources/types";
+import { clip, identityFor, namesakeSkipReason } from "@/recipe/sources/types";
 
 const Author = z.object({
   userName: z.string().nullish(),
@@ -51,10 +51,11 @@ export const x: Collector = {
         actor: "apidojo/tweet-scraper",
         input: { twitterHandles: [handle], maxItems: 20, sort: "Latest" },
         maxTotalChargeUsd: 0.03,
-        timeoutSecs: 45,
+        timeoutSecs: 90,
       },
     ];
   },
+  skipReason: (ctx) => namesakeSkipReason(ctx, "x", "X", "no confirmed handle or id to look up"),
   parse: (payload, ctx) => {
     const items = z.array(Tweet).safeParse(payload);
     if (!items.success) return [];

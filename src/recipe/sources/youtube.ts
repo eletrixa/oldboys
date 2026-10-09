@@ -50,7 +50,7 @@ export const youtube: Collector = {
       url === undefined
         ? { searchQueries: [ctx.subject], maxResults: 5 }
         : { startUrls: [{ url }], maxResults: 5 };
-    return [{ via: "actor", actor: "streamers/youtube-scraper", input, maxTotalChargeUsd: 0.03, timeoutSecs: 45 }];
+    return [{ via: "actor", actor: "streamers/youtube-scraper", input, maxTotalChargeUsd: 0.03, timeoutSecs: 120 }];
   },
   parse: (payload, ctx) => {
     const items = z.array(Video).safeParse(payload);

@@ -7,7 +7,7 @@
  * Tested:  n/a (this is the test)
  *
  * Key responsibilities:
- * - The CV rule and the CV source label reach the extract prompt only on CV runs
+ * - The CV rule and the CV source label reach the extract prompt only on CV runs; the CV goes in the first extract batch
  * - Verify: a CV check FACT quoted only from the CV is downgraded; judgemental CV check claims are dropped
  * - Synthesize: a difference becomes a templated interview question and the first to_verify item (also degraded);
  *   not-found items stay in the section; no model interview question for the CV check
@@ -21,7 +21,7 @@ import { describe, expect, it } from "vitest";
 import type { Claim, Source } from "@/domain/claim";
 import { CV_QUESTION, CV_QUESTION_ID } from "@/domain/cv-check";
 import type { Ports } from "@/domain/ports";
-import { CV_RULE, extractClaims } from "@/recipe/seams/extract";
+import { CV_RULE, extractClaims, PROMPT_CHARS } from "@/recipe/seams/extract";
 import { sectionsOf } from "@/recipe/seams/sections";
 import { CV_EXCERPT_MAX, seedProfile } from "@/recipe/seams/seed";
 import { synthesizeBrief } from "@/recipe/seams/synthesize";
@@ -100,6 +100,16 @@ describe("extract: CV rule only on CV runs", () => {
     expect(system).not.toContain(CV_QUESTION_ID);
     expect(prompt).not.toContain("candidate's CV");
     expect(prompt).not.toContain(CV_QUESTION_ID);
+  });
+
+  it("puts the CV in the first batch when the sources need several", async () => {
+    const press = (id: string) => src(id, `https://news.cz/${id}`, "apify/google-search-scraper", "x".repeat(PROMPT_CHARS * 0.6));
+    const prompts: string[] = [];
+    const ports = fakePorts({ llm: fakeLlm((p) => (prompts.push(p), [])) });
+    await extractClaims(baseContext({ questions: [...questions, CV_QUESTION], sources: [press("p1"), press("p2"), cv] }), ports);
+    expect(prompts.length).toBeGreaterThan(1);
+    expect(prompts[0]).toContain("[cv] cv:run-1");
+    expect(prompts.slice(1).join()).not.toContain("[cv]");
   });
 });
 

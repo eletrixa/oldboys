@@ -39,7 +39,7 @@ const brief = (over: Partial<Brief> = {}): Brief => ({
   per_question: [{ question_id: "mh-exp", coverage: "evidenced", claim_ids: ["c1"], summary: "Five years of data work." }],
   interview_questions: ["Walk me through your last pipeline."],
   to_verify: ["Dates at Acme"],
-  not_searched: [{ source: "facebook_profile", reason: "profile not opened (login needed); only search snippets were read" }],
+  not_searched: [{ source: "facebook_page", reason: "2 accounts with the same name on Facebook, none confirmed as the candidate by the identity lineup; not scraped" }],
   searched_empty: [{ source: "github_profile", reason: "no public repositories" }],
   removed_protected: 1,
   degraded: null,
@@ -97,7 +97,7 @@ describe("candidateCopy", () => {
     expect(md).toContain("- LinkedIn\n");
     expect(md).toContain("- X\n");
     expect(md).toContain("- GitHub (nothing found that we could confirm as yours)");
-    expect(md).toContain("- Facebook: profile not opened (login needed); only search snippets were read");
+    expect(md).toContain("- Facebook page: 2 accounts with the same name on Facebook, none confirmed as the candidate by the identity lineup; not scraped");
     expect(md).toContain("- <https://www.linkedin.com/in/jnovak>");
     expect(md).toContain("- <https://x.com/jnovak>");
     expect(md).toContain("deleted on 2026-10-15");
@@ -261,7 +261,6 @@ describe("candidateCopy (cs)", () => {
     const md = cs({
       brief: brief({
         not_searched: [
-          { source: "facebook_profile", reason: "profile not opened (login needed); only search snippets were read" },
           { source: "x_profile", reason: "request failed: HTTP 429 from https://api.example.com/x?q=Jan%20Novak" },
           { source: "github_profile", reason: "request failed: timeout" },
           { source: "instagram_profile", reason: "no confirmed handle or id to look up" },
@@ -276,7 +275,6 @@ describe("candidateCopy (cs)", () => {
         ],
       }),
     });
-    expect(md).toContain("- Facebook: profil jsme neotevřeli (vyžaduje přihlášení); četli jsme jen úryvky z výsledků vyhledávání\n");
     expect(md).toContain("- X: služba odmítla náš dotaz (HTTP 429)\n");
     expect(md).toContain("- GitHub: služba neodpověděla\n");
     expect(md).toContain("- Instagram: neměli jsme potvrzený profil, který bychom mohli dohledat\n");

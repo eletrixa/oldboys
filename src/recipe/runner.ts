@@ -18,7 +18,12 @@
  * - A wave performs consecutive fetch requests up to 6 at a time and applies results (parse, dedup, `Fetched`) in request order;
  *   stores of a request's hits run up to 6 at a time with parsed order preserved; actor requests run one by one
  * - One source per page: a hit whose canonical URL (no locale / trailing slash) is already in the run is not stored again;
- *   deduped hits add the note "N hits already in the run" and do not make the step empty (no onEmpty gap)
+ *   deduped hits add the note "N hits already in the run" and do not make the step empty (no onEmpty gap). A collector
+ *   with `enriches` (profile scrapers) skips only URLs it stored itself in this step: its page (bio, counts, posts) is
+ *   richer than the search hit that first listed the URL
+ * - A parsed source with `replaces: true` whose canonical URL is already in ctx.sources is stored under the existing
+ *   source's id, url, identity, actor and fetched_at with the new excerpt and raw (the D1 upsert rewrites that row), lands
+ *   in outcome.sources, and adds the note "replaced excerpts of N pages"; a `replaces` source for a new URL is stored normally
  *
  * Design constraints:
  * - Never mutates ctx; the Workflow persists the outcome and rebuilds ctx for the next step
@@ -34,6 +39,7 @@ import { resolveCandidates } from "@/recipe/seams/resolve";
 import { synthesizeBrief } from "@/recipe/seams/synthesize";
 import { verifyClaims } from "@/recipe/seams/verify";
 import { collectorFor } from "@/recipe/sources";
+import { emptyOutcome } from "@/recipe/sources/types";
 import type { Collector, CollectorRequest, Fetched, ParsedSource, StepContext, StepOutcome } from "@/recipe/sources/types";
 import type { Step } from "@/recipe/step";
 
@@ -43,9 +49,8 @@ const FETCH_CONCURRENCY = 6;
 
 type Attempt = { ok: { payload: unknown; cost_usd: number } } | { error: unknown };
 
-export function emptyOutcome(): StepOutcome {
-  return { sources: [], candidates: [], claims: [], gaps: [], brief: null, claims_mode: "append", empty: true, cost_usd: 0, calls: 0, notes: [] };
-}
+/** Re-exported for the seams and tests that import it from here; defined beside StepOutcome so the resolve seam need not import the runner. */
+export { emptyOutcome };
 
 export async function executeStep(step: Step, ctx: StepContext, ports: Ports): Promise<StepOutcome> {
   switch (step.kind) {
@@ -105,10 +110,13 @@ export async function collectWith(collector: Collector, step: Step, ctx: StepCon
     out.notes.push(collector.skipReason?.(ctx) ?? "no confirmed handle or id to look up");
     return out;
   }
-  const seen = new Set(ctx.sources.map((s) => canonicalUrl(s.url)));
+  // An enriching collector stores its page beside the earlier search hit of the same URL; others keep one source per URL per run
+  const seen = new Set(collector.enriches === true ? [] : ctx.sources.map((s) => canonicalUrl(s.url)));
+  const existing = new Map(ctx.sources.map((s) => [canonicalUrl(s.url), s]));
   const done: Fetched[] = [];
   let parsedHits = 0;
   let deduped = 0;
+  let replaced = 0;
   const attempt = (req: CollectorRequest): Promise<Attempt> => perform(req, ports).then((ok) => ({ ok }), (error: unknown) => ({ error }));
   // Applies one performed request: tallies, parse, dedup, store. Called in request order whatever order the fetches finished in.
   const apply = async (req: CollectorRequest, res: Attempt): Promise<void> => {
@@ -127,6 +135,14 @@ export async function collectWith(collector: Collector, step: Step, ctx: StepCon
     const fresh: { source: Omit<Source, "r2_key">; raw: unknown }[] = [];
     for (const p of parsed) {
       const key = canonicalUrl(p.url);
+      const prior = p.replaces === true ? existing.get(key) : undefined;
+      if (prior !== undefined) {
+        existing.delete(key); // one rewrite per page per step
+        replaced += 1;
+        const { r2_key: _r2, ...kept } = prior;
+        out.sources.push(await ports.storeSource({ ...kept, excerpt: p.excerpt }, p.raw));
+        continue;
+      }
       if (seen.has(key)) {
         deduped += 1;
         continue;
@@ -180,6 +196,7 @@ export async function collectWith(collector: Collector, step: Step, ctx: StepCon
   await wave(requests);
   if (collector.followUp) await wave(collector.followUp(ctx, step, [...done]));
   if (deduped > 0) out.notes.push(`${String(deduped)} hits already in the run`);
+  if (replaced > 0) out.notes.push(`replaced excerpts of ${String(replaced)} pages`);
   // Pages found but all stored by an earlier step are not "nothing found": empty only when parse returned nothing
   out.empty = parsedHits === 0;
   const digest = collector.digest?.(done, ctx);

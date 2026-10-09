@@ -26,6 +26,8 @@
  * - Two pools: the "search" pool runs the collectors before `resolve` (they read only subject/anchor) and the
  *   "collect" pool runs those after it; at most PARALLEL run at once because Workers allow 6 simultaneous outbound
  *   connections waiting for headers and a collector's own fetch fan-out shares that cap
+ * - `read_pages` (rest/read-pages, plans/013) runs alone after the collect pool with the identity pass before it, so it
+ *   reads only pages the corroboration marked as the person's
  * - Source identity re-marked after the lineup and before extract (applySourceIdentity), so only SERP hits on
  *   a merged profile count as confirmed
  * - Truthful gaps: a collector that made no request, or whose requests all failed, records "not searched: <why>", not its onEmpty text; a
@@ -81,6 +83,8 @@ const COLLECTOR_KINDS = new Set<Step["kind"]>(["serp", "actor", "ares"]);
  * would only queue.
  */
 const PARALLEL = 6;
+/** The page reader needs every other collector done and the identity pass run first (plans/013); it runs alone, after the collect pool. */
+const READ_ACTOR = "rest/read-pages";
 
 export class ResearchRunWorkflow extends WorkflowEntrypoint<CloudflareEnv, ResearchRunParams> {
   async run(event: Readonly<WorkflowEvent<ResearchRunParams>>, step: WorkflowStep): Promise<void> {
@@ -201,10 +205,11 @@ export class ResearchRunWorkflow extends WorkflowEntrypoint<CloudflareEnv, Resea
         afterResolve = true;
         continue;
       }
-      if (COLLECTOR_KINDS.has(recipeStep.kind)) {
+      if (COLLECTOR_KINDS.has(recipeStep.kind) && recipeStep.actor !== READ_ACTOR) {
         pool.push(recipeStep);
         continue;
       }
+      // Seams, and the page reader (plans/013), run alone after the pool so far has drained.
       await flush(afterResolve ? "collect" : "search");
       await runOne(recipeStep);
     }
@@ -255,7 +260,7 @@ export class ResearchRunWorkflow extends WorkflowEntrypoint<CloudflareEnv, Resea
   ): Promise<{ empty: boolean; skipped: string | null; unconfirmed: boolean }> {
     return step.do(recipeStep.id, { retries: { limit: 1, delay: "5 seconds" } }, async () => {
       const started = Date.now();
-      if (recipeStep.kind === "extract") await applySourceIdentity(this.env.DB, runId);
+      if (recipeStep.kind === "extract" || recipeStep.actor === READ_ACTOR) await applySourceIdentity(this.env.DB, runId);
       const ctx = await loadContext(this.env.DB, runId, questions);
       if (COLLECTOR_KINDS.has(recipeStep.kind) && (ctx.spent.calls >= ctx.budget.calls || ctx.spent.usd >= ctx.budget.usd)) {
         await this.ledger(runId, recipeStep.id, "decision", 0, 0, { skipped: "run budget reached", spent: ctx.spent });

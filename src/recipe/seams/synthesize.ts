@@ -31,7 +31,6 @@
  * - `location_note`: a merged profile names a known Czech city/region and never the anchor (stated, nothing deleted)
  * - A step's UNCONFIRMED_GAP is dropped once a merged source from its actor exists (staleGap); the heading follows the gaps left
  * - `contradictions`: claims or a model summary saying "compatible" are dropped; no claim left = coverage none, no section
- * - Facebook: a Facebook candidate adds a static not_searched line (no collector; public pages need a login)
  * - `sections`: findings cut by what was found, confidence computed deterministically (seams/sections.ts), never by the model
  * - `profile` (hiring): enriched profile from seams/profile.ts, two primary calls, degraded on its own when the model fails;
  *   built concurrently with the summaries from the screened claims; a contradiction claim the summary later calls
@@ -77,7 +76,7 @@ async function dropProtected(claims: readonly Claim[], ports: Ports, out: StepOu
   return claims.filter((c) => !flagged.has(c.id));
 }
 
-const EVIDENCE_MAX = 40;
+const EVIDENCE_MAX = 120;
 const INTERVIEW_MAX = 6;
 const NOT_SEARCHED = "not searched:";
 const CONTRADICTIONS = "contradictions";
@@ -259,8 +258,6 @@ export function locationNoteOf(anchor: string, candidates: readonly Candidate[],
 
 const PROFILE_PLATFORMS = new Set(Object.keys(PLATFORM_LABEL));
 const IDENTITY_MAX = 2;
-const FACEBOOK_GAP = { source: "facebook_profile", reason: "profile not opened (login needed); only search snippets were read" };
-
 /**
  * Degraded mode: at most two identity questions about open social profiles (never plain web pages a candidate
  * cannot speak to; one per platform, none where a profile is already merged), then the role must-haves (mh-) still without evidence, in the second person. Base research
@@ -401,8 +398,7 @@ export async function synthesizeBrief(ctx: StepContext, ports: Ports): Promise<S
     to_verify: [...differences, ...kept.filter((c) => c.kind === "INFERENCE" && c.question_id !== CV_QUESTION_ID)].slice(0, TO_VERIFY_MAX).map((c) => c.text),
     not_searched: ctx.gaps
       .filter((g) => g.reason.startsWith(NOT_SEARCHED))
-      .map((g) => ({ source: g.question_id, reason: g.reason.slice(NOT_SEARCHED.length).trim() || "no reason recorded" }))
-      .concat(ctx.candidates.some((c) => c.platform === "facebook") ? [FACEBOOK_GAP] : []),
+      .map((g) => ({ source: g.question_id, reason: g.reason.slice(NOT_SEARCHED.length).trim() || "no reason recorded" })),
     searched_empty: ctx.gaps.filter((g) => !g.reason.startsWith(NOT_SEARCHED) && !staleGap(ctx, g)).map((g) => ({ source: g.question_id, reason: g.reason })),
     removed_protected: removed,
     degraded,
