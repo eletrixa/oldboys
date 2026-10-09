@@ -11,6 +11,7 @@
  *   gap reasons (plain words) and the 30-second summary bodies are collected with stable ids
  * - Quotes, URLs, the headline, the person's name, the role, evidence and also_found excerpts never are
  * - The hash changes when a claim text changes; splitLead separates the lead word
+ * - No sum: text (the 30-second summary is built in Czech from counts); missing criteria go in by their q: id
  *
  * Design constraints:
  * - Fixtures stay inline
@@ -90,7 +91,19 @@ describe("reportTexts", () => {
     expect(texts.get(tid.searchedEmpty(0))).toBe("no public repositories");
     expect(texts.get(tid.notSearched(0))).toBe("the service refused our request (HTTP 403)");
     expect(texts.get(tid.locationNote)).toBe("Confirmed profile mentions Brno, you entered Praha");
-    expect(texts.get(tid.summary("ask"))).toBe("How do you version acme-ui?");
+  });
+
+  it("never sends the 30-second summary as sentences; only the texts of the criteria it lists as missing", () => {
+    expect(reportTexts(run()).some((t) => t.id.startsWith("sum:"))).toBe(false);
+    expect(byId(reportTexts(run())).has(tid.question("mh-ui"))).toBe(false);
+    const missing = run({
+      questions: [{ id: "mh-ui", text: "Builds UI component libraries" }, { id: "mh-a11y", text: "Has shipped accessible components" }],
+      brief: brief({ per_question: [...brief().per_question, { question_id: "mh-a11y", coverage: "none", claim_ids: [], summary: "" }] }),
+    });
+    const texts = reportTexts(missing);
+    expect(texts.some((t) => t.id.startsWith("sum:"))).toBe(false);
+    expect(byId(texts).get(tid.question("mh-a11y"))).toBe("Has shipped accessible components");
+    expect(byId(texts).has(tid.question("mh-ui"))).toBe(false);
   });
 
   it("never includes quotes, URLs, the headline, names, the role or source excerpts", () => {

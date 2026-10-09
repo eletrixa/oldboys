@@ -40,6 +40,8 @@ export type ReportDict = {
   stopReading: string;
   speechLang: string;
   lead: Record<SummaryLead, string>;
+  /** Lead of the Czech "missing" line when it lists criteria without evidence (English keeps "Missing: no evidence for"). */
+  summaryMissingEvidence: string;
   confirmedProfile: string;
   hiringFor: string;
   band: Record<ConfidenceBand, string>;
@@ -89,6 +91,7 @@ const EN: ReportDict = {
   stopReading: "Stop",
   speechLang: "en-US",
   lead: { Confirmed: "Confirmed", Missing: "Missing", Ask: "Ask", Check: "Check" },
+  summaryMissingEvidence: "Missing evidence for",
   confirmedProfile: "Confirmed profile",
   hiringFor: "Hiring for",
   band: { strong: "Strong evidence", fair: "Some evidence", weak: "Thin evidence" },
@@ -160,6 +163,8 @@ const LABEL_CS: Record<string, string> = {
   "ARES registry": "Registr ARES",
   "ARES public register": "Veřejný rejstřík (ARES)",
   CV: "Životopis",
+  "LinkedIn posts": "Příspěvky na LinkedInu",
+  "Employer company page": "Stránka zaměstnavatele",
 };
 
 const CS: ReportDict = {
@@ -172,6 +177,7 @@ const CS: ReportDict = {
   stopReading: "Zastavit",
   speechLang: "cs-CZ",
   lead: { Confirmed: "Potvrzeno", Missing: "Chybí", Ask: "Zeptejte se", Check: "Ověřte" },
+  summaryMissingEvidence: "Chybí doklad k",
   confirmedProfile: "Potvrzený profil",
   hiringFor: "Obsazovaná pozice",
   band: { strong: "Silné doložení", fair: "Částečné doložení", weak: "Slabé doložení" },

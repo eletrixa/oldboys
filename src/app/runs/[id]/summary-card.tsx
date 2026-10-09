@@ -3,15 +3,16 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/runs/[id]/summary-card.tsx
- * Deps:    react, ./summary, ./report-text (splitLead, tid), ./report-lang (useReport), ../../ui (Radar primitives)
- * Tested:  n/a (the sentences are tested in __tests__/summary.test.ts)
+ * Deps:    react, ./summary (type), ./summary-cs (summaryLines), ./report-lang (useReport), ../../ui (Radar primitives)
+ * Tested:  n/a (the sentences are tested in __tests__/summary.test.ts and __tests__/summary-cs.test.ts)
  *
  * Key responsibilities:
  * - SummaryCard: the three sentences from summary30s (documented, missing, ask), each lead word (Confirmed, Missing,
  *   Ask) coloured; nothing while there is no brief
  * - ReadAloud: browser SpeechSynthesis only (no external service); hidden when the browser has none; toggles Stop;
  *   reads in the report's language (cs-CZ for the Czech brief)
- * - Czech brief (idea #24): lead words and headings from the dictionary, each sentence body translated by id
+ * - Czech brief (idea #24): lines from summaryLines (built from counts and translated criteria, never a translated
+ *   sentence), lead words and headings from the dictionary
  *
  * Design constraints:
  * - Client only; support is read with useSyncExternalStore so the server render (no button) hydrates cleanly
@@ -21,9 +22,9 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { BTN_QUIET, CARD, Eyebrow } from "../../ui";
 import { useReport } from "./report-lang";
-import { splitLead, tid } from "./report-text";
 import type { RunState } from "./state";
-import { type Summary30s, summary30s } from "./summary";
+import type { Summary30s } from "./summary";
+import { lineText, summaryLines } from "./summary-cs";
 
 const noop = (): void => undefined;
 const subscribe = (): (() => void) => noop;
@@ -68,12 +69,6 @@ function ReadAloud({ text }: { text: string }): React.JSX.Element | null {
 const TONE: Record<keyof Summary30s, string> = { documented: "text-ok", missing: "text-unsure", ask: "text-action" };
 const PARTS = ["documented", "missing", "ask"] as const;
 
-/** One sentence in the report language: its lead word ("Confirmed", "Ask" …) in its tone colour, then the body. */
-function sentenceOf(s: Summary30s, part: keyof Summary30s, report: ReturnType<typeof useReport>): { lead: string | null; body: string } {
-  const { lead, body } = splitLead(s[part]);
-  return { lead: lead === null ? null : report.t.lead[lead], body: report.text(tid.summary(part), body) };
-}
-
 function Row({ lead, tone, body }: { lead: string | null; tone: string; body: string }): React.JSX.Element {
   if (lead === null) return <li className="py-1.5">{body}</li>;
   return (
@@ -85,9 +80,10 @@ function Row({ lead, tone, body }: { lead: string | null; tone: string; body: st
 
 export function SummaryCard({ state }: { state: RunState }): React.JSX.Element | null {
   const report = useReport();
-  const s = summary30s(state);
-  if (s === null) return null;
-  const rows = PARTS.map((part) => ({ part, ...sentenceOf(s, part, report) }));
+  const lines = summaryLines(state, report);
+  if (lines === null) return null;
+  // Each lead word ("Confirmed", "Ask" …) in its tone colour, then the body.
+  const rows = PARTS.map((part) => ({ part, ...lines[part] }));
   return (
     <section className={`${CARD} border-l-4 border-l-action`} aria-labelledby="summary-30s">
       <div className="flex items-start justify-between gap-3">
@@ -97,7 +93,7 @@ export function SummaryCard({ state }: { state: RunState }): React.JSX.Element |
             {report.t.summaryTitle}
           </h2>
         </div>
-        <ReadAloud text={rows.map((r) => (r.lead === null ? r.body : `${r.lead}: ${r.body}`)).join(" ")} />
+        <ReadAloud text={rows.map(lineText).join(" ")} />
       </div>
       <ul className="mt-3 divide-y divide-divider text-sm text-ink">
         {rows.map((r) => (

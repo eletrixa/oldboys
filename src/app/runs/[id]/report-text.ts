@@ -3,15 +3,17 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/runs/[id]/report-text.ts
- * Deps:    src/domain/report-translation (ReportText type), ./state, ./summary, ./challenge
+ * Deps:    src/domain/report-translation (ReportText type), ./state, ./summary (aiOff, summaryGaps), ./challenge
  * Tested:  src/app/runs/[id]/__tests__/report-text.test.ts
  *
  * Key responsibilities:
  * - tid: one id per text (section title / reason / summary, per-question summary, question, claim text, devil's
  *   advocate reason, source confirmation reason, interview question, to-verify item, gap reason, location note,
- *   degraded reason, 30-second summary sentence); the renderers look translations up by the same ids
+ *   degraded reason); the renderers look translations up by the same ids
  * - reportTexts: every such text the brief area shows, only for what is shown (shown sections, their claims)
- * - splitLead: "Confirmed: …" → lead + body, so the lead word comes from the dictionary and only the body is translated
+ * - The 30-second summary is never sent as a sentence (summary-cs.ts builds the Czech lines from counts): only the
+ *   question texts of the criteria its "missing" line names (q:<id>); its ask line reuses iq: / tv:
+ * - splitLead: "Confirmed: …" → lead + body, so the English lead word maps to the dictionary
  *
  * Design constraints:
  * - Pure, server-safe (the translate route imports it): no React
@@ -21,7 +23,7 @@
 import type { ReportText } from "@/domain/report-translation";
 import { challengesById } from "./challenge";
 import { type RunState, briefSections, gapText, isShown, searchedEmpty } from "./state";
-import { type Summary30s, summary30s } from "./summary";
+import { aiOff, summaryGaps } from "./summary";
 
 export const tid = {
   sectionTitle: (id: string): string => `s:${id}:title`,
@@ -38,7 +40,6 @@ export const tid = {
   notSearched: (i: number): string => `ns:${String(i)}`,
   locationNote: "loc",
   degraded: "deg",
-  summary: (part: keyof Summary30s): string => `sum:${part}`,
 } as const;
 
 export type SummaryLead = "Confirmed" | "Missing" | "Ask" | "Check";
@@ -65,8 +66,7 @@ export function reportTexts(state: RunState): ReportText[] {
   };
   const questionText = new Map(state.questions.map((q) => [q.id, q.text]));
 
-  const summary = summary30s(state);
-  if (summary !== null) for (const part of ["documented", "missing", "ask"] as const) add(tid.summary(part), splitLead(summary[part]).body);
+  for (const g of summaryGaps(state, brief, aiOff(brief))) if (g.kind === "criterion") add(tid.question(g.questionId), questionText.get(g.questionId));
   add(tid.locationNote, brief.location_note);
   add(tid.degraded, brief.degraded);
 

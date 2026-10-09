@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/runs/[id]/interview-invite.ts
- * Deps:    src/domain/audit (deletionDate), ./summary (summary30s), ./state (RunState, hiringFor), ./export-text (EXPORT_DICT, localSummary), ./i18n (Report)
+ * Deps:    src/domain/audit (deletionDate), ./summary-cs (summaryIn), ./state (RunState, hiringFor), ./export-text (EXPORT_DICT), ./i18n (Report)
  * Tested:  src/app/runs/[id]/__tests__/interview-invite.test.ts, src/app/runs/[id]/__tests__/export-text.test.ts (Czech invite)
  *
  * Key responsibilities:
@@ -21,11 +21,11 @@
  * - Rates the research, never the candidate: no scores, ranks, verdicts or traits
  */
 import { deletionDate } from "@/domain/audit";
-import { exportFileName, exportText, localSummary } from "./export-text";
+import { exportFileName, exportText } from "./export-text";
 import { ENGLISH_REPORT, type Report, type ReportLang } from "./i18n";
 import { tid } from "./report-text";
 import { hiringFor, type RunState } from "./state";
-import { summary30s } from "./summary";
+import { summaryIn } from "./summary-cs";
 
 /** Most interview questions and to-verify items in the description; the full brief has the rest. */
 const MAX_QUESTIONS = 8;
@@ -80,11 +80,10 @@ export function interviewInvite(
   opts: { start: Date; minutes: number; briefUrl: string; now: Date },
   report: Report = ENGLISH_REPORT,
 ): string | null {
-  const english = summary30s(state);
-  if (english === null || state.brief === null) return null;
+  const summary = summaryIn(state, report);
+  if (summary === null || state.brief === null) return null;
   const x = exportText(report);
   const { invite } = x.d;
-  const summary = localSummary(english, x);
   const subject = state.subject.trim() === "" ? x.d.unnamed : state.subject.trim();
   const role = hiringFor(state)?.trim() ?? "";
   const questions = items(state.brief.interview_questions, tid.interviewQuestion, x.text, MAX_QUESTIONS);

@@ -106,9 +106,6 @@ const TEXTS: Record<string, string> = {
   "ns:0": "žádný potvrzený účet",
   loc: "Sídlo v Praze",
   "q:mh-lead": "Vedl/a tým",
-  "sum:documented": "LinkedIn profil; 1 ze 2 kritérií pozice má doklady.",
-  "sum:missing": "chybí doklad pro „Has led a team“; X neprohledán.",
-  "sum:ask": "Popište prosím billingovou pipeline.",
 };
 
 /** What KitActions gets from useReportLanguage().exports: CZ with the translation, and CZ before it has arrived. */
@@ -239,10 +236,11 @@ describe("kit review with a Czech kit (idea #23)", () => {
 });
 
 describe("ATS note and reference questions before the translation arrives", () => {
-  it("ATS note: Czech fixed lines, English summary bodies under Czech lead words", () => {
+  it("ATS note: Czech fixed lines and summary, English criterion and question texts", () => {
     const lines = (atsNote(run(), BRIEF_URL, CS_NO_TEXTS) ?? "").split("\n");
     expect(lines[0]).toBe("Podklady z průzkumu: Jan Novak, pozice Senior Data Engineer");
-    expect(lines[1]).toMatch(/^Potvrzeno: LinkedIn profile; /);
+    expect(lines[1]).toBe("Potvrzeno: profil LinkedIn. Doložená kritéria pozice: 1 ze 2.");
+    expect(lines[2]).toBe("Chybí doklad k: „Has led a team“. Dále: Osobní web (prohledáno, nic nepotvrzeno).");
     expect(lines[3]).toBe("Zeptejte se: Walk me through the billing pipeline.");
     expect(lines.at(-1)).toBe("Tato poznámka hodnotí průzkum, ne kandidáta. Data z průzkumu smažeme po 15. 10. 2026.");
   });
@@ -272,7 +270,7 @@ describe("interviewInvite in Czech", () => {
 
   it("has a Czech summary and description with LANGUAGE=cs and translated items", () => {
     expect(unfolded).toContain("SUMMARY;LANGUAGE=cs:Pohovor: Jan Novak\\, pozice Senior Data Engineer");
-    expect(unfolded).toContain("DESCRIPTION;LANGUAGE=cs:Potvrzeno: LinkedIn profil\\; 1 ze 2 kritérií pozice má doklady.");
+    expect(unfolded).toContain("DESCRIPTION;LANGUAGE=cs:Potvrzeno: profil LinkedIn. Doložená kritéria pozice: 1 ze 2.\\nChybí doklad k: „Vedl/a tým“.");
     expect(unfolded).toContain("\\n\\nOtázky k pohovoru:\\n1. Popište prosím billingovou pipeline.\\n2. How did you test it?");
     expect(unfolded).toContain("\\n\\nK ověření:\\n- Data působení v Acme\\n- Talk at DataConf 2024");
     expect(unfolded).toContain(`Celý podklad se zdroji: ${BRIEF_URL}`);

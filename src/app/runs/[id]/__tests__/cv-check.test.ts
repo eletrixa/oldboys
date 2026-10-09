@@ -26,6 +26,8 @@ import { referenceQuestions } from "../reference-check";
 import { SectionList } from "../sections";
 import type { RunState } from "../state";
 import { summary30s } from "../summary";
+import { makeReport } from "../i18n";
+import { summaryIn } from "../summary-cs";
 
 const claim = (id: string, kind: Claim["kind"], text: string, supports: string[], question_id = CV_QUESTION_ID): Claim => ({
   id, run_id: "r", question_id, candidate_id: null, text, kind, confidence: 0.8, quote: kind === "FACT" ? text : null, supports, contradicts: [], rank: 1,
@@ -147,6 +149,9 @@ describe("summary, kit and reference questions", () => {
   it("adds the CV line to the 30-second summary and never counts the CV check as a research question", () => {
     expect(summary30s(run(true))?.documented).toBe("No profile confirmed yet; 1 of 1 research questions has evidence. CV: 1 statement matches the public record, 1 to ask about, 1 not found publicly.");
     expect(summary30s(run(false))?.documented).toBe("No profile confirmed yet; 1 of 1 research questions has evidence.");
+    expect(summaryIn(run(true), makeReport("cs", null))?.documented).toBe(
+      "Zatím žádný potvrzený profil. Doložené výzkumné otázky: 1 z 1. Životopis: shoda s veřejnými zdroji u 1 údaje, k doptání 1, veřejně nedohledáno 1.",
+    );
   });
 
   it("labels each CV claim in the interview kit and lists the difference as a question", () => {

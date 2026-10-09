@@ -13,10 +13,12 @@
  * - CV runs (idea #14): the documented sentence ends with cvSummaryLine ("CV: 3 statements match the public record,
  *   1 to ask about."); the CV check is never counted as a research question or listed as a gap
  * - summaryText: the three sentences as one string for "Read aloud"
+ * - The structured parts (confirmedSources, criteriaCounts, summaryGaps, askItem) for the Czech lines in summary-cs.ts
  *
  * Design constraints:
  * - Pure and deterministic; summarises the research, never the candidate: no scores, verdicts or traits
  * - Confirmed data only (merged candidates, brief.evidence); brief.also_found (unconfirmed namesakes) never goes in
+ * - English only: these sentences are never sent to the translator (a translated count once inverted its meaning)
  */
 import type { Brief } from "@/domain/claim";
 import { platformOf } from "@/recipe/sources/types";
@@ -47,7 +49,7 @@ function plural(n: number, word: string): string {
 }
 
 /** Confirmed platforms (merged candidates plus confirmed evidence URLs) in lineup order, and other confirmed pages. */
-function confirmed(state: RunState, brief: Brief): { platforms: string[]; other: number } {
+export function confirmedSources(state: RunState, brief: Brief): { platforms: string[]; other: number } {
   const merged = state.candidates.filter((c) => c.decision === "merge");
   const keys = new Set([...merged.map((c) => c.platform), ...brief.evidence.map((e) => platformOf(e.url))]);
   const platforms = [...keys]
@@ -62,7 +64,7 @@ function confirmed(state: RunState, brief: Brief): { platforms: string[]; other:
 }
 
 function confirmedPhrase(state: RunState, brief: Brief): string | null {
-  const { platforms, other } = confirmed(state, brief);
+  const { platforms, other } = confirmedSources(state, brief);
   const parts = [
     ...(platforms.length > 0 ? [`${joinAnd(platforms)} ${platforms.length === 1 ? "profile" : "profiles"}`] : []),
     ...(other > 0 ? [plural(other, platforms.length > 0 ? "other source" : "web source")] : []),
@@ -75,10 +77,24 @@ export function aiOff(brief: Brief): boolean {
   return brief.degraded !== null || (brief.per_question.length > 0 && brief.per_question.every((q) => q.summary.startsWith("AI summary unavailable")));
 }
 
+/** Which rows the summary counts: role must-haves (mh-), or every research question but the CV check. */
+export type CriteriaKind = "role criteria" | "research questions";
+
 /** Per-question rows that are role must-haves (mh-); all rows but the CV check when the run has no role criteria. */
-function criteriaRows(brief: Brief): { rows: Brief["per_question"]; noun: string } {
+function criteriaRows(brief: Brief): { rows: Brief["per_question"]; noun: CriteriaKind } {
   const mh = brief.per_question.filter((q) => q.question_id.startsWith("mh-"));
   return mh.length > 0 ? { rows: mh, noun: "role criteria" } : { rows: brief.per_question.filter((q) => !isCvSection(q.question_id)), noun: "research questions" };
+}
+
+/** Counts behind the "N of M role criteria have evidence" part. */
+export function criteriaCounts(brief: Brief): { noun: CriteriaKind; total: number; evidenced: number; partial: number } {
+  const { rows, noun } = criteriaRows(brief);
+  return {
+    noun,
+    total: rows.length,
+    evidenced: rows.filter((q) => q.coverage === "evidenced").length,
+    partial: rows.filter((q) => q.coverage === "partial").length,
+  };
 }
 
 function documented(state: RunState, brief: Brief, off: boolean): string {
@@ -91,46 +107,81 @@ function researched(state: RunState, brief: Brief, off: boolean): string {
   const phrase = confirmedPhrase(state, brief);
   const head = phrase === null ? "No profile confirmed yet" : `Confirmed: ${phrase}`;
   if (off) return `${head}; role criteria were not checked because AI was off.`;
-  const { rows, noun } = criteriaRows(brief);
-  if (rows.length === 0) return `${head}.`;
-  const evidenced = rows.filter((q) => q.coverage === "evidenced").length;
-  const partial = rows.filter((q) => q.coverage === "partial").length;
+  const { noun, total, evidenced, partial } = criteriaCounts(brief);
+  if (total === 0) return `${head}.`;
   const partly = partial > 0 ? `, ${String(partial)} partly` : "";
-  return `${head}; ${String(evidenced)} of ${String(rows.length)} ${noun} ${evidenced === 1 ? "has" : "have"} evidence${partly}.`;
+  return `${head}; ${String(evidenced)} of ${String(total)} ${noun} ${evidenced === 1 ? "has" : "have"} evidence${partly}.`;
+}
+
+/** One gap of the "Missing" sentence; `text` is the criterion's English wording. */
+export type SummaryGap =
+  | { kind: "criterion"; questionId: string; text: string }
+  | { kind: "empty"; source: string }
+  | { kind: "not-searched"; source: string };
+
+/** Display name of a gap's source ("GitHub", "Web search"). */
+export function gapSourceLabel(source: string): string {
+  return GAP_LABEL[source] ?? source;
+}
+
+function gapEnglish(g: SummaryGap): string {
+  if (g.kind === "criterion") return `no evidence for "${shorten(g.text, 60)}"`;
+  return g.kind === "empty" ? `nothing confirmed on ${gapSourceLabel(g.source)}` : `${gapSourceLabel(g.source)} not searched`;
 }
 
 /** Up to two gaps: criteria with no evidence first, then sources searched in vain, then sources not searched. */
-function missing(state: RunState, brief: Brief, off: boolean): string {
+export function summaryGaps(state: RunState, brief: Brief, off: boolean): SummaryGap[] {
   const textOf = new Map(state.questions.map((q) => [q.id, q.text]));
-  const noEvidence = off
+  const noEvidence: SummaryGap[] = off
     ? []
     : criteriaRows(brief)
         .rows.filter((q) => q.coverage === "none")
-        .map((q) => `no evidence for "${shorten(textOf.get(q.question_id) ?? q.question_id, 60)}"`);
-  const label = (source: string): string => GAP_LABEL[source] ?? source;
-  const empty = searchedEmpty(brief).map((g) => `nothing confirmed on ${label(g.source)}`);
-  const notSearched = brief.not_searched.map((g) => `${label(g.source)} not searched`);
-  const gaps = [...new Set([...noEvidence, ...empty, ...notSearched])].slice(0, 2);
+        .map((q) => ({ kind: "criterion", questionId: q.question_id, text: textOf.get(q.question_id) ?? q.question_id }));
+  const all: SummaryGap[] = [
+    ...noEvidence,
+    ...searchedEmpty(brief).map((g): SummaryGap => ({ kind: "empty", source: g.source })),
+    ...brief.not_searched.map((g): SummaryGap => ({ kind: "not-searched", source: g.source })),
+  ];
+  // Same wording twice (two rows on one criterion, a source listed twice) is one gap.
+  const seen = new Set<string>();
+  return all
+    .filter((g) => {
+      const key = gapEnglish(g);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .slice(0, 2);
+}
+
+function missing(state: RunState, brief: Brief, off: boolean): string {
+  const gaps = summaryGaps(state, brief, off).map(gapEnglish);
   return gaps.length === 0 ? "Missing: no gaps recorded." : `Missing: ${gaps.join("; ")}.`;
 }
 
 /** A question is never cut short of being askable: it may run to ASK_MAX before the ellipsis. */
-const ASK_MAX = 220;
+export const ASK_MAX = 220;
 
 /** Shortened text with its own end: "…" when cut, "?" for a question, "." otherwise. */
-function sentence(text: string, max = MAX_PART): string {
+export function sentence(text: string, max = MAX_PART): string {
   const short = shorten(text, max);
   if (short.endsWith("…")) return short;
   return `${short}${text.trim().endsWith("?") ? "?" : "."}`;
 }
 
-/** The first interview question (identity checks come first on a degraded brief), else the first to-verify item. */
+/** The first interview question (identity checks come first on a degraded brief), else the first to-verify item, by index. */
+export function askItem(brief: Brief): { kind: "ask" | "check"; index: number; text: string } | null {
+  const qi = brief.interview_questions.findIndex((q) => q.trim() !== "");
+  if (qi >= 0) return { kind: "ask", index: qi, text: brief.interview_questions[qi] ?? "" };
+  const ti = brief.to_verify.findIndex((t) => t.trim() !== "");
+  if (ti >= 0) return { kind: "check", index: ti, text: brief.to_verify[ti] ?? "" };
+  return null;
+}
+
 function ask(brief: Brief): string {
-  const question = brief.interview_questions.find((q) => q.trim() !== "");
-  if (question !== undefined) return `Ask: ${sentence(question, ASK_MAX)}`;
-  const check = brief.to_verify.find((t) => t.trim() !== "");
-  if (check !== undefined) return `Check: ${sentence(check, ASK_MAX)}`;
-  return "Ask: no interview question yet.";
+  const item = askItem(brief);
+  if (item === null) return "Ask: no interview question yet.";
+  return `${item.kind === "ask" ? "Ask" : "Check"}: ${sentence(item.text, ASK_MAX)}`;
 }
 
 /** The three sentences, or null while there is no brief. */

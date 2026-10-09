@@ -5,7 +5,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/runs/[id]/export-text.ts
- * Deps:    src/domain/{call,claim} (types), ./call-panel (ANSWER_BADGE), ./challenge, ./cv-check, ./evidence (retrievedLabel), ./i18n (REPORT_DICT, makeReport), ./report-text (splitLead, tid), ./state, ./summary (type)
+ * Deps:    src/domain/{call,claim} (types), ./call-panel (ANSWER_BADGE), ./challenge, ./cv-check, ./evidence (retrievedLabel), ./i18n (REPORT_DICT, makeReport), ./report-text (tid), ./state
  * Tested:  src/app/runs/[id]/__tests__/export-text.test.ts, the export tests (interview-kit, interview-invite, kit-review)
  *
  * Key responsibilities:
@@ -14,7 +14,7 @@
  * - EXPORT_DICT: every fixed line per export in both languages (typed, so a missing Czech key is a compile error);
  *   the English values are the exports' existing words, character for character
  * - exportText: dictionary + the Report's labels and text(id, english) (translation or English per text)
- * - localSummary: the 30-second summary sentences in the export language (lead word from the dictionary, body by id)
+ * - The 30-second summary sentences come from summaryIn (summary-cs.ts); an ExportText is a Report for it
  * - toVerifyTexts: the "To verify" items in the export language (brief items by index, appended challenged claims by
  *   claim id, devil's advocate reasons translated), the same mapping the brief uses
  * - exportFileName: "-cs" before the extension for Czech downloads
@@ -29,9 +29,8 @@ import { formatDuration } from "@/domain/run-cost";
 import { ANSWER_BADGE } from "./call-panel";
 import { challengeReason, challengesById, toVerifyItems } from "./challenge";
 import { REPORT_DICT, type Report, type ReportDict, type ReportLang } from "./i18n";
-import { splitLead, tid } from "./report-text";
+import { tid } from "./report-text";
 import type { RunState } from "./state";
-import type { Summary30s } from "./summary";
 
 type Research = { usd: number; sourceCalls: number; llmCalls: number; durationMs: number };
 
@@ -179,17 +178,6 @@ export type ExportText = { lang: ReportLang; d: ExportDict; t: ReportDict; text:
 
 export function exportText(report: Report): ExportText {
   return { lang: report.lang, d: EXPORT_DICT[report.lang], t: report.t, text: report.text };
-}
-
-/** The three summary sentences in the export language; English unchanged. */
-export function localSummary(s: Summary30s, x: ExportText): Summary30s {
-  if (x.lang === "en") return s;
-  const part = (key: keyof Summary30s): string => {
-    const { lead, body } = splitLead(s[key]);
-    const text = x.text(tid.summary(key), body);
-    return lead === null ? text : `${x.t.lead[lead]}: ${text}`;
-  };
-  return { documented: part("documented"), missing: part("missing"), ask: part("ask") };
 }
 
 /** "To verify" items with their devil's advocate reason, in the export language (same ids as the brief). */
