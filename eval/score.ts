@@ -13,7 +13,8 @@
  *   its quote is inside one of them)
  * - Each miss carries a plain reason and a severity: `unsafe` (the brief shows something false or a namesake) or
  *   `conservative` (the brief holds back something true); the headline counts both
- * - `markdown()` renders eval/RESULTS.md
+ * - `markdown()` renders eval/RESULTS.md; `lineupAsked` lists own profiles left "possibly the same person" (the eval
+ *   has no recruiter to answer the lineup, so their pages stay unused and what they back counts as conservative misses)
  *
  * Design constraints:
  * - Scores the research pipeline, never a candidate; never tunes the truth to the result
@@ -47,6 +48,13 @@ export type EvalReport = {
   checks: Check[];
 };
 
+const ASKED = "asked in the lineup (possibly-same-as); no recruiter answers in the eval, so it stays unmerged";
+
+/** Own profiles the lineup asks about and the eval leaves unanswered: "p4-devops-degraded: own GitHub". */
+export function lineupAsked(report: Pick<EvalReport, "checks">): string[] {
+  return report.checks.filter((c) => c.category === "identity" && c.pass && c.detail === ASKED).map((c) => `${c.persona}: ${c.label.replace(/^[^:]*: /, "")}`);
+}
+
 const fold = (t: string): string => t.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
 
 function findClaim(r: PipelineResult, text: string): Claim | undefined {
@@ -70,7 +78,8 @@ export function scorePersona(p: Persona, r: PipelineResult): PersonaScore {
     const cand = r.candidates.find((c) => c.profile_urls.some((u) => profileKey(u) === key));
     if (prof.person) {
       const kept = cand !== undefined && cand.decision !== "rejected";
-      add("identity", `Own profile kept (merged or asked): ${prof.note}`, kept, kept ? `decision ${cand.decision}` : `decision ${cand?.decision ?? "no candidate"}`, "conservative");
+      const detail = cand?.decision === "possibly-same-as" ? ASKED : `decision ${cand?.decision ?? "no candidate"}`;
+      add("identity", `Own profile kept (merged or asked): ${prof.note}`, kept, detail, "conservative");
       continue;
     }
     const merged = cand?.decision === "merge";
@@ -174,6 +183,7 @@ export const CATEGORY_LABEL: Record<CheckCategory, string> = {
 
 export function markdown(report: EvalReport): string {
   const h = report.headline;
+  const asked = lineupAsked(report);
   const lines = [
     "# Eval results",
     "",
@@ -197,6 +207,12 @@ export function markdown(report: EvalReport): string {
     "",
     "## Misses",
     "",
+    ...(asked.length === 0
+      ? []
+      : [
+          `Own profiles the lineup asks about ("is this the same person?"): ${asked.join(", ")}. A profile merges only on a strong link (the given profile, a confirmed employer, a cross-link), never on name + city; the eval has no recruiter to answer, so these stay unmerged and a finding backed only by their pages counts as a conservative miss below.`,
+          "",
+        ]),
     ...(report.misses.length === 0
       ? ["None."]
       : ["| Persona | Severity | Check | What happened |", "|---|---|---|---|", ...report.misses.map((m) => `| ${m.persona} | ${m.severity} | ${m.label.replaceAll("|", "\\|")} | ${m.detail.replaceAll("|", "\\|")} |`)]),

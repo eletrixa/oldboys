@@ -9,7 +9,7 @@
  * Key responsibilities:
  * - Draft one candidate per profile-like source; LLM scores each vs subject + anchor; thresholds decide
  * - Deterministic fallback when the LLM call fails: anchor substring caps at 0.6, name only 0.5; merge only on
- *   hard links (anchor URL itself, or cross-linked drafts with the anchor in one of them)
+ *   hard links (anchor URL itself, or cross-linked drafts with a website/IČO anchor in one of them, never a city)
  * - Drops PDF, genealogy/translation noise, directory/listing pages (LinkedIn /pub/dir/, Facebook /public/,
  *   "N profiles" titles) and election pages, so one "Yes" can never confirm a page that lists
  *   several people; ranks profile platforms before web and dedupes by profile key BEFORE the 12-draft cap (web hits
@@ -19,9 +19,11 @@
  *   leading initial "L. Pokorný") in its title line or URL handle, so surname-only namesakes never fill the lineup
  * - Handles come only from known profile URL shapes; Instagram posts/reels and unknown paths on profile platforms
  *   get no handle (never a post code or a path word)
- * - Model merges need a deterministic corroboration (anchor/place, merged-profile employer, cross-link to a merged
- *   profile); a name/handle-only hit is capped at UNCORROBORATED_CAP (possibly-same-as). anchor_match is also set
- *   when the model's reasons say the location matched, never while the anchor is still empty
+ * - Model merges need a strong deterministic corroboration (anchor link or website/IČO text, merged-profile
+ *   employer, cross-link to or from a merged profile); a name/handle-only or name + city hit is capped at
+ *   UNCORROBORATED_CAP (possibly-same-as, asked in the lineup), since many people share a name in one city.
+ *   The place still sets anchor_match, as do the model's reasons saying the location matched, never while the
+ *   anchor is still empty
  * - Lineup reasons and snippets carry professional identifiers only (personal-life details filtered, prompt says so)
  * - `sourceIdentityUpdates`: after the lineup, sources whose profile key equals a merged candidate's become
  *   "merged", sources under a rejected candidate "unverified"; then (rule 2) a still-unverified source naming the
@@ -31,14 +33,14 @@
  * - `lineupNeedsAnswer`: pause for the manager only on possibly-same-as, or when nothing is merged (a seed merge counts)
  *
  * Design constraints:
- * - Never merges on name alone (plans/001 case studies §B); below ASK_FLOOR the UI asks the manager
+ * - Never merges on name alone or name + city (plans/001 case studies §B; eval p2); below ASK_FLOOR the UI asks the manager
  */
 import { z } from "zod";
 import type { Candidate, Source, SourceIdentity } from "@/domain/claim";
 import type { Ports } from "@/domain/ports";
 import { emptyOutcome } from "@/recipe/runner";
 import { isCvSource } from "@/domain/cv-check";
-import { corroborationReason, employerHit, fold, mentionsPlace, orgTokens, professionalReasons, professionalSnippet, type OrgToken } from "@/domain/corroborate";
+import { corroborationReason, employerHit, fold, mentionsPlace, orgTokens, placeOf, professionalReasons, professionalSnippet, type OrgToken } from "@/domain/corroborate";
 import { experienceCompanies, LINKEDIN_PROFILE_ACTORS } from "@/recipe/sources/linkedin";
 import { clip, platformOf, type StepContext, type StepOutcome } from "@/recipe/sources/types";
 
@@ -239,7 +241,8 @@ type Draft = { id: string; url: string; excerpt: string };
 
 /**
  * No-model scoring. Never merges on text: anchor substring caps at 0.6, name only at 0.5.
- * Merge (0.85) only on hard links: the URL is the anchor URL, or two drafts cross-link and one mentions the anchor.
+ * Merge (0.85) only on hard links: the URL is the anchor URL, or two drafts cross-link and one mentions a website or
+ * IČO anchor. A city anchor never merges a cross-linked pair: two namesake pages may link each other.
  */
 export function fallbackScores(drafts: readonly Draft[], anchor: string): { id: string; score: number; reasons: string[] }[] {
   const aKey = anchorKey(anchor);
@@ -253,8 +256,8 @@ export function fallbackScores(drafts: readonly Draft[], anchor: string): { id: 
     const inAnchor = d.excerpt.toLowerCase().includes(anchorLc);
     if (aKey !== null && keys.get(d.id) === aKey) return { id: d.id, score: 0.85, reasons: ["Profile link you supplied"] };
     // ponytail: substring link check; misses shortened or redirected links, fine for profile cross-links
-    const partner = drafts.find((o) => (linked(d, o) || linked(o, d)) && (inAnchor || o.excerpt.toLowerCase().includes(anchorLc)));
-    if (partner) return { id: d.id, score: 0.85, reasons: [`Links to a profile that mentions ${anchor}`] };
+    const partner = placeOf(anchor) !== null ? undefined : drafts.find((o) => (linked(d, o) || linked(o, d)) && (inAnchor || o.excerpt.toLowerCase().includes(anchorLc)));
+    if (partner !== undefined) return { id: d.id, score: 0.85, reasons: [`Links to a profile that mentions ${anchor}`] };
     return inAnchor ? { id: d.id, score: 0.6, reasons: [`Same name, mentions ${anchor}`] } : { id: d.id, score: 0.5, reasons: ["Same name only"] };
   });
 }
@@ -331,11 +334,13 @@ export function pickDrafts(ctx: Pick<StepContext, "candidates" | "sources" | "su
 /** Highest score a name- or handle-only hit may keep: possibly-same-as, never merge. */
 export const UNCORROBORATED_CAP = 0.7;
 const UNCORROBORATED_REASON = "name or handle only: no location, employer or cross-link match";
+const PLACE_ONLY_REASON = "name and city only: no employer or link to a confirmed profile";
 const LOCATION_REASON = /\b(?:location|located|based in|lives in)\b/i;
 
 /**
- * What besides the name ties a hit to the subject: the anchor link or text, the anchor's place, a token of a merged
- * LinkedIn profile's employer, or a cross-link to or from a merged profile. Null when it is name/handle only.
+ * What besides the name ties a hit to the subject: the anchor link or text, a token of a merged LinkedIn profile's
+ * employer, a cross-link to or from a merged profile, or (weak, never enough to merge) the anchor's place.
+ * Null when it is name/handle only.
  */
 export function corroboration(
   d: { url: string; excerpt: string },
@@ -346,16 +351,21 @@ export function corroboration(
   const lc = text.toLowerCase();
   const aKey = anchorKey(ctx.anchor);
   if (aKey !== null && pageKey(d.url) === aKey) return "anchor link";
-  if (ctx.anchor.trim() !== "" && lc.includes(ctx.anchor.trim().toLowerCase())) return "anchor";
-  if (mentionsPlace(ctx.anchor, text)) return "location";
-  const employer = employerHit(text, tokens);
+  const place = placeOf(ctx.anchor);
+  if (place === null && ctx.anchor.trim() !== "" && lc.includes(ctx.anchor.trim().toLowerCase())) return "anchor";
+  // "Kódovna Brno" must not turn the city into an employer match
+  const employer = employerHit(text, tokens.filter((t) => t.token !== place));
   if (employer !== null) return `employer (${employer})`;
   const mergedKeys = ctx.candidates.filter((c) => c.decision === "merge").flatMap((c) => c.profile_urls.map(pageKey)).filter((k): k is string => k !== null);
   // ponytail: substring link check, like fallbackScores; misses shortened or redirected links
   if (mergedKeys.some((k) => lc.includes(k))) return "cross-link";
   const own = pageKey(d.url);
-  return own !== null && ctx.sources.some((s) => s.identity === "merged" && s.excerpt.toLowerCase().includes(own)) ? "cross-link" : null;
+  if (own !== null && ctx.sources.some((s) => s.identity === "merged" && s.excerpt.toLowerCase().includes(own))) return "cross-link";
+  return place !== null && mentionsPlace(ctx.anchor, text) ? "location" : null;
 }
+
+/** A corroboration strong enough to keep a merge: anything but the place alone. */
+const isStrong = (why: string | null): boolean => why !== null && why !== "location";
 
 /** anchor_match: the hit matched the anchor or its place, or the model's reasons say the location matched. */
 function anchorMatched(anchor: string, why: string | null, reasons: readonly string[]): boolean {
@@ -383,8 +393,8 @@ export async function resolveCandidates(ctx: StepContext, ports: Ports): Promise
       system: [
         "You resolve whether a public web hit belongs to the person described. Score 0..1 = probability it is the same person.",
         "Use the anchor (city, employer, website or IČO), the confirmed employers, cross-links between profiles, and name match.",
-        `Score ${String(MERGE_FLOOR)} or more only when the name matches AND the hit shows the location, a confirmed employer, or a cross-link to a confirmed profile.`,
-        `A name or handle match alone is at most ${String(UNCORROBORATED_CAP)}; a bare name match is at most 0.5.`,
+        `Score ${String(MERGE_FLOOR)} or more only when the name matches AND the hit shows a confirmed employer, the anchor website or IČO, or a cross-link to a confirmed profile.`,
+        `A name or handle match alone, or name + city, is at most ${String(UNCORROBORATED_CAP)} (many people share a name in one city); a bare name match is at most 0.5.`,
         "Give short reasons citing only professional identifiers: name, handle, headline, employer, location, cross-links.",
         "Never mention personal-life details (check-ins, profile pictures, photos, family, hobbies).",
       ].join(" "),
@@ -404,8 +414,8 @@ export async function resolveCandidates(ctx: StepContext, ports: Ports): Promise
   const all = drafts.map((d) => {
     const s = byId.get(d.id) ?? { score: 0.5, reasons: ["unscored"] };
     const why = corroboration(d, ctx, tokens);
-    // fallbackScores already merges only on hard links; a model merge also needs a deterministic corroboration
-    const capped = byModel && s.score >= MERGE_FLOOR && why === null;
+    // fallbackScores already merges only on hard links; a model merge also needs a strong deterministic corroboration
+    const capped = byModel && s.score >= MERGE_FLOOR && !isStrong(why);
     const score = capped ? UNCORROBORATED_CAP : s.score;
     return {
       id: d.id,
@@ -418,7 +428,7 @@ export async function resolveCandidates(ctx: StepContext, ports: Ports): Promise
       platform: d.platform,
       handle: d.handle,
       snippet: professionalSnippet(d.snippet),
-      reasons: professionalReasons(capped ? [...s.reasons, UNCORROBORATED_REASON] : s.reasons),
+      reasons: professionalReasons(capped ? [...s.reasons, why === "location" ? PLACE_ONLY_REASON : UNCORROBORATED_REASON] : s.reasons),
     };
   });
   out.candidates = all;

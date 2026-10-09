@@ -12,7 +12,7 @@ Hackathon Case 01 (Apify): social media deep research. Input (hiring, plans/006)
 | Actors | `apify-client` with 45s timeout and `maxTotalChargeUsd`, never Apify MCP |
 | LLM seams | score, extract, verify, synthesize; `Output.array` / `Output.object` |
 | Verify | deterministic quote-in-excerpt and URL-in-ledger first, second model on residue, then a devil's advocate call (idea #8) that may only downgrade must-have FACTs; its record lives in the verify ledger row (`ref.challenge`) |
-| Identity | merge / `possibly-same-as` / ask below threshold |
+| Identity | merge / `possibly-same-as` / ask below threshold; a merge needs a strong link (given profile or anchor website / IČO, confirmed employer, cross-link to a confirmed profile), name + city alone caps at `possibly-same-as` (`resolve.ts` `corroboration`) |
 | Claims | claim + references + rank; contradictions via rank, never delete |
 | Budget | enforced in runner, never by the LLM: $0.50 and 16 paid actor runs per run (free REST fetches and LLM calls count USD only) |
 | Runner | Cloudflare Workflow `ResearchRunWorkflow` (binding `RESEARCH_RUN`), one `step.do` per recipe step, `step.waitForEvent` for lineup |

@@ -1,21 +1,21 @@
 {
   "headline": {
-    "passed": 89,
+    "passed": 84,
     "total": 95,
-    "unsafe_misses": 3,
-    "conservative_misses": 3
+    "unsafe_misses": 0,
+    "conservative_misses": 11
   },
   "personas": [
     {
       "id": "p1-data-engineer",
       "title": "Data engineer in Brno: namesakes on LinkedIn and GitHub, forked repo, quote not in source",
-      "passed": 21,
+      "passed": 17,
       "total": 21
     },
     {
       "id": "p2-frontend",
       "title": "Frontend engineer in Praha: same-name GitHub in the same city, hedged FACT, unconfirmed page",
-      "passed": 16,
+      "passed": 19,
       "total": 19
     },
     {
@@ -27,7 +27,7 @@
     {
       "id": "p4-devops-degraded",
       "title": "DevOps engineer in Plzeň, AI summary down: 2016 evidence, alias employer, no on-call evidence",
-      "passed": 16,
+      "passed": 12,
       "total": 16
     },
     {
@@ -41,25 +41,25 @@
     {
       "category": "identity",
       "label": "Identity (namesakes)",
-      "passed": 16,
+      "passed": 18,
       "total": 18
     },
     {
       "category": "false-fact",
       "label": "Traps caught (no false FACT)",
-      "passed": 14,
+      "passed": 13,
       "total": 16
     },
     {
       "category": "true-fact",
       "label": "True findings kept",
-      "passed": 11,
+      "passed": 9,
       "total": 11
     },
     {
       "category": "must-have",
       "label": "Must-have coverage",
-      "passed": 19,
+      "passed": 15,
       "total": 21
     },
     {
@@ -77,31 +77,66 @@
   ],
   "misses": [
     {
-      "persona": "p2-frontend",
-      "category": "identity",
-      "label": "Namesake not merged: firmware developer with the same name in Praha",
-      "detail": "merged with score 0.85 (Name matches; Location Praha matches)",
-      "severity": "unsafe"
+      "persona": "p1-data-engineer",
+      "category": "true-fact",
+      "label": "True finding: \"Maintains a public Python repository with Airflow DAGs and dbt models.\"",
+      "detail": "ended dropped",
+      "severity": "conservative"
     },
     {
-      "persona": "p2-frontend",
-      "category": "identity",
-      "label": "Namesake pages never confirmed evidence: firmware developer with the same name in Praha",
-      "detail": "confirmed as evidence: https://github.com/evalp-tsmysleny, https://github.com/evalp-tsmysleny/thermo-fw",
-      "severity": "unsafe"
-    },
-    {
-      "persona": "p2-frontend",
+      "persona": "p1-data-engineer",
       "category": "false-fact",
-      "label": "FACT from a same-city namesake's GitHub: \"Writes firmware for heating controllers in C.\"",
-      "detail": "ended FACT, in the brief",
-      "severity": "unsafe"
+      "label": "Forked repository: \"Built a Kubernetes operator for Spark jobs.\"",
+      "detail": "ended dropped",
+      "severity": "conservative"
+    },
+    {
+      "persona": "p1-data-engineer",
+      "category": "must-have",
+      "label": "Must-have evidenced: mh-python",
+      "detail": "coverage none",
+      "severity": "conservative"
+    },
+    {
+      "persona": "p1-data-engineer",
+      "category": "must-have",
+      "label": "No interview question for the evidenced mh-python",
+      "detail": "asked anyway",
+      "severity": "conservative"
     },
     {
       "persona": "p3-product-cv",
       "category": "false-fact",
       "label": "CV check shows \"not-found\": \"Led the pricing redesign that raised conversion by 18 %.\"",
       "detail": "shown as \"differs\"",
+      "severity": "conservative"
+    },
+    {
+      "persona": "p4-devops-degraded",
+      "category": "true-fact",
+      "label": "True finding: \"Maintains Helm charts for services on Kubernetes.\"",
+      "detail": "ended dropped",
+      "severity": "conservative"
+    },
+    {
+      "persona": "p4-devops-degraded",
+      "category": "false-fact",
+      "label": "2016 evidence for a current skill: \"Writes Terraform modules for AWS.\"",
+      "detail": "ended dropped",
+      "severity": "conservative"
+    },
+    {
+      "persona": "p4-devops-degraded",
+      "category": "must-have",
+      "label": "Must-have evidenced: mh-kubernetes",
+      "detail": "coverage none",
+      "severity": "conservative"
+    },
+    {
+      "persona": "p4-devops-degraded",
+      "category": "must-have",
+      "label": "No interview question for the evidenced mh-kubernetes",
+      "detail": "asked anyway",
       "severity": "conservative"
     },
     {
@@ -157,7 +192,7 @@
       "category": "identity",
       "label": "Own profile kept (merged or asked): own GitHub",
       "pass": true,
-      "detail": "decision merge",
+      "detail": "asked in the lineup (possibly-same-as); no recruiter answers in the eval, so it stays unmerged",
       "severity": "conservative"
     },
     {
@@ -165,7 +200,7 @@
       "category": "identity",
       "label": "Own profile kept (merged or asked): own meetup talk page",
       "pass": true,
-      "detail": "decision possibly-same-as",
+      "detail": "asked in the lineup (possibly-same-as); no recruiter answers in the eval, so it stays unmerged",
       "severity": "conservative"
     },
     {
@@ -180,8 +215,8 @@
       "persona": "p1-data-engineer",
       "category": "true-fact",
       "label": "True finding: \"Maintains a public Python repository with Airflow DAGs and dbt models.\"",
-      "pass": true,
-      "detail": "kept as FACT",
+      "pass": false,
+      "detail": "ended dropped",
       "severity": "conservative"
     },
     {
@@ -196,8 +231,8 @@
       "persona": "p1-data-engineer",
       "category": "false-fact",
       "label": "Forked repository: \"Built a Kubernetes operator for Spark jobs.\"",
-      "pass": true,
-      "detail": "moved to To verify",
+      "pass": false,
+      "detail": "ended dropped",
       "severity": "conservative"
     },
     {
@@ -220,16 +255,16 @@
       "persona": "p1-data-engineer",
       "category": "must-have",
       "label": "Must-have evidenced: mh-python",
-      "pass": true,
-      "detail": "coverage evidenced",
+      "pass": false,
+      "detail": "coverage none",
       "severity": "conservative"
     },
     {
       "persona": "p1-data-engineer",
       "category": "must-have",
       "label": "No interview question for the evidenced mh-python",
-      "pass": true,
-      "detail": "not asked",
+      "pass": false,
+      "detail": "asked anyway",
       "severity": "conservative"
     },
     {
@@ -253,7 +288,7 @@
       "category": "must-have",
       "label": "Must-have not shown as evidenced: mh-kubernetes",
       "pass": true,
-      "detail": "coverage partial",
+      "detail": "coverage none",
       "severity": "unsafe"
     },
     {
@@ -277,7 +312,7 @@
       "category": "invariant",
       "label": "Every FACT cites only confirmed sources",
       "pass": true,
-      "detail": "3 FACTs",
+      "detail": "2 FACTs",
       "severity": "unsafe"
     },
     {
@@ -285,7 +320,7 @@
       "category": "invariant",
       "label": "Every FACT quote is inside a cited excerpt",
       "pass": true,
-      "detail": "3 FACTs",
+      "detail": "2 FACTs",
       "severity": "unsafe"
     },
     {
@@ -316,16 +351,16 @@
       "persona": "p2-frontend",
       "category": "identity",
       "label": "Namesake not merged: firmware developer with the same name in Praha",
-      "pass": false,
-      "detail": "merged with score 0.85 (Name matches; Location Praha matches)",
+      "pass": true,
+      "detail": "decision possibly-same-as",
       "severity": "unsafe"
     },
     {
       "persona": "p2-frontend",
       "category": "identity",
       "label": "Namesake pages never confirmed evidence: firmware developer with the same name in Praha",
-      "pass": false,
-      "detail": "confirmed as evidence: https://github.com/evalp-tsmysleny, https://github.com/evalp-tsmysleny/thermo-fw",
+      "pass": true,
+      "detail": "kept out of the evidence",
       "severity": "unsafe"
     },
     {
@@ -356,8 +391,8 @@
       "persona": "p2-frontend",
       "category": "false-fact",
       "label": "FACT from a same-city namesake's GitHub: \"Writes firmware for heating controllers in C.\"",
-      "pass": false,
-      "detail": "ended FACT, in the brief",
+      "pass": true,
+      "detail": "not shown (dropped)",
       "severity": "unsafe"
     },
     {
@@ -429,7 +464,7 @@
       "category": "invariant",
       "label": "Every FACT cites only confirmed sources",
       "pass": true,
-      "detail": "3 FACTs",
+      "detail": "2 FACTs",
       "severity": "unsafe"
     },
     {
@@ -437,7 +472,7 @@
       "category": "invariant",
       "label": "Every FACT quote is inside a cited excerpt",
       "pass": true,
-      "detail": "3 FACTs",
+      "detail": "2 FACTs",
       "severity": "unsafe"
     },
     {
@@ -445,7 +480,7 @@
       "category": "identity",
       "label": "Own profile kept (merged or asked): own course homework page",
       "pass": true,
-      "detail": "decision possibly-same-as",
+      "detail": "asked in the lineup (possibly-same-as); no recruiter answers in the eval, so it stays unmerged",
       "severity": "conservative"
     },
     {
@@ -629,7 +664,7 @@
       "category": "identity",
       "label": "Own profile kept (merged or asked): own GitHub",
       "pass": true,
-      "detail": "decision merge",
+      "detail": "asked in the lineup (possibly-same-as); no recruiter answers in the eval, so it stays unmerged",
       "severity": "conservative"
     },
     {
@@ -644,16 +679,16 @@
       "persona": "p4-devops-degraded",
       "category": "true-fact",
       "label": "True finding: \"Maintains Helm charts for services on Kubernetes.\"",
-      "pass": true,
-      "detail": "kept as FACT",
+      "pass": false,
+      "detail": "ended dropped",
       "severity": "conservative"
     },
     {
       "persona": "p4-devops-degraded",
       "category": "false-fact",
       "label": "2016 evidence for a current skill: \"Writes Terraform modules for AWS.\"",
-      "pass": true,
-      "detail": "moved to To verify",
+      "pass": false,
+      "detail": "ended dropped",
       "severity": "conservative"
     },
     {
@@ -668,16 +703,16 @@
       "persona": "p4-devops-degraded",
       "category": "must-have",
       "label": "Must-have evidenced: mh-kubernetes",
-      "pass": true,
-      "detail": "coverage evidenced",
+      "pass": false,
+      "detail": "coverage none",
       "severity": "conservative"
     },
     {
       "persona": "p4-devops-degraded",
       "category": "must-have",
       "label": "No interview question for the evidenced mh-kubernetes",
-      "pass": true,
-      "detail": "not asked",
+      "pass": false,
+      "detail": "asked anyway",
       "severity": "conservative"
     },
     {
@@ -685,7 +720,7 @@
       "category": "must-have",
       "label": "Must-have not shown as evidenced: mh-terraform",
       "pass": true,
-      "detail": "coverage partial",
+      "detail": "coverage none",
       "severity": "unsafe"
     },
     {
@@ -741,7 +776,7 @@
       "category": "invariant",
       "label": "Every FACT cites only confirmed sources",
       "pass": true,
-      "detail": "2 FACTs",
+      "detail": "1 FACTs",
       "severity": "unsafe"
     },
     {
@@ -749,7 +784,7 @@
       "category": "invariant",
       "label": "Every FACT quote is inside a cited excerpt",
       "pass": true,
-      "detail": "2 FACTs",
+      "detail": "1 FACTs",
       "severity": "unsafe"
     },
     {

@@ -11,6 +11,8 @@
  *   stackexchange_profile -> source identity pass -> extract -> verify (incl. devil's advocate) -> synthesize
  * - Replayed ports: the LinkedIn scrape, SERP hits, REST payloads and every model answer come from `persona.recorded`;
  *   a model call the persona has no answer for is recorded in `problems` (the eval test fails on any)
+ * - A recorded claim citing a page the persona records but the run never collected (identity kept it out) drops that
+ *   source, and the claim when none is left: the live model only sees collected pages. Any other unknown URL is a problem
  * - Gaps follow the Workflow's rule (src/workflow/research-run.ts doStep): not searched / unconfirmed / onEmpty gap
  *
  * Design constraints:
@@ -66,6 +68,16 @@ function claimBlocks(prompt: string): [string, string][] {
   });
 }
 
+/** Every URL the persona's recorded world could return: SERP hits and `html_url` fields of the REST payloads. */
+function recordedUrls(p: Persona): Set<string> {
+  const urls = new Set(Object.values(p.recorded.serp).flat().map((h) => canonicalUrl(h.url)));
+  JSON.stringify(p.recorded.fetch, (k, v: unknown) => {
+    if (k === "html_url" && typeof v === "string") urls.add(canonicalUrl(v));
+    return v;
+  });
+  return urls;
+}
+
 /** The recorded model: picks the answer by the seam's system prompt. Unknown calls throw and are listed in `problems`. */
 function recordedLlm(p: Persona, sources: () => readonly Source[], runId: string, problems: string[]): LlmCall {
   const answer = (system: string, prompt: string): unknown => {
@@ -82,18 +94,16 @@ function recordedLlm(p: Persona, sources: () => readonly Source[], runId: string
     }
     if (system.startsWith("Extract claims")) {
       const byUrl = new Map(sources().map((s) => [canonicalUrl(s.url), s.id]));
-      return p.recorded.extract.map((c) => ({
-        question_id: c.question_id,
-        text: c.text,
-        kind: c.kind,
-        confidence: c.confidence,
-        quote: c.quote,
-        source_ids: c.sources.map((u) => {
+      const world = recordedUrls(p);
+      return p.recorded.extract.flatMap((c) => {
+        const ids = c.sources.flatMap((u) => {
           const id = byUrl.get(canonicalUrl(u === "cv" ? `cv:${runId}` : u));
-          if (id === undefined) throw new Error(`recorded claim cites a source the run does not have: ${u}`);
-          return id;
-        }),
-      }));
+          if (id !== undefined) return [id];
+          if (world.has(canonicalUrl(u))) return [];
+          throw new Error(`recorded claim cites a source the run does not have: ${u}`);
+        });
+        return ids.length === 0 ? [] : [{ question_id: c.question_id, text: c.text, kind: c.kind, confidence: c.confidence, quote: c.quote, source_ids: ids }];
+      });
     }
     if (system.startsWith("You check whether a quote")) {
       return claimBlocks(prompt).map(([id, text]) => ({ id, supported: !p.recorded.verifyRejects.includes(text) }));
