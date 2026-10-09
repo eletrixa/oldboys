@@ -42,8 +42,10 @@ export function SampleBrief(): React.JSX.Element {
         </div>
 
         <div className="relative rounded-xl border border-divider border-l-[3px] border-l-action bg-canvas p-4">
-          <Marker n={1} />
-          <p className="mt-2 font-serif text-lg">In 30 seconds</p>
+          <p className="flex items-center gap-2 font-serif text-lg">
+            <Marker n={1} />
+            In 30 seconds
+          </p>
           <dl className="mt-2 flex flex-col divide-y divide-divider">
             <div className="grid grid-cols-[5.5rem_minmax(0,1fr)] gap-2 py-1.5">
               <dt className="font-semibold text-ok">Confirmed</dt>
@@ -68,8 +70,8 @@ export function SampleBrief(): React.JSX.Element {
             </div>
             <Pill tone="ok">evidenced</Pill>
           </div>
-          <p className="mt-2 flex flex-wrap items-baseline gap-x-2">
-            <Pill tone="neutral">Fact</Pill>
+          <p className="mt-2 flex items-start gap-2">
+            <Pill tone="neutral" className="mt-0.5">Fact</Pill>
             <span>Owns the SQL for Acme&apos;s nightly reporting pipelines.</span>
           </p>
           <p className="mt-2 font-serif leading-snug">

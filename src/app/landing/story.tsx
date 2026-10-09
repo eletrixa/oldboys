@@ -8,7 +8,7 @@
  *
  * Key responsibilities:
  * - Problem: three short cards beside the "too many tabs" photo (photo shorter on phones, where it carries no information)
- * - Product: the live SampleBrief with three numbered callouts that point at its summary, requirement cards and limits line
+ * - Product: the live SampleBrief with three numbered callouts (sticky on desktop) that point at its summary, requirement cards and limits line
  * - Moments: Before (read one page) and During (ask what matters, copy the questions into your kit or ATS)
  *
  * Design constraints:
@@ -60,8 +60,8 @@ export function Product(): React.JSX.Element {
           A fictional example, in the exact layout you get. Every point opens the quote and the page it came from.
         </p>
       </div>
-      <div className="mt-10 grid items-center gap-8 md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] md:gap-12">
-        <ol className="flex flex-col gap-5 md:order-2">
+      <div className="mt-10 grid items-start gap-8 md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] md:gap-12">
+        <ol className="flex flex-col gap-5 md:sticky md:top-24 md:order-2">
           {CALLOUTS.map(([t, b], i) => (
             <li key={t} className="flex gap-3">
               <span aria-hidden="true" className="mt-0.5 grid size-6 shrink-0 place-items-center rounded-full bg-action font-serif text-sm text-white tabular-nums">

@@ -15,9 +15,7 @@
  * - The card illustrates the brief's format with an invented quote, so it names no person or employer
  */
 import { Pill } from "../ui";
-import { Ctas, Photo } from "./parts";
-
-const PROOF = ["Sources on every line", "No scores, ever", "Candidate notice built in", "Deleted after 7 days"];
+import { Ctas, Photo, PROOF } from "./parts";
 
 function FindingCard(): React.JSX.Element {
   return (

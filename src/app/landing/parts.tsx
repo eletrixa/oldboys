@@ -7,6 +7,7 @@
  * Tested:  n/a (visual; e2e/home.spec.ts covers the landing)
  *
  * Key responsibilities:
+ * - PROOF: the four proof points shared by the hero and the closing band
  * - Photo: a rounded, outlined frame around a public/marketing image (object-cover, fixed aspect)
  * - Title: serif h2, optionally with a muted second clause ("The CV says a lot. It proves little."); balanced wrapping so no clause ends in a lone word
  * - Section: the shared width, gutter, optional hairline and vertical rhythm of every landing section
@@ -21,6 +22,9 @@ import Link from "next/link";
 import { BTN_PRIMARY, BTN_SECONDARY } from "../ui";
 
 export const PHOTO_SIZE = { width: 1536, height: 1024 } as const;
+
+/** Proof points that are true of the product today; shown in the hero and repeated in the closing band. */
+export const PROOF = ["Sources on every line", "No scores, ever", "Candidate notice built in", "Deleted after 7 days"];
 
 export function Photo({
   src,
