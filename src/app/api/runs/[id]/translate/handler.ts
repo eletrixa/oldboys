@@ -10,11 +10,12 @@
  * - Auth like POST /api/runs/:id/delete: a same-origin session user (of the run's organization when it has one) or the bearer
  * - Body `{ lang: "cs" }` (Zod, 400); unknown run 404; another organization 403; no finished brief 409
  * - Cache: R2 SOURCES `translations/<runId>/brief-cs.json` = `{ lang, brief_hash, texts }`; served when brief_hash
- *   matches the current texts (a changed brief or new claims are translated again)
+ *   matches the current texts and PROMPT_VERSION (a changed brief, new claims or a new prompt are translated again)
  * - Otherwise the texts are cut into batches (translationBatches) and each batch is one `verify`-model call
  *   (translatePrompt), TRANSLATE_CONCURRENCY at a time, so no call nears the output cap and the whole takes about one
- *   batch's time; the outputs are merged with mergeTranslation (unknown ids dropped, missing ids and new Art. 9 topics
- *   fall back to English)
+ *   batch's time; every batch gets the same system prompt (glossary, date style, examples) and its kind markers as
+ *   placeholders; the outputs are merged with mergeTranslation (unknown ids dropped, missing ids, new Art. 9 topics, a
+ *   lost kind placeholder or a translated job title fall back to English; placeholders become FAKT: / ODVOZENÍ: / VÝROK:)
  * - Some batches failed: the translated part is answered with `partial: true` and not cached (a retry translates again);
  *   all failed: 502. Each failure is logged as `translate failed` with the run, batch, error name and message, never a text
  * - One `llm` ledger row for the whole translation (step TRANSLATE_STEP, cost_usd = all batches including what a failed

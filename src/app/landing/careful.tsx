@@ -16,16 +16,15 @@
  *   (src/domain/audit.ts), candidate notice (candidate-copy.ts, -cs.ts), RETENTION_DAYS = 7
  * - Hairline tiles, not boxed cards; fragments are illustrations (spans), never fake buttons
  */
-import { Eyebrow, Pill } from "../ui";
+import { Eyebrow, FRAG, Pill, TILE } from "../ui";
 import { EVIDENCED, NOT_SEARCHED, SEARCHED } from "./evidence-data";
 import { Section, Title } from "./parts";
 
-const FRAG = "flex flex-col gap-2.5 rounded-lg border border-divider bg-[#fffefb] p-3.5 text-sm";
 const CHIP = "inline-flex min-h-8 items-center rounded-md border border-divider bg-surface px-2.5 text-[13px] font-semibold";
 
 function Tile({ title, body, wide = false, children }: Readonly<{ title: string; body: string; wide?: boolean; children: React.ReactNode }>): React.JSX.Element {
   return (
-    <div className={`flex flex-col gap-3 border-t-2 border-ink pt-4 ${wide ? "lg:col-span-3" : "lg:col-span-2"}`}>
+    <div className={`${TILE} gap-3 ${wide ? "lg:col-span-3" : "lg:col-span-2"}`}>
       <h3 className="text-lg font-semibold">{title}</h3>
       <p className="text-[15px] leading-relaxed text-pretty text-muted">{body}</p>
       <div className={FRAG}>{children}</div>

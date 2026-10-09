@@ -18,11 +18,10 @@
 "use client";
 
 import { useId, useRef, useState } from "react";
-import { Pill } from "../ui";
+import { KEY, Pill } from "../ui";
 import { type Example, NOT_SEARCHED, SEARCHED } from "./evidence-data";
 import type { Phase } from "./evidence-example";
 
-const K = "text-[11px] font-semibold tracking-[0.07em] text-muted uppercase";
 const SCALE: Record<Phase, string> = { 0: "scale-y-100", 1: "scale-y-[0.12]", 2: "scale-y-[0.55]", 3: "scale-y-100" };
 
 function Dot({ n, phase }: Readonly<{ n: number; phase: Phase }>): React.JSX.Element {
@@ -54,7 +53,7 @@ export function Steps({ ex, phase, checking }: Readonly<{ ex: Example; phase: Ph
         <li className="grid grid-cols-[28px_minmax(0,1fr)] gap-3.5 py-3">
           <Dot n={1} phase={phase} />
           <Body n={1} phase={phase}>
-            <span className={K}>Requirement</span>
+            <span className={KEY}>Requirement</span>
             <span className="text-[17px] leading-snug font-semibold">{ex.requirement}</span>
             {ex.claim !== null ? (
               <span className="flex items-start gap-2 text-sm"><Pill tone={ex.claim.kind === "Fact" ? "neutral" : "inference"} className="mt-0.5">{ex.claim.kind}</Pill>{ex.claim.text}</span>
@@ -66,7 +65,7 @@ export function Steps({ ex, phase, checking }: Readonly<{ ex: Example; phase: Ph
         <li className="grid grid-cols-[28px_minmax(0,1fr)] gap-3.5 py-3">
           <Dot n={2} phase={phase} />
           <Body n={2} phase={phase}>
-            <span className={K}>Evidence</span>
+            <span className={KEY}>Evidence</span>
             {ex.quote !== null && ex.source !== null ? (
               <>
                 <p className="font-serif text-[18px] leading-[1.45]">
@@ -106,7 +105,7 @@ export function Steps({ ex, phase, checking }: Readonly<{ ex: Example; phase: Ph
             >
               {ex.source !== null && ex.quote !== null ? (
                 <>
-                  <span className={K}>Quote from the source</span>
+                  <span className={KEY}>Quote from the source</span>
                   <p className="text-muted">
                     <span className="font-semibold text-action">Open at the quote</span> · {ex.source.host} · retrieved {ex.source.read} · Confirmed: {ex.source.confirmed}
                   </p>
@@ -128,7 +127,7 @@ export function Steps({ ex, phase, checking }: Readonly<{ ex: Example; phase: Ph
         <li className="grid grid-cols-[28px_minmax(0,1fr)] gap-3.5 py-3">
           <Dot n={3} phase={phase} />
           <Body n={3} phase={phase}>
-            <span className={K}>Question to ask</span>
+            <span className={KEY}>Question to ask</span>
             <p className="font-serif text-[18px] leading-[1.45]">“{ex.question}”</p>
             <span className="text-[13px] text-muted">{ex.from}</span>
           </Body>

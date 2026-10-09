@@ -7,13 +7,13 @@
  * Tested:  n/a (visual; docs/design/radar-ui.md is the spec)
  *
  * Key responsibilities:
- * - Class strings for cards (plain, flush, muted, peach, sage, conflict, unsure), buttons (primary, secondary, quiet, danger), fields
- *   and links so pages do not drift
+ * - Class strings for cards (plain, flush, muted, peach, sage, conflict, unsure), tiles, fragments and key labels (landing v9 idioms),
+ *   buttons (primary, secondary, quiet, danger), fields and links so pages do not drift
  * - Eyebrow, Pill (semantic tone), SourceLink, and the SUMMARY + Chevron disclosure pattern
  * - SimulatedPill: the one label for anything not live (MOCK call, CACHED stored run, NO AI brief); /validation lists them
  *
  * Design constraints:
- * - Semantic tokens only (canvas, surface, ink, muted, action, sage, peach, divider, ok, unsure, conflict, inference)
+ * - Semantic tokens only (canvas, surface, paper, ink, muted, action, sage, peach, divider, ok, unsure, conflict, inference)
  * - Server-safe: no hooks, no browser APIs
  */
 import { CV_SOURCE_TEXT, host, isCvSource } from "./runs/[id]/state";
@@ -30,6 +30,13 @@ export const CARD_PEACH = "rounded-2xl border border-peach bg-peach/40 p-5 md:p-
 export const CARD_SAGE = "rounded-2xl border border-sage bg-sage/50 p-5 md:p-6";
 export const CARD_CONFLICT = "rounded-2xl border border-conflict/40 bg-conflict-bg p-5 md:p-6";
 export const CARD_UNSURE = "rounded-2xl border border-unsure/40 bg-unsure-bg p-5 md:p-6";
+
+/** Landing v9 idiom for a set of equal items (steps, trust tiles, page sections): an ink rule on top, no box, no shadow. */
+export const TILE = "flex flex-col gap-2.5 border-t-2 border-ink pt-4";
+/** A fragment of real UI shown inside a tile or beside a photo: warm paper, hairline, small type. */
+export const FRAG = "flex flex-col gap-2.5 rounded-lg border border-divider bg-paper p-3.5 text-sm";
+/** Key label above a fragment or a dl group (11px, uppercase, tracked, muted). */
+export const KEY = "text-[11px] font-semibold tracking-[0.07em] text-muted uppercase";
 
 const BTN = "inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-lg text-sm whitespace-nowrap transition-colors";
 export const BTN_PRIMARY = `${BTN} bg-action px-5 font-semibold text-white hover:bg-action-hover active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-action`;

@@ -23,7 +23,7 @@ import { trackRun } from "@/app/_components/run-tray-store";
 import { authFetch, postJson, readToken } from "@/app/_components/token";
 import type { PositionDetail } from "@/app/api/positions/handler";
 import { enrichSummary, type EnrichResponse } from "@/app/positions/pool-rows";
-import { BTN_PRIMARY, CARD, Eyebrow } from "@/app/ui";
+import { BTN_PRIMARY, Eyebrow, TILE } from "@/app/ui";
 import type { PositionListItem } from "@/domain/position";
 import type { RoleOption } from "@/domain/role-catalog";
 import { candidateBody, type DraftRow, emptyRow, enrichIds, failText, patchRow, researchCount, rowReady } from "./brief-rows";
@@ -52,9 +52,9 @@ async function addRow(positionId: string, row: DraftRow): Promise<string | numbe
 
 function Step({ n, title, children }: { n: number; title: string; children: React.ReactNode }): React.JSX.Element {
   return (
-    <section aria-labelledby={`step-${String(n)}`} className={`${CARD} flex flex-col gap-5 md:p-8`}>
+    <section aria-labelledby={`step-${String(n)}`} className={`${TILE} gap-5`}>
       <div className="flex items-baseline gap-3">
-        <span className="font-serif text-xl text-action tabular-nums">{n}</span>
+        <span className="font-serif text-3xl leading-none text-action tabular-nums">{n}</span>
         <h2 id={`step-${String(n)}`} className="text-2xl">{title}</h2>
       </div>
       {children}
