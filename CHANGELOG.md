@@ -4,6 +4,9 @@ All notable changes to oldboys are documented here. The format follows [Keep a C
 
 ## [Unreleased]
 
+### Added
+- Big Five lean in the Working style section of the candidate profile: a pentagon chart and one bipolar row per dimension (Openness, Conscientiousness, Extraversion, Agreeableness, Stress response) with a lean word, confidence, a summary sentence and the person's own quotes behind a disclosure, plus "How to work with them" recommendations; read only from their own writing, labelled an inference, no number is printed. `POST /api/runs/:id/personality` (session or bearer) reads the working style again for a finished run and stores it in the profile, one `llm` ledger row (`profile_personality`)
+
 ### Fixed
 - A brief started from a position (the New brief page, the candidate pool, intake into a bound tag) now matches the role catalog by the position title before the collectors run, so the role's evidence-site search (`role_sites_serp`) and the GitHub steps for technical roles run as they do for a role typed on the start form; before, these runs had no template and recorded "not searched: no confirmed profile to look up" for the role sites
 - Czech brief translation reads the same in every batch: one fixed glossary, date style ("říjen 2022 – květen 2026", "od října 2022 do května 2026") and four examples in the system prompt; job titles stay in English with a Czech preposition ("Owner ve společnosti Naveky.cz", never "Vlastnictví"), a text that translated one falls back to English; FACT / INFERENCE / STATEMENT inside section summaries go to the model as placeholders and come back as the pill words FAKT: / ODVOZENÍ: / VÝROK: (no more "ÚSUDEK:"), a lost placeholder falls back to English; PROMPT_VERSION is part of the cache hash, so briefs cached with the old prompt are translated again once

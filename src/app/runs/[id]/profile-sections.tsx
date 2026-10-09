@@ -31,6 +31,7 @@
  */
 import type { HistoryEntry, PositionFit, Profile, ProfileEvidence, ProfileItem } from "@/domain/claim";
 import { CARD, CARD_MUTED, Chevron, Eyebrow, LINK, Pill, SUMMARY, SUMMARY_COMPACT, type Tone } from "../../ui";
+import { BigFiveBlock } from "./big-five";
 import { type Evidence, quoteLink, retrievedLabel } from "./evidence";
 import { CV_SOURCE_TEXT, host, isCvSource } from "./state";
 
@@ -67,6 +68,7 @@ function allEvidence(p: Profile): ProfileEvidence[] {
     ...items(p.history),
     ...items(p.personality.traits),
     ...p.personality.evidence,
+    ...items(p.personality.big5?.traits ?? []),
     ...p.position_fit.flatMap((f) => items(f.traits)),
   ];
 }
@@ -351,6 +353,7 @@ function WorkingStyle({ p, ctx }: { p: Profile["personality"]; ctx: Ctx }): Reac
         )}
       </dl>
       {traits.length > 0 && <Capped items={traits} visible={4} ctx={ctx} quiet />}
+      {p.big5 !== null && <BigFiveBlock big5={p.big5} evidence={(items, about) => <EvidenceList items={items} ctx={ctx} about={about} />} />}
       <Dropped n={p.evidence_dropped} />
     </section>
   );
@@ -614,7 +617,7 @@ export function ProfileSections({ profile, evidence, role = null }: { profile: P
     achievements: profile.achievements.length > 0,
     risks: profile.risks.length > 0,
     history: profile.history.length > 0,
-    "working-style": p.disc !== null || p.mbti !== null || p.read !== "" || p.traits.length > 0,
+    "working-style": p.disc !== null || p.mbti !== null || p.big5 !== null || p.read !== "" || p.traits.length > 0,
     fit: fits.length > 0,
     ask: profile.questions.length > 0,
   };

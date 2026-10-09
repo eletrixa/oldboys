@@ -25,31 +25,23 @@
  * - Public professional data only; no Art. 9 inference, no reputation or trust scores; personality is an inference
  */
 import { z } from "zod";
-import { type Candidate, type Claim, HistoryEntry, type Profile, ProfileEvidence, ProfileItem, type Source, TraitFit } from "@/domain/claim";
-import { quoteInExcerpt } from "@/domain/quote";
+import { type Claim, HistoryEntry, type Profile, ProfileEvidence, ProfileItem, type Source, TraitFit } from "@/domain/claim";
 import type { Ports } from "@/domain/ports";
-import { evidenceStrength, FIRST_PERSON } from "@/recipe/seams/evidence-strength";
+import { gatePersonality, PERSONALITY_PROMPT, PersonalityReading, TOO_LITTLE_WRITING } from "@/recipe/seams/personality";
 import { type FitTrait, fitTraits, topQuestions } from "@/recipe/seams/profile-fit";
+import { rankSources, sourceBlock, validEvidence } from "@/recipe/seams/profile-gate";
 import { confirmedSources } from "@/recipe/seams/resolve";
-import { CV_ACTOR } from "@/recipe/seams/seed";
-import { LINKEDIN_PROFILE_ACTORS } from "@/recipe/sources/linkedin";
 import { acceptedCandidates, type StepContext } from "@/recipe/sources/types";
 
-const PROMPT_CHARS = 60_000;
-const RETRY_SOURCES = 40;
-const MIN_PERSONALITY_LINES = 3;
-const ASK_QUESTIONS = 10;
-export const TOO_LITTLE_WRITING = "Too little of the person's own writing to estimate a type.";
+export { rankSources, validEvidence } from "@/recipe/seams/profile-gate";
+export { TOO_LITTLE_WRITING };
 
-const POST_ACTORS = new Set(["harvestapi/linkedin-profile-posts", "apidojo/tweet-scraper", "rest/bluesky"]);
-const PRESS_ACTORS = new Set(["apify/google-search-scraper", "apify/website-content-crawler"]);
-/** Sources the subject wrote: own LinkedIn profile, CV, own posts (reposts are unverified, so never confirmed). */
-const OWN_WRITING = new Set([...LINKEDIN_PROFILE_ACTORS, CV_ACTOR, ...POST_ACTORS]);
+const RETRY_SOURCES = 40;
+const ASK_QUESTIONS = 10;
 
 const Facts = z.object({ achievements: z.array(ProfileItem), risks: z.array(ProfileItem), history: z.array(HistoryEntry) });
-const Type = z.object({ type: z.string().min(1), confidence: z.enum(["low", "medium", "high"]) }).nullable();
 const Reading = z.object({
-  personality: z.object({ disc: Type, mbti: Type, read: z.string(), traits: z.array(ProfileItem).default([]), evidence: z.array(ProfileEvidence) }),
+  personality: PersonalityReading,
   // Status per trait id from the fixed list; role, labels and weights stay in code
   position_fit: z.object({ rationale: z.string().default(""), traits: z.array(z.object({ id: z.string(), status: TraitFit.shape.status, evidence: z.array(ProfileEvidence) })) }).nullable().default(null),
   // Priority loose here, clamped to 1..3 in code: an out-of-range value must not fail the whole parse
@@ -64,7 +56,7 @@ const RULES = [
 
 export function emptyProfile(degraded: string | null): Profile {
   return {
-    achievements: [], risks: [], history: [], personality: { disc: null, mbti: null, read: "", traits: [], evidence: [], evidence_dropped: 0 }, position_fit: [], questions: [], degraded,
+    achievements: [], risks: [], history: [], personality: { disc: null, mbti: null, big5: null, read: "", traits: [], evidence: [], evidence_dropped: 0 }, position_fit: [], questions: [], degraded,
     achievements_dropped: 0, risks_dropped: 0, history_dropped: 0, fit_dropped: 0,
   };
 }
@@ -75,28 +67,6 @@ export function fitPct(traits: readonly (Pick<z.infer<typeof TraitFit>, "status"
   if (total === 0) return 0;
   const score = traits.reduce((n, t) => n + (t.weight ?? 1) * (t.status === "has" ? 1 : t.status === "partial" ? 0.5 : 0), 0);
   return Math.round((score / total) * 100);
-}
-
-/** Keeps evidence whose quote is inside the excerpt of the source it names (unknown ids fail); sets `strength` in code, never from the model. */
-export function validEvidence(
-  evidence: readonly ProfileEvidence[],
-  sources: readonly Pick<Source, "id" | "excerpt" | "actor" | "url" | "identity">[],
-  candidates: readonly Pick<Candidate, "profile_urls" | "handle" | "platform" | "name">[] = [],
-): ProfileEvidence[] {
-  const byId = new Map(sources.map((s) => [s.id, s]));
-  return evidence.flatMap((e) => {
-    const s = byId.get(e.source_id);
-    if (s === undefined || !quoteInExcerpt(e.quote, s.excerpt)) return [];
-    const { strength, note } = evidenceStrength(s, e.quote, candidates, e.kind);
-    const supports = e.direction === undefined ? e.supports : e.direction !== "contradicts";
-    return [note === "" ? { ...e, supports, strength } : { ...e, supports, strength, note: e.note ? `${e.note}, ${note}` : note }];
-  });
-}
-
-/** Profile and CV first, then own posts, then press and talks, then the rest; stable within a tier. */
-export function rankSources(sources: readonly Source[]): Source[] {
-  const tier = (s: Source): number => (LINKEDIN_PROFILE_ACTORS.has(s.actor) || s.actor === CV_ACTOR ? 0 : POST_ACTORS.has(s.actor) ? 1 : PRESS_ACTORS.has(s.actor) ? 2 : 3);
-  return [...sources].sort((a, b) => tier(a) - tier(b));
 }
 
 /** The run's role card: every listed trait, model status per id; a trait without surviving supporting evidence is none. */
@@ -115,20 +85,9 @@ function fitCard(
   return { role, traits: rows, fit_pct: fitPct(rows), rationale: fit?.rationale ?? "" };
 }
 
-function sourceBlock(sources: readonly Source[], claims: readonly Claim[]): string {
-  let body = "";
-  for (const s of sources) {
-    const line = `[${s.id}] ${s.url}\n${s.excerpt}\n\n`;
-    if (body.length + line.length > PROMPT_CHARS) break;
-    body += line;
-  }
-  return `Sources:\n${body}\nVerified claims:\n${claims.map((c) => `- [${c.kind}] ${c.text}`).join("\n") || "- (none)"}`;
-}
-
 /** Two model calls over `sources`; cost and calls go into `out` once a call validates. Throws on model or parse failure. */
 async function attempt(ctx: StepContext, kept: readonly Claim[], sources: readonly Source[], ports: Ports, out: { calls: number; cost_usd: number }): Promise<Profile> {
   const head = `Subject: ${ctx.subject}\nAnchor: ${ctx.anchor}\nRole: ${ctx.role ?? "(none)"}\n\nResearch questions:\n${ctx.questions.map((q) => `- ${q.id}: ${q.text}`).join("\n")}\n\n${sourceBlock(sources, kept)}`;
-  const byId = new Map(sources.map((s) => [s.id, s]));
   const merged = acceptedCandidates(ctx);
   const a = await ports.llm({
     model: "primary",
@@ -159,7 +118,7 @@ async function attempt(ctx: StepContext, kept: readonly Claim[], sources: readon
     model: "primary",
     system: [
       "Read the candidate for a hiring manager.",
-      "`personality`: a working-style inference from the person's own public writing only: their LinkedIn profile text, their own posts, their CV, or a first-person quote of theirs in an interview or talk. Never from what others write about them and never from reposts. Give a DISC type and an MBTI type, each with confidence low/medium/high, `read`: their working style in two or three sentences, `traits`: working-style rows each with 2-3 of their own quotes as evidence, and `evidence`: the quotes behind the types. Use null types when their own writing is too thin.",
+      PERSONALITY_PROMPT,
       traits.length === 0
         ? "`position_fit`: null."
         : `\`position_fit\`: for the role ${ctx.role ?? ""} only, one row per listed must-have id, nothing else: \`id\` copied exactly, status has/partial/none and evidence, plus a one-sentence \`rationale\`. Do not compute a percentage.`,
@@ -173,16 +132,7 @@ async function attempt(ctx: StepContext, kept: readonly Claim[], sources: readon
   out.calls += 1;
   out.cost_usd += b.cost_usd;
 
-  const own = (e: ProfileEvidence): boolean => {
-    const s = byId.get(e.source_id);
-    return s !== undefined && (OWN_WRITING.has(s.actor) || FIRST_PERSON.test(e.quote));
-  };
-  const ownLines = (e: readonly ProfileEvidence[]): ProfileEvidence[] => validEvidence(e, sources, merged).filter(own);
-  const personality = ownLines(reading.personality.evidence);
-  const traitRows = reading.personality.traits.map((t) => ({ ...t, evidence: ownLines(t.evidence) })).filter((t) => t.evidence.length > 0);
-  const modelLines = reading.personality.evidence.length + reading.personality.traits.reduce((n, t) => n + t.evidence.length, 0);
-  const keptLines = personality.length + traitRows.reduce((n, t) => n + t.evidence.length, 0);
-  const thin = keptLines < MIN_PERSONALITY_LINES;
+  const personality = gatePersonality(reading.personality, sources, merged);
   const position_fit = traits.length === 0 || ctx.role === null ? [] : [fitCard(ctx.role, traits, reading.position_fit, (e) => gate(e, "fit"))];
   const riskEvidence = (q: { risk: string | null }): number => risks[Number(/^R(\d+)$/i.exec(q.risk?.trim() ?? "")?.[1] ?? 0) - 1]?.evidence.length ?? 0;
   const questions = topQuestions(
@@ -193,14 +143,7 @@ async function attempt(ctx: StepContext, kept: readonly Claim[], sources: readon
     achievements: items(facts.achievements, "achievements"),
     risks,
     history: items(facts.history, "history"),
-    personality: {
-      disc: thin ? null : reading.personality.disc,
-      mbti: thin ? null : reading.personality.mbti,
-      read: thin ? `${reading.personality.read} ${TOO_LITTLE_WRITING}`.trim() : reading.personality.read,
-      traits: traitRows,
-      evidence: personality,
-      evidence_dropped: modelLines - keptLines,
-    },
+    personality,
     position_fit,
     questions,
     degraded: null,
