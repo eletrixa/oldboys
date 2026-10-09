@@ -117,14 +117,14 @@ describe("collectWith waves and digest", () => {
   it("runs followUp requests after the first wave and passes the first-wave payloads", async () => {
     const seen: (readonly unknown[])[] = [];
     const collector = fake({
-      followUp: (_ctx, _step, payloads) => {
-        seen.push(payloads);
+      followUp: (_ctx, _step, fetched) => {
+        seen.push(fetched);
         return [{ via: "fetch", url: "https://api.example.com/stats" }];
       },
     });
     const ports = echoPorts();
     const out = await collectWith(collector, step, baseContext(), ports);
-    expect(seen).toEqual([[{ url: "https://api.example.com/list" }]]);
+    expect(seen).toEqual([[{ req: { via: "fetch", url: "https://api.example.com/list" }, payload: { url: "https://api.example.com/list" } }]]);
     expect(out.sources).toHaveLength(2);
     expect(out.empty).toBe(false);
   });
@@ -133,9 +133,9 @@ describe("collectWith waves and digest", () => {
     let got: readonly unknown[] = [];
     const collector = fake({
       followUp: () => [{ via: "fetch", url: "https://api.example.com/stats" }],
-      digest: (payloads) => {
-        got = payloads;
-        return { n: payloads.length };
+      digest: (fetched) => {
+        got = fetched;
+        return { n: fetched.length };
       },
     });
     const out = await collectWith(collector, step, baseContext(), echoPorts());

@@ -10,8 +10,9 @@
  * - StepContext: everything a step may read (never mutate)
  * - Collector: `requests()` decides what to fetch (empty array = nothing to do, triggers onEmpty); `parse()` maps one payload to sources;
  *   optional `alreadyFetched()` names sources an earlier step (seed) fetched, so the step does not scrape them twice;
- *   optional `followUp()` computes a second wave of requests from the first wave's payloads; optional `digest()` summarises
- *   every payload into StepOutcome.digest
+ *   optional `followUp()` computes a second wave of requests from the first wave's request/payload pairs (`Fetched`); optional
+ *   `digest()` summarises every pair into StepOutcome.digest
+ * - githubHandles(): accepted github handles (deduped case-insensitively, `@` stripped, max 2), shared by the GitHub collectors
  * - identityFor(): "merged" only for urls under a merged candidate (profile url prefix or handle segment), else "unverified"
  *
  * Design constraints:
@@ -56,6 +57,9 @@ export type ParsedSource = {
   identity?: SourceIdentity;
 };
 
+/** One performed request with the payload it returned (null = empty 2xx body); followUp and digest read these pairs. */
+export type Fetched = { req: CollectorRequest; payload: unknown };
+
 export type Collector = {
   /** Matches Step.actor. */
   id: string;
@@ -64,10 +68,10 @@ export type Collector = {
   alreadyFetched?: (ctx: StepContext) => Source[];
   /** `req` is the request that produced the payload (a stats payload carries no repo name; the URL does). */
   parse: (payload: unknown, ctx: StepContext, step: Step, req?: CollectorRequest) => ParsedSource[];
-  /** Second wave of requests computed from the first wave's payloads (e.g. per-repo stats after the repo list); runs once, after every first-wave request. */
-  followUp?: (ctx: StepContext, step: Step, payloads: readonly unknown[]) => CollectorRequest[];
-  /** Pure summary of all payloads of both waves (null = nothing). */
-  digest?: (payloads: readonly unknown[], ctx: StepContext) => unknown;
+  /** Second wave of requests computed from the first wave's request/payload pairs (e.g. per-repo stats after the repo list); runs once, after every first-wave request. */
+  followUp?: (ctx: StepContext, step: Step, fetched: readonly Fetched[]) => CollectorRequest[];
+  /** Pure summary of all request/payload pairs of both waves (null = nothing). */
+  digest?: (fetched: readonly Fetched[], ctx: StepContext) => unknown;
 };
 
 export type StepOutcome = {
@@ -91,6 +95,19 @@ export type StepOutcome = {
 /** Accepted identities only: the profiles the manager (or the threshold) confirmed. */
 export function acceptedCandidates(ctx: StepContext): readonly Candidate[] {
   return ctx.candidates.filter((c) => c.decision === "merge");
+}
+
+/** Accepted github handles: `@` stripped, trimmed, deduplicated case-insensitively, at most `max`. */
+export function githubHandles(ctx: StepContext, max = 2): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const c of acceptedCandidates(ctx)) {
+    const h = (c.handle ?? "").trim().replace(/^@/, "");
+    if (c.platform !== "github" || h === "" || seen.has(h.toLowerCase())) continue;
+    seen.add(h.toLowerCase());
+    out.push(h);
+  }
+  return out.slice(0, max);
 }
 
 /** Same set as acceptedCandidates; the name the identity rule reads by. */

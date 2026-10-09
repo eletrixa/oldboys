@@ -10,6 +10,7 @@ import { describe, expect, it } from "vitest";
 import type { Candidate } from "@/domain/claim";
 import { baseContext } from "@/recipe/__tests__/fakes";
 import { githubApify, parseCount } from "@/recipe/sources/github-apify";
+import type { CollectorRequest } from "@/recipe/sources/types";
 import type { Step } from "@/recipe/step";
 
 const step: Step = { id: "github_apify", kind: "actor", actor: "saswave/github-profile-scraper" };
@@ -112,10 +113,11 @@ describe("githubApify.parse", () => {
 });
 
 describe("githubApify.digest", () => {
+  const apifyReq: CollectorRequest = { via: "actor", actor: "saswave/github-profile-scraper", input: {}, maxTotalChargeUsd: 0.05, timeoutSecs: 45 };
   const ctx = baseContext({ candidates: [cand("github", "janad")] });
 
   it("parses numbers from strings", () => {
-    expect(githubApify.digest?.([[{ username: "someone" }, full]], ctx)).toEqual({
+    expect(githubApify.digest?.([{ req: apifyReq, payload: [{ username: "someone" }, full] }], ctx)).toEqual({
       handle: "janad",
       last_year_contributions: 1444,
       first_commit_year: 2014,
@@ -129,7 +131,7 @@ describe("githubApify.digest", () => {
   });
 
   it("returns null without a matching item", () => {
-    expect(githubApify.digest?.([[{ username: "someone" }]], ctx)).toBeNull();
+    expect(githubApify.digest?.([{ req: apifyReq, payload: [{ username: "someone" }] }], ctx)).toBeNull();
     expect(githubApify.digest?.([], ctx)).toBeNull();
   });
 });

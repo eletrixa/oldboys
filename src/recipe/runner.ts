@@ -11,8 +11,9 @@
  * - resolve/extract/verify/synthesize: delegate to the LLM seams
  * - A collector whose sources an earlier step already fetched (`alreadyFetched`) and that has nothing new to request
  *   returns those sources, not empty, with the note "already fetched at seed" and no request
- * - `collectWith(collector, ...)` is `collect` for an explicit collector: a first wave, then once `collector.followUp(payloads)`
- *   through the same per-request path (budget, calls, error note, dedup), then `collector.digest` into StepOutcome.digest
+ * - `collectWith(collector, ...)` is `collect` for an explicit collector: a first wave, then once `collector.followUp(fetched)`
+ *   through the same per-request path (budget, calls, error note, dedup), then `collector.digest` into StepOutcome.digest;
+ *   both receive the performed request/payload pairs (`Fetched`), recorded right after the request succeeds
  * - Budget: refuse a paid (actor) request once calls or USD are exhausted (note + empty); free REST fetches are not gated
  * - One source per page: a hit whose canonical URL (no locale / trailing slash) is already in the run is not stored again;
  *   deduped hits add the note "N hits already in the run" and do not make the step empty (no onEmpty gap)
@@ -31,7 +32,7 @@ import { resolveCandidates } from "@/recipe/seams/resolve";
 import { synthesizeBrief } from "@/recipe/seams/synthesize";
 import { verifyClaims } from "@/recipe/seams/verify";
 import { collectorFor } from "@/recipe/sources";
-import type { Collector, CollectorRequest, ParsedSource, StepContext, StepOutcome } from "@/recipe/sources/types";
+import type { Collector, CollectorRequest, Fetched, ParsedSource, StepContext, StepOutcome } from "@/recipe/sources/types";
 import type { Step } from "@/recipe/step";
 
 export const SOURCE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -99,7 +100,7 @@ export async function collectWith(collector: Collector, step: Step, ctx: StepCon
     return out;
   }
   const seen = new Set(ctx.sources.map((s) => canonicalUrl(s.url)));
-  const payloads: unknown[] = [];
+  const done: Fetched[] = [];
   let parsedHits = 0;
   let deduped = 0;
   const run = async (req: CollectorRequest): Promise<boolean> => {
@@ -112,8 +113,8 @@ export async function collectWith(collector: Collector, step: Step, ctx: StepCon
       const { payload, cost_usd } = await perform(req, ports);
       if (req.via === "actor") out.calls += 1; // only paid actor runs count toward RUN_BUDGET_CALLS
       out.cost_usd += cost_usd;
+      done.push({ req, payload }); // before parse: a parse throw must not drop the pair
       parsed = collector.parse(payload, ctx, step, req);
-      payloads.push(payload);
     } catch (error) {
       if (req.via === "actor") out.calls += 1;
       out.notes.push(`request failed: ${error instanceof Error ? error.message : String(error)}`);
@@ -146,11 +147,11 @@ export async function collectWith(collector: Collector, step: Step, ctx: StepCon
     for (const req of reqs) if (!(await run(req))) break;
   };
   await wave(requests);
-  if (collector.followUp) await wave(collector.followUp(ctx, step, [...payloads]));
+  if (collector.followUp) await wave(collector.followUp(ctx, step, [...done]));
   if (deduped > 0) out.notes.push(`${String(deduped)} hits already in the run`);
   // Pages found but all stored by an earlier step are not "nothing found": empty only when parse returned nothing
   out.empty = parsedHits === 0;
-  const digest = collector.digest?.(payloads, ctx);
+  const digest = collector.digest?.(done, ctx);
   if (digest !== undefined && digest !== null) out.digest = digest;
   return out;
 }

@@ -3,20 +3,20 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/runs/[id]/code-profile-text.ts
- * Deps:    src/domain/code-profile (types, CODE_PROFILE_CAVEATS)
+ * Deps:    src/domain/code-profile (types, CODE_PROFILE_CAVEATS, codeTotals), src/domain/url (httpUrl)
  * Tested:  src/app/runs/[id]/__tests__/code-profile-card.test.ts
  *
  * Key responsibilities:
  * - fmtInt: integers with thin-space thousands separators (U+2009)
- * - sourceFor: the `source_urls` entry a number group was read from (user, repos, search, events, orgs), http(s) only
- * - statGroups: the compact stat row (label, value, source link or null)
+ * - statGroups: the compact stat row (label, value, source link from `profile.sources` or null; http(s) only)
  * - codeProfileLines: the same numbers, repo table, merged-PR sample, orgs, the profile-page numbers (apify), pending stats and caveats as plain text lines;
  *   empty without a profile
  *
  * Design constraints:
  * - Pure; numbers only, no score and no adjective about the person; public work only
  */
-import { CODE_PROFILE_CAVEATS, type CodeProfile } from "@/domain/code-profile";
+import { CODE_PROFILE_CAVEATS, type CodeProfile, codeTotals } from "@/domain/code-profile";
+import { httpUrl } from "@/domain/url";
 
 const THIN_SPACE = " ";
 const MINUS = "−";
@@ -25,31 +25,6 @@ export const PENDING_PREFIX = "GitHub had not computed statistics yet for: ";
 
 export function fmtInt(n: number): string {
   return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, THIN_SPACE);
-}
-
-/** http(s) URLs only, so a malformed digest can never render a javascript: link. */
-export function safeHref(url: string): string | null {
-  try {
-    const u = new URL(url);
-    return u.protocol === "http:" || u.protocol === "https:" ? u.href : null;
-  } catch {
-    return null;
-  }
-}
-
-export type SourceKind = "user" | "repos" | "search" | "events" | "orgs";
-
-/** The URL in `source_urls` a number group was read from; the user group falls back to the profile URL. */
-export function sourceFor(profile: CodeProfile, kind: SourceKind): string | null {
-  const urls = profile.source_urls;
-  const pick = (pred: (u: string) => boolean): string | undefined => urls.find((u) => safeHref(u) !== null && pred(u));
-  const found =
-    kind === "repos" ? pick((u) => u.includes("/repos?"))
-    : kind === "search" ? pick((u) => u.includes("search/issues"))
-    : kind === "events" ? pick((u) => u.includes("/events"))
-    : kind === "orgs" ? pick((u) => u.includes("/orgs"))
-    : (pick((u) => u.includes("/users/") && !/\/(repos|events|orgs)\b/.test(u)) ?? profile.profile_url);
-  return found === undefined ? null : safeHref(found);
 }
 
 export type StatGroup = { label: string; value: string; source: string | null };
@@ -65,18 +40,20 @@ function accountYears(created: string | null, now: Date): string | null {
 export function statGroups(p: CodeProfile, now: Date = new Date()): StatGroup[] {
   const e = p.recent_events;
   const age = accountYears(p.account_created, now);
+  const t = codeTotals(p);
+  const src = (k: keyof CodeProfile["sources"]): string | null => httpUrl(p.sources[k]);
   return [
-    { label: "Own repositories", value: `${fmtInt(p.repos_sampled)} sampled of ${fmtInt(p.repos_owned)} owned`, source: sourceFor(p, "repos") },
-    { label: "Commits", value: fmtInt(p.commits), source: null },
-    { label: "Lines", value: `+${fmtInt(p.additions)} / ${MINUS}${fmtInt(p.deletions)}`, source: null },
-    { label: "Stars received", value: fmtInt(p.stars_received), source: sourceFor(p, "repos") },
-    { label: "PRs merged elsewhere", value: fmtInt(p.merged_prs_elsewhere), source: sourceFor(p, "search") },
+    { label: "Own repositories", value: `${fmtInt(t.repos_sampled)} sampled of ${fmtInt(p.repos_owned)} owned`, source: src("repos") },
+    { label: "Commits", value: fmtInt(t.commits), source: null },
+    { label: "Lines", value: `+${fmtInt(t.additions)} / ${MINUS}${fmtInt(t.deletions)}`, source: null },
+    { label: "Stars received", value: fmtInt(p.stars_received), source: src("repos") },
+    { label: "PRs merged elsewhere", value: fmtInt(p.merged_prs_elsewhere), source: src("search") },
     {
       label: "Public events, last 90 days",
       value: `${fmtInt(e.pushes)} pushes, ${fmtInt(e.pull_requests)} PRs, ${fmtInt(e.issues)} issues, ${fmtInt(e.reviews)} reviews`,
-      source: sourceFor(p, "events"),
+      source: src("events"),
     },
-    ...(age === null ? [] : [{ label: "Account age", value: age, source: sourceFor(p, "user") }]),
+    ...(age === null ? [] : [{ label: "Account age", value: age, source: src("user") }]),
   ];
 }
 

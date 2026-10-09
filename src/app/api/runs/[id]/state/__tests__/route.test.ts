@@ -59,10 +59,10 @@ describe("GET /api/runs/:id/state position", () => {
 
 describe("GET /api/runs/:id/state code_profile", () => {
   const digest = {
-    handle: "jnovak", profile_url: "https://github.com/jnovak", repos_sampled: 1, repos_owned: 1, forks_excluded: 0,
-    commits: 10, additions: 100, deletions: 5, stats_pending: [], repos: [], languages: [], stars_received: 0,
+    handle: "jnovak", profile_url: "https://github.com/jnovak", repos_owned: 1, forks_excluded: 0,
+    stats_pending: [], repos: [], languages: [], stars_received: 0,
     merged_prs_elsewhere: 0, merged_prs_sample: [], recent_events: { pushes: 0, pull_requests: 0, issues: 0, reviews: 0, since: null },
-    orgs: [], account_created: null, source_urls: ["https://api.github.com/users/jnovak"],
+    orgs: [], account_created: null, sources: { user: "https://api.github.com/users/jnovak", repos: "https://api.github.com/users/jnovak/repos", search: "https://api.github.com/search/issues", events: "https://api.github.com/users/jnovak/events/public", orgs: "https://api.github.com/users/jnovak/orgs" },
   };
 
   it("returns the digest of the github_deep step", async () => {

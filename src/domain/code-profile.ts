@@ -11,12 +11,14 @@
  * - `TECHNICAL_FAMILIES`: role families for which the hiring recipe scrapes GitHub in depth (engineering, data; AI falls
  *   under one of them in `familyOf`)
  * - `ApifyGithubProfile`: what the Apify profile actor step (`github_apify`) adds (last-year contributions, pinned repos, achievements)
+ * - `readDigest` (shared with src/domain/cz-registry): latest `ref.digest` of a step among ledger rows
  * - `readCodeProfile`: latest `github_deep` digest from ledger rows with the `github_apify` digest attached (same handle), parsed
  *   defensively (null for runs before the feature or non-technical roles)
+ * - `codeTotals`: repos sampled, commits, lines added and removed summed over `repos`
  * - `codeProfileCaveats`: the fixed honesty lines shown with the numbers (private work invisible, forks excluded, LoC is a weak proxy)
  *
  * Design constraints:
- * - Pure, no I/O; every number carries the `source_url` it was read from, so the report can link it
+ * - Pure, no I/O; every number carries the source URL it was read from (`sources`, `repos[].source_url`), so the report can link it
  * - Numbers describe public code only; never a score of the person
  */
 import { z } from "zod";
@@ -74,14 +76,9 @@ export type ApifyGithubProfile = z.infer<typeof ApifyGithubProfile>;
 export const CodeProfile = z.object({
   handle: z.string().min(1),
   profile_url: z.string().min(1),
-  /** Own, non-fork, non-archived public repos counted (the sample the per-repo numbers come from) and the total owned. */
-  repos_sampled: z.number().int().nonnegative(),
+  /** Public repos owned (forks included) and how many of them are forks; the sampled repos with stats are `repos` (see `codeTotals`). */
   repos_owned: z.number().int().nonnegative(),
   forks_excluded: z.number().int().nonnegative(),
-  /** Sums over `repos` where stats were ready. */
-  commits: z.number().int().nonnegative(),
-  additions: z.number().int().nonnegative(),
-  deletions: z.number().int().nonnegative(),
   /** Repos whose stats answered 202 twice (not counted); named so the gap is honest. */
   stats_pending: z.array(z.string()),
   repos: z.array(RepoContribution),
@@ -95,12 +92,20 @@ export const CodeProfile = z.object({
   recent_events: z.object({ pushes: z.number().int().nonnegative(), pull_requests: z.number().int().nonnegative(), issues: z.number().int().nonnegative(), reviews: z.number().int().nonnegative(), since: z.string().nullable() }),
   orgs: z.array(z.string()),
   account_created: z.string().nullable(),
-  /** Every GitHub API URL a number was read from, so each metric links to evidence. */
-  source_urls: z.array(z.string().min(1)),
-  /** Filled by the state loader from the `github_apify` step's digest (withApify); null when that step did not run. */
+  /** The GitHub API URLs the number groups were read from (per-repo stats URLs are `repos[].source_url`), so each metric links to evidence. */
+  sources: z.object({ user: z.string().min(1), repos: z.string().min(1), search: z.string().min(1), events: z.string().min(1), orgs: z.string().min(1) }),
+  /** Attached by `readCodeProfile` from the `github_apify` step's digest; null when that step did not run. */
   apify: ApifyGithubProfile.nullable().default(null),
 });
 export type CodeProfile = z.infer<typeof CodeProfile>;
+
+/** Sums over `repos` (the sampled repos whose stats were ready). */
+export function codeTotals(p: CodeProfile): { repos_sampled: number; commits: number; additions: number; deletions: number } {
+  return p.repos.reduce(
+    (t, r) => ({ repos_sampled: t.repos_sampled + 1, commits: t.commits + (r.commits ?? 0), additions: t.additions + (r.additions ?? 0), deletions: t.deletions + (r.deletions ?? 0) }),
+    { repos_sampled: 0, commits: 0, additions: 0, deletions: 0 },
+  );
+}
 
 export const CODE_PROFILE_STEP = "github_deep";
 export const APIFY_PROFILE_STEP = "github_apify";
@@ -113,10 +118,10 @@ export const CODE_PROFILE_CAVEATS: readonly string[] = [
   "Only the GitHub account confirmed in the identity lineup is counted; a namesake's account never is.",
 ];
 
-type LedgerRow = { step?: string | null; ref_json?: string | null };
+export type LedgerRow = { step?: string | null; ref_json?: string | null };
 
-/** Latest `ref.digest` of `step` among ledger rows that parses with `schema`; null when absent or malformed. */
-function readDigest<T>(rows: readonly LedgerRow[], step: string, schema: z.ZodType<T>): T | null {
+/** Latest `ref.digest` of `step` among ledger rows that parses with `schema`; null when absent or malformed. Shared with cz-registry. */
+export function readDigest<T>(rows: readonly LedgerRow[], step: string, schema: z.ZodType<T>): T | null {
   for (let i = rows.length - 1; i >= 0; i -= 1) {
     const row = rows[i];
     if (row?.step !== step || typeof row.ref_json !== "string") continue;

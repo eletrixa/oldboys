@@ -14,18 +14,14 @@
  */
 import { describe, expect, it } from "vitest";
 import { CODE_PROFILE_CAVEATS, type CodeProfile } from "@/domain/code-profile";
-import { codeProfileLines, fmtInt, PENDING_PREFIX, sourceFor, statGroups } from "../code-profile-text";
+import { codeProfileLines, fmtInt, PENDING_PREFIX, statGroups } from "../code-profile-text";
 
 const NOW = new Date("2026-10-09T00:00:00Z");
 const profile: CodeProfile = {
   handle: "jnovak",
   profile_url: "https://github.com/jnovak",
-  repos_sampled: 2,
   repos_owned: 5,
   forks_excluded: 3,
-  commits: 1234,
-  additions: 1_200_000,
-  deletions: 45_000,
   stats_pending: ["jnovak/slow"],
   repos: [
     {
@@ -46,13 +42,13 @@ const profile: CodeProfile = {
     source_url: "https://api.apify.com/v2/datasets/abc/items",
   },
   account_created: "2014-03-02T10:00:00Z",
-  source_urls: [
-    "https://api.github.com/users/jnovak",
-    "https://api.github.com/users/jnovak/repos?per_page=100",
-    "https://api.github.com/search/issues?q=author:jnovak",
-    "https://api.github.com/users/jnovak/events/public",
-    "https://api.github.com/users/jnovak/orgs",
-  ],
+  sources: {
+    user: "https://api.github.com/users/jnovak",
+    repos: "https://api.github.com/users/jnovak/repos?per_page=100",
+    search: "https://api.github.com/search/issues?q=author:jnovak",
+    events: "https://api.github.com/users/jnovak/events/public",
+    orgs: "https://api.github.com/users/jnovak/orgs",
+  },
 };
 
 describe("code profile text", () => {
@@ -61,18 +57,18 @@ describe("code profile text", () => {
     expect(fmtInt(999)).toBe("999");
   });
 
-  it("finds the source URL per group", () => {
-    expect(sourceFor(profile, "user")).toBe("https://api.github.com/users/jnovak");
-    expect(sourceFor(profile, "repos")).toContain("/repos?");
-    expect(sourceFor(profile, "search")).toContain("search/issues");
-    expect(sourceFor(profile, "events")).toContain("/events");
-    expect(sourceFor({ ...profile, source_urls: [] }, "user")).toBe(profile.profile_url);
-    expect(sourceFor({ ...profile, source_urls: [] }, "events")).toBeNull();
+  it("links each group to its source and drops non-http(s) sources", () => {
+    const src = (p: CodeProfile) => Object.fromEntries(statGroups(p, NOW).map((g) => [g.label, g.source]));
+    expect(src(profile)["Own repositories"]).toBe(profile.sources.repos);
+    expect(src(profile)["PRs merged elsewhere"]).toContain("search/issues");
+    expect(src(profile)["Public events, last 90 days"]).toContain("/events");
+    expect(src(profile)["Account age"]).toBe(profile.sources.user);
+    expect(src({ ...profile, sources: { ...profile.sources, events: "javascript:alert(1)" } })["Public events, last 90 days"]).toBeNull();
   });
 
   it("builds the stat row with sums, minus sign and account age", () => {
     const by = Object.fromEntries(statGroups(profile, NOW).map((g) => [g.label, g.value]));
-    expect(by["Own repositories"]).toBe("2 sampled of 5 owned");
+    expect(by["Own repositories"]).toBe("1 sampled of 5 owned");
     expect(by.Commits).toBe("1 234");
     expect(by.Lines).toBe("+1 200 000 / −45 000");
     expect(by["Account age"]).toBe("12 years (since 2014-03-02)");

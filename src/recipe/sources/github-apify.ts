@@ -9,7 +9,7 @@
  * Key responsibilities:
  * - `saswave/github-profile-scraper`: one actor request for up to two accepted GitHub handles, technical role families only
  * - `parseCount`: "19.9k" / "1,444" / "2.1m" / numbers to integers
- * - `digest`: ApifyGithubProfile for the accepted handle, read by the code-profile card
+ * - `profileOf`: the ApifyGithubProfile of one item, built once; the excerpt is formatted from it and `digest` returns it (read by the code-profile card)
  *
  * Design constraints:
  * - Pure: no fetch here; unknown payload shapes parse to [] (digest: null)
@@ -18,10 +18,9 @@
 import { z } from "zod";
 import { ApifyGithubProfile, isTechnicalFamily } from "@/domain/code-profile";
 import type { Collector, ParsedSource } from "@/recipe/sources/types";
-import { acceptedCandidates, clip, identityFor } from "@/recipe/sources/types";
+import { clip, githubHandles, identityFor } from "@/recipe/sources/types";
 
 const ACTOR = "saswave/github-profile-scraper";
-const MAX_HANDLES = 2;
 
 const Count = z.union([z.string(), z.number()]).nullish();
 const Text = z.string().nullish();
@@ -31,25 +30,10 @@ const Item = z.object({
   username: Text,
   name: Text,
   followers: Count,
-  bio: Text,
-  location: Text,
   last_year_contribution_number: Count,
   first_year_commit: Count,
-  pinned_repos: z
-    .array(
-      z.object({
-        name: Text,
-        url: Text,
-        description: Text,
-        languages: z.array(z.string()).nullish(),
-        stars: Count,
-        forks: Count,
-      }),
-    )
-    .nullish(),
+  pinned_repos: z.array(z.object({ name: Text, url: Text, languages: z.array(z.string()).nullish(), stars: Count, forks: Count })).nullish(),
   achievements: z.array(z.string()).nullish(),
-  organization_followed: z.array(z.string()).nullish(),
-  highlights: z.array(z.string()).nullish(),
 });
 type Item = z.infer<typeof Item>;
 
@@ -83,26 +67,35 @@ function items(payload: unknown): { item: Item; username: string }[] {
   });
 }
 
-function excerptOf(item: Item, username: string): string {
+/** The item's numbers as the digest shape (not yet schema-checked). */
+function profileOf(item: Item, username: string): ApifyGithubProfile {
+  return {
+    handle: username,
+    last_year_contributions: parseCount(item.last_year_contribution_number),
+    first_commit_year: yearOf(item.first_year_commit),
+    pinned_repos: (item.pinned_repos ?? []).flatMap((p) => {
+      const name = (p.name ?? "").trim();
+      if (name === "") return [];
+      return [{ name, url: p.url ?? `https://github.com/${username}/${name}`, stars: parseCount(p.stars) ?? 0, forks: parseCount(p.forks) ?? 0, languages: p.languages ?? [] }];
+    }),
+    achievements: item.achievements ?? [],
+    source_url: `https://apify.com/${ACTOR}?profile=${username}`,
+  };
+}
+
+function excerptOf(item: Item, p: ApifyGithubProfile): string {
   const parts: string[] = [];
-  const contributions = parseCount(item.last_year_contribution_number);
-  if (contributions !== null) parts.push(`${String(contributions)} contributions in the last year`);
-  const year = yearOf(item.first_year_commit);
-  if (year !== null) parts.push(`first commit in ${String(year)}`);
-  const pinned = (item.pinned_repos ?? []).flatMap((p) => {
-    const name = (p.name ?? "").trim();
-    if (name === "") return [];
-    const stars = parseCount(p.stars);
-    const lang = p.languages?.[0];
-    const detail = [stars === null ? null : `★${String(stars)}`, lang ?? null].filter((x) => x !== null).join(", ");
-    return [detail === "" ? name : `${name} (${detail})`];
+  if (p.last_year_contributions !== null) parts.push(`${String(p.last_year_contributions)} contributions in the last year`);
+  if (p.first_commit_year !== null) parts.push(`first commit in ${String(p.first_commit_year)}`);
+  const pinned = p.pinned_repos.map((r) => {
+    const detail = [r.stars > 0 ? `★${String(r.stars)}` : null, r.languages[0] ?? null].filter((x) => x !== null).join(", ");
+    return detail === "" ? r.name : `${r.name} (${detail})`;
   });
   if (pinned.length > 0) parts.push(`pinned repositories: ${pinned.join(", ")}`);
-  const achievements = item.achievements ?? [];
-  if (achievements.length > 0) parts.push(`achievements: ${achievements.join(", ")}`);
+  if (p.achievements.length > 0) parts.push(`achievements: ${p.achievements.join(", ")}`);
   const followers = parseCount(item.followers);
   if (followers !== null) parts.push(`followers ${String(followers)}`);
-  const who = (item.name ?? "").trim() || username;
+  const who = (item.name ?? "").trim() || p.handle;
   return parts.length > 0 ? `${who} on GitHub: ${parts.join("; ")}` : `${who} on GitHub`;
 }
 
@@ -110,59 +103,21 @@ export const githubApify: Collector = {
   id: ACTOR,
   requests: (ctx) => {
     if (!isTechnicalFamily(ctx.roleFamily)) return [];
-    const seen = new Set<string>();
-    const handles: string[] = [];
-    for (const c of acceptedCandidates(ctx)) {
-      const h = (c.handle ?? "").trim().replace(/^@/, "");
-      if (c.platform !== "github" || h === "" || seen.has(h.toLowerCase())) continue;
-      seen.add(h.toLowerCase());
-      handles.push(h);
-    }
+    const handles = githubHandles(ctx);
     if (handles.length === 0) return [];
-    return [
-      {
-        via: "actor",
-        actor: ACTOR,
-        input: { peoples_links: handles.slice(0, MAX_HANDLES).map((h) => `https://github.com/${h}`) },
-        maxTotalChargeUsd: 0.05,
-        timeoutSecs: 45,
-      },
-    ];
+    return [{ via: "actor", actor: ACTOR, input: { peoples_links: handles.map((h) => `https://github.com/${h}`) }, maxTotalChargeUsd: 0.05, timeoutSecs: 45 }];
   },
   parse: (payload, ctx) =>
     items(payload).map(({ item, username }): ParsedSource => {
       const url = `https://github.com/${username}`;
-      return { url, excerpt: clip(excerptOf(item, username)), raw: item, identity: identityFor(ctx, url) };
+      return { url, excerpt: clip(excerptOf(item, profileOf(item, username))), raw: item, identity: identityFor(ctx, url) };
     }),
-  digest: (payloads, ctx) => {
-    const handles = acceptedCandidates(ctx)
-      .filter((c) => c.platform === "github")
-      .map((c) => (c.handle ?? "").replace(/^@/, "").toLowerCase())
-      .filter((h) => h !== "");
-    for (const payload of payloads) {
-      const hit = items(payload).find(({ username }) => handles.includes(username.toLowerCase()));
+  digest: (fetched, ctx) => {
+    const handles = githubHandles(ctx).map((h) => h.toLowerCase());
+    for (const f of fetched) {
+      const hit = items(f.payload).find(({ username }) => handles.includes(username.toLowerCase()));
       if (hit === undefined) continue;
-      const { item, username } = hit;
-      const parsed = ApifyGithubProfile.safeParse({
-        handle: username,
-        last_year_contributions: parseCount(item.last_year_contribution_number),
-        first_commit_year: yearOf(item.first_year_commit),
-        pinned_repos: (item.pinned_repos ?? []).flatMap((p) => {
-          const name = (p.name ?? "").trim();
-          if (name === "") return [];
-          return [
-            {
-              name,
-              url: p.url ?? `https://github.com/${username}/${name}`,
-              stars: parseCount(p.stars) ?? 0,
-              forks: parseCount(p.forks) ?? 0,
-              languages: p.languages ?? [],
-            },
-          ];
-        }),
-        achievements: item.achievements ?? [],
-        source_url: `https://apify.com/${ACTOR}?profile=${username}`,
-      });
+      const parsed = ApifyGithubProfile.safeParse(profileOf(hit.item, hit.username));
       if (parsed.success) return parsed.data;
     }
     return null;

@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/runs/[id]/ats-note.ts
- * Deps:    src/domain/audit (deletionDate), ./summary (summary30s), ./state (RunState, sortLineup, hiringFor)
+ * Deps:    src/domain/audit (deletionDate), src/domain/url (httpUrl), ./summary (summary30s), ./state (RunState, sortLineup, hiringFor)
  * Tested:  src/app/runs/[id]/__tests__/ats-note.test.ts
  *
  * Key responsibilities:
@@ -16,21 +16,12 @@
  * - Rates the research, never the candidate: no scores, ranks, verdicts or traits
  */
 import { deletionDate } from "@/domain/audit";
+import { httpUrl } from "@/domain/url";
 import { hiringFor, sortLineup, type RunState } from "./state";
 import { summary30s } from "./summary";
 
 /** Most profile links on the note; the full brief has the rest. */
 const MAX_PROFILES = 5;
-
-/** The URL normalised, or null unless it parses as http(s). */
-function httpUrl(raw: string): string | null {
-  try {
-    const url = new URL(raw);
-    return url.protocol === "http:" || url.protocol === "https:" ? url.href : null;
-  } catch {
-    return null;
-  }
-}
 
 /** First profile URL of each merged candidate, lineup order, deduplicated, at most MAX_PROFILES. */
 function confirmedProfiles(state: RunState): string[] {

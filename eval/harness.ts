@@ -26,7 +26,7 @@ import type { LlmCall, Ports } from "@/domain/ports";
 import { canonicalUrl } from "@/domain/url";
 import { hiringRecipe } from "@/recipe/goals/hiring";
 import { executeStep } from "@/recipe/runner";
-import { familyOf } from "@/recipe/seams/position-extract";
+import { familyOf } from "@/domain/position";
 import { CHALLENGE_SYSTEM } from "@/recipe/seams/challenge";
 import { noneConfirmed, profileKey, sourceIdentityUpdates, UNCONFIRMED_GAP } from "@/recipe/seams/resolve";
 import { seedProfile } from "@/recipe/seams/seed";
