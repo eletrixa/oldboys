@@ -15,7 +15,7 @@
  * - Copy only claims what the run page does today (evidence per criterion, to-verify list, not searched, kit)
  * - Each section adds a new concrete detail instead of repeating the hero's sentence
  */
-import { Eyebrow, Pill, type Tone } from "../ui";
+import { Eyebrow, KEY, Pill, type Tone } from "../ui";
 import { NONE, PARTIAL } from "./evidence-data";
 import { Photo, Section, Title } from "./parts";
 import { SampleBrief } from "./sample-brief";
@@ -65,8 +65,7 @@ const GLANCE: readonly (readonly [string, Tone, string])[] = [
   ["Has led a team of at least three engineers", "neutral", "none"],
 ];
 
-const SNIP = "relative mx-3 -mt-12 flex flex-col gap-2 rounded-xl border border-divider bg-[#fffefb] p-4 shadow-[0_18px_44px_rgba(40,45,43,0.14)] sm:mx-4";
-const SNIP_K = "text-[11px] font-semibold tracking-[0.07em] text-muted uppercase";
+const SNIP = "relative mx-3 -mt-12 flex flex-col gap-2 rounded-xl border border-divider bg-paper p-4 shadow-[0_18px_44px_rgba(40,45,43,0.14)] sm:mx-4";
 
 function Moment({ when, title, body, children }: Readonly<{ when: string; title: string; body: string; children: React.ReactNode }>): React.JSX.Element {
   return (
@@ -92,7 +91,7 @@ export function Moments(): React.JSX.Element {
         <Moment when="Before" title="Read one page, not ten tabs." body="Each requirement sits next to its coverage word and its source, so you know what is backed up before the candidate walks in.">
           <Photo src="/marketing/moment-prepare.jpg" alt="Hands underlining a highlighted line on a printed one-page brief." className="aspect-[16/10]" />
           <div className={SNIP}>
-            <span className={SNIP_K}>Jan&apos;s brief at a glance</span>
+            <span className={KEY}>Jan&apos;s brief at a glance</span>
             <ul className="flex flex-col divide-y divide-divider text-[15px]">
               {GLANCE.map(([t, tone, word]) => (
                 <li key={t} className="flex items-center justify-between gap-3 py-2">
@@ -106,7 +105,7 @@ export function Moments(): React.JSX.Element {
         <Moment when="During" title="Ask questions that start from the evidence." body="Each question carries the reason to ask it. Copy them into your interview kit, your ATS or a reference check.">
           <Photo src="/marketing/moment-interview.jpg" alt="Two people talking across a table in a bright meeting room, faces not visible." className="aspect-[16/10]" />
           <div className={SNIP}>
-            <span className={SNIP_K}>Questions with a reason</span>
+            <span className={KEY}>Questions with a reason</span>
             <div className="flex flex-col gap-1 border-b border-divider pb-3">
               <p className="font-serif text-[17px] leading-snug text-pretty">“{partial.question}”</p>
               <span className="text-[13px] text-muted">Why ask: partial. {partial.why.open}</span>

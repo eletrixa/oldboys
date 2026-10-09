@@ -20,7 +20,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import results from "../../../eval/results.json";
 import type { EvalReport } from "../../../eval/score";
-import { CARD, CARD_FLUSH, CARD_SAGE, Eyebrow, LINK, Pill, SimulatedPill } from "../ui";
+import { CARD, CARD_FLUSH, Eyebrow, LINK, Pill, SimulatedPill, TILE } from "../ui";
 
 export const metadata: Metadata = { title: "Validation · Radar" };
 
@@ -169,28 +169,30 @@ export default function ValidationPage(): React.JSX.Element {
         <MissList misses={report.strict.misses} />
       </section>
 
-      <section aria-labelledby="real" className={CARD}>
-        <h2 id="real" className="mb-3 font-serif text-xl">What is real</h2>
-        <ul className="flex list-disc flex-col gap-2 pl-5 text-sm">{REAL.map((t) => <li key={t}>{t}</li>)}</ul>
-      </section>
+      <div className="grid gap-8 md:grid-cols-3 md:gap-6">
+        <section aria-labelledby="real" className={TILE}>
+          <h2 id="real" className="font-serif text-xl">What is real</h2>
+          <ul className="flex list-disc flex-col gap-2 pl-5 text-sm">{REAL.map((t) => <li key={t}>{t}</li>)}</ul>
+        </section>
 
-      <section aria-labelledby="simulated" className={CARD}>
-        <h2 id="simulated" className="mb-1 font-serif text-xl">What is simulated</h2>
-        <p className="mb-3 text-sm text-muted">The app marks each of these where it appears.</p>
-        <ul className="flex flex-col gap-3 text-sm">
-          {SIMULATED.map((s) => (
-            <li key={s.text} className="flex flex-wrap items-start gap-2">
-              {s.kind === null ? <Pill tone="neutral">NOT LIVE</Pill> : <SimulatedPill kind={s.kind} />}
-              <span className="min-w-0 flex-1">{s.text}</span>
-            </li>
-          ))}
-        </ul>
-      </section>
+        <section aria-labelledby="simulated" className={TILE}>
+          <h2 id="simulated" className="font-serif text-xl">What is simulated</h2>
+          <p className="text-sm text-muted">The app marks each of these where it appears.</p>
+          <ul className="flex flex-col gap-3 text-sm">
+            {SIMULATED.map((s) => (
+              <li key={s.text} className="flex flex-wrap items-start gap-2">
+                {s.kind === null ? <Pill tone="neutral">NOT LIVE</Pill> : <SimulatedPill kind={s.kind} />}
+                <span className="min-w-0 flex-1">{s.text}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
 
-      <section aria-labelledby="incomplete" className={CARD_SAGE}>
-        <h2 id="incomplete" className="mb-3 font-serif text-xl">What is incomplete</h2>
-        <ul className="flex list-disc flex-col gap-2 pl-5 text-sm">{INCOMPLETE.map((t) => <li key={t}>{t}</li>)}</ul>
-      </section>
+        <section aria-labelledby="incomplete" className={TILE}>
+          <h2 id="incomplete" className="font-serif text-xl">What is incomplete</h2>
+          <ul className="flex list-disc flex-col gap-2 pl-5 text-sm">{INCOMPLETE.map((t) => <li key={t}>{t}</li>)}</ul>
+        </section>
+      </div>
 
       <p className="text-sm text-muted">
         <Link href="/" className={LINK}>Back to Radar</Link>
