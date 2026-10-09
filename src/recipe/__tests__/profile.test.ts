@@ -11,7 +11,7 @@
  * - fit_pct: has 1, partial 0.5, none 0; a trait without supporting evidence counts as none
  * - One fit card for the run's role: brief must-haves weight 2, catalog extras weight 1, none without a role
  * - Questions cut to 5 by priority, then the evidence count of the risk they close
- * - Personality only from the person's own writing; under 3 lines DISC and MBTI are null
+ * - Personality only from the person's own writing; under 3 lines DISC and MBTI are null; big5 passes through the same gate
  * - Every surviving evidence line carries a code-set strength
  * - A failed attempt retries once over the 40 highest-value sources; then a degraded profile, never a thrown step
  * - Prompt forbids score/rating/trust/culture-fit wording and Art. 9 content
@@ -177,6 +177,23 @@ describe("profile seam", () => {
     expect(rows.personality.traits.map((x) => x.text)).toEqual(["Ships in small steps"]);
     expect(rows.personality.evidence_dropped).toBe(1);
     expect(rows.personality.disc).not.toBeNull();
+  });
+
+  it("passes big5 through the gate: a trait with an own-writing quote survives, nothing without one", async () => {
+    const post: Source = { ...src, id: "s2", actor: "harvestapi/linkedin-profile-posts", url: "https://www.linkedin.com/posts/jd-1", excerpt: "Shipping beats planning. Small PRs, every day." };
+    const press: Source = { ...src, id: "s3", actor: "apify/google-search-scraper", url: "https://news.example/jd", excerpt: "She is a calm leader." };
+    const c = baseContext({ sources: [src, post, press], claims: [fact] });
+    const line = (quote: string, source_id: string) => ({ quote, source_id, kind: "INFERENCE", supports: true });
+    const own = [line("Shipping beats planning", "s2"), line("Small PRs, every day", "s2"), style];
+    const trait = (evidence: unknown[]) => ({ dimension: "conscientiousness", lean: "high", position: 80, confidence: "medium", summary: "Ships small.", evidence });
+    const r = reading(own);
+    const withBig5 = { ...r, personality: { ...r.personality, big5: { traits: [trait([own[0]])], recommendations: [{ text: "Scope tasks small.", dimension: "conscientiousness" }] } } };
+    const p = await buildProfile(c, [fact], fakePorts({ llm: llmFor(withBig5) }), out());
+    expect(p.personality.big5?.traits).toHaveLength(1);
+    expect(p.personality.big5?.recommendations[0]?.text).toBe("Scope tasks small.");
+    const other = { ...r, personality: { ...r.personality, big5: { traits: [trait([line("She is a calm leader", "s3")])], recommendations: [] } } };
+    expect((await buildProfile(c, [fact], fakePorts({ llm: llmFor(other) }), out())).personality.big5).toBeNull();
+    expect((await buildProfile(c, [fact], fakePorts({ llm: llmFor(r) }), out())).personality.big5).toBeNull();
   });
 
   it("retries once over the 40 highest-value sources when the output does not parse", async () => {

@@ -4,13 +4,13 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/api/runs/[id]/personality/handler.ts
- * Deps:    src/app/api/_lib/run-access, src/domain/claim (Brief, Candidate, Source), src/domain/ports (types), src/recipe/seams/personality
+ * Deps:    src/app/api/_lib/run-access, src/domain/claim (Brief, Candidate, Source), src/domain/ports (types), src/recipe/seams/{personality,resolve}
  * Tested:  src/app/api/runs/[id]/personality/__tests__/handler.test.ts
  *
  * Key responsibilities:
  * - Auth like POST /api/runs/:id/delete: a same-origin session user (of the run's organization) or the bearer
  * - Unknown run 404; another organization 403; no brief with a profile 409; no AI key 503; model failure 502
- * - Reads the run's sources (confirmed identity only) and merged candidates from D1, one `primary` call (readPersonality),
+ * - Reads the run's sources (merged identity, minus rejected profiles: confirmedSources) and merged candidates from D1, one `primary` call (readPersonality),
  *   writes `profile.personality` back into briefs.brief_json and one `llm` ledger row (step PERSONALITY_STEP, cost, counts)
  * - Answer `{ personality }`
  *
@@ -21,6 +21,7 @@ import { authorizeRunAction, findRunOwner, otherOrganization } from "@/app/api/_
 import { Brief, type Candidate, type Profile, type Source } from "@/domain/claim";
 import type { LedgerAppend, LlmCall } from "@/domain/ports";
 import { readPersonality } from "@/recipe/seams/personality";
+import { confirmedSources } from "@/recipe/seams/resolve";
 
 export const PERSONALITY_STEP = "profile_personality";
 
@@ -48,23 +49,25 @@ export async function personalityRoute(request: Request, env: PersonalityEnv, ru
   const [head, briefRow, sources, cands] = await Promise.all([
     env.DB.prepare("SELECT id, subject, anchor, role FROM investigations WHERE id = ?").bind(runId).first<Head>(),
     env.DB.prepare("SELECT brief_json FROM briefs WHERE run_id = ?").bind(runId).first<{ brief_json: string }>(),
-    env.DB.prepare("SELECT * FROM sources WHERE run_id = ? AND identity = 'confirmed'").bind(runId).all<Source>(),
-    env.DB.prepare("SELECT * FROM candidates WHERE run_id = ? AND decision = 'merge'").bind(runId).all<CandidateRow>(),
+    env.DB.prepare("SELECT * FROM sources WHERE run_id = ?").bind(runId).all<Source>(),
+    env.DB.prepare("SELECT * FROM candidates WHERE run_id = ?").bind(runId).all<CandidateRow>(),
   ]);
   if (head === null || briefRow === null) return json({ error: "the run has no brief yet" }, 409);
   const brief = Brief.parse(JSON.parse(briefRow.brief_json));
   if (brief.profile?.degraded !== null) return json({ error: "the run has no profile" }, 409);
-  const merged = cands.results.map(({ profile_urls_json, reasons_json, ...c }) => ({
+  const candidates: Candidate[] = cands.results.map(({ profile_urls_json, reasons_json, ...c }) => ({
     ...c,
     profile_urls: JSON.parse(profile_urls_json) as string[],
     reasons: JSON.parse(reasons_json) as string[],
   }));
+  const merged = candidates.filter((c) => c.decision === "merge");
+  const confirmed = confirmedSources({ sources: sources.results, candidates });
 
   const started = deps.now();
   let personality: Profile["personality"];
   let cost_usd: number;
   try {
-    ({ personality, cost_usd } = await readPersonality({ subject: head.subject, anchor: head.anchor, role: head.role, sources: sources.results, merged }, deps.llm));
+    ({ personality, cost_usd } = await readPersonality({ subject: head.subject, anchor: head.anchor, role: head.role, sources: confirmed, merged }, deps.llm));
   } catch (error) {
     const e = error instanceof Error ? error : new Error(String(error));
     console.error("personality failed", { runId, name: e.name, message: e.message.slice(0, 200) });
