@@ -13,9 +13,11 @@
  * - scorecard(state): null without a brief; fit from the hiring role's position_fit traits, else from per_question
  *   `mh-*` coverage (weight 1), null when there are no must-haves; pluses (must-haves with evidence, partly evidenced
  *   must-haves, achievements with an independent line, CV matches), minuses (must-haves without evidence, risks, CV
- *   differences, challenged claims, registry records attributed to the candidate, account signals with a question),
+ *   differences, challenged claims, registry records: attributed ones listed (REGISTRY_LISTED per registry), name-only ones as one
+ *   summary line per registry; account signals with a question),
  *   notes (steps not searched or empty, AI off)
- * - Points: a must-have's share of 100, signed; every other line carries 0 ("no effect on fit")
+ * - Points: a must-have's share of 100, signed; every other line carries 0 ("no effect on fit"); a must-have whose only
+ *   evidence is the CV carries CV_ONLY in its text
  * - Shared wording for the card and the text export: askLine, pointsLabel, checkedLabel, hasScorecard, SCORECARD_NOTE
  *
  * Design constraints:
@@ -29,7 +31,7 @@ import type { Brief, PositionFit, Profile, ProfileEvidence, ProfileItem } from "
 import { registryById } from "@/domain/cz-registry";
 import { challengeReason } from "./challenge";
 import { cvRows, isCvSection } from "./cv-check";
-import { hiringFor, type RunState } from "./state";
+import { hiringFor, isCvSource, type RunState } from "./state";
 
 type ScoreSide = "plus" | "minus";
 type ScoreArea = "must-have" | "achievement" | "risk" | "cv" | "challenge" | "registry" | "signal";
@@ -123,15 +125,21 @@ export function hasScorecard(card: Scorecard | null): card is Scorecard {
   return card !== null && (card.fit !== null || card.pluses.length > 0 || card.minuses.length > 0);
 }
 
-function mustHaveItems(traits: readonly Trait[], fromCoverage: boolean): ScoreItem[] {
+/** Suffix of a must-have line whose only evidence is the candidate's own CV. */
+export const CV_ONLY = "from the CV only";
+
+function mustHaveItems(traits: readonly Trait[], fromCoverage: boolean, isCv: (sourceId: string) => boolean): ScoreItem[] {
   const total = traits.reduce((s, t) => s + t.weight, 0);
   return traits.map((t, i) => {
     const pts = share(t.weight, total);
     const lines = supporting(t.evidence);
-    const base = { id: `mh-${String(i)}`, area: "must-have" as const, source_ids: sourceIds(lines), urls: [], ask: null };
+    const ids = sourceIds(lines);
+    const base = { id: `mh-${String(i)}`, area: "must-have" as const, source_ids: ids, urls: [], ask: null };
     const kind: ScoreKind = fromCoverage ? "CHECK" : t.evidence.length === 0 ? "INFERENCE" : kindOf(lines);
-    if (t.status === "has") return { ...base, side: "plus", text: t.trait, kind, points: pts };
-    if (t.status === "partial") return { ...base, side: "plus", text: `${t.trait}, partly evidenced`, kind, points: share(t.weight / 2, total) };
+    // A must-have resting on the CV alone is self-reported: said so in the line, never hidden behind "FACT".
+    const cvOnly = ids.length > 0 && ids.every(isCv) ? `, ${CV_ONLY}` : "";
+    if (t.status === "has") return { ...base, side: "plus", text: `${t.trait}${cvOnly}`, kind, points: pts };
+    if (t.status === "partial") return { ...base, side: "plus", text: `${t.trait}, partly evidenced${cvOnly}`, kind, points: share(t.weight / 2, total) };
     return { ...base, side: "minus", text: `${t.trait}: no public evidence`, kind: "CHECK", points: -pts };
   });
 }
@@ -196,22 +204,45 @@ function challengeItems(state: RunState): ScoreItem[] {
   });
 }
 
+/** Attributed records (city or company match) listed one by one, at most this many per registry; name-only records are one summary line. */
+const REGISTRY_LISTED = 3;
+
 function registryItems(state: RunState): ScoreItem[] {
-  return (state.registry_checks?.checks ?? []).flatMap((check) =>
-    check.status !== "hits"
-      ? []
-      : check.hits.map((h, i) => ({
-          id: `reg-${check.registry}-${String(i)}`,
-          side: "minus" as const,
-          area: "registry" as const,
-          text: `${registryById(check.registry).name}: ${h.label}`,
-          kind: "CHECK" as const,
-          points: 0,
-          source_ids: [],
-          urls: [h.url],
-          ask: h.match === null ? "Check: name match only, a namesake is possible." : `Check: matched by ${h.match}.`,
-        })),
-  );
+  return (state.registry_checks?.checks ?? []).flatMap((check) => {
+    if (check.status !== "hits") return [];
+    const name = registryById(check.registry).name;
+    const matched = check.hits.filter((h) => h.match !== null);
+    const nameOnly = check.hits.length - matched.length;
+    const listed = matched.slice(0, REGISTRY_LISTED).map((h, i) => ({
+      id: `reg-${check.registry}-${String(i)}`,
+      side: "minus" as const,
+      area: "registry" as const,
+      text: `${name}: ${h.label}`,
+      kind: "CHECK" as const,
+      points: 0,
+      source_ids: [],
+      urls: [h.url],
+      ask: `Check: matched by ${h.match ?? ""}.`,
+    }));
+    const rest = matched.length - listed.length + nameOnly;
+    if (rest === 0) return listed;
+    const total = check.total !== null && check.total > check.hits.length ? check.total : check.hits.length;
+    const what = listed.length === 0 ? `${String(total)} ${total === 1 ? "record" : "records"} under this name` : `${String(rest)} more ${rest === 1 ? "record" : "records"} under this name`;
+    return [
+      ...listed,
+      {
+        id: `reg-${check.registry}-rest`,
+        side: "minus" as const,
+        area: "registry" as const,
+        text: `${name}: ${what}`,
+        kind: "CHECK" as const,
+        points: 0,
+        source_ids: [],
+        urls: [check.source_url],
+        ask: nameOnly > 0 ? "Check: name match only, a namesake is possible; the registry search is linked." : "Check: the registry search is linked.",
+      },
+    ];
+  });
 }
 
 function signalItems(state: RunState): ScoreItem[] {
@@ -235,8 +266,9 @@ export function scorecard(state: RunState): Scorecard | null {
   const role = hiringFor(state);
   const fit = mainFit(brief.profile, role);
   const traits: Trait[] = fit?.traits ?? coverageTraits(state, brief);
+  const cvIds = new Set(state.sources.filter((src) => isCvSource(src.url)).map((src) => src.id));
   const items = [
-    ...mustHaveItems(traits, fit === null),
+    ...mustHaveItems(traits, fit === null, (id) => cvIds.has(id)),
     ...achievementItems(brief.profile?.achievements ?? []),
     ...(brief.profile === null ? [] : riskItems(brief.profile)),
     ...cvItems(state),
@@ -260,4 +292,4 @@ export function scorecard(state: RunState): Scorecard | null {
 }
 
 export const SCORECARD_NOTE =
-  "The figure is the share of the role's must-haves with public evidence, weighted as the role weights them. It is not a prediction of performance and not a judgement of the person. Lines under “no effect on fit” are points for the interview, not deductions.";
+  "The figure is the share of the role's must-haves with evidence, weighted as the role weights them; a line resting on the CV alone says so. It is not a prediction of performance and not a judgement of the person. Lines under “no effect on fit” are points for the interview, not deductions.";

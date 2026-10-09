@@ -182,9 +182,45 @@ describe("scorecard", () => {
     expect(byArea.challenge).toMatchObject({ text: "Maintains the acme-etl repository", source_ids: ["s-gh"] });
     expect(byArea.challenge?.ask).toMatch(/fork|copy/i);
     expect(byArea.registry).toMatchObject({ text: "ARES business records: Jan Novák, Brno, živnost aktivní", urls: ["https://ares.gov.cz/r/1"], ask: "Check: matched by city: Brno." });
+    expect(minuses.filter((i) => i.area === "registry")).toHaveLength(1);
     expect(byArea.signal).toMatchObject({ text: "The GitHub account was created on 2 Mar 2026.", urls: ["https://api.github.com/users/jnovak"], ask: "Did you have an earlier GitHub account?" });
     expect(minuses.map((i) => i.text)).not.toContain("The LinkedIn profile shows a verified badge.");
     expect(minuses.filter((i) => i.area !== "must-have").every((i) => i.points === 0)).toBe(true);
+  });
+
+  it("folds name-only registry records into one line per registry and lists at most three attributed ones", () => {
+    const hit = (label: string, match: string | null) => ({ label, url: `https://isir.justice.cz/${label}`, status: null, born: null, match });
+    const card = scorecard(
+      run({
+        registry_checks: {
+          subject: "Jan Novak",
+          role: null,
+          checks: [
+            { registry: "isir", status: "hits", searched: "Jan Novak", source_url: "https://isir.justice.cz/search", hits: Array.from({ length: 20 }, (_, i) => hit(`r${String(i)}`, null)), namesakes: 0, total: 35, note: null },
+            { registry: "justice-or", status: "hits", searched: "Jan Novak", source_url: "https://or.justice.cz/search", hits: [hit("a", "city: Brno"), hit("b", "city: Brno"), hit("c", "company: Acme"), hit("d", "city: Brno"), hit("e", null)], namesakes: 0, total: null, note: null },
+          ],
+        },
+      }),
+    );
+    const reg = (card?.minuses ?? []).filter((i) => i.area === "registry");
+    expect(reg.map((i) => i.text)).toEqual([
+      "Insolvency register: 35 records under this name",
+      "Public register persons: a",
+      "Public register persons: b",
+      "Public register persons: c",
+      "Public register persons: 2 more records under this name",
+    ]);
+    expect(reg[0]?.urls).toEqual(["https://isir.justice.cz/search"]);
+    expect(reg[0]?.ask).toMatch(/namesake/);
+    expect(reg[1]?.ask).toBe("Check: matched by city: Brno.");
+  });
+
+  it("says when a must-have rests on the CV alone", () => {
+    const p = profile();
+    const fit = p.position_fit[0];
+    if (fit !== undefined) fit.traits = [{ trait: "Location fit", status: "has", weight: 1, evidence: [line("cv:run1")] }, { trait: "Python", status: "has", weight: 1, evidence: [line("cv:run1"), line("s-gh")] }];
+    const card = scorecard(run({ brief: brief({ profile: p }) }));
+    expect(card?.pluses.map((i) => i.text).slice(0, 2)).toEqual(["Location fit, from the CV only", "Python"]);
   });
 
   it("notes empty and unsearched sources, never counting the CV section", () => {
