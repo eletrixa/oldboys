@@ -10,6 +10,7 @@
  * - Sections with no claims and no sources never render; a claimless social presence list is hidden
  * - ClaimList: quote deep link with the retrieval date in the tooltip, quote + saved copy with the match marked,
  *   STATEMENT label, inference note, CV source as text
+ * - Czech report (idea #24): labels and claim text in Czech, the quote and saved copy unchanged and marked lang=""
  *
  * Design constraints:
  * - Fixtures stay inline
@@ -19,7 +20,10 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { BriefSection, Claim } from "@/domain/claim";
 import { evidenceOf } from "../evidence";
-import { ClaimList, isShown } from "../sections";
+import { makeReport } from "../i18n";
+import { ReportContext } from "../report-lang";
+import { ClaimList } from "../sections";
+import { isShown } from "../state";
 
 const sec = (over: Partial<BriefSection>): BriefSection => ({
   id: "x", title: "X", confidence: 0.5, confidence_reason: "r", claim_ids: [], source_ids: [], summary: "", ...over,
@@ -89,5 +93,26 @@ describe("ClaimList evidence", () => {
     const html = render([claim({ id: "c2", supports: ["cv"] })]);
     expect(html).toContain("Candidate&#x27;s CV (pasted)");
     expect(html).not.toContain('href="cv:');
+  });
+});
+
+describe("ClaimList in Czech", () => {
+  const report = makeReport("cs", { "c:c1": "Pracuje jako datový inženýr.", "src:s1": "shoda jména a zaměstnavatele (Acme)" });
+  const renderCs = (claims: Claim[]): string =>
+    renderToStaticMarkup(createElement(ReportContext, { value: report }, createElement(ClaimList, { claims, evidence })));
+
+  it("shows Czech labels and the translated claim, the quote stays in the original", () => {
+    const html = renderCs([claim({}), claim({ id: "c3", text: "Leads a team" })]);
+    expect(html).toContain("Fakt");
+    expect(html).toContain("Pracuje jako datový inženýr.");
+    expect(html).toContain("Leads a team");
+    expect(html).toContain("Zobrazit doklady");
+    expect(html).toContain("Citace v originále");
+    expect(html).toContain('<blockquote lang=""');
+    expect(html).toContain("“data engineer at Acme”");
+    expect(html).toContain("Otevřít u citace");
+    expect(html).toContain("Uložená kopie z doby načtení (uchováváme do 16. 10. 2026)");
+    expect(html).toContain("Potvrzeno: shoda jména a zaměstnavatele (Acme) · Načteno 9. 10. 2026, 23:14 UTC");
+    expect(html).not.toContain("Show evidence");
   });
 });

@@ -9,6 +9,7 @@
  * Key responsibilities:
  * - Empty ledger reads as zeros; costs sum and round to 2 decimals; calls are counted by kind
  * - Pause time is excluded; an open pause stops the clock at the pause
+ * - A later report translation row (idea #24) adds cost and a model call, never research time
  * - Invalid createdAt and negative values clamp to 0
  * - formatDuration picks seconds, minutes or hours
  *
@@ -60,6 +61,12 @@ describe("runCost", () => {
     expect(cost.source_calls).toBe(2);
     expect(cost.llm_calls).toBe(1);
     expect(cost.duration_ms).toBe(192_000);
+  });
+
+  it("adds a later report translation's cost and model call but not its time", () => {
+    const translate: CostRow = { ...row("llm", "23:30:00", 0.04), step: "translate" };
+    const cost = runCost([row("llm", "20:01:00", 0.07), translate], START);
+    expect(cost).toEqual({ usd: 0.11, source_calls: 0, llm_calls: 2, duration_ms: 60_000 });
   });
 
   it("excludes time spent paused", () => {

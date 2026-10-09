@@ -19,7 +19,7 @@
  *   interview kit, the ATS note and the reference questions
  * - searchedTitle: "Searched, nothing confirmed" when a gap is namesake-only, else "nothing found"
  * - GAP_LABEL, gapText, gapLine, searchedEmpty: human gap lines (raw request errors turned into plain words), shared by BriefView and the interview kit
- * - briefSections (confidence descending, null for briefs stored before sections), confidenceBand, host
+ * - briefSections (confidence descending, null for briefs stored before sections), isShown (sections worth a card), confidenceBand, host
  * - headerText / firstName: the run page title; "the candidate" until the seed step derived a name (plans/006)
  * - seedHeadline: the headline the seed_profile ledger row recorded
  *
@@ -197,7 +197,12 @@ export function seedHeadline(rows: readonly { step: string; ref_json: string | n
 
 /** Gap list heading: "nothing confirmed" once any searched source returned only namesakes, else "nothing found". */
 export function searchedTitle(gaps: readonly { reason: string }[]): string {
-  return gaps.some((g) => g.reason.includes("none confirmed")) ? "Searched, nothing confirmed" : "Searched, nothing found";
+  return namesakeOnly(gaps) ? "Searched, nothing confirmed" : "Searched, nothing found";
+}
+
+/** True once any searched source returned only namesakes (the gap heading then says "nothing confirmed"). */
+export function namesakeOnly(gaps: readonly { reason: string }[]): boolean {
+  return gaps.some((g) => g.reason.includes("none confirmed"));
 }
 
 /** Human labels for recipe step ids that appear in the gap lists. */
@@ -245,6 +250,11 @@ export function briefSections(brief: Brief): BriefSection[] | null {
   const b: unknown = brief;
   if (typeof b !== "object" || b === null || !("sections" in b) || !Array.isArray(b.sections) || b.sections.length === 0) return null;
   return (b.sections as BriefSection[]).toSorted((x, y) => y.confidence - x.confidence);
+}
+
+/** A section with no claims and no sources has nothing to show; neither has a claimless social-presence list. */
+export function isShown(s: BriefSection): boolean {
+  return s.claim_ids.length > 0 || (s.source_ids.length > 0 && s.id !== "social-presence");
 }
 
 export type ConfidenceBand = "strong" | "fair" | "weak";
