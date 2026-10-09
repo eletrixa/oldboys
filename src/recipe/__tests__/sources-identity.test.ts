@@ -76,6 +76,13 @@ describe("identityFor", () => {
 });
 
 describe("collector identity", () => {
+  it("a {role_sites} serp step requests nothing without a role template and a site: clause with one", () => {
+    const sitesStep = { ...step, query: '"{subject}" {role_sites}' };
+    expect(googleSearch.requests(baseContext(), sitesStep)).toEqual([]);
+    const [req] = googleSearch.requests(baseContext({ roleSites: ["github.com", "npmjs.com"] }), sitesStep);
+    expect(req?.via === "actor" ? req.input.queries : null).toBe('"Jana Dvořáková" site:github.com OR site:npmjs.com');
+  });
+
   it("serp hits are always unverified discovery", () => {
     const out = googleSearch.parse([{ organicResults: [{ url: "https://jana.dev/", title: "Jana" }] }], merged({ profile_urls: ["https://jana.dev/"] }), step);
     expect(ids(out)).toEqual(["unverified"]);

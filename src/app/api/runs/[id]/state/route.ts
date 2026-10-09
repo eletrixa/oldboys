@@ -3,18 +3,21 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/api/runs/[id]/state/route.ts
- * Deps:    @opennextjs/cloudflare (getCloudflareContext), bindings DB, src/recipe/goals, src/domain/run-cost, src/domain/quote, src/app/intake/intake-rows (type)
- * Tested:  n/a
+ * Deps:    @opennextjs/cloudflare (getCloudflareContext), bindings DB, src/recipe/goals, src/domain/run-cost, src/domain/quote, src/domain/cv-check, src/domain/challenge, src/app/runs/[id]/challenge, src/app/intake/intake-rows (type)
+ * Tested:  n/a (withCvQuestion: src/domain/__tests__/cv-check.test.ts; readChallenge: src/domain/__tests__/challenge.test.ts; challengeState: src/app/runs/[id]/__tests__/challenge.test.ts)
  *
  * Key responsibilities:
  * - Read investigation, candidates, claims, sources, brief and last ledger step from D1
- * - Questions = recipe base questions + investigations.questions_json; mentions = COUNT(sources)
+ * - Questions = recipe base questions + investigations.questions_json, plus `cv-consistency` when the run has a CV
+ *   source (withCvQuestion, same rule as the Workflow's loadContext); mentions = COUNT(sources)
  * - step_index/step_count from the recipe; failed_step = first recipe step without a ledger row on a failed run
  * - role = investigations.role (the brief's "Hiring for" line); subject is "" until the seed step derived it;
  *   headline = what the seed_profile ledger row recorded (plans/006); sources carry identity_reason (migration 0008),
  *   fetched_at and expires_at
  * - quote_contexts = quoteContexts over the claims and the source excerpts (idea #5): the saved text around each
  *   claim's quote, only for sources the claim cites; whole excerpts never leave this handler
+ * - challenges / challenge_summary = the devil's advocate record (idea #8) read from the verify ledger row's
+ *   `ref.challenge` (readChallenge, challengeState); [] / null for runs before it, no migration
  * - position = LEFT JOIN positions on investigations.position_id ({id, title}); null without one or once purged (migration 0009)
  * - organization_name = LEFT JOIN organizations (null for bearer/extension runs)
  * - cost = runCost over the ledger rows (seq order) from investigations.created_at
@@ -26,10 +29,13 @@
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import type { Candidate, Claim } from "@/domain/claim";
 import { Brief, GoalId } from "@/domain/claim";
+import { readChallenge } from "@/domain/challenge";
+import { withCvQuestion } from "@/domain/cv-check";
 import { quoteContexts } from "@/domain/quote";
 import { type CostRow, runCost } from "@/domain/run-cost";
 import { recipeFor } from "@/recipe/goals";
 import type { RunIntake } from "@/app/intake/intake-rows";
+import { challengeState } from "@/app/runs/[id]/challenge";
 import { type RunState, type RunStatus, seedHeadline } from "@/app/runs/[id]/state";
 
 type HeadRow = {
@@ -137,7 +143,8 @@ export async function GET(
     claims: runClaims,
     sources: sources.results.map(({ excerpt: _excerpt, ...s }) => s),
     quote_contexts: quoteContexts(runClaims, new Map(sources.results.map((s) => [s.id, s.excerpt]))),
-    questions: [...base, ...extra],
+    ...challengeState(readChallenge(ledger.results), new Set(runClaims.map((c) => c.id))),
+    questions: withCvQuestion(head.goal, [...base, ...extra], sources.results),
     // Brief.parse fills defaults (profile, sections...) for briefs stored before those fields existed
     brief: brief ? Brief.parse(JSON.parse(brief.brief_json)) : null,
     cost: runCost(ledger.results, head.created_at),

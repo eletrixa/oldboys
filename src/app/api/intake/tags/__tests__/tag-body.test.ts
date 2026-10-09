@@ -24,6 +24,12 @@ describe("TagBody", () => {
       goal: "hiring",
     });
   });
+  it("takes a positionId in place of a role, and needs one of the two", () => {
+    expect(TagBody.parse({ tag: "ok-tag", positionId: "p1" })).toMatchObject({ positionId: "p1", goal: "hiring" });
+    expect(TagBody.parse({ tag: "ok-tag", positionId: "p1" }).role).toBeUndefined();
+    expect(TagBody.safeParse({ tag: "ok-tag" }).success).toBe(false);
+    expect(TagBody.safeParse({ tag: "ok-tag", positionId: "bad id!" }).success).toBe(false);
+  });
   it("lowercases and trims the tag before the IntakeTag check", () => {
     expect(TagBody.parse({ tag: " Senior-BE ", role: "x" }).tag).toBe("senior-be");
   });

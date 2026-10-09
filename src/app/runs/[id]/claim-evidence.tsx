@@ -3,10 +3,12 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/runs/[id]/claim-evidence.tsx
- * Deps:    react, src/domain/claim (type), ../../ui (Radar primitives), ./evidence, ./state (host, isCvSource)
+ * Deps:    react, src/domain/claim (type), ../../ui (Radar primitives), ./challenge (challengeTag), ./evidence, ./state (host, isCvSource)
  * Tested:  src/app/runs/[id]/__tests__/sections.test.ts (rendered through ClaimList)
  *
  * Key responsibilities:
+ * - Devil's advocate (idea #8): a challenged claim opens with "Challenged: … — ask at the interview." and the
+ *   source-level reason
  * - The verbatim quote ("Quote from the source"; STATEMENT: "Said by the candidate, not public evidence"), or the
  *   inference note when the claim has no quote
  * - Per supporting source: "Open at the quote" deep link (quoteLink), host, retrieval date, "Confirmed: <reason>",
@@ -18,6 +20,7 @@
  */
 import type { Claim } from "@/domain/claim";
 import { Chevron, SUMMARY, SourceLink } from "../../ui";
+import { challengeTag } from "./challenge";
 import { type Evidence, contextKey, keptUntilLabel, quoteLink, retrievedLabel } from "./evidence";
 import { host, isCvSource } from "./state";
 
@@ -55,6 +58,7 @@ function SourceEvidence({ claim, sid, evidence }: { claim: Claim; sid: string; e
 export function ClaimEvidence({ claim, evidence, className = "" }: { claim: Claim; evidence: Evidence; className?: string }): React.JSX.Element {
   const quote = claim.quote !== null && claim.quote.trim() !== "" ? claim.quote.trim() : null;
   const sources = [...new Set(claim.supports)];
+  const challenge = evidence.challengeOf.get(claim.id);
   return (
     <details className={`group ${className}`}>
       <summary className={SUMMARY}>
@@ -62,6 +66,11 @@ export function ClaimEvidence({ claim, evidence, className = "" }: { claim: Clai
         Show evidence
       </summary>
       <div className="flex flex-col gap-3 rounded-xl border border-divider bg-canvas p-3 [overflow-wrap:anywhere]">
+        {challenge !== undefined && (
+          <p className="text-xs text-muted">
+            <span className="font-semibold">{challengeTag(challenge.ground)}.</span> {challenge.why}
+          </p>
+        )}
         {quote !== null ? (
           <figure>
             <figcaption className="text-xs font-semibold text-muted">{claim.kind === "STATEMENT" ? "Said by the candidate, not public evidence" : "Quote from the source"}</figcaption>

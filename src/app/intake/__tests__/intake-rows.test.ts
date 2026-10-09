@@ -39,6 +39,7 @@ describe("STATUS_LABEL / STATUS_TONE", () => {
   it("labels every status in plain words", () => {
     expect(ApplicationStatus.options.map((s) => STATUS_LABEL[s])).toEqual([
       "Received",
+      "In pool",
       "Run started",
       "Unmatched",
       "Incomplete",
@@ -46,13 +47,13 @@ describe("STATUS_LABEL / STATUS_TONE", () => {
     ]);
   });
   it("gives every status a tone; only run-started is ok", () => {
-    expect(ApplicationStatus.options.map((s) => STATUS_TONE[s])).toEqual(["neutral", "ok", "conflict", "unsure", "unsure"]);
+    expect(ApplicationStatus.options.map((s) => STATUS_TONE[s])).toEqual(["neutral", "neutral", "ok", "conflict", "unsure", "unsure"]);
   });
 });
 
 describe("SOURCE_LABEL", () => {
   it("labels every source", () => {
-    expect(ApplicationSource.options.map((s) => SOURCE_LABEL[s])).toEqual(["Email", "Google Form", "Apply page", "StartupJobs"]);
+    expect(ApplicationSource.options.map((s) => SOURCE_LABEL[s])).toEqual(["Email", "Google Form", "Apply page", "StartupJobs", "Added by hand"]);
   });
 });
 

@@ -3,13 +3,15 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/runs/[id]/summary.ts
- * Deps:    src/recipe/sources/types (platformOf), ./state (RunState, labels, gap helpers)
- * Tested:  src/app/runs/[id]/__tests__/summary.test.ts
+ * Deps:    src/recipe/sources/types (platformOf), ./state (RunState, labels, gap helpers), ./cv-check
+ * Tested:  src/app/runs/[id]/__tests__/summary.test.ts, src/app/runs/[id]/__tests__/cv-check.test.ts (CV check)
  *
  * Key responsibilities:
  * - summary30s: what is documented (confirmed platforms, role criteria with evidence), what is missing (at most two
  *   gaps), what to ask (the first interview question or check), or null while there is no brief
  * - Degraded brief (AI off): confirmed sources only, criteria stated as not checked
+ * - CV runs (idea #14): the documented sentence ends with cvSummaryLine ("CV: 3 statements match the public record,
+ *   1 to ask about."); the CV check is never counted as a research question or listed as a gap
  * - summaryText: the three sentences as one string for "Read aloud"
  *
  * Design constraints:
@@ -18,6 +20,7 @@
  */
 import type { Brief } from "@/domain/claim";
 import { platformOf } from "@/recipe/sources/types";
+import { cvSummaryLine, isCvSection } from "./cv-check";
 import { GAP_LABEL, PLATFORM_LABEL, PLATFORM_RANK, type RunState, searchedEmpty } from "./state";
 
 export type Summary30s = { documented: string; missing: string; ask: string };
@@ -72,13 +75,19 @@ export function aiOff(brief: Brief): boolean {
   return brief.degraded !== null || (brief.per_question.length > 0 && brief.per_question.every((q) => q.summary.startsWith("AI summary unavailable")));
 }
 
-/** Per-question rows that are role must-haves (mh-); all rows when the run has no role criteria. */
+/** Per-question rows that are role must-haves (mh-); all rows but the CV check when the run has no role criteria. */
 function criteriaRows(brief: Brief): { rows: Brief["per_question"]; noun: string } {
   const mh = brief.per_question.filter((q) => q.question_id.startsWith("mh-"));
-  return mh.length > 0 ? { rows: mh, noun: "role criteria" } : { rows: brief.per_question, noun: "research questions" };
+  return mh.length > 0 ? { rows: mh, noun: "role criteria" } : { rows: brief.per_question.filter((q) => !isCvSection(q.question_id)), noun: "research questions" };
 }
 
 function documented(state: RunState, brief: Brief, off: boolean): string {
+  const cv = cvSummaryLine(state);
+  const base = researched(state, brief, off);
+  return cv === null ? base : `${base} ${cv}`;
+}
+
+function researched(state: RunState, brief: Brief, off: boolean): string {
   const phrase = confirmedPhrase(state, brief);
   const head = phrase === null ? "No profile confirmed yet" : `Confirmed: ${phrase}`;
   if (off) return `${head}; role criteria were not checked because AI was off.`;
@@ -87,7 +96,7 @@ function documented(state: RunState, brief: Brief, off: boolean): string {
   const evidenced = rows.filter((q) => q.coverage === "evidenced").length;
   const partial = rows.filter((q) => q.coverage === "partial").length;
   const partly = partial > 0 ? `, ${String(partial)} partly` : "";
-  return `${head}; ${String(evidenced)} of ${String(rows.length)} ${noun} have evidence${partly}.`;
+  return `${head}; ${String(evidenced)} of ${String(rows.length)} ${noun} ${evidenced === 1 ? "has" : "have"} evidence${partly}.`;
 }
 
 /** Up to two gaps: criteria with no evidence first, then sources searched in vain, then sources not searched. */

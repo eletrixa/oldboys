@@ -3,15 +3,15 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/recipe/seams/seed.ts
- * Deps:    zod, src/domain/stable-id
- * Tested:  src/recipe/__tests__/seed.test.ts
+ * Deps:    zod, src/domain/stable-id, src/domain/cv-check (CV_ACTOR)
+ * Tested:  src/recipe/__tests__/seed.test.ts, src/recipe/__tests__/cv-consistency.test.ts (CV check)
  *
  * Key responsibilities:
  * - Profile URL: one harvestapi LinkedIn run (same request and parse as the linkedin_profile collector), the profile
  *   stored as a merged Source, one merged linkedin Candidate ("profile given by the manager")
  * - CV: one `primary` LLM call extracts name, headline, location, employer and links; the CV itself is stored as a
- *   merged Source (actor "cv", url "cv:<runId>"); linkedin/github/x/instagram links that literally appear in the CV
- *   become merged Candidates
+ *   merged Source (actor "cv", url "cv:<runId>", excerpt up to CV_EXCERPT_MAX so the career history reaches the
+ *   cv-consistency check); linkedin/github/x/instagram links that literally appear in the CV become merged Candidates
  * - Derive subject (profile name, CV name, given subject, name from the URL handle) and anchor (profile location,
  *   CV location, the profile URL, given anchor)
  *
@@ -24,6 +24,7 @@
  */
 import { z } from "zod";
 import type { Candidate } from "@/domain/claim";
+import { CV_ACTOR } from "@/domain/cv-check";
 import { nameFromHandle, normalizeLinkedinProfile } from "@/domain/profile-url";
 import type { Ports } from "@/domain/ports";
 import { stableId } from "@/domain/stable-id";
@@ -32,7 +33,12 @@ import { canonicalProfile, profileKey } from "@/recipe/seams/resolve";
 import { HARVEST_ACTOR, harvestProfiles, harvestRequest } from "@/recipe/sources/linkedin";
 import { clip, platformOf, type StepOutcome } from "@/recipe/sources/types";
 
-export const CV_ACTOR = "cv";
+export { CV_ACTOR };
+/**
+ * The CV is candidate-supplied, not scraped: a larger excerpt than EXCERPT_MAX keeps its career history for extract
+ * (still far under the extract prompt cap and the Workflow step payload limit).
+ */
+export const CV_EXCERPT_MAX = 8000;
 const LINK_PLATFORMS = new Set(["linkedin", "github", "x", "instagram"]);
 const GIVEN_REASON = "profile given by the manager";
 const CV_REASON = "linked from the CV the manager pasted";
@@ -123,7 +129,7 @@ function cvLinks(links: readonly string[], cvText: string): { url: string; platf
 }
 
 async function fromCv(cvText: string, input: SeedInput, ports: Ports, r: SeedResult): Promise<(Found & { links: ReturnType<typeof cvLinks> }) | null> {
-  r.out.sources.push(await store(input, ports, `cv:${input.runId}`, CV_ACTOR, clip(cvText), { text: cvText }));
+  r.out.sources.push(await store(input, ports, `cv:${input.runId}`, CV_ACTOR, clip(cvText, CV_EXCERPT_MAX), { text: cvText }));
   try {
     const res = await ports.llm({
       model: "primary",

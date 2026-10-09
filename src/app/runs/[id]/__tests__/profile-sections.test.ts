@@ -8,7 +8,7 @@
  *
  * Key responsibilities:
  * - Summary box, Robert's section order, caps with "Show N more", run's role first, empty sections omitted
- * - Evidence lines: kind, direction, [n] deep link, note, "source missing"
+ * - Evidence lines: kind, direction, strength pill, [n] deep link, note, "source missing"; independent count per item
  * - Fit recomputed as Σ(weight × status) ÷ Σ(weight)
  * - A degraded profile renders only "Profile not built: <reason>"
  *
@@ -22,7 +22,7 @@ import { type HistoryEntry, type PositionFit, Profile, type ProfileEvidence } fr
 import { evidenceOf } from "../evidence";
 import { ProfileSections } from "../profile-sections";
 
-const ev = (over: Partial<ProfileEvidence> = {}): ProfileEvidence => ({ quote: "led the data team at Acme", source_id: "s1", kind: "FACT", supports: true, note: "", ...over });
+const ev = (over: Partial<ProfileEvidence> = {}): ProfileEvidence => ({ quote: "led the data team at Acme", source_id: "s1", kind: "FACT", supports: true, note: "", strength: "weak", ...over });
 
 const acme: HistoryEntry = { organization: "Acme", title: "Data lead", from: "2019", to: null, kind: "job", summary: "Runs data", location: "", duration: "", evidence: [ev()] };
 const cto: PositionFit = {
@@ -85,6 +85,14 @@ describe("ProfileSections", () => {
     expect(out).toContain('href="https://example.com/about#:~:text=led%20the%20data%20team%20at%20Acme"');
     expect(out).toContain(">[1] example.com<");
     expect(out).toContain("Retrieved 9 Oct 2026, 10:00 UTC");
+  });
+
+  it("marks each line Independent or Self-reported and counts independent lines per item", () => {
+    const out = html(Profile.parse({ ...profile, achievements: [{ text: "Grew Acme", evidence: [ev(), ev({ strength: "strong" })] }], risks: [{ text: "Short tenure", evidence: [ev()] }] }));
+    expect(out).toContain(">Independent<");
+    expect(out).toContain(">Self-reported<");
+    expect(out).toContain("· 1 independent");
+    expect(out).toMatch(/text-unsure">· all self-reported</);
   });
 
   it("renders direction, note, detail, location, weights and style traits: context direction, note, detail, location, weights", () => {

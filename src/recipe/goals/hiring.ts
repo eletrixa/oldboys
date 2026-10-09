@@ -12,6 +12,7 @@
  *   presence, community and awards, location, contradictions
  * - Paid actor runs stay under RUN_BUDGET_CALLS (16): at most 14 here, and the extra web searches are packed as
  *   several queries into one SERP run (press_serp, talks_serp)
+ * - `role_sites_serp`: the matched role template's evidence sites (src/domain/role-catalog) as one `site:` search
  *
  * Design constraints:
  * - Must call `github_profile`; must never call ARES (that is due-diligence's step)
@@ -55,6 +56,7 @@ export const hiringRecipe: Recipe = {
     { id: "facebook_page", kind: "actor", actor: "apify/facebook-pages-scraper", onEmpty: { gap: "no public Facebook page found" } },
     { id: "bluesky_profile", kind: "actor", actor: "rest/bluesky", onEmpty: { gap: "no Bluesky account found" } },
     { id: "personal_site_crawl", kind: "actor", actor: "apify/website-content-crawler", onEmpty: { gap: "no personal site found" } },
+    { id: "role_sites_serp", kind: "serp", actor: "apify/google-search-scraper", query: '"{subject}" {role_sites}', onEmpty: { gap: "no hits on the role's evidence sites (or the role matched no template)" } },
     { id: "talks_serp", kind: "serp", actor: "apify/google-search-scraper", query: '"{subject}" talk OR podcast OR conference OR webinar OR přednáška\n"{subject}" blog OR article OR medium.com OR substack.com', onEmpty: { gap: "no talks, podcasts or articles found in web search" } },
     { id: "press_serp", kind: "serp", actor: "apify/google-search-scraper", query: '"{subject}" interview OR rozhovor OR "tisková zpráva" OR "press release"\n"{subject}" award OR ocenění OR volunteer OR mentor OR meetup', onEmpty: { gap: "no press, awards or community mentions found in web search" } },
     { id: "extract_claims", kind: "extract" },

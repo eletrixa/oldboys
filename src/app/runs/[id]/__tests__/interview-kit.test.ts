@@ -137,6 +137,12 @@ describe("interviewKit", () => {
     expect(md).toContain("2 items removed (protected categories)");
   });
 
+  it("footer says 1 item removed in the singular", () => {
+    const md = kit({ brief: brief({ removed_protected: 1 }) });
+    expect(md).toContain("_1 item removed (protected categories)_");
+    expect(md).not.toContain("1 items removed");
+  });
+
   it("lists sections by confidence instead of coverage, facts before inferences", () => {
     const section = (id: string, title: string, confidence: number, claim_ids: string[], source_ids: string[]): Brief["sections"][number] => ({
       id, title, confidence, confidence_reason: `reason ${id}`, claim_ids, source_ids, summary: `summary ${id}`,

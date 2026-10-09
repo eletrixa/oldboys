@@ -157,6 +157,8 @@ export const ProfileEvidence = z.object({
   direction: z.enum(["supports", "contradicts", "context"]).optional(),
   /** Where the line comes from, as a recruiter would say it: "LinkedIn experience, self-reported", "Meta farewell post, 2022-03-28". */
   note: z.string().default(""),
+  /** Set in code from the source: "weak" when the person wrote it themselves (LinkedIn profile or posts, X, CV, own site), "strong" when an independent party published it (press, employer page, registry, case study). Defaulted for older briefs. */
+  strength: z.enum(["strong", "weak"]).default("weak"),
 });
 export type ProfileEvidence = z.infer<typeof ProfileEvidence>;
 

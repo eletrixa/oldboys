@@ -3,18 +3,18 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/api/calls/[id]/skip/route.ts
- * Deps:    @opennextjs/cloudflare (getCloudflareContext), src/adapters/d1, src/workflow/calls, bindings DB
+ * Deps:    @opennextjs/cloudflare (getCloudflareContext), src/app/api/_lib/session-or-bearer, src/adapters/d1, src/workflow/calls, bindings DB
  * Tested:  n/a
  *
  * Key responsibilities:
- * - Bearer auth; drafted -> skipped in one conditional UPDATE (409 otherwise); ledger decision row
+ * - Session or bearer auth (requireSessionOrBearer); drafted -> skipped in one conditional UPDATE (409 otherwise); ledger decision row
  *
  * Design constraints:
  * - No runtime = "edge"
  */
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { makeLedgerAppend } from "@/adapters/d1";
-import { requireBearer } from "@/app/api/_lib/auth";
+import { requireSessionOrBearer } from "@/app/api/_lib/session-or-bearer";
 import { applyCallEvent, loadCall } from "@/workflow/calls";
 
 export async function POST(
@@ -22,7 +22,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> },
 ): Promise<Response> {
   const { env } = getCloudflareContext();
-  const denied = requireBearer(request, env.RUN_TOKEN);
+  const denied = await requireSessionOrBearer(request, env);
   if (denied) return denied;
 
   const { id } = await params;

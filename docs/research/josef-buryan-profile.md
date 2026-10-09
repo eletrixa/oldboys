@@ -4,7 +4,7 @@ Public sources, compiled 2026-10-09. Target shape for the app’s hiring brief.
 
 | Current role | Location | Sources | Facts | Inferences | Platforms | Fit, CMO |
 |---|---|---|---|---|---|---|
-| CMO, Groupon (since Feb 2025) | Prague, Czechia | 35 | 148 | 9 | 4 confirmed + 1 possible | 81% |
+| CMO, Groupon (since Feb 2025) | Prague, Czechia | 35 | 161 | 9 | 4 confirmed + 1 possible | 85% |
 
 FACT = verbatim quote from the linked source, checked by script; scraper fields appear as `field: value`. INFERENCE = derived, with its basis. Public data only.
 
@@ -443,27 +443,69 @@ Evidence (2):
 
 ## 5. Position fit
 
-Capabilities draw on common leadership-competency frameworks (Korn Ferry Leadership Architect, Spencer & Spencer) and industry writing on growth-focused CMOs; a checklist, not a scored test. Weight per role 0–3; status 1 has, 0.5 partial, 0 no evidence. Fit = Σ(weight × status) ÷ Σ(weight): the share of the role profile with public evidence.
+Capabilities draw on common leadership-competency frameworks (Korn Ferry Leadership Architect, Spencer & Spencer) and industry writing on growth-focused CMOs; a checklist, not a scored test. Catalog CMO must-haves weigh 2, other capabilities 1; status 1 has, 0.5 partial, 0 no evidence. Fit = Σ(weight × status) ÷ Σ(weight): the share of the role profile with public evidence.
 
-| CMO | VP Growth | GM / Country lead | Head of Performance Marketing |
-|---|---|---|---|
-| 81% | 85% | 75% | 92% |
+| CMO |
+|---|
+| 85% |
 
-| Capability | Evidence | CMO weight | VP Growth weight | GM / Country lead weight | Head of Performance Marketing weight |
-|---|---|---|---|---|---|
-| Leads a large multi-function organisation | Has | 3 | 2 | 3 | 1 |
-| Brand strategy and brand building | Partial | 3 | 1 | 2 | 1 |
-| Performance and channel depth (paid, search, CRM) | Has | 2 | 3 | 1 | 3 |
-| Budget and P&L accountability | Partial | 2 | 2 | 3 | 1 |
-| Data and analytics orientation | Has | 2 | 3 | 2 | 3 |
-| Leading technology and AI change | Has | 2 | 2 | 2 | 2 |
-| International and multi-market expansion | Has | 2 | 1 | 2 | 1 |
-| Hiring and building teams | Has | 2 | 2 | 2 | 2 |
-| Executive and board stakeholder management | Partial | 3 | 2 | 3 | 1 |
-| Transparent communication of results | Has | 1 | 1 | 1 | 1 |
-| General management beyond marketing (product, ops, supply) | Partial | 1 | 1 | 3 | 0 |
-| Hands-on execution | Has | 1 | 2 | 1 | 3 |
-| Sales and country commercial leadership | Partial | 0 | 1 | 3 | 0 |
+| Capability | Evidence | CMO weight |
+|---|---|---|
+| Executive marketing role | Has | 2 |
+| Brand or growth record | Has | 2 |
+| Industry visibility | Has | 2 |
+| Recognised campaigns | Partial | 2 |
+| Leads a large multi-function organisation | Has | 1 |
+| Brand strategy and brand building | Partial | 1 |
+| Performance and channel depth (paid, search, CRM) | Has | 1 |
+| Budget and P&L accountability | Partial | 1 |
+| Data and analytics orientation | Has | 1 |
+| Leading technology and AI change | Has | 1 |
+| International and multi-market expansion | Has | 1 |
+| Hiring and building teams | Has | 1 |
+| Executive and board stakeholder management | Partial | 1 |
+| Transparent communication of results | Has | 1 |
+| General management beyond marketing (product, ops, supply) | Partial | 1 |
+| Hands-on execution | Has | 1 |
+
+### Executive marketing role
+
+Has. CMO at Groupon, Vilgain/Aktin and Tipli; joining post, team page and press release confirm two of them.
+
+Evidence (4):
+  - FACT · Supports: "I'm joining Groupon as Chief Marketing Officer" [[24]](https://www.linkedin.com/posts/josef-buryan_few-brands-have-the-recognition-and-reach-activity-7295005931606564865-Dkyp)
+  - FACT · Supports: "Chief Marketing Officer. Josef Buryan" [[18]](https://www.groupon.com/articles/team) (Groupon team page)
+  - FACT · Supports: "/Praha, 13. 4. 2022/ V Aktinu jsme nově obsadili pozici CMO." [[13]](https://aktin.cz/marketing-aktinu-vede-josef-buryan-prisel-z-evropske-centraly-meta)
+  - FACT · Supports: "Member of Executive Leadership team" [[1]](https://www.linkedin.com/in/josef-buryan)
+
+### Brand or growth record
+
+Has. Groupon’s return to growth is documented by Google; Vilgain growth is self-reported; Q2 2026 dipped.
+
+Evidence (4):
+  - FACT · Supports: "In 2025, we returned to growth in both billings and revenue for the first time in a decade." [[2]](https://business.google.com/en-all/think/ai-excellence/groupon-ai-first-future-czech-leaders/) (Google for Business case study)
+  - FACT · Supports: "tripled turnover to 4.3M € per month, expanded Vilgain’s presence from 2 to 9 countries" [[1]](https://www.linkedin.com/in/josef-buryan) (LinkedIn experience, self-reported)
+  - FACT · Supports: "Ale my rosteme" [[11]](https://cc.cz/facebook-je-jiny-nez-zvenci-vypada-rika-jeho-byvaly-cesky-manazer-zevnitr-vidite-ze-mu-na-lidech-zalezi/) (CzechCrunch, 2022)
+  - FACT · Contradicts: "Revenue down 1%, below our own bar." [[4]](https://www.linkedin.com/posts/josef-buryan_grpn-q2-2026-activity-7491485311202537472-5ReC) (Q2 2026)
+
+### Industry visibility
+
+Has. Podcast guest, Google case-study voice and press interviews; no keynote recording found beyond exec talks #88.
+
+Evidence (3):
+  - FACT · Supports: "#88 exec talks live: Josef Buryan (CMO, Groupon) – Jak vypadá AI-first marketing dle Mety a Vilgainu" [[5]](https://www.youtube.com/watch?v=X8FlikWYuog)
+  - FACT · Supports: "we became early adopters of Google’s AI Max, testing it during the beta stage well before the general market rollout." [[2]](https://business.google.com/en-all/think/ai-excellence/groupon-ai-first-future-czech-leaders/)
+  - FACT · Supports: "bývalý commerce manager ve společnosti Meta" [[11]](https://cc.cz/facebook-je-jiny-nez-zvenci-vypada-rika-jeho-byvaly-cesky-manazer-zevnitr-vidite-ze-mu-na-lidech-zalezi/) (CzechCrunch interview)
+
+### Recognised campaigns
+
+Partial. Google featured the AI Max work; the awards he lists are company or product awards, self-reported, not campaign awards.
+
+Evidence (4):
+  - FACT · Supports: "Proud to see @Groupon 's AI-first turnaround featured by @GoogleAds." [[8]](https://x.com/josefburyan/status/2072235172229955650)
+  - FACT · Supports: "Won Zonky Innovation Award 2019 in the FinTech category" [[1]](https://www.linkedin.com/in/josef-buryan) (Self-reported)
+  - FACT · Supports: "Achieved #7 in Křišťálová Lupa." [[1]](https://www.linkedin.com/in/josef-buryan) (Self-reported)
+  - INFERENCE · Contradicts: No third-party campaign credit or award for a brand campaign was found. Derived from: Press and award searches. [[1]](https://www.linkedin.com/in/josef-buryan)
 
 ### Leads a large multi-function organisation
 
@@ -565,30 +607,13 @@ Evidence (2):
   - FACT · Supports: "I spend most of my days pointing AI agents at marketing problems." [[26]](https://www.linkedin.com/posts/josef-buryan_from-dusk-till-dawn-hackathon-01-by-agents-activity-7508809891969413120-llUr)
   - FACT · Supports: "Managed campaigns focused on PPC, SM, SEO, Email and Affiliate" [[1]](https://www.linkedin.com/in/josef-buryan)
 
-### Sales and country commercial leadership
-
-Partial. Led sales at Tipli (2016–2019); not since.
-
-Evidence (2):
-  - FACT · Supports: "Led the marketing and sales teams (20+ people)" [[1]](https://www.linkedin.com/in/josef-buryan)
-  - INFERENCE · Contradicts: No sales leadership after 2019. Derived from: Later roles are marketing or ads consulting. [[1]](https://www.linkedin.com/in/josef-buryan)
-
 ## 6. What we should ask him
 
 1. **Walk us through February to April 2022: when did you leave Meta and when did you start at Aktin/Vilgain?** Closes the date overlap between LinkedIn, the Meta farewell post and the Aktin press release.
-2. **Which legal entity employed you as CMO from 2022 to 2025, Aktin or Vilgain?** Closes the employer-name difference for the background check.
+2. **What is the marketing budget you own at Groupon, and what does it include ($150M, $175M or close to $200M)?** Closes the inconsistent budget figures.
 3. **Can you share a reference or document for the Vilgain +200% YoY growth and the 4.3M € monthly turnover?** Closes the self-reported growth metrics.
 4. **Who can confirm the Meta top-performer ratings and the Tipli growth figures?** Closes unverifiable claims at Meta and Tipli.
-5. **What is the marketing budget you own at Groupon, and what does it include ($150M, $175M or close to $200M)?** Closes the inconsistent budget figures.
-6. **How many markets do you cover today, 12 or 13, and how many people report into marketing after Project Foundry?** Closes the market count and current team size.
-7. **Your CMO roles lasted about 2.5 to 3 years. What made you move each time, and what would make you stay longer?** Closes the tenure-pattern question.
-8. **What does your Q2 2026 plan look like after the 1% revenue decline, and what are you accountable for in it?** Closes the mixed recent results.
-9. **You wrote that colleagues found you difficult to work with. Tell us about one case and what changed.** Closes stakeholder-management evidence, rated partial.
-10. **Have you owned a full P&L or a non-marketing function? If not, how would you close that gap?** Closes the partial P&L and general-management evidence for GM roles.
-11. **Do you still offer consulting, coaching or speaking services, and how much time do they take?** Closes the outside-services question.
-12. **Do you hold or have you held a Czech trade licence?** Closes the unresolved same-name register entry (IČO 17659043).
-13. **Can you provide the MBA certificate from the University of St. Francis?** Closes the unconfirmed degree.
-14. **Is there a recording or transcript of a talk you gave, beyond exec talks #88?** Closes the thin talks and conference record.
+5. **Which campaign you led won an award or press coverage, and what was your part in it?** Closes the Recognised campaigns must-have, rated partial.
 
 **[Call candidate]** (placeholder: wires to the verification call flow in the app)
 

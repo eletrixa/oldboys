@@ -24,7 +24,7 @@ const MAX_TEXT = 160;
 const MAX_TITLE = 48;
 export const MAX_MUST_HAVES = 5;
 
-export const INGEST_METHODS = ["pasted", "jobs-cz", "greenhouse", "lever", "ashby", "jsonld"] as const;
+export const INGEST_METHODS = ["pasted", "manual", "jobs-cz", "startupjobs", "greenhouse", "lever", "ashby", "jsonld"] as const;
 export type IngestMethod = (typeof INGEST_METHODS)[number];
 
 export const POSITION_ID = z.string().trim().min(1).max(64).regex(/^[A-Za-z0-9_-]+$/);

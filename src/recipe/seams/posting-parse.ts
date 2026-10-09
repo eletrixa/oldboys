@@ -8,7 +8,7 @@
  *
  * Key responsibilities:
  * - `parsePosting`: per-method extraction, never throws, unreadable payload gives `{ text: "" }`
- * - Jobs.cz pages go to `parseJobsCz` first (no JSON-LD there), JSON-LD is the fallback and the `jsonld` method
+ * - Jobs.cz pages go to `parseJobsCz` first (no JSON-LD there), JSON-LD is the fallback and the `jsonld` and `startupjobs` methods
  *
  * Design constraints:
  * - Pure; no I/O. Ashby needs the externalId to pick one job from the board listing
@@ -98,8 +98,8 @@ function parseAshby(data: unknown, externalId?: string): ParsedPosting {
 
 export function parsePosting(method: PostingMethod, payload: unknown, externalId?: string): ParsedPosting {
   try {
-    if (method === "pasted") return typeof payload === "string" ? { text: payload.trim() } : EMPTY;
-    if (method === "jobs-cz" || method === "jsonld") {
+    if (method === "pasted" || method === "manual") return typeof payload === "string" ? { text: payload.trim() } : EMPTY;
+    if (method === "jobs-cz" || method === "jsonld" || method === "startupjobs") {
       if (typeof payload !== "string") return EMPTY;
       const page = method === "jobs-cz" ? parseJobsCz(payload) : EMPTY;
       return page.text === "" ? parseJsonLd(payload) : page;

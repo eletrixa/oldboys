@@ -12,7 +12,7 @@
  * - Summary box: current role, sources and FACT / INFERENCE counts, run's role fit with must-haves evidenced, risks,
  *   questions; FACT / INFERENCE legend; section anchors
  * - Sections in Robert's order with caps (3 / 3 / 5 jobs / 3 sentences / run's role / 5) and "Show N more"; empty ones omitted
- * - Evidence line: FACT / INFERENCE, Supports / Contradicts / Context, the quote, [n] source deep-linked at the quote,
+ * - Evidence line: FACT / INFERENCE, Supports / Contradicts / Context, Independent / Self-reported, the quote, [n] source deep-linked at the quote,
  *   note; "source missing" for an unknown id; numbered Sources list with retrieved dates
  * - Position fit: one card per role, weighted capability table, Σ(weight × status) ÷ Σ(weight) computed here
  *
@@ -93,6 +93,9 @@ function EvidenceLine({ e, ctx }: { e: ProfileEvidence; ctx: Ctx }): React.JSX.E
           {e.kind}
         </Pill>
         <span className={`rounded border border-divider px-1.5 text-[0.6875rem] font-semibold ${dir.cls}`}>{dir.text}</span>
+        <Pill tone={e.strength === "strong" ? "ok" : "unsure"} className="px-2 py-0 text-[0.6875rem]">
+          {e.strength === "strong" ? "Independent" : "Self-reported"}
+        </Pill>
       </span>
       <span className="font-serif text-ink">“{e.quote}”</span>{" "}
       {info === undefined || n === undefined ? (
@@ -112,11 +115,13 @@ function EvidenceLine({ e, ctx }: { e: ProfileEvidence; ctx: Ctx }): React.JSX.E
 function EvidenceList({ items, ctx }: { items: ProfileEvidence[]; ctx: Ctx }): React.JSX.Element | null {
   if (items.length === 0) return null;
   const against = items.filter((e) => directionOf(e) === "contradicts").length;
+  const independent = items.filter((e) => e.strength === "strong").length;
   return (
     <details className="group">
       <summary className={SUMMARY_COMPACT}>
         <Chevron />
         Evidence ({String(items.length)})
+        {independent === 0 ? <span className="text-unsure">· all self-reported</span> : <span>· {String(independent)} independent</span>}
         {against > 0 && <span className="font-medium text-conflict">· {String(against)} contradicts</span>}
       </summary>
       <ul className="divide-y divide-divider rounded-xl border border-divider bg-canvas p-3 [overflow-wrap:anywhere]">

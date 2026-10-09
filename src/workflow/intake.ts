@@ -10,9 +10,12 @@
  * Key responsibilities:
  * - Idempotency per (source, externalId): a repeat (or an insert race) returns the first row, never a second run
  * - Store the CV file in R2 (intake/<id>/<safe name>) when the delivery can become a run, and extract its text
- * - Decide the status (unknown tag / sender not allowed / incomplete / capped / run-started) and start the run in one
+ * - Decide the status (unknown tag / sender not allowed / incomplete / pooled / capped / run-started) and start the run in one
  *   tail (`decideAndStart`) shared by a new delivery, the re-decision of a capped duplicate and the resume of a row
  *   that a failed delivery left at 'received'
+ *
+ * - Plans/010: a tag bound to a position, and every manual add, pools the row (status 'pooled', position_id set, no run);
+ *   a run starts later from src/workflow/enrich.ts. A tag without a position keeps the auto-start path
  *
  * Design constraints:
  * - The only writer of `applications` and the only intake path to startRun (specs/intake/00-overview.md rule 1)
@@ -61,7 +64,8 @@ type ExistingRow = {
   received_at: string;
 };
 
-type Position = { role: string; goal: GoalId };
+/** Where an application lands: the role and goal a run would get, and the position whose pool it joins (null = auto-start). */
+type Position = { role: string; goal: GoalId; positionId: string | null };
 
 export async function ingestApplication(
   raw: IntakeInput,
@@ -120,7 +124,7 @@ async function decideAndWrite(
   const { cv } = input;
   const [extracted, position] = await Promise.all([
     cv && input.cvText === undefined ? extractCvText(cv) : null,
-    findPosition(env.DB, input.tag),
+    findPosition(env.DB, input),
   ]);
   const cvText = input.cvText ?? extracted?.text ?? undefined;
 
@@ -130,12 +134,13 @@ async function decideAndWrite(
 
   const candidate = candidateInput({ linkedinUrl: input.linkedinUrl, cvText });
   const decision = await decideAndStart(env, { id, position, candidate, senderAllowed }, now);
+  if (decision.status === "unmatched" && position === null && input.source === "manual") decision.note = "unknown position";
   const note = joinNotes(decision.note, extracted?.note, ...candidate.notes, input.note);
 
   await env.DB.prepare(
-    "UPDATE applications SET status = ?, run_id = ?, note = ?, linkedin_url = ?, cv_key = ?, cv_text = ? WHERE id = ?",
+    "UPDATE applications SET status = ?, run_id = ?, note = ?, linkedin_url = ?, cv_key = ?, cv_text = ?, position_id = ? WHERE id = ?",
   )
-    .bind(decision.status, decision.runId, note, candidate.profileUrl ?? null, cvKey, cvText ?? null, id)
+    .bind(decision.status, decision.runId, note, candidate.profileUrl ?? null, cvKey, cvText ?? null, position?.positionId ?? null, id)
     .run();
 
   return { applicationId: id, status: decision.status, runId: decision.runId, duplicate, note };
@@ -147,16 +152,23 @@ async function decideAndWrite(
  */
 async function decideAndStart(
   env: IntakeEnv,
-  a: { id: string; position: Position | null; candidate: { profileUrl?: string; cvText?: string }; senderAllowed: boolean },
+  a: {
+    id: string;
+    position: Position | null;
+    candidate: { profileUrl?: string; cvText?: string };
+    senderAllowed: boolean;
+  },
   now: Date,
 ): Promise<{ status: DecidedStatus; runId: string | null; note: string | null }> {
   const { position, candidate, senderAllowed } = a;
   const complete = candidate.profileUrl !== undefined || candidate.cvText !== undefined;
+  // A pooled row never starts a run, so the intake cap is not even queried for it (decideStatus ranks pool above capped).
+  const pool = position !== null && position.positionId !== null;
   const capped =
-    position !== null && senderAllowed && complete
+    position !== null && !pool && senderAllowed && complete
       ? (await runsStartedSince(env.DB, new Date(now.getTime() - HOUR_MS), "intake")) >= intakeCap(env.INTAKE_PER_HOUR_CAP)
       : false;
-  const decision = decideStatus({ tagKnown: position !== null, senderAllowed, candidate, capped });
+  const decision = decideStatus({ tagKnown: position !== null, senderAllowed, candidate, capped, pool });
   if (decision.status !== "run-started" || position === null) return { ...decision, runId: null };
   const run = await startRun(
     env,
@@ -166,9 +178,20 @@ async function decideAndStart(
   return { ...decision, runId: run.id };
 }
 
-async function findPosition(db: D1Database, rawTag: string | null | undefined): Promise<Position | null> {
-  const tag = IntakeTag.safeParse(rawTag);
-  return tag.success ? db.prepare("SELECT role, goal FROM intake_tags WHERE tag = ?").bind(tag.data).first<Position>() : null;
+/** A manual add names its position directly; every other channel routes through its intake tag (which may be bound to a position). */
+async function findPosition(db: D1Database, input: Partial<Pick<IntakeInput, "source" | "tag" | "positionId">>): Promise<Position | null> {
+  if (input.source === "manual") {
+    if (input.positionId === undefined) return null;
+    const row = await db.prepare("SELECT id, title FROM positions WHERE id = ?").bind(input.positionId).first<{ id: string; title: string }>();
+    return row ? { role: row.title, goal: "hiring", positionId: row.id } : null;
+  }
+  const tag = IntakeTag.safeParse(input.tag);
+  if (!tag.success) return null;
+  const row = await db
+    .prepare("SELECT role, goal, position_id FROM intake_tags WHERE tag = ?")
+    .bind(tag.data)
+    .first<{ role: string; goal: GoalId; position_id: string | null }>();
+  return row ? { role: row.role, goal: row.goal, positionId: row.position_id } : null;
 }
 
 async function findExisting(db: D1Database, source: string, externalId: string): Promise<ExistingRow | null> {
@@ -202,22 +225,22 @@ async function resumeReceived(id: string, input: IntakeInput, env: IntakeEnv, no
 
 /**
  * A delivery that was capped is the one duplicate worth re-deciding: the stored candidate input goes through the same
- * decision tail now, and the run starts if there is room. The new payload is ignored; the row keeps what it had
- * (parser and subject notes included, only the cap note goes), and is only written when the run starts. The sender
- * check passed when the row was capped.
+ * decision tail now, and the run starts if there is room (or the row joins the pool when its tag was bound to a
+ * position since). The new payload is ignored; the row keeps what it had (parser and subject notes included, only the
+ * cap note goes), and is only written when the run starts or the row pools. The sender check passed when the row was capped.
  */
 async function retryCapped(row: ExistingRow, env: IntakeEnv, now: Date): Promise<IntakeResult> {
   const [position, stored] = await Promise.all([
-    findPosition(env.DB, row.tag),
+    findPosition(env.DB, { tag: row.tag ?? undefined }),
     env.DB.prepare("SELECT cv_text FROM applications WHERE id = ?").bind(row.id).first<{ cv_text: string | null }>(),
   ]);
   const candidate = { profileUrl: row.linkedin_url ?? undefined, cvText: stored?.cv_text ?? undefined };
   const decision = await decideAndStart(env, { id: row.id, position, candidate, senderAllowed: true }, now);
-  if (decision.status !== "run-started") return toResult(row);
+  if (decision.status !== "run-started" && decision.status !== "pooled") return toResult(row);
 
   const note = joinNotes(decision.note, ...(row.note?.split("; ").filter((n) => n !== CAPPED_NOTE) ?? []));
-  await env.DB.prepare("UPDATE applications SET status = ?, run_id = ?, note = ? WHERE id = ?")
-    .bind(decision.status, decision.runId, note, row.id)
+  await env.DB.prepare("UPDATE applications SET status = ?, run_id = ?, note = ?, position_id = ? WHERE id = ?")
+    .bind(decision.status, decision.runId, note, position?.positionId ?? null, row.id)
     .run();
   return { applicationId: row.id, status: decision.status, runId: decision.runId, duplicate: true, note };
 }

@@ -33,6 +33,11 @@ export function writeToken(token: string | null): void {
   }
 }
 
+/** JSON POST with the stored operator token (if any) as the bearer; cookies travel as on every fetch. */
+export function postJson(path: string, body: unknown): Promise<Response> {
+  return authFetch(path, readToken(), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+}
+
 export function authFetch(path: string, token: string | null, init: RequestInit = {}): Promise<Response> {
   const headers = new Headers(init.headers);
   if (token !== null) headers.set("Authorization", `Bearer ${token}`);
