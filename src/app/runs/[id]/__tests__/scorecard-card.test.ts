@@ -19,7 +19,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { Evidence } from "../evidence";
 import { checkedLabel, pointsLabel, SCORECARD_NOTE, type ScoreItem, type Scorecard } from "../scorecard";
-import { OPEN_POINTS_LABEL, ScorecardCard, VISIBLE } from "../scorecard-card";
+import { CHECKS_TITLE, OPEN_POINTS_LABEL, ScorecardCard, VISIBLE } from "../scorecard-card";
 
 const evidence: Evidence = {
   sourceOf: new Map([
@@ -30,17 +30,20 @@ const evidence: Evidence = {
   challengeOf: new Map(),
 };
 
-const item = (over: Partial<ScoreItem>): ScoreItem => ({ id: "x", side: "plus", area: "must-have", text: "Production SQL", kind: "FACT", points: 38, source_ids: ["s-gh"], urls: [], ask: null, ...over });
+const item = (over: Partial<ScoreItem>): ScoreItem => ({ id: "x", side: "plus", area: "must-have", weight: 3, text: "Production SQL", kind: "FACT", points: 38, source_ids: ["s-gh"], urls: [], ask: null, ...over });
 
 const card = (over: Partial<Scorecard> = {}): Scorecard => ({
   fit: 75,
   role: "Senior Data Engineer",
   checked: { evidenced: 2, partial: 1, none: 1, total: 4 },
-  pluses: [item({ id: "p1" }), item({ id: "p2", text: "1 CV statement matches the public record", kind: "CHECK", points: 0, source_ids: ["cv:r"] })],
+  pluses: [item({ id: "p1" }), item({ id: "p2", area: "cv", weight: null, text: "1 CV statement matches the public record", kind: "CHECK", points: 0, source_ids: ["cv:r"] })],
   minuses: [
-    item({ id: "m1", side: "minus", text: "Led a team of three: no public evidence", kind: "CHECK", points: -13, source_ids: [] }),
-    item({ id: "m2", side: "minus", area: "signal", text: "All public repositories are forks.", kind: "CHECK", points: 0, source_ids: [], urls: ["javascript:alert(1)"], ask: "Did you have an earlier account?" }),
-    item({ id: "m3", side: "minus", area: "registry", text: "ARES: Jan Novák, Brno", kind: "CHECK", points: 0, source_ids: [], urls: ["https://ares.gov.cz/r/1"], ask: "Check: matched by city: Brno." }),
+    item({ id: "m1", side: "minus", weight: 1, text: "Led a team of three: no public evidence", kind: "CHECK", points: -13, source_ids: [], ask: "Where would we see it?" }),
+    item({ id: "m2", side: "minus", area: "risk", weight: null, text: "Three employers in four years", kind: "INFERENCE", points: 0, source_ids: ["s-gh"] }),
+  ],
+  checks: [
+    item({ id: "c1", side: "check", area: "signal", weight: null, text: "All public repositories are forks.", kind: "CHECK", points: 0, source_ids: [], urls: ["javascript:alert(1)"], ask: "Did you have an earlier account?" }),
+    item({ id: "c2", side: "check", area: "registry", weight: null, text: "ARES: Jan Novák, Brno", kind: "CHECK", points: 0, source_ids: [], urls: ["https://ares.gov.cz/r/1"], ask: "Check: matched by city: Brno." }),
   ],
   notes: ["1 source was not searched."],
   ...over,
@@ -51,7 +54,7 @@ const html = (c: Scorecard | null): string => renderToStaticMarkup(createElement
 describe("ScorecardCard", () => {
   it("renders nothing for null or an empty card", () => {
     expect(html(null)).toBe("");
-    expect(html(card({ fit: null, pluses: [], minuses: [] }))).toBe("");
+    expect(html(card({ fit: null, pluses: [], minuses: [], checks: [] }))).toBe("");
   });
 
   it("shows the figure, role, counts, both columns, labels, links and the note", () => {
@@ -60,6 +63,9 @@ describe("ScorecardCard", () => {
     expect(out).toContain("Senior Data Engineer");
     expect(out).toContain("2 of 4 must-haves evidenced, 1 partly");
     expect(out).toContain("+38 pts");
+    expect(out).toContain("weight 3");
+    expect(out).toContain(CHECKS_TITLE);
+    expect(out).toContain("Ask: Where would we see it?");
     expect(out).toContain("−13 pts");
     expect(out).not.toContain(">no effect on fit<");
     expect(out.split(OPEN_POINTS_LABEL).length).toBe(3);
@@ -75,7 +81,7 @@ describe("ScorecardCard", () => {
   });
 
   it("prints a dash when there is nothing to score but lines exist", () => {
-    const out = html(card({ fit: null, checked: { evidenced: 0, partial: 0, none: 0, total: 0 }, pluses: [] }));
+    const out = html(card({ fit: null, checked: { evidenced: 0, partial: 0, none: 0, total: 0 }, pluses: [], checks: [] }));
     expect(out).toContain("—");
     expect(out).toContain("no must-haves to score");
     expect(out).toContain("No must-have has public evidence yet.");

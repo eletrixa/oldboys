@@ -10,7 +10,8 @@
  * Key responsibilities:
  * - null without a brief; null fit and no must-have lines when there are none
  * - Profile run: fit equals fitPct of the hiring role; has / partial / none become +pts / +half / −pts; achievements with an
- *   independent line, risks with their closing question, CV lines, challenged claims, registry hits and signals with asks
+ *   independent line, risks with their closing question, CV lines, challenged claims; registry records and signals as checks;
+ *   every must-have without full evidence carries an ask; CV-only must-haves are CLAIMED
  * - Coverage fallback (no profile): mh-* rows, weight 1, CHECK kind
  * - Every text and ask passes the JUDGEMENT guard; also_found never appears
  *
@@ -156,13 +157,16 @@ describe("scorecard", () => {
     expect(card?.role).toBe("Senior Data Engineer");
     expect(card?.checked).toEqual({ evidenced: 2, partial: 1, none: 1, total: 4 });
     const must = [...(card?.pluses ?? []), ...(card?.minuses ?? [])].filter((i) => i.area === "must-have");
-    expect(must.map((i) => [i.text, i.points, i.kind, i.side])).toEqual([
-      ["Production SQL", 38, "FACT", "plus"],
-      ["Python", 25, "INFERENCE", "plus"],
-      ["Cloud data platforms, partly evidenced", 13, "FACT", "plus"],
-      ["Led a team of three: no public evidence", -13, "CHECK", "minus"],
+    expect(must.map((i) => [i.text, i.points, i.kind, i.side, i.weight])).toEqual([
+      ["Production SQL", 38, "FACT", "plus", 3],
+      ["Python", 25, "INFERENCE", "plus", 2],
+      ["Cloud data platforms, partly evidenced", 13, "FACT", "plus", 2],
+      ["Led a team of three: no public evidence", -13, "CHECK", "minus", 1],
     ]);
     expect(must[0]?.source_ids).toEqual(["s-gh"]);
+    expect(must[0]?.ask).toBeNull();
+    expect(must[2]?.ask).toBe("Where would we see cloud data platforms in your work? Name one case, one number and one person who can confirm it.");
+    expect(must[3]?.ask).toBe("Where would we see led a team of three in your work? Name one case, one number and one person who can confirm it.");
   });
 
   it("lists pluses outside the must-haves at 0 points: independent achievements and CV matches", () => {
@@ -174,18 +178,20 @@ describe("scorecard", () => {
     expect(pluses.filter((i) => i.area !== "must-have").every((i) => i.points === 0)).toBe(true);
   });
 
-  it("lists minuses at 0 points with an ask or a check: risk, CV difference, challenge, registry hit, signal", () => {
-    const minuses = scorecard(run())?.minuses ?? [];
-    const byArea = Object.fromEntries(minuses.map((i) => [i.area, i]));
+  it("lists minuses at 0 points with an ask: risk, CV difference, challenge; records and signals go to checks", () => {
+    const card = scorecard(run());
+    const minuses = card?.minuses ?? [];
+    const byArea = Object.fromEntries([...minuses, ...(card?.checks ?? [])].map((i) => [i.area, i]));
     expect(byArea.risk).toMatchObject({ text: "Three employers in four years", kind: "INFERENCE", ask: "What made you move on each time?" });
     expect(byArea.cv).toMatchObject({ text: "CV: Acme 2019-2022; LinkedIn: Acme 2020-2022", kind: "CHECK", source_ids: ["cv:run1", "s-li"] });
     expect(byArea.challenge).toMatchObject({ text: "Maintains the acme-etl repository", source_ids: ["s-gh"] });
     expect(byArea.challenge?.ask).toMatch(/fork|copy/i);
     expect(byArea.registry).toMatchObject({ text: "ARES business records: Jan Novák, Brno, živnost aktivní", urls: ["https://ares.gov.cz/r/1"], ask: "Check: matched by city: Brno." });
-    expect(minuses.filter((i) => i.area === "registry")).toHaveLength(1);
+    expect(minuses.map((i) => i.area)).toEqual(["must-have", "risk", "cv", "challenge"]);
+    expect(card?.checks.map((i) => [i.area, i.side])).toEqual([["registry", "check"], ["signal", "check"]]);
     expect(byArea.signal).toMatchObject({ text: "The GitHub account was created on 2 Mar 2026.", urls: ["https://api.github.com/users/jnovak"], ask: "Did you have an earlier GitHub account?" });
-    expect(minuses.map((i) => i.text)).not.toContain("The LinkedIn profile shows a verified badge.");
-    expect(minuses.filter((i) => i.area !== "must-have").every((i) => i.points === 0)).toBe(true);
+    expect(card?.checks.map((i) => i.text)).not.toContain("The LinkedIn profile shows a verified badge.");
+    expect([...minuses, ...(card?.checks ?? [])].filter((i) => i.area !== "must-have").every((i) => i.points === 0 && i.weight === null)).toBe(true);
   });
 
   it("folds name-only registry records into one line per registry and lists at most three attributed ones", () => {
@@ -202,7 +208,7 @@ describe("scorecard", () => {
         },
       }),
     );
-    const reg = (card?.minuses ?? []).filter((i) => i.area === "registry");
+    const reg = (card?.checks ?? []).filter((i) => i.area === "registry");
     expect(reg.map((i) => i.text)).toEqual([
       "Insolvency register: 35 records under this name",
       "Public register persons: a",
@@ -225,7 +231,7 @@ describe("scorecard", () => {
         },
       }),
     );
-    expect(card?.minuses.find((i) => i.area === "registry")?.text).toBe("Public register persons: společník at Acme s.r.o. (IČO 123), entered 2010");
+    expect(card?.checks[0]?.text).toBe("Public register persons: společník at Acme s.r.o. (IČO 123), entered 2010");
     expect(askLine("Challenged: evidence may be outdated")).toBe("Challenged: evidence may be outdated");
     expect(askLine("Check: x")).toBe("Check: x");
     expect(askLine("Why?")).toBe("Ask: Why?");
@@ -236,7 +242,10 @@ describe("scorecard", () => {
     const fit = p.position_fit[0];
     if (fit !== undefined) fit.traits = [{ trait: "Location fit", status: "has", weight: 1, evidence: [line("cv:run1")] }, { trait: "Python", status: "has", weight: 1, evidence: [line("cv:run1"), line("s-gh")] }];
     const card = scorecard(run({ brief: brief({ profile: p }) }));
-    expect(card?.pluses.map((i) => i.text).slice(0, 2)).toEqual(["Location fit, from the CV only", "Python"]);
+    expect(card?.pluses.slice(0, 2).map((i) => [i.text, i.kind])).toEqual([
+      ["Location fit, from the CV only", "CLAIMED"],
+      ["Python", "FACT"],
+    ]);
   });
 
   it("notes empty and unsearched sources, never counting the CV section", () => {
@@ -265,7 +274,7 @@ describe("scorecard", () => {
 
   it("never judges the person and never uses also_found", () => {
     const card = scorecard(run());
-    const texts = [...(card?.pluses ?? []), ...(card?.minuses ?? [])].flatMap((i) => [i.text, i.ask ?? ""]);
+    const texts = [...(card?.pluses ?? []), ...(card?.minuses ?? []), ...(card?.checks ?? [])].flatMap((i) => [i.text, i.ask ?? ""]);
     for (const t of texts) expect(t).not.toMatch(JUDGEMENT);
     expect(texts.join(" ")).not.toMatch(/instagram|Another Jan/);
   });

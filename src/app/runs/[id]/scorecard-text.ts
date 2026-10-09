@@ -8,7 +8,8 @@
  *
  * Key responsibilities:
  * - scorecardLines(card, urlOf): "Fit, <role>: 75% (2 of 4 must-haves evidenced, 1 partly)", then one line per plus ("+") and
- *   minus ("−") with kind, points label, source hosts or URLs, and the ask; notes; the fixed honesty line; [] for null
+ *   minus ("−") with kind, points label, weight, source hosts or URLs, and the ask; then "Checked, unresolved" records ("?");
+ *   notes; the fixed honesty line; [] for null
  *
  * Design constraints:
  * - Pure; English only; the caller escapes Markdown and turns URLs into links
@@ -22,7 +23,9 @@ function itemLine(item: ScoreItem, urlOf: (sourceId: string) => string | null): 
   const urls = [...item.source_ids.map(urlOf).filter((u): u is string => u !== null), ...item.urls];
   const cv = urls.some(isCvSource) ? ` (${CV_SOURCE_TEXT})` : "";
   const ask = item.ask === null ? "" : ` ${askLine(item.ask)}`;
-  return { text: `${item.side === "plus" ? "+" : "−"} ${item.text} [${item.kind}, ${pointsLabel(item.points)}]${cv}${ask}`, urls: urls.filter((u) => !isCvSource(u)) };
+  const glyph = item.side === "plus" ? "+" : item.side === "minus" ? "\u2212" : "?";
+  const weight = item.weight === null ? "" : `, weight ${String(item.weight)}`;
+  return { text: `${glyph} ${item.text} [${item.kind}, ${pointsLabel(item.points)}${weight}]${cv}${ask}`, urls: urls.filter((u) => !isCvSource(u)) };
 }
 
 export function scorecardLines(card: Scorecard | null, urlOf: (sourceId: string) => string | null): ScoreLine[] {
@@ -32,6 +35,7 @@ export function scorecardLines(card: Scorecard | null, urlOf: (sourceId: string)
     { text: `Fit, ${card.role ?? "the role"}: ${fit}`, urls: [] },
     ...card.pluses.map((i) => itemLine(i, urlOf)),
     ...card.minuses.map((i) => itemLine(i, urlOf)),
+    ...(card.checks.length === 0 ? [] : [{ text: "Checked, unresolved (not a minus):", urls: [] }, ...card.checks.map((i) => itemLine(i, urlOf))]),
     ...card.notes.map((n) => ({ text: n, urls: [] })),
     { text: SCORECARD_NOTE, urls: [] },
   ];
