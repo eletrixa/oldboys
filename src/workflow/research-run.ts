@@ -18,7 +18,8 @@
  * - a collector's `digest` (StepOutcome.digest) lands in the step's ledger ref as `digest`
  * - `onEmpty`: run the declared fallback step once, or record a Gap (ledger decision with ref.gap)
  * - resolve: persist candidates; pause with `step.waitForEvent('lineup-answer')` only when candidates exist and none is
- *   merged (lineupNeedsAnswer, seed merges count, so a given profile/CV never pauses); apply the manager's decisions on resume
+ *   merged (lineupNeedsAnswer, seed merges count), or when a technical role has a GitHub account that is only possibly-same-as;
+ *   apply the manager's decisions on resume; after the 1 hour timeout a run with a confirmed identity carries on unanswered
  * - Budget (RUN_BUDGET_USD / RUN_BUDGET_CALLS) enforced here for collector steps, never by the LLM; collectors run
  *   in one sliding-window pool (runPool): the paid allowance (budget - spent) is read once per pool, a paid step
  *   starts only while allowance is left or no paid step runs (nextToStart), free REST steps always start
@@ -38,12 +39,13 @@
  * - Imports only src/domain, src/recipe and src/adapters, never Next.js
  * - Step return values stay tiny (counts); payloads live in D1/R2
  */
-import { WorkflowEntrypoint, type WorkflowEvent, type WorkflowStep } from "cloudflare:workers";
+import { WorkflowEntrypoint, type WorkflowEvent, type WorkflowStep, type WorkflowStepEvent } from "cloudflare:workers";
 import { makeActorCall } from "@/adapters/apify";
 import { applySourceIdentity, loadContext, loadRoleTemplates, makeLedgerAppend, makeSourceStore, persistOutcome, setCandidateDecisions } from "@/adapters/d1";
 import { makeFetchJson } from "@/adapters/fetch";
 import { makeLlmCall } from "@/adapters/llm";
 import type { Candidate, GoalId } from "@/domain/claim";
+import { isTechnicalRole } from "@/domain/code-profile";
 import type { Ports } from "@/domain/ports";
 import { matchRoleTemplate } from "@/domain/role-catalog";
 import { missingSecrets } from "@/domain/secrets";
@@ -303,20 +305,22 @@ export class ResearchRunWorkflow extends WorkflowEntrypoint<CloudflareEnv, Resea
   }
 
   private async resolveWithPause(runId: string, recipeStep: Step, questions: ReturnType<typeof recipeFor>["questions"], step: WorkflowStep): Promise<void> {
-    const needsAnswer = await step.do(recipeStep.id, async () => {
+    const { ask: needsAnswer, confirmed } = await step.do(recipeStep.id, async () => {
       const started = Date.now();
       const ctx = await loadContext(this.env.DB, runId, questions);
       const out = await executeStep(recipeStep, ctx, this.ports());
       await persistOutcome(this.env.DB, runId, out);
       const all = [...ctx.candidates, ...out.candidates];
-      const ask = lineupNeedsAnswer(all);
+      // A technical role also waits for the manager on a GitHub account that is only possibly-same-as: the deep
+      // statistics need a confirmed handle, and name + city alone never confirms one
+      const ask = lineupNeedsAnswer(all, isTechnicalRole(ctx) ? ["github"] : []);
       await this.ledger(runId, recipeStep.id, "llm", out.cost_usd, Date.now() - started, {
         candidates: out.candidates.map((c) => ({ id: c.id, platform: c.platform, url: c.profile_urls[0], score: c.score, decision: c.decision, snippet: c.snippet, reasons: c.reasons })),
         calls: out.calls,
         notes: out.notes,
         ask,
       });
-      return ask;
+      return { ask, confirmed: all.some((c) => c.decision === "merge") };
     });
     if (!needsAnswer) return;
 
@@ -324,7 +328,19 @@ export class ResearchRunWorkflow extends WorkflowEntrypoint<CloudflareEnv, Resea
       await this.setStatus(runId, "paused");
       await this.ledger(runId, recipeStep.id, "pause", 0, 0, { waitingFor: "lineup-answer" });
     });
-    const answer = await step.waitForEvent<LineupAnswer>("lineup-answer", { type: "lineup-answer", timeout: "1 hour" });
+    let answer: WorkflowStepEvent<LineupAnswer>;
+    try {
+      answer = await step.waitForEvent<LineupAnswer>("lineup-answer", { type: "lineup-answer", timeout: "1 hour" });
+    } catch (e) {
+      // Nobody answered within the hour: an identity already confirmed by the given profile or CV carries the run on
+      // with the server's decisions (unattended intake runs); without one the run still fails as before
+      if (!confirmed) throw e;
+      await step.do(`${recipeStep.id}:unanswered`, async () => {
+        await this.setStatus(runId, "running");
+        await this.ledger(runId, recipeStep.id, "decision", 0, 0, { unanswered: true, note: "no lineup answer within 1 hour; the possibly-same-as accounts stay unconfirmed" });
+      });
+      return;
+    }
     await step.do(`${recipeStep.id}:answered`, async () => {
       await setCandidateDecisions(this.env.DB, runId, answer.payload.decisions);
       await this.setStatus(runId, "running");
