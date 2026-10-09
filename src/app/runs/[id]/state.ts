@@ -59,7 +59,7 @@ export type RunState = {
    * fetched_at: when we read the source; expires_at: when the saved excerpt is purged (both ISO; absent in older code paths).
    */
   sources: { id: string; url: string; identity_reason?: string | null; fetched_at?: string | null; expires_at?: string | null }[];
-  /** Saved text around each claim's quote, one per (claim with a quote, source it cites); Art. 9 surroundings are emptied. */
+  /** Saved text around each claim's quote, one per (shown claim with a quote, confirmed source it cites); none touching an Art. 9 topic. */
   quote_contexts?: ClaimQuoteContext[];
   /** Devil's advocate (idea #8): claims that did not hold, with ground and a source-level reason; empty or absent for older runs. */
   challenges?: Challenge[];

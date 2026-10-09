@@ -48,6 +48,7 @@ All notable changes to oldboys are documented here. The format follows [Keep a C
 
 ### Fixed
 - CV runs no longer send the pasted CV itself to the identity check as a "profile found by search" (found by the eval set)
+- The open run state (`GET /api/runs/:id/state`) now returns only what the brief shows: no claims before the brief, only the claims the brief lists and never one touching a GDPR Art. 9 topic, the saved text around a quote only from confirmed sources, and not-searched / searched-empty reasons and the failure reason without URLs, e-mails or phone numbers. The saved copy around a quote is dropped whole (no quote either) when it touches an Art. 9 topic
 - Phone verification proposal never reads internal gap reasons to the candidate: a source gap becomes a question only when it is a plain "no … found" statement (scrubbed of links, e-mails and numbers); failed requests (URLs, HTTP codes), budget, fallback and namesake-only gaps are no longer asked about
 - Nightly purge: intake applications (rows and R2 CV files) are deleted after 7 days and before the runs they started, so `applications.run_id` never blocks the runs sweep; the purge result reports `applications`
 - Extract and synthesize steps now degrade gracefully instead of failing, producing evidence-only briefs and completed runs

@@ -12,8 +12,8 @@
  *   STATEMENT can never disagree on what "the quote is in the source" means
  * - quoteContext: where that same normalised match sits in the raw excerpt, as original characters before / match /
  *   after (clipped at word boundaries with "…"), for the report's evidence panel (idea #5)
- * - quoteContexts: one context per (claim with a quote, source it cites); Art. 9 topics around the quote drop the
- *   surrounding text and keep the quote only
+ * - quoteContexts: one context per (claim with a quote, source it cites); a context that touches an Art. 9 topic is
+ *   dropped whole (no before, match or after: dropped, never masked)
  *
  * Design constraints:
  * - Pure; diacritics are kept (Czech transcripts), punctuation is dropped
@@ -102,7 +102,8 @@ export type ClaimQuoteContext = QuoteContext & { claim_id: string; source_id: st
 
 /**
  * One context per claim with a quote and per source it cites (sources the claim does not cite never get one).
- * When the text around the quote touches a GDPR Art. 9 topic, before/after are emptied and only the quote is kept.
+ * When the quote or the text around it touches a GDPR Art. 9 topic, the whole entry is dropped (special-category data
+ * is dropped, never masked).
  */
 export function quoteContexts(
   claims: readonly { id: string; quote: string | null; supports: readonly string[] }[],
@@ -115,9 +116,8 @@ export function quoteContexts(
     return [...new Set(c.supports)].flatMap((sid) => {
       const excerpt = excerptOf.get(sid);
       const ctx = excerpt === undefined ? null : quoteContext(quote, excerpt, radius);
-      if (ctx === null) return [];
-      const safe = containsArt9Topic(ctx.before + ctx.match + ctx.after) ? { before: "", match: ctx.match, after: "" } : ctx;
-      return [{ claim_id: c.id, source_id: sid, ...safe }];
+      if (ctx === null || containsArt9Topic(`${ctx.before} ${ctx.match} ${ctx.after}`)) return [];
+      return [{ claim_id: c.id, source_id: sid, ...ctx }];
     });
   });
 }

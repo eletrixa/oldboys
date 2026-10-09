@@ -9,7 +9,7 @@
  * Key responsibilities:
  * - quoteContext: same matching as quoteInExcerpt (case, punctuation, diacritics, whitespace), original characters
  *   returned, word-boundary clipping with "…", null for empty or missing quotes
- * - quoteContexts: only cited sources, deduplicated, Art. 9 surroundings dropped
+ * - quoteContexts: only cited sources, deduplicated, a context touching an Art. 9 topic dropped whole (no match either)
  *
  * Design constraints:
  * - Fixtures stay inline; no real people
@@ -79,9 +79,15 @@ describe("quoteContexts", () => {
     expect(out).toEqual([{ claim_id: "c1", source_id: "s1", before: "Works at Acme as a ", match: "data engineer", after: " since 2019." }]);
   });
 
-  it("keeps only the quote when the text around it touches an Art. 9 topic", () => {
+  it("drops the whole context, quote included, when the text around it touches an Art. 9 topic", () => {
     const out = quoteContexts([{ id: "c1", quote: "data engineer at acme", supports: ["s2"] }], excerptOf);
-    expect(out).toEqual([{ claim_id: "c1", source_id: "s2", before: "", match: "Data engineer at Acme", after: "" }]);
+    expect(out).toEqual([]);
+  });
+
+  it("drops the context when the quote itself is an Art. 9 topic, but keeps the claim's other clean contexts", () => {
+    const excerpts = new Map([["h1", "Jan wrote about his health condition last year."], ["s1", "Works at Acme as a data engineer since 2019."]]);
+    expect(quoteContexts([{ id: "c1", quote: "health condition", supports: ["h1"] }], excerpts)).toEqual([]);
+    expect(quoteContexts([{ id: "c2", quote: "data engineer", supports: ["h1", "s1"] }], excerpts).map((x) => x.source_id)).toEqual(["s1"]);
   });
 
   it("skips a source whose excerpt does not hold the quote", () => {
