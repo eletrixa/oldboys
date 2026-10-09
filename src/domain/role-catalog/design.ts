@@ -21,7 +21,7 @@ export const DESIGN: RoleTemplate[] = [
     key: "product-designer",
     title: "Product Designer",
     family: "design",
-    aliases: ["produktový designér", "produktový designer", "product design", "ux/ui designer", "digital product designer"],
+    aliases: ["produktový designér", "produktový designer", "product design", "ux/ui designer", "digital product designer", "ui/ux designer", "ui/ux", "ux/ui", "ui/ux designér", "ux/ui designér"],
     profile: "makers",
     must_haves: [
       { id: "mh-shipped-product-ui", title: "Shipped product UI", text: "Has a public portfolio with shipped product UI case studies", accepted_evidence: ["portfolio", "case study", "Dribbble shot"] },
@@ -35,7 +35,7 @@ export const DESIGN: RoleTemplate[] = [
     key: "ux-designer",
     title: "UX Designer",
     family: "design",
-    aliases: ["ux designér", "user experience designer", "interaction designer", "uživatelská zkušenost", "ux"],
+    aliases: ["ux designér", "user experience designer", "interaction designer", "uživatelská zkušenost", "ux designer/ka", "ux designér/ka"],
     profile: "makers",
     must_haves: [
       { id: "mh-ux-case-studies", title: "UX case studies", text: "Has public case studies covering flows, wireframes and usability outcomes", accepted_evidence: ["case study", "portfolio", "published article"] },
@@ -49,7 +49,7 @@ export const DESIGN: RoleTemplate[] = [
     key: "ui-designer",
     title: "UI Designer",
     family: "design",
-    aliases: ["ui designér", "user interface designer", "visual designer", "vizuální designér", "ui"],
+    aliases: ["ui designér", "user interface designer", "visual designer", "vizuální designér", "ui designer/ka", "ui designér/ka"],
     profile: "makers",
     must_haves: [
       { id: "mh-ui-portfolio", title: "Interface portfolio", text: "Has a public portfolio of polished interface designs", accepted_evidence: ["portfolio", "Dribbble shot", "Behance project"] },
@@ -133,7 +133,7 @@ export const DESIGN: RoleTemplate[] = [
     key: "3d-artist",
     title: "3D Artist",
     family: "design",
-    aliases: ["3d grafik", "3d umělec", "3d modeler", "3d modelář", "3d designer", "cgi artist"],
+    aliases: ["3d grafik", "3d umělec", "3d modeler", "3d modelář", "cgi artist"],
     profile: "makers",
     must_haves: [
       { id: "mh-3d-portfolio", title: "3D portfolio", text: "Has a public 3D portfolio with renders, models or scenes", accepted_evidence: ["portfolio", "ArtStation project", "Sketchfab model"] },
@@ -161,7 +161,7 @@ export const DESIGN: RoleTemplate[] = [
     key: "head-of-design",
     title: "Head of Design",
     family: "design",
-    aliases: ["design lead", "vedoucí designu", "design director", "ředitel designu", "lead designer", "hod"],
+    aliases: ["design lead", "vedoucí designu", "design director", "ředitel designu", "lead designer"],
     profile: "track-record",
     must_haves: [
       { id: "mh-led-design-team", title: "Led a design team", text: "Held a named design lead or head role at a company with a design team", accepted_evidence: ["job history", "company page", "talk"] },
@@ -203,7 +203,7 @@ export const DESIGN: RoleTemplate[] = [
     key: "art-director",
     title: "Art Director",
     family: "design",
-    aliases: ["artdirector", "kreativní ředitel", "artdirektor", "vizuální ředitel", "ad"],
+    aliases: ["artdirector", "kreativní ředitel", "artdirektor", "vizuální ředitel"],
     profile: "track-record",
     must_haves: [
       { id: "mh-directed-campaigns", title: "Directed campaigns", text: "Credited as art director on named campaigns or productions", accepted_evidence: ["campaign", "credits", "case study"] },

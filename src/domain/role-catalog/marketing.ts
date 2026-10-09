@@ -35,7 +35,7 @@ export const MARKETING: RoleTemplate[] = [
     key: "cmo",
     title: "Chief Marketing Officer",
     family: "marketing",
-    aliases: ["cmo", "head of marketing", "marketingový ředitel", "ředitel marketingu", "vp marketing", "chief marketer"],
+    aliases: ["cmo", "head of marketing", "marketingový ředitel", "ředitel marketingu", "vp marketing", "chief marketer", "marketing director", "director of marketing", "marketingová ředitelka", "vp of marketing"],
     profile: "track-record",
     must_haves: [
       { id: "mh-exec-marketing-role", title: "Executive marketing role", text: "Held a CMO, head or director of marketing role at a named company", accepted_evidence: ["job history", "company page", "press"] },
@@ -231,7 +231,7 @@ export const MARKETING: RoleTemplate[] = [
     key: "video-producer",
     title: "Video Producer",
     family: "marketing",
-    aliases: ["content creator", "tvůrce obsahu", "videotvůrce", "video content creator", "video marketér", "videoproducent", "youtuber"],
+    aliases: ["videotvůrce", "video content creator", "video marketér", "videoproducent", "youtuber", "video editor", "videoeditor", "video střihač", "střihač videa"],
     profile: "audience",
     must_haves: [
       { id: "mh-public-video-work", title: "Public video work", text: "Has public videos or a channel with published marketing or brand content", accepted_evidence: ["channel", "showreel", "Vimeo project"] },
@@ -240,5 +240,19 @@ export const MARKETING: RoleTemplate[] = [
       { id: "mh-video-recognition", title: "Video recognition", text: "Has a festival selection, award or platform feature for video work", accepted_evidence: ["award", "press", "Vimeo staff pick"] },
     ],
     sources: { steps: ["youtube_channel", "instagram_profile", "tiktok_profile", "personal_site_crawl", "linkedin_profile", "x_profile"], sites: ["youtube.com", "vimeo.com", "tiktok.com", "instagram.com", "linkedin.com"] },
+  },
+  {
+    key: "pricing-specialist",
+    title: "Pricing Specialist",
+    family: "marketing",
+    aliases: ["pricing analyst", "pricing manager", "cenový analytik", "cenová analytička", "specialista pricingu", "pricing specialista", "specialista cenotvorby", "revenue management analyst", "cenotvorba"],
+    profile: "makers",
+    must_haves: [
+      { id: "mh-pricing-role-history", title: "Pricing role history", text: "Held a named pricing, revenue management or category pricing role at a verifiable company", accepted_evidence: ["job history", "company page", "profile"] },
+      { id: "mh-pricing-analysis-published", title: "Published pricing analysis", text: "Has a public case study, article or talk on a pricing change, price test or elasticity analysis", accepted_evidence: ["case study", "published article", "talk"] },
+      { id: "mh-pricing-tooling", title: "Pricing tooling and data", text: "Public profile or work names the tools used, e.g. SQL, Excel, Power BI, a repricing or price-monitoring platform", accepted_evidence: ["profile", "certification", "case study"] },
+      { id: "mh-pricing-results", title: "Measured pricing results", text: "Public example ties a pricing decision to a measured margin, conversion or revenue outcome", accepted_evidence: ["case study", "talk", "published article"] },
+    ],
+    sources: { steps: ["linkedin_profile", "personal_site_crawl", "talks_serp", "github_profile", "x_profile"], sites: ["linkedin.com", "medium.com", "marketingjournal.cz", "ecommercebridge.cz"] },
   },
 ];

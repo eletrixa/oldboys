@@ -20,7 +20,7 @@ export const SALES: RoleTemplate[] = [
     key: "sales-development-representative",
     title: "Sales Development Representative",
     family: "sales",
-    aliases: ["sdr", "bdr", "business development representative", "obchodní zástupce", "junior obchodník", "lead generation specialist"],
+    aliases: ["sdr", "bdr", "business development representative", "junior obchodník", "asistent/ka pro obchodní zástupce", "appointment setter"],
     profile: "track-record",
     must_haves: [
       {
@@ -57,7 +57,7 @@ export const SALES: RoleTemplate[] = [
     key: "account-executive",
     title: "Account Executive",
     family: "sales",
-    aliases: ["ae", "b2b sales executive", "sales executive", "obchodník", "obchodní manažer", "account exekutiv"],
+    aliases: ["b2b sales executive", "sales executive", "obchodník", "obchodní manažer", "account exekutiv", "obchodní zástupce", "obchodní zástupkyně", "obchodní zástupce/zástupkyně", "obchodní konzultant", "obchodní konzultant/ka"],
     profile: "track-record",
     must_haves: [
       {
@@ -168,7 +168,7 @@ export const SALES: RoleTemplate[] = [
     key: "sales-manager",
     title: "Sales Manager",
     family: "sales",
-    aliases: ["head of sales", "sales team lead", "sales lead", "vedoucí obchodu", "vedoucí obchodního týmu", "manažer prodeje"],
+    aliases: ["sales team lead", "sales lead", "vedoucí obchodu", "vedoucí obchodního týmu", "manažer prodeje"],
     profile: "track-record",
     must_haves: [
       {
@@ -205,7 +205,7 @@ export const SALES: RoleTemplate[] = [
     key: "vp-sales-cro",
     title: "VP Sales / Chief Revenue Officer",
     family: "sales",
-    aliases: ["vp sales", "cro", "chief revenue officer", "vice president of sales", "obchodní ředitel", "ředitel prodeje", "head of revenue"],
+    aliases: ["vp sales", "cro", "chief revenue officer", "vice president of sales", "obchodní ředitel", "ředitel prodeje", "head of revenue", "head of sales"],
     profile: "track-record",
     must_haves: [
       {
@@ -242,7 +242,7 @@ export const SALES: RoleTemplate[] = [
     key: "business-development-manager",
     title: "Business Development Manager",
     family: "sales",
-    aliases: ["bdm", "business development", "manažer obchodního rozvoje", "obchodní rozvoj", "new business manager", "growth partnerships lead"],
+    aliases: ["bdm", "manažer obchodního rozvoje", "obchodní rozvoj", "new business manager", "growth partnerships lead", "business development lead", "business development officer", "business developer", "manažer business developmentu"],
     profile: "track-record",
     must_haves: [
       {
@@ -279,7 +279,7 @@ export const SALES: RoleTemplate[] = [
     key: "partnerships-manager",
     title: "Partnerships Manager",
     family: "sales",
-    aliases: ["partnership manager", "strategic partnerships manager", "alliances manager", "manažer partnerství", "partnerský manažer", "head of partnerships"],
+    aliases: ["partnership manager", "strategic partnerships manager", "alliances manager", "manažer partnerství", "partnerský manažer", "head of partnerships", "partner development manager", "partner manager"],
     profile: "track-record",
     must_haves: [
       {
@@ -353,7 +353,7 @@ export const SALES: RoleTemplate[] = [
     key: "account-manager",
     title: "Account Manager",
     family: "sales",
-    aliases: ["am", "client manager", "správce účtů", "account manažer", "klientský manažer", "obchodní zástupce pro stávající zákazníky"],
+    aliases: ["client manager", "správce účtů", "account manažer", "klientský manažer", "obchodní zástupce pro stávající zákazníky"],
     profile: "track-record",
     must_haves: [
       {

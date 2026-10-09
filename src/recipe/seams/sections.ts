@@ -44,6 +44,7 @@ const QUESTION_TITLE: Record<string, string> = {
   "social-presence": "Social presence",
   community: "Community and awards",
   "location-match": "Location",
+  "public-registries": "Public registries",
   contradictions: "Where sources disagree",
   [CV_QUESTION_ID]: "CV vs public record",
   "legal-entity": "Legal entity",

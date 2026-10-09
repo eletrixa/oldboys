@@ -21,11 +21,15 @@ import { loginHref } from "@/app/login/next-path";
 import { ROLE_OPTIONS } from "@/domain/role-catalog";
 import { NewBriefWizard } from "./new-brief-wizard";
 
-export default async function NewBriefPage({ searchParams }: { searchParams: Promise<{ positionId?: string }> }): Promise<React.JSX.Element> {
-  const { positionId } = await searchParams;
+export default async function NewBriefPage({ searchParams }: { searchParams: Promise<{ positionId?: string; role?: string }> }): Promise<React.JSX.Element> {
+  const { positionId, role } = await searchParams;
   const initial = typeof positionId === "string" && positionId !== "" ? positionId : null;
+  const initialRole = typeof role === "string" ? role.trim().slice(0, 300) : "";
   const user = await currentUser();
-  if (user === null) redirect(loginHref(initial === null ? "/briefs/new" : `/briefs/new?positionId=${encodeURIComponent(initial)}`));
+  if (user === null) {
+    const next = initial !== null ? `/briefs/new?positionId=${encodeURIComponent(initial)}` : initialRole !== "" ? `/briefs/new?role=${encodeURIComponent(initialRole)}` : "/briefs/new";
+    redirect(loginHref(next));
+  }
   const positions = await listPositions(getCloudflareContext().env.DB);
-  return <NewBriefWizard positions={positions} roleOptions={ROLE_OPTIONS} initialPositionId={initial} />;
+  return <NewBriefWizard positions={positions} roleOptions={ROLE_OPTIONS} initialPositionId={initial} initialRole={initialRole} />;
 }

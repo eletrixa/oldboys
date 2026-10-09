@@ -31,12 +31,14 @@ export type Chosen = { id: string; title: string; mustHaves: readonly MustHave[]
 type Props = {
   positions: readonly PositionListItem[];
   roleOptions: readonly RoleOption[];
+  /** A catalog title carried in `?role=` (picked on /positions): prefilled and focused in the picker. */
+  initialRole?: string;
   chosen: Chosen | null;
   onPick: (id: string, title: string) => void;
   onChange: () => void;
 };
 
-export function PositionStep({ positions, roleOptions, chosen, onPick, onChange }: Props): React.JSX.Element {
+export function PositionStep({ positions, roleOptions, initialRole = "", chosen, onPick, onChange }: Props): React.JSX.Element {
   const [query, setQuery] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -114,7 +116,7 @@ export function PositionStep({ positions, roleOptions, chosen, onPick, onChange 
       )}
       <form className="flex flex-col gap-3 border-t border-divider pt-5" aria-label="Create from role catalog" onSubmit={(e) => void create(e)}>
         <h3 className="font-semibold">Or create one from the role catalog</h3>
-        <RolePicker options={roleOptions} />
+        <RolePicker options={roleOptions} defaultValue={initialRole} autoFocus={initialRole !== ""} />
         {error !== null && <p role="alert" className="text-sm text-conflict">{error}</p>}
         <div className="flex flex-wrap items-center gap-4">
           <button type="submit" className={BTN_PRIMARY} disabled={busy}>{busy ? "Creating…" : "Create position"}</button>

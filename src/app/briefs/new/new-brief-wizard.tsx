@@ -30,7 +30,7 @@ import { candidateBody, type DraftRow, emptyRow, enrichIds, failText, patchRow, 
 import { CandidatesStep } from "./candidates-step";
 import { PositionStep } from "./position-step";
 
-type Props = { positions: readonly PositionListItem[]; roleOptions: readonly RoleOption[]; initialPositionId: string | null };
+type Props = { positions: readonly PositionListItem[]; roleOptions: readonly RoleOption[]; initialPositionId: string | null; initialRole?: string };
 type Added = { applicationId?: string };
 
 /** Add one row to the pool; the application id, or the HTTP status of the refusal. */
@@ -62,7 +62,7 @@ function Step({ n, title, children }: { n: number; title: string; children: Reac
   );
 }
 
-export function NewBriefWizard({ positions, roleOptions, initialPositionId }: Props): React.JSX.Element {
+export function NewBriefWizard({ positions, roleOptions, initialPositionId, initialRole = "" }: Props): React.JSX.Element {
   const router = useRouter();
   const nextKey = useRef(2);
   const [positionId, setPositionId] = useState(initialPositionId);
@@ -150,7 +150,7 @@ export function NewBriefWizard({ positions, roleOptions, initialPositionId }: Pr
         <p className="text-muted">Pick the position, add one or more candidates, and start the research for all of them at once.</p>
       </header>
       <Step n={1} title="Position">
-        <PositionStep positions={positions} roleOptions={roleOptions} chosen={chosen} onPick={pick} onChange={() => { setPositionId(null); setDetail(null); }} />
+        <PositionStep positions={positions} roleOptions={roleOptions} initialRole={initialRole} chosen={chosen} onPick={pick} onChange={() => { setPositionId(null); setDetail(null); }} />
       </Step>
       {chosen !== null && (
         <>

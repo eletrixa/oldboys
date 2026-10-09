@@ -94,7 +94,7 @@ export const OPERATIONS: RoleTemplate[] = [
     key: "customer-support-specialist",
     title: "Customer Support Specialist",
     family: "operations",
-    aliases: ["customer service representative", "support agent", "zákaznická podpora", "specialista zákaznické podpory", "operátor zákaznického servisu", "support specialist"],
+    aliases: ["customer service representative", "support agent", "zákaznická podpora", "specialista zákaznické podpory", "operátor zákaznického servisu", "support specialist", "consumer care specialist", "customer care specialist"],
     profile: "verify-only",
     must_haves: [
       {
@@ -205,7 +205,7 @@ export const OPERATIONS: RoleTemplate[] = [
     key: "logistics-coordinator",
     title: "Logistics Coordinator",
     family: "operations",
-    aliases: ["logistics specialist", "logistik", "koordinátor logistiky", "specialista logistiky", "dispečer", "shipping coordinator"],
+    aliases: ["logistics specialist", "logistik", "koordinátor logistiky", "specialista logistiky", "dispečer", "shipping coordinator", "speditér", "speditérka", "spediční referent", "disponent dopravy", "disponent", "freight forwarder", "freight forwarding specialist", "transport coordinator", "koordinátor dopravy", "referent dopravy", "spedice", "disponent/ka", "disponent logistiky", "disponent/ka logistiky", "disponent mezinárodní dopravy", "vedoucí řidičů", "pracovník logistiky", "logistický pracovník", "administrativní pracovník logistiky"],
     profile: "verify-only",
     must_haves: [
       {
@@ -242,7 +242,7 @@ export const OPERATIONS: RoleTemplate[] = [
     key: "procurement-manager",
     title: "Procurement Manager",
     family: "operations",
-    aliases: ["purchasing manager", "nákupčí", "vedoucí nákupu", "manažer nákupu", "strategic sourcing manager", "head of procurement"],
+    aliases: ["purchasing manager", "vedoucí nákupu", "manažer nákupu", "strategic sourcing manager", "head of procurement"],
     profile: "credentialed",
     must_haves: [
       {
@@ -316,7 +316,7 @@ export const OPERATIONS: RoleTemplate[] = [
     key: "executive-assistant",
     title: "Executive Assistant",
     family: "operations",
-    aliases: ["ea", "personal assistant", "asistentka", "asistent vedení", "asistentka managementu", "office assistant to ceo"],
+    aliases: ["ea", "personal assistant", "asistent vedení", "asistentka managementu", "office assistant to ceo", "asistentka ředitele", "asistent ředitele", "asistent/ka ředitele", "asistentka jednatele", "výkonná asistentka", "asistent/ka vedení"],
     profile: "verify-only",
     must_haves: [
       {
@@ -501,7 +501,7 @@ export const OPERATIONS: RoleTemplate[] = [
     key: "warehouse-manager",
     title: "Warehouse Manager",
     family: "operations",
-    aliases: ["warehouse supervisor", "vedoucí skladu", "skladník vedoucí", "manažer skladu", "logistics warehouse lead", "fulfilment manager"],
+    aliases: ["warehouse supervisor", "vedoucí skladu", "skladník vedoucí", "manažer skladu", "logistics warehouse lead", "fulfilment manager", "zástupce vedoucího skladu", "vedoucí skladu/zástupce"],
     profile: "verify-only",
     must_haves: [
       {
@@ -570,5 +570,33 @@ export const OPERATIONS: RoleTemplate[] = [
       steps: ["linkedin_profile", "talks_serp", "youtube_channel", "personal_site_crawl", "x_profile"],
       sites: ["linkedin.com", "trailblazer.me", "hubspot.com", "youtube.com"],
     },
+  },
+  {
+    key: "warehouse-worker",
+    title: "Warehouse Worker",
+    family: "operations",
+    aliases: ["warehouse operative", "warehouse associate", "warehouse operator", "order picker", "picker", "picker/packer", "picker packer", "forklift driver", "forklift operator", "skladník", "skladnice", "skladník/skladnice", "skladník/ce", "skladník/ice", "skladník-picker", "skladník/řidič", "skladník/řidič vzv", "skladník ve výrobě", "skladový manipulant", "ještěrkář", "řidič retraku", "operátor logistiky", "pracovník skladu", "pracovník/ce skladu", "operátor skladu", "manipulant", "manipulační dělník", "řidič vzv", "řidič vysokozdvižného vozíku", "obsluha vzv", "vychystávač", "staplerfahrer", "lagermitarbeiter", "lagerarbeiter", "lagerist", "kommissionierer", "lagerhelfer"],
+    profile: "verify-only",
+    must_haves: [
+      { id: "mh-warehouse-history", title: "Warehouse job history", text: "Held a warehouse, picking or material-handling job at a named employer", accepted_evidence: ["job history", "LinkedIn profile", "company page"] },
+      { id: "mh-tenure", title: "Tenure", text: "Stayed 12+ months in at least one warehouse or logistics role", accepted_evidence: ["job history", "LinkedIn profile"] },
+      { id: "mh-forklift-licence", title: "Forklift licence", text: "Lists a forklift (VZV) licence or other lifting-equipment training from a named provider", accepted_evidence: ["certification listing", "LinkedIn profile"] },
+      { id: "mh-wms-scanner-tools", title: "WMS or scanner tools", text: "Names a WMS, ERP or handheld scanner system used (SAP EWM, Manhattan, Mantis, Blue Yonder)", accepted_evidence: ["LinkedIn profile", "job history"] },
+    ],
+    sources: { steps: ["linkedin_profile", "personal_site_crawl", "x_profile"], sites: ["linkedin.com", "firmy.cz", "jobs.cz"] },
+  },
+  {
+    key: "delivery-driver",
+    title: "Delivery Driver",
+    family: "operations",
+    aliases: ["courier", "kurýr", "kurýrka", "kurýr/ka", "rozvozový řidič", "rozvozový řidič /ka", "řidič rozvozu zboží", "řidič dodávky", "řidič rozvozu", "řidič kurýr", "řidič-kurýr", "rozvozce", "rozvoz zboží", "van driver", "delivery courier", "last mile driver", "last-mile driver", "řidič sk. b", "řidič skupiny b", "řidič kamionu", "řidič mkd", "truck driver", "lkw-fahrer", "lkw fahrer", "kraftfahrer", "zusteller", "auslieferungsfahrer", "kurier"],
+    profile: "verify-only",
+    must_haves: [
+      { id: "mh-driving-history", title: "Driving job history", text: "Held a courier, delivery or professional driving job at a named employer", accepted_evidence: ["job history", "LinkedIn profile", "company page"] },
+      { id: "mh-tenure", title: "Tenure", text: "Stayed 12+ months in at least one driving or delivery role", accepted_evidence: ["job history", "LinkedIn profile"] },
+      { id: "mh-licence-class", title: "Licence class stated", text: "States the driving licence class held (B, C, C+E) or a professional driver card (profesní průkaz)", accepted_evidence: ["LinkedIn profile", "certification listing", "job history"] },
+      { id: "mh-delivery-tools", title: "Delivery tools", text: "Names routing, telematics or courier apps used (Onfleet, Routific, Wolt Partner, Rohlik app, tachograph)", accepted_evidence: ["LinkedIn profile", "job history"] },
+    ],
+    sources: { steps: ["linkedin_profile", "personal_site_crawl", "x_profile"], sites: ["linkedin.com", "firmy.cz", "jobs.cz"] },
   },
 ];

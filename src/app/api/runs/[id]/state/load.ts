@@ -36,6 +36,7 @@ import { readChallenge } from "@/domain/challenge";
 import { readCodeProfile } from "@/domain/code-profile";
 import { readProfileFacts } from "@/domain/profile-facts";
 import { profileSignals } from "@/domain/profile-signals";
+import { readRegistryChecks } from "@/domain/cz-registry";
 import { withCvQuestion } from "@/domain/cv-check";
 import { TRANSLATE_STEP } from "@/domain/report-translation";
 import { type CostRow, runCost } from "@/domain/run-cost";
@@ -159,6 +160,7 @@ export async function loadRunState(db: D1Database, id: string): Promise<RunState
     ...challengeState(readChallenge(ledger.results), new Set(open.claims.map((c) => c.id))),
     code_profile: codeProfile,
     profile_signals: profileSignals({ facts: readProfileFacts(ledger.results), codeProfile, candidates, now: new Date().toISOString() }),
+    registry_checks: readRegistryChecks(ledger.results),
     questions: withCvQuestion(head.goal, [...base, ...extra], sources.results),
     brief: open.brief,
     cost: runCost(ledger.results, head.created_at),
