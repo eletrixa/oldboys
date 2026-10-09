@@ -1,5 +1,5 @@
 /**
- * Verify seam: deterministic screens (noise, unknown ids, quote-in-excerpt, hedges, alias contradictions, duplicates), then a second model and a devil's advocate that may only downgrade.
+ * Verify seam: deterministic screens (noise, unknown ids, quote-in-excerpt, hedges, alias contradictions, duplicates), then a second model and a devil's advocate, run concurrently, that may only downgrade.
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/recipe/seams/verify.ts
@@ -22,10 +22,12 @@
  * - mergeDuplicates: claims with the same question_id whose folded texts are equal or token Jaccard >= 0.8
  *   (src/domain/similar) merge into the better-ranked / higher-confidence one, supports unioned, note
  *   "merged duplicate: <id>"
- * - Residue (FACTs that passed) goes to the verify model; "not supported" downgrades to INFERENCE
- * - Devil's advocate (idea #8, src/recipe/seams/challenge): must-have / CV-match FACTs that survived everything are
- *   challenged (fork pre-check, then one more `verify` model call); what does not hold becomes INFERENCE and the
- *   record (checked, held, per claim ground + why) goes to `out.challenge` for the ledger ref
+ * - Residue (FACTs that passed the deterministic screens) goes to the verify model; "not supported" downgrades to INFERENCE
+ * - The second model and the devil's advocate run concurrently on the same deterministic result; both only downgrade,
+ *   the downgrades are unioned (a claim the second model rejects may also appear in the challenge record)
+ * - Devil's advocate (idea #8, src/recipe/seams/challenge): must-have / CV-match FACTs that survived the deterministic
+ *   screens are challenged (fork pre-check, then one more `verify` model call); what does not hold becomes INFERENCE
+ *   and the record (checked, held, per claim ground + why) goes to `out.challenge` for the ledger ref
  *
  * Design constraints:
  * - Downgrade or drop only, never promote; an LLM failure keeps the deterministic result
@@ -231,8 +233,11 @@ export async function verifyClaims(ctx: StepContext, ports: Ports): Promise<Step
   out.notes.push(...merged.notes);
   const deduped = merged.kept;
   const residue = deduped.filter((c) => c.kind === "FACT");
-  let final = deduped;
-  if (residue.length > 0) {
+  // The second model and the devil's advocate (idea #8) both only downgrade, so they run concurrently on the same
+  // deterministic result and the downgrades are unioned
+  const secondModel = async (): Promise<Set<string>> => {
+    const rejected = new Set<string>();
+    if (residue.length === 0) return rejected;
     try {
       const byId = new Map(ctx.sources.map((s) => [s.id, s]));
       const r = await ports.llm({
@@ -245,17 +250,17 @@ export async function verifyClaims(ctx: StepContext, ports: Ports): Promise<Step
       });
       out.calls += 1;
       out.cost_usd += r.cost_usd;
-      const rejected = new Set(r.value.filter((v) => !v.supported).map((v) => v.id));
-      final = deduped.map((c) => (rejected.has(c.id) ? downgrade(c) : c));
+      for (const v of r.value) if (!v.supported) rejected.add(v.id);
       for (const id of rejected) out.notes.push(`downgraded (second model): ${id}`);
     } catch (error) {
       out.notes.push(`verify model failed, deterministic result kept: ${error instanceof Error ? error.message : String(error)}`);
     }
-  }
-  // Devil's advocate (idea #8): what survived every check above is challenged once more; what fails goes to the interview
-  out.challenge = await challengeClaims(final, ctx.sources, ports, out);
-  const challenged = new Set(out.challenge.challenges.map((ch) => ch.claim_id));
-  final = final.map((c) => (challenged.has(c.id) ? downgrade(c) : c));
+    return rejected;
+  };
+  const [rejected, challenge] = await Promise.all([secondModel(), challengeClaims(deduped, ctx.sources, ports, out)]);
+  out.challenge = challenge;
+  const challenged = new Set(challenge.challenges.map((ch) => ch.claim_id));
+  const final = deduped.map((c) => (rejected.has(c.id) || challenged.has(c.id) ? downgrade(c) : c));
   out.claims = final;
   out.empty = final.length === 0;
   return out;

@@ -33,7 +33,9 @@
  * - `contradictions`: claims or a model summary saying "compatible" are dropped; no claim left = coverage none, no section
  * - Facebook: a Facebook candidate adds a static not_searched line (no collector; public pages need a login)
  * - `sections`: findings cut by what was found, confidence computed deterministically (seams/sections.ts), never by the model
- * - `profile` (hiring): enriched profile from seams/profile.ts, two primary calls, degraded on its own when the model fails
+ * - `profile` (hiring): enriched profile from seams/profile.ts, two primary calls, degraded on its own when the model fails;
+ *   built concurrently with the summaries from the screened claims; a contradiction claim the summary later calls
+ *   compatible stays in the profile's input (it is still a verified, sourced claim)
  */
 import { z } from "zod";
 import { containsArt9Topic } from "@/domain/art9";
@@ -329,6 +331,9 @@ export async function synthesizeBrief(ctx: StepContext, ports: Ports): Promise<S
   for (const c of kept) byQ.get(c.question_id)?.push(c);
   let askable = interviewAllowed(ctx, byQ);
 
+  // Hiring only; starts now, in parallel with the summaries call (needs only `kept`, not the summaries)
+  const profilePromise = ctx.goal === "hiring" ? buildProfile(ctx, kept, ports, out) : Promise.resolve(null);
+
   let summaries = new Map<string, { summary: string; interview_question: string | null }>();
   // No claims = nothing for a model to summarise: skip the call, ship an evidence-only brief
   let degraded: string | null = kept.length === 0 ? "no verified claims" : null;
@@ -407,7 +412,7 @@ export async function synthesizeBrief(ctx: StepContext, ports: Ports): Promise<S
     location_note: locationNoteOf(ctx.anchor, ctx.candidates, ctx.sources),
     sections: sectionsOf(ctx.questions, kept, perQuestion, ctx.sources, confirmedSources(ctx), ctx.candidates.filter((c) => c.decision === "merge").flatMap((c) => c.profile_urls)),
     // Hiring only: the enriched profile (seams/profile.ts), two more primary calls; degrades on its own
-    profile: ctx.goal === "hiring" ? await buildProfile(ctx, kept, ports, out) : null,
+    profile: await profilePromise,
   };
   out.brief = brief;
   out.empty = false;
