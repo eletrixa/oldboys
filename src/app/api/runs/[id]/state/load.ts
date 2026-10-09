@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/api/runs/[id]/state/load.ts
- * Deps:    D1Database (passed in), src/domain/code-profile (readCodeProfile), src/domain/profile-facts (readProfileFacts), src/domain/profile-signals (profileSignals), src/domain/report-translation (TRANSLATE_STEP), src/domain/call-questions-llm (CALL_QUESTIONS_STEP), src/recipe/goals, src/domain/run-cost, src/domain/cv-check, src/domain/challenge, src/app/runs/[id]/challenge, src/app/intake/intake-rows (type), ./public-state
+ * Deps:    D1Database (passed in), src/domain/run-issues (readRunIssues), src/domain/scrub (scrubReason), src/domain/code-profile (readCodeProfile), src/domain/profile-facts (readProfileFacts), src/domain/profile-signals (profileSignals), src/domain/report-translation (TRANSLATE_STEP), src/domain/call-questions-llm (CALL_QUESTIONS_STEP), src/recipe/goals, src/domain/run-cost, src/domain/cv-check, src/domain/challenge, src/app/runs/[id]/challenge, src/app/intake/intake-rows (type), ./public-state
  * Tested:  src/app/api/runs/[id]/state/__tests__/route.test.ts (through the route; publicState: __tests__/public-state.test.ts; withCvQuestion: src/domain/__tests__/cv-check.test.ts; readChallenge: src/domain/__tests__/challenge.test.ts; challengeState: src/app/runs/[id]/__tests__/challenge.test.ts)
  *
  * Key responsibilities:
@@ -26,6 +26,8 @@
  * - cost = runCost over the ledger rows (seq order) from investigations.created_at
  * - intake = the applications row LEFT JOINed into the head query on investigations.application_id ({source, tag, receivedAt}), null for runs started by hand; never cv_text or cover_letter
  * - code_profile = readCodeProfile over the same ledger rows (the github_deep step's `ref.digest`); null for runs before it or non-technical roles
+ * - issues = readRunIssues over the ledger rows with every reason through scrubReason (the route is open), so the page can list
+ *   failed requests, budget stops and gaps while the run is still loading
  * - profile_signals = profileSignals over readProfileFacts(ledger), the same code profile and the mapped candidates, relative to the request time (plans/012); derived at read time, never stored
  *
  * Design constraints:
@@ -38,6 +40,8 @@ import { readCodeProfile } from "@/domain/code-profile";
 import { readProfileFacts } from "@/domain/profile-facts";
 import { profileSignals } from "@/domain/profile-signals";
 import { readRegistryChecks } from "@/domain/cz-registry";
+import { readRunIssues } from "@/domain/run-issues";
+import { scrubReason } from "@/domain/scrub";
 import { withCvQuestion } from "@/domain/cv-check";
 import { TRANSLATE_STEP } from "@/domain/report-translation";
 import { CALL_QUESTIONS_STEP } from "@/domain/call-questions-llm";
@@ -164,6 +168,7 @@ export async function loadRunState(db: D1Database, id: string): Promise<RunState
     code_profile: codeProfile,
     profile_signals: profileSignals({ facts: readProfileFacts(ledger.results), codeProfile, candidates, now: new Date().toISOString() }),
     registry_checks: readRegistryChecks(ledger.results),
+    issues: readRunIssues(ledger.results).map((i) => ({ ...i, reason: scrubReason(i.reason) })),
     questions: withCvQuestion(head.goal, [...base, ...extra], sources.results),
     brief: open.brief,
     cost: runCost(ledger.results, head.created_at),

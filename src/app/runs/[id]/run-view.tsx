@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/runs/[id]/run-view.tsx
- * Deps:    react, next/link, ../../ui, ./parts, ./brief-page, ./state, ./identity-map-card, ./delete-card
+ * Deps:    react, next/link, ../../ui, ./parts, ./brief-page, ./state, ./identity-map-card, ./delete-card, ./issues-card
  * Tested:  n/a
  *
  * Key responsibilities:
@@ -20,6 +20,8 @@
  * - Show the run cost and research time line (ledger projection) while running and when done
  * - Identity map above the profile list (same live decisions)
  * - On failure keep the progress rows, mark the failed one, show the reason, sources so far and a retry link
+ * - "Issues so far" (IssuesCard) under the progress while the run is not done: failed requests, skipped sources,
+ *   empty searches and AI off, with counts, so a problem shows as it happens and not only when the run dies
  * - Show one question at a time (at most LINEUP_MAX_QUESTIONS) above the lineup, so it is never below the fold; send every
  *   decision in one answer event
  *
@@ -38,6 +40,7 @@ import type { DeletionReceipt } from "@/domain/deletion";
 import { BriefPage, BriefView } from "./brief-page";
 import { DeleteCard, DeletedView } from "./delete-card";
 import { IdentityMapCard } from "./identity-map-card";
+import { IssuesCard } from "./issues-card";
 import { type Answer, CostLine, ProfileList, ProgressSteps, QuestionCard } from "./parts";
 import { LINEUP_MAX_QUESTIONS, type RunState, firstName, headerText, questionsToAsk, retryHref, sortLineup, startedAgo, stalledNotice, stepRows } from "./state";
 
@@ -280,6 +283,7 @@ export function RunView({ id }: { id: string }): React.JSX.Element {
       )}
       {progress}
       {failed}
+      <IssuesCard issues={state.issues ?? []} />
       {identity}
       {sendRows}
       <BriefView state={state} />
