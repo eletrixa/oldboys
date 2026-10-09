@@ -97,8 +97,8 @@ export function dedupeSince(now: Date): string {
 export const HOUR_MS = 60 * 60 * 1000;
 
 /** Runs started per hour across the shared token before the API answers 429. */
-export const RUNS_PER_HOUR_CAP = 20;
+export const RUNS_PER_HOUR_CAP = 40;
 /** Runs started from the public start form (no bearer of its own) in any rolling hour. */
-export const START_PER_HOUR_CAP = 6;
+export const START_PER_HOUR_CAP = 20;
 /** Runs started by the intake funnel in any rolling hour when var INTAKE_PER_HOUR_CAP is unset (specs/intake). */
 export const INTAKE_PER_HOUR_CAP_DEFAULT = 10;
