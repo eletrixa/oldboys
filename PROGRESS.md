@@ -320,3 +320,6 @@ Each agent appends: what it starts, progress, what it finishes. Newest at the bo
 
 ## 2026-10-09 · eval-remeasure agent (Minas)
 - Started: 04:40. Re-run pnpm eval after the night's changes (role_template 56725e9, enriched profile + Big Five 24cb73b/ddf21d5/e71c714, cz-registries review d88ccf8, translation fixes) and align the numbers in RESULTS.md, README, JURY.md and /validation.
+- Finished: 04:41. `pnpm eval` on main after the night's changes (role_template, enriched profile + Big Five, cz-registries review, translations, scorecard): unchanged, 84 of 95 (0 unsafe, 11 conservative) with the simulated recruiter, strict 84 of 95, 0 lineup questions; eval/results.json and eval/RESULTS.md regenerate byte-identical. Same 11 misses as at 03:19 (p1 x4 and p4 x4: own GitHub with only name + city stays unused; p3 CV-only quote "differs"; p5 overstated claim keeps mh-usability partial). No regression, nothing fixed. README, JURY.md (numbers table, known eval misses) and /validation (reads results.json) already say 84 of 95; grep found no stale "89/95" outside PROGRESS/CHANGELOG history. Note: JURY.md still quotes 1,873 + 21 tests (now 1940 + 21).
+- Checked: pnpm eval (no network, no keys), pnpm check green (1940 + 21 tests).
+- Files: PROGRESS.md.
