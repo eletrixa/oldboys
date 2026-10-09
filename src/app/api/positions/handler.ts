@@ -104,13 +104,22 @@ export async function listPositions(db: D1Database): Promise<PositionListItem[]>
 
 const HIRING_STEPS = recipeFor("hiring").steps;
 
+/** Plain words for the steps without an actor; the pool status never shows a recipe step id. */
+const KIND_LABEL: Readonly<Partial<Record<(typeof HIRING_STEPS)[number]["kind"], string>>> = {
+  seed: "Reading the profile",
+  resolve: "Checking it is the right person",
+  extract: "Reading the sources",
+  verify: "Double-checking facts",
+  synthesize: "Writing the brief",
+};
+
 /** Progress from the last step with a ledger row: the step label is the one now running, pct the share of steps done. */
 function poolRun(row: RoleRunRow): PoolRun {
   const done = row.last_step === undefined || row.last_step === null ? 0 : HIRING_STEPS.findIndex((s) => s.id === row.last_step) + 1;
   const next = HIRING_STEPS[done];
   const actor = next !== undefined && "actor" in next ? next.actor : undefined;
   const active = row.status === "queued" || row.status === "running";
-  const step = !active || next === undefined ? null : (actor === undefined ? undefined : STEP_LABEL[actor]) ?? next.id.replaceAll("_", " ");
+  const step = !active || next === undefined ? null : (actor === undefined ? undefined : STEP_LABEL[actor]) ?? KIND_LABEL[next.kind] ?? "Web search";
   const pct = row.status === "done" ? 100 : Math.min(99, Math.round((done / HIRING_STEPS.length) * 100));
   const stalled = isStalled(row.status, row.last_at ?? row.created_at, new Date().toISOString());
   return { status: row.status, subject: row.subject, step, pct, stalled, ...briefStats(row.brief_json) };
