@@ -8,6 +8,7 @@
  *
  * Key responsibilities:
  * - `rest/github`: accepted github candidate -> user + repos; otherwise user search by name
+ * - A forked repo's excerpt carries FORK_MARK ("forked repository") so verify can challenge it without a model
  *
  * Design constraints:
  * - Pure: no fetch here; unknown payload shapes parse to []
@@ -35,10 +36,13 @@ const Repo = z.object({
   language: z.string().nullish(),
   stargazers_count: z.number().optional(),
   pushed_at: z.string().nullish(),
+  fork: z.boolean().optional(),
 });
 const Search = z.object({ items: z.array(z.object({ html_url: z.string(), login: z.string() })) });
 
 const API = "https://api.github.com";
+/** In a repo excerpt: the devil's advocate (src/domain/challenge forkPrecheck) never counts a fork as own work. */
+export const FORK_MARK = "forked repository";
 
 export const github: Collector = {
   id: "rest/github",
@@ -62,7 +66,7 @@ export const github: Collector = {
       return repos.data.map((r) => ({
         url: r.html_url,
         excerpt: clip(
-          [r.name, r.description, r.language, `${String(r.stargazers_count ?? 0)} stars`, `pushed ${r.pushed_at ?? "?"}`]
+          [r.name, r.fork === true ? FORK_MARK : null, r.description, r.language, `${String(r.stargazers_count ?? 0)} stars`, `pushed ${r.pushed_at ?? "?"}`]
             .filter((x): x is string => typeof x === "string" && x.length > 0)
             .join(" · "),
         ),

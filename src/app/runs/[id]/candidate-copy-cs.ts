@@ -10,6 +10,7 @@
  * - CS_TEXT: the notice in formal ("Vy"), gender-neutral Czech; no name in the greeting (Czech needs the vocative)
  * - Generic source labels ("Web search", "Personal website" …) in Czech; platform names stay as they are
  * - Known "not searched" reasons in Czech; unknown reasons pass through unchanged
+ * - Deletion line matches the English one: the date, or earlier once the candidate no longer continues in the selection
  *
  * Design constraints:
  * - Pure strings only; escaping, links and scrubbing stay in candidate-copy.ts
@@ -92,8 +93,8 @@ export const CS_TEXT: NoticeText = {
   keepHeading: "Jak dlouho údaje uchováváme",
   keep: (day, days) =>
     day !== null
-      ? `Všechna data z průzkumu smažeme ${dateCs(day)} (${String(days)} dní po průzkumu).`
-      : `Všechna data z průzkumu smažeme ${String(days)} dní po průzkumu.`,
+      ? `Všechna data z průzkumu smažeme ${dateCs(day)} (${String(days)} dní po průzkumu), nebo dříve, jakmile už ve výběrovém řízení nebudete pokračovat.`
+      : `Všechna data z průzkumu smažeme ${String(days)} dní po průzkumu, nebo dříve, jakmile už ve výběrovém řízení nebudete pokračovat.`,
   rightsHeading: "Vaše práva",
   rights: "Můžete se nás zeptat, co jsme našli, požádat o opravu nebo o okamžité smazání.",
   reply: "Stačí odpovědět na tento e-mail.",

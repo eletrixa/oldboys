@@ -9,6 +9,7 @@
  * Key responsibilities:
  * - 400 for a query outside 3..100 chars, 503 without a key, 502 when the provider fails or answers an unexpected shape
  * - 200 {suggestions, source: "web-search"}; an empty result set is a 200 with []
+ * - No `country` parameter: Brave answers 422 for CZ (not in its enum), and the `site:` filter plus the name already narrow it
  *
  * Design constraints:
  * - The picker never reads linkedin.com; only search-engine snippets of public pages (brief hard rule)
@@ -21,7 +22,7 @@ import { SUGGEST_QUERY_MAX, SUGGEST_QUERY_MIN, suggestionsFromHits, suggestQuery
 export const BRAVE_SEARCH_URL = "https://api.search.brave.com/res/v1/web/search";
 export const SUGGEST_SOURCE = "web-search";
 
-export type SuggestDeps = { fetchJson: JsonFetch; key: string; country?: string };
+export type SuggestDeps = { fetchJson: JsonFetch; key: string };
 
 const BraveResponse = z.object({
   web: z.object({ results: z.array(z.object({ title: z.string().default(""), url: z.string(), description: z.string().optional() })).default([]) }).optional(),
@@ -38,7 +39,6 @@ export async function suggestProfiles(rawQ: string, rawHint: string, deps: Sugge
   const url = new URL(BRAVE_SEARCH_URL);
   url.searchParams.set("q", suggestQuery(q, hint));
   url.searchParams.set("count", "20");
-  url.searchParams.set("country", deps.country ?? "cz");
   let raw: unknown;
   try {
     raw = await deps.fetchJson(url.toString(), { headers: { "X-Subscription-Token": deps.key } });

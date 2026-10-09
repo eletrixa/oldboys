@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/domain/audit.ts
- * Deps:    zod, src/domain/run-cost, src/domain/scrub
+ * Deps:    zod, src/domain/run-cost, src/domain/scrub, src/domain/deletion (PROVIDER_RETENTION)
  * Tested:  src/domain/__tests__/audit.test.ts
  *
  * Key responsibilities:
@@ -16,6 +16,8 @@
  *   or call rows show it (Apify: a call row with an Apify actor id; Anthropic: an llm row; ElevenLabs: a live call)
  * - LEGAL_BASIS states only what the hiring team declares; NOTICE_NOTE says the tool records no candidate notice
  * - RETENTION_DAYS / deletionDate: single source of the 7-day retention, also used by src/workflow/purge.ts
+ * - RETENTION_NOTE: earlier deletion at once on rejection or request (POST /api/runs/:id/delete); runs with a live call
+ *   add the provider's own transcript retention (PROVIDER_RETENTION)
  *
  * Design constraints:
  * - Pure: no I/O; rows come from D1 via the caller, recipe steps are passed as plain data
@@ -26,6 +28,7 @@
  * - Unreadable ref_json never throws; the step then reads as "no record"
  */
 import { z } from "zod";
+import { PROVIDER_RETENTION } from "@/domain/deletion";
 import { runCost } from "@/domain/run-cost";
 import { scrubReason } from "@/domain/scrub";
 
@@ -36,7 +39,8 @@ export const LEGAL_BASIS =
   "Legitimate interest, Art. 6(1)(f) GDPR, as declared by the hiring team: pre-employment screening of public professional data.";
 export const NOTICE_NOTE =
   "Not recorded by this tool. The hiring team informs the candidate (GDPR Art. 14), for example with the candidate notice from the run page.";
-export const RETENTION_NOTE = "Earlier deletion on request (done by hand; no automatic delete on rejection yet).";
+export const RETENTION_NOTE =
+  "Deleted earlier, at once, when the recruiter rejects the candidate or the candidate asks for it (Delete candidate data on the run page).";
 
 /** Recipe step kinds that query an outside source; the others are model seams or the lineup. */
 const COLLECTOR_KINDS: ReadonlySet<string> = new Set(["serp", "actor", "ares"]);
@@ -271,6 +275,11 @@ export function auditRecord(rows: AuditRows): AuditRecord {
     total_cost_usd: cost.usd,
     lineup,
     verification_calls: calls.map((c) => ({ status: c.status, mock: c.provider === "mock", created_at: c.created_at, finished_at: c.finished_at })),
-    retention: { days: RETENTION_DAYS, delete_after: deletionDate(run.created_at), note: RETENTION_NOTE },
+    retention: {
+      days: RETENTION_DAYS,
+      delete_after: deletionDate(run.created_at),
+      // A live call leaves a transcript copy at the provider that neither the purge nor the delete button reaches.
+      note: calls.some((c) => c.provider === "elevenlabs") ? `${RETENTION_NOTE} ${PROVIDER_RETENTION}` : RETENTION_NOTE,
+    },
   };
 }

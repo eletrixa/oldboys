@@ -3,12 +3,13 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/runs/[id]/state.ts
- * Deps:    src/domain/claim, src/domain/run-cost, src/domain/quote, src/app/intake/intake-rows (types only)
+ * Deps:    src/domain/claim, src/domain/challenge, src/domain/run-cost, src/domain/quote, src/app/intake/intake-rows (types only)
  * Tested:  src/app/runs/[id]/__tests__/state.test.ts
  *
  * Key responsibilities:
  * - RunState: the GET /api/runs/:id/state contract (incl. position {id, title} | null, organization_name, and intake = the application that started the run, or null;
- *   sources carry fetched_at / expires_at and quote_contexts the saved text around each claim's quote, never whole excerpts)
+ *   sources carry fetched_at / expires_at and quote_contexts the saved text around each claim's quote, never whole excerpts;
+ *   challenges / challenge_summary = the devil's advocate record, optional for older runs)
  * - stepRows: map the ledger step + status to the five human progress rows
  * - sortLineup: confirmed first, social platforms before web hits
  * - questionsToAsk: one open profile per platform; roleCriteria: role must-haves (mh-) only
@@ -25,6 +26,7 @@
  * Design constraints:
  * - Pure (types plus the pure platformOf), so both the route handler and client code can use it
  */
+import type { Challenge } from "@/domain/challenge";
 import type { Brief, BriefSection, Candidate, Claim } from "@/domain/claim";
 import type { ClaimQuoteContext } from "@/domain/quote";
 import type { RunCost } from "@/domain/run-cost";
@@ -59,6 +61,10 @@ export type RunState = {
   sources: { id: string; url: string; identity_reason?: string | null; fetched_at?: string | null; expires_at?: string | null }[];
   /** Saved text around each claim's quote, one per (claim with a quote, source it cites); Art. 9 surroundings are emptied. */
   quote_contexts?: ClaimQuoteContext[];
+  /** Devil's advocate (idea #8): claims that did not hold, with ground and a source-level reason; empty or absent for older runs. */
+  challenges?: Challenge[];
+  /** How many findings the devil's advocate checked, how many held, how many moved to the interview; null or absent for older runs. */
+  challenge_summary?: { checked: number; held: number; moved: number } | null;
   questions: { id: string; text: string; title?: string }[];
   brief: Brief | null;
   /** Reason recorded by the Workflow when status is failed; null otherwise. */

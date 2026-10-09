@@ -14,11 +14,22 @@
  *   /api/profiles/suggest (mocked by the test) and the picked row lands in profileUrl; 503 degrades to calm copy
  *
  * Design constraints:
+ * - One registration per file (10 per hour per IP), cookies shared across the tests
  * - No network calls to /api/start; the form is never submitted; the suggest route is answered by page.route so no
  *   search provider or key is needed
  */
-import { expect, test } from "@playwright/test";
+import { expect, test, type BrowserContext } from "@playwright/test";
 import { registerAndLogin } from "./session";
+
+// Registration is limited to 10 per hour per IP, so the file registers once and every test reuses the cookies.
+let cookies: Awaited<ReturnType<BrowserContext["cookies"]>> = [];
+
+test.beforeAll(async ({ browser }) => {
+  const page = await browser.newPage();
+  await registerAndLogin(page);
+  cookies = await page.context().cookies();
+  await page.close();
+});
 
 test("logged-out visitors go to login and keep the position", async ({ page }) => {
   await page.goto("/?positionId=abc");
@@ -33,7 +44,7 @@ test("logged-out visitors see the landing", async ({ page }) => {
 });
 
 test("home page renders the start form", async ({ page }) => {
-  await registerAndLogin(page);
+  await page.context().addCookies(cookies);
   await page.goto("/");
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
   await expect(page.getByRole("combobox", { name: /linkedin profile or name/i })).toBeVisible();
@@ -42,7 +53,7 @@ test("home page renders the start form", async ({ page }) => {
 });
 
 test("a pasted profile URL fills profileUrl and hides the search button", async ({ page }) => {
-  await registerAndLogin(page);
+  await page.context().addCookies(cookies);
   await page.goto("/");
   const field = page.getByRole("combobox", { name: /linkedin profile or name/i });
   await field.fill("https://www.linkedin.com/in/jan-novak");
@@ -51,7 +62,7 @@ test("a pasted profile URL fills profileUrl and hides the search button", async 
 });
 
 test("a name offers profiles to pick and the pick lands in profileUrl", async ({ page }) => {
-  await registerAndLogin(page);
+  await page.context().addCookies(cookies);
   await page.route("**/api/profiles/suggest?*", async (route) => {
     const url = new URL(route.request().url());
     expect(url.searchParams.get("q")).toBe("Jan Novák");
@@ -81,7 +92,7 @@ test("a name offers profiles to pick and the pick lands in profileUrl", async ({
 });
 
 test("without a search provider the field degrades to the pasted link", async ({ page }) => {
-  await registerAndLogin(page);
+  await page.context().addCookies(cookies);
   await page.route("**/api/profiles/suggest?*", (route) => route.fulfill({ status: 503, json: { error: "suggest unavailable" } }));
   await page.goto("/");
   await page.getByRole("combobox", { name: /linkedin profile or name/i }).fill("Jan Novák");

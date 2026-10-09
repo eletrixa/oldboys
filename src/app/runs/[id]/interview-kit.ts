@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/runs/[id]/interview-kit.ts
- * Deps:    src/domain/run-cost (formatDuration), ./call-panel (CallView, formatAt), ./cv-check, ./evidence (retrievedLabel), ./state (RunState, gap helpers, roleCriteria, briefSections, confidenceBand, host)
+ * Deps:    src/domain/run-cost (formatDuration), src/domain/challenge (type), ./call-panel (CallView, formatAt), ./challenge, ./cv-check, ./evidence (retrievedLabel), ./state (RunState, gap helpers, roleCriteria, briefSections, confidenceBand, host)
  * Tested:  src/app/runs/[id]/__tests__/interview-kit.test.ts, src/app/runs/[id]/__tests__/cv-check.test.ts (CV check)
  *
  * Key responsibilities:
@@ -12,6 +12,8 @@
  *   interview questions as a checklist with room for notes, to-verify list, gap lists, footer
  * - Findings by section (confidence descending, with the reason) replace per-question coverage; briefs stored
  *   before sections fall back to coverage
+ * - Devil's advocate (idea #8): a challenged claim gets a nested "Challenged: … (reason)" line; to-verify items carry the
+ *   same reason (toVerifyItems) and the list ends with the "Devil's advocate: checked N findings, …" line
  * - "CV vs public record" (idea #14): the explainer line, claims in outcome order, each line led by its outcome label
  * - Degraded brief: the "AI summary unavailable" note, role criteria and confirmed evidence links, then the sections
  * - Phone verification: the latest call with answers, one line per question, labelled as said by the candidate
@@ -26,7 +28,9 @@
  */
 import { formatDuration } from "@/domain/run-cost";
 import type { Brief, BriefSection, Claim } from "@/domain/claim";
+import type { Challenge } from "@/domain/challenge";
 import { ANSWER_BADGE, type CallView, formatAt, placedCalls } from "./call-panel";
+import { challengeLine, challengeReason, challengesById, toVerifyItems } from "./challenge";
 import { CV_EXPLAINER, CV_OUTCOME, cvRows, isCvSection } from "./cv-check";
 import { retrievedLabel } from "./evidence";
 import { type RunState, briefSections, confidenceBand, gapLine, hiringFor, host, roleCriteria, searchedEmpty, searchedTitle } from "./state";
@@ -86,7 +90,7 @@ type KitSource = RunState["sources"][number];
  * "- FACT: text (<link>, <link>)" with only parseable http(s) links, then nested lines with the verbatim quote and,
  * per linked source, when it was retrieved.
  */
-function claimLine(c: Claim, sourceOf: ReadonlyMap<string, KitSource>, label = ""): string {
+function claimLine(c: Claim, sourceOf: ReadonlyMap<string, KitSource>, challengeOf: ReadonlyMap<string, Challenge>, label = ""): string {
   const linked = c.supports.flatMap((sid) => {
     const s = sourceOf.get(sid);
     const link = mdLink(s?.url ?? "");
@@ -97,14 +101,17 @@ function claimLine(c: Claim, sourceOf: ReadonlyMap<string, KitSource>, label = "
     .filter(({ s }) => typeof s.fetched_at === "string")
     .map(({ s }) => `\n  - ${retrievedLabel(s.fetched_at)} (${escapeMd(host(s.url))})`)
     .join("");
-  return `- ${label === "" ? "" : `${escapeMd(label)} · `}${c.kind}: ${escapeMd(c.text)}${linked.length > 0 ? ` (${linked.map((l) => l.link).join(", ")})` : ""}${quote}${retrieved}`;
+  const ch = challengeOf.get(c.id);
+  const challenged = ch === undefined ? "" : `\n  - ${escapeMd(challengeReason(ch))}`;
+  return `- ${label === "" ? "" : `${escapeMd(label)} · `}${c.kind}: ${escapeMd(c.text)}${linked.length > 0 ? ` (${linked.map((l) => l.link).join(", ")})` : ""}${challenged}${quote}${retrieved}`;
 }
 
 function coverage(state: RunState, brief: Brief): string[] {
   const sourceOf = new Map(state.sources.map((s) => [s.id, s]));
+  const challengeOf = challengesById(state);
   const textOf = new Map(state.questions.map((q) => [q.id, q.text]));
   const lines = brief.per_question.flatMap((q) => {
-    const claims = state.claims.filter((c) => q.claim_ids.includes(c.id)).map((c) => claimLine(c, sourceOf));
+    const claims = state.claims.filter((c) => q.claim_ids.includes(c.id)).map((c) => claimLine(c, sourceOf, challengeOf));
     const summary = escapeMd(q.summary);
     return [
       `### ${escapeMd(textOf.get(q.question_id) ?? q.question_id)}`,
@@ -121,12 +128,13 @@ function coverage(state: RunState, brief: Brief): string[] {
 /** Sections by confidence: how well the research backs each finding, facts before inferences, links for source-only sections. */
 function findings(state: RunState, sections: readonly BriefSection[]): string[] {
   const sourceOf = new Map(state.sources.map((s) => [s.id, s]));
+  const challengeOf = challengesById(state);
   const lines = sections.flatMap((sec) => {
     const claims = state.claims.filter((c) => sec.claim_ids.includes(c.id));
     const cv = isCvSection(sec.id) && claims.length > 0;
     const ordered = cv
-      ? [CV_EXPLAINER, "", ...cvRows(claims, state.sources).map((r) => claimLine(r.claim, sourceOf, CV_OUTCOME[r.outcome].label))]
-      : [...claims.filter((c) => c.kind !== "INFERENCE"), ...claims.filter((c) => c.kind === "INFERENCE")].map((c) => claimLine(c, sourceOf));
+      ? [CV_EXPLAINER, "", ...cvRows(claims, state.sources).map((r) => claimLine(r.claim, sourceOf, challengeOf, CV_OUTCOME[r.outcome].label))]
+      : [...claims.filter((c) => c.kind !== "INFERENCE"), ...claims.filter((c) => c.kind === "INFERENCE")].map((c) => claimLine(c, sourceOf, challengeOf));
     const links = claims.length === 0 ? [...new Set(sec.source_ids.flatMap((sid) => mdLink(sourceOf.get(sid)?.url ?? "") ?? []))].map((l) => `- ${l}`) : [];
     const summary = escapeMd(sec.summary);
     return [
@@ -174,6 +182,17 @@ function phoneLines(calls: readonly CallView[]): string[] {
   return call.provider === "mock" ? [...lines, "", "_MOCK call: the answers are simulated._"] : lines;
 }
 
+/** "- [ ] item" per to-verify item, a nested reason under challenged ones, then the devil's advocate line (idea #8). */
+function toVerifyLines(state: RunState, brief: Brief): string[] {
+  const items = toVerifyItems(brief, state.claims, challengesById(state));
+  if (items.length === 0) return [];
+  const line = challengeLine(state.challenge_summary);
+  return [
+    ...items.map((i) => `- [ ] ${escapeMd(i.text)}${i.reason === null ? "" : `\n  - ${escapeMd(i.reason)}`}`),
+    ...(line === null ? [] : ["", `_${escapeMd(line)}_`]),
+  ];
+}
+
 /** The interview kit as Markdown, or null while there is no brief. `generatedAt` is an ISO timestamp. */
 export function interviewKit(state: RunState, generatedAt: string, calls: readonly CallView[] = []): string | null {
   const { brief } = state;
@@ -190,7 +209,7 @@ export function interviewKit(state: RunState, generatedAt: string, calls: readon
       "Questions for the interview",
       brief.interview_questions.flatMap((q) => [`- [ ] ${escapeMd(q)}`, "  Notes:"]),
     ),
-    ...section("To verify", brief.to_verify.map((t) => `- [ ] ${escapeMd(t)}`)),
+    ...section("To verify", toVerifyLines(state, brief)),
     ...section(searchedTitle(empty), empty.map((g) => `- ${escapeMd(gapLine(g))}`)),
     ...section("Not searched, and why", brief.not_searched.map((g) => `- ${escapeMd(gapLine(g))}`)),
     ...section("Phone verification (said by the candidate, not public evidence)", phoneLines(calls)),

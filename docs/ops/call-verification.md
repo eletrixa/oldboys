@@ -122,3 +122,4 @@ Production `CALL_PROVIDER` is now `"elevenlabs"` (`wrangler.jsonc`).
 - **Secrets**: `ELEVENLABS_API_KEY` and `ELEVENLABS_WEBHOOK_SECRET` are set by Robert via `wrangler secret put`. Until the webhook secret is set, the webhook route answers 503 and ElevenLabs retries.
 - **Call limit**: `RUN_CALL_MAX` is 3.
 - **Rollback**: set `CALL_PROVIDER` back to `"mock"` in `wrangler.jsonc`.
+- **Delete on rejection or request** (`POST /api/runs/:id/delete`, "Delete candidate data" on the run page): deletes the call rows, the R2 call results and the webhook events with the rest of the run and terminates the call Workflows; a live call that is still dialing (no result, approved less than 40 minutes ago) makes it answer 409 until the call ends. Nothing is deleted at ElevenLabs or Twilio: ElevenLabs keeps the transcript for up to 7 days under the agent's retention setting (audio is not stored), and the audit record says so for runs with a live call.

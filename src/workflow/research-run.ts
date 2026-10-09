@@ -11,6 +11,7 @@
  * - `seed` step (plans/006) runs first, before role_questions: the manager's LinkedIn URL / CV become the merged
  *   identity and set investigations.subject/anchor; a scrape or model failure is a ledger note, never a failed run;
  *   seed row ids are stable (stableId), so a retried seed step upserts instead of duplicating sources/candidates
+ * - verify's ledger row carries `ref.challenge` (devil's advocate record, idea #8: checked, held, per claim ground + why)
  * - `onEmpty`: run the declared fallback step once, or record a Gap (ledger decision with ref.gap)
  * - resolve: persist candidates; pause with `step.waitForEvent('lineup-answer')` when any candidate is
  *   possibly-same-as or none merged (lineupNeedsAnswer, seed merges count); apply the manager's decisions on resume
@@ -225,6 +226,8 @@ export class ResearchRunWorkflow extends WorkflowEntrypoint<CloudflareEnv, Resea
         calls: out.calls,
         empty: out.empty,
         notes: out.notes,
+        // Devil's advocate record (verify only): read back by GET /api/runs/:id/state (readChallenge), no migration
+        ...(out.challenge === undefined ? {} : { challenge: out.challenge }),
       });
       const degraded = out.brief?.degraded ?? null;
       if (degraded !== null) await this.ledger(runId, recipeStep.id, "decision", 0, 0, { degraded });

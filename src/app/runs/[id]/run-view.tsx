@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/runs/[id]/run-view.tsx
- * Deps:    react, next/link, ../../ui, ./parts, ./state, ./identity-map-card
+ * Deps:    react, next/link, ../../ui, ./parts, ./state, ./identity-map-card, ./delete-card
  * Tested:  n/a
  *
  * Key responsibilities:
@@ -12,7 +12,8 @@
  *   then "From <source> · <tag> · <date>" when an intake application started the run
  * - "Researched for: <position title>" link to /positions/<id> under the name when the run came from a position
  * - When done, the brief comes first and the confirmation steps fold into a closed "How we confirmed it" disclosure
- * - One footer closes the page: running hint (not done), then "Back to home" and "Audit record" links
+ * - One footer closes the page: running hint (not done), then "Back to home" and "Audit record" links, then the
+ *   "Delete candidate data" disclosure (any status); after a delete the whole page becomes the deletion receipt
  * - Not-found view: eyebrow, heading, muted sentence and a primary back link on the header rhythm
  * - Show the run cost and research time line (ledger projection) while running and when done
  * - Identity map above the profile list (same live decisions)
@@ -30,6 +31,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { intakeLine } from "@/app/intake/intake-rows";
 import type { Candidate, CandidateDecision } from "@/domain/claim";
 import { BTN_SECONDARY, CARD_CONFLICT, Chevron, Eyebrow, LINK, Pill, SUMMARY } from "../../ui";
+import type { DeletionReceipt } from "@/domain/deletion";
+import { DeleteCard, DeletedView } from "./delete-card";
 import { IdentityMapCard } from "./identity-map-card";
 import { type Answer, BriefView, CostLine, ProfileList, ProgressSteps, QuestionCard } from "./parts";
 import { type RunState, firstName, headerText, questionsToAsk, sortLineup, stepRows } from "./state";
@@ -72,6 +75,7 @@ export function RunView({ id }: { id: string }): React.JSX.Element {
   const [openedAt] = useState(() => Date.now());
   const [sent, setSent] = useState(false);
   const [sendFailed, setSendFailed] = useState(false);
+  const [deleted, setDeleted] = useState<DeletionReceipt | null>(null);
 
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -137,6 +141,7 @@ export function RunView({ id }: { id: string }): React.JSX.Element {
     setLocal((l) => ({ ...l, [cid]: decision }));
   }, []);
 
+  if (deleted !== null) return <DeletedView receipt={deleted} />;
   if (missing) {
     return (
       <main className="mx-auto flex max-w-3xl flex-col items-start gap-4 px-4 py-10 md:py-14">
@@ -257,6 +262,7 @@ export function RunView({ id }: { id: string }): React.JSX.Element {
         <Link href="/" className={LINK}>Back to home</Link>
         <Link href={`/runs/${id}/audit`} className={LINK}>Audit record</Link>
       </div>
+      <DeleteCard runId={id} onDeleted={setDeleted} />
     </main>
   );
 }

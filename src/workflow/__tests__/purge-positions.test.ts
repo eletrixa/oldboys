@@ -11,7 +11,7 @@
  * - U9-U10: expired run-less applications lose their R2 CV and row; a run's applications go before its row (applications.run_id references investigations)
  *
  * Design constraints:
- * - No module mocks; the fake matches SQL prefixes and throws on anything unexpected
+ * - No module mocks; the fake matches SQL prefixes and throws on anything unexpected; statements report meta.changes like D1
  */
 import { describe, expect, it } from "vitest";
 import { purgeExpired } from "@/workflow/purge";
@@ -60,7 +60,7 @@ function makeEnv(opts: { positions?: Pos[]; applications?: App[]; runIds?: strin
       const gone = applications.filter((x) => (q.includes("run_id = ?") ? x.run_id : x.id) === a[0]);
       log.push(...gone.map((x) => `delete-app:${x.id}`));
       for (const x of gone) applications.splice(applications.indexOf(x), 1);
-      return [];
+      return gone;
     }
     if (/^(SELECT .* FROM (sources|calls)|DELETE FROM|SELECT r2_key)/.test(q)) return [];
     throw new Error(`unexpected SQL: ${q}`);
@@ -75,7 +75,11 @@ function makeEnv(opts: { positions?: Pos[]; applications?: App[]; runIds?: strin
         return Promise.reject(e instanceof Error ? e : new Error(String(e)));
       }
     },
-    run: () => Promise.resolve({ results: exec(q, a) }),
+    run: () => {
+      // Like D1: meta.changes is the number of rows a DELETE removed (the fake returns the removed rows).
+      const results = exec(q, a);
+      return Promise.resolve({ results, meta: { changes: results.length } });
+    },
   });
   const db = {
     prepare: (q: string) => stmt(q),
