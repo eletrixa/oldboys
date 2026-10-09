@@ -4,7 +4,7 @@
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/runs/[id]/issues-card.tsx
  * Deps:    react, ../../ui, ./issues-text, src/domain/run-issues (type)
- * Tested:  src/app/runs/[id]/__tests__/issues-text.test.ts (the lines); the markup is static
+ * Tested:  src/app/runs/[id]/__tests__/issues-card.test.ts
  *
  * Key responsibilities:
  * - Nothing for a clean run; otherwise a status region with the counts line and the issue lines (raw reason on hover)
