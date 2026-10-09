@@ -15,6 +15,7 @@ All notable changes to oldboys are documented here. The format follows [Keep a C
 - Czech public registries put the right person first: a record is attributed to the candidate when its city (the LinkedIn location, Czech declensions and the English city name included) or company (a confirmed employer from the LinkedIn experience) matches, shown with the reason ("city: Brno", "company: Snuggs"); records under the same name elsewhere are counted as namesakes and left out of the list and the brief (status "no record at the candidate's city or employers" with the count and the link to repeat the search); without a known city every record stays listed as "namesake possible" as before; the Police wanted list and chambers without a town column never drop a hit
 
 ### Fixed
+- Brief gap lists name every step in words ("Czech public registries", "GitHub contributions", "GitHub profile page", "Role evidence sites", with Czech labels) instead of `cz_registries`, `github_deep`, `github_apify`
 - Czech registries card: what a record means now reads "A record here means: …"; under a clear row ("no record under this name") the bare sentence "A person of this name is on the public wanted or missing list" read like a finding
 - Mobile: the position page and My briefs no longer scroll sideways at 375 px; the hidden table labels (`sr-only`) escaped the tables' scroll boxes, which now are `relative` (candidate pool, results table, My briefs, code profile)
 - Site icon: the Radar mark as `/icon.svg`; every page requested a missing `/favicon.ico` (404 in the console)

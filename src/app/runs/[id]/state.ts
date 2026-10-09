@@ -234,6 +234,10 @@ export const GAP_LABEL: Record<string, string> = {
   press_serp: "Press and awards search",
   facebook_profile: "Facebook",
   facebook_page: "Facebook page",
+  role_sites_serp: "Role evidence sites",
+  github_deep: "GitHub contributions",
+  github_apify: "GitHub profile page",
+  cz_registries: "Czech public registries",
 };
 
 type Gap = Brief["not_searched"][number];
