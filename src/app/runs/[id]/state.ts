@@ -214,6 +214,8 @@ export function namesakeOnly(gaps: readonly { reason: string }[]): boolean {
 export const GAP_LABEL: Record<string, string> = {
   serp_person: "Web search",
   social_serp: "Social profile search",
+  instagram_search: "Instagram search",
+  facebook_search: "Facebook search",
   linkedin_profile: "LinkedIn",
   linkedin_posts: "LinkedIn posts",
   employer_company: "Employer company page",

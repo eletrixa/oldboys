@@ -83,7 +83,7 @@ Limits you may hit: 6 started runs per hour per company and 20 runs per hour acr
   | Czech translation | verify |
   | Position extraction | primary |
   | Call transcript ingest | primary |
-- **Budget:** the runner enforces it, never the model. Each run gets $0.50 and 16 paid actor runs for collectors. When the budget is used up, the remaining collectors are skipped with "run budget reached" (`src/recipe/runner.ts`, `src/workflow/research-run.ts`).
+- **Budget:** the runner enforces it, never the model. Each run gets $0.50 and 18 paid actor runs for collectors. When the budget is used up, the remaining collectors are skipped with "run budget reached" (`src/recipe/runner.ts`, `src/workflow/research-run.ts`).
 - **Ledger:** `ledger_entries` is append-only (`seq` per run). Every step, model call and cost is a row. The UI streams it over SSE.
 - **Calls:** ElevenLabs agent + Twilio, dialled once on operator approval, never from a Workflow step. With `CALL_PROVIDER=mock`, calls are labelled MOCK. Plan: [`plans/005-call-verification/`](plans/005-call-verification/00-SYNTHESIS.md).
 

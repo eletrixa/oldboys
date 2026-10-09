@@ -64,7 +64,7 @@
     "LLM_MODEL_PRIMARY": "claude-opus-5-5",
     "LLM_MODEL_VERIFY": "claude-sonnet-5-5",
     "RUN_BUDGET_USD": "0.50",
-    "RUN_BUDGET_CALLS": "16",
+    "RUN_BUDGET_CALLS": "18",
     "CALL_PROVIDER": "elevenlabs",
     "CALL_BUDGET_USD": "0.50",
     "RUN_CALL_MAX": "5",

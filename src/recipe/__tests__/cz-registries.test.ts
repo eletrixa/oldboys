@@ -20,7 +20,7 @@ import { aresPerson } from "@/recipe/sources/cz-registries/ares";
 import { cak } from "@/recipe/sources/cz-registries/cak";
 import { ckait, clnk, ekcr, kacr, kdp, nkcr, nrpzs } from "@/recipe/sources/cz-registries/chambers-html";
 import { cka, csk } from "@/recipe/sources/cz-registries/chambers-json";
-import { czRegistries, digestOf } from "@/recipe/sources/cz-registries";
+import { attribute, czRegistries, digestOf, placeWords } from "@/recipe/sources/cz-registries";
 import { isir } from "@/recipe/sources/cz-registries/isir";
 import { justicePersons } from "@/recipe/sources/cz-registries/justice";
 import { police } from "@/recipe/sources/cz-registries/police";
@@ -134,7 +134,8 @@ describe("parsers", () => {
 
 describe("collector", () => {
   it("writes a quotable excerpt per registry and marks unanswered ones unavailable in the digest", () => {
-    const ctx = baseContext({ subject: "Pavel Hlaváček", role: "Advokát" });
+    // No city known (anchor is the profile URL): every record stays listed as "namesake possible"
+    const ctx = baseContext({ subject: "Pavel Hlaváček", role: "Advokát", anchor: "https://www.linkedin.com/in/pavel/" });
     const reqs = czRegistries.requests(ctx, step);
     const justiceReq = reqs.find((r) => r.via === "fetch" && r.url.includes("or.justice.cz"));
     const isirReq = reqs.find((r) => r.via === "fetch" && r.url.includes("isir"));
@@ -147,7 +148,55 @@ describe("collector", () => {
     const digest = digestOf([{ req: justiceReq as never, payload: fixture("justice.html") }], ctx);
     expect(digest?.checks.map((c) => `${c.registry}:${c.status}`)).toEqual(["isir:unavailable", "ares:unavailable", "justice-or:hits", "police:unavailable", "cak:unavailable"]);
     expect(digest?.checks[2]?.hits.length).toBeGreaterThan(0);
+    expect(digest?.checks[2]?.namesakes).toBe(0);
     expect(digest?.role).toBe("Advokát");
+  });
+
+  it("attributes records by the candidate's city or employer and sets the others aside as namesakes", () => {
+    const linkedin = { id: "s1", run_id: "run-1", url: "https://www.linkedin.com/in/pavel/", actor: "harvestapi/linkedin-profile-scraper", fetched_at: "", expires_at: "", r2_key: "", identity: "merged" as const,
+      excerpt: "Pavel Hlaváček\nCEO\nBrno\nCurrent: Člen představenstva @ VLTAVA INVEST a.s.\nČlen představenstva @ VLTAVA INVEST a.s. (2010–present)" };
+    const reqs = czRegistries.requests(baseContext({ subject: "Pavel Hlaváček" }), step);
+    const justiceReq = reqs.find((r) => r.via === "fetch" && r.url.includes("or.justice.cz"));
+    // City Brno: no justice.cz row is at Brno, one names the confirmed employer -> that one is the candidate's, the rest namesakes
+    const brno = baseContext({ subject: "Pavel Hlaváček", anchor: "Brno, Czechia", sources: [linkedin] });
+    const d1 = digestOf([{ req: justiceReq as never, payload: fixture("justice.html") }], brno);
+    const j1 = d1?.checks.find((c) => c.registry === "justice-or");
+    expect(j1?.status).toBe("hits");
+    expect(j1?.hits.length).toBeGreaterThan(0);
+    expect(j1?.hits.every((h) => h.match === "company: VLTAVA")).toBe(true);
+    expect(j1?.namesakes).toBeGreaterThan(0);
+    const src = czRegistries.parse(fixture("justice.html"), brno, step, justiceReq);
+    expect(src[0]?.excerpt).toContain("at the candidate's city or employer");
+    expect(src[0]?.excerpt).toContain("(company: VLTAVA)");
+    expect(src[0]?.excerpt).toContain("left out as namesakes");
+    // City Svatý Jan: every row is at the candidate's address
+    const home = baseContext({ subject: "Pavel Hlaváček", anchor: "Svatý Jan, Czechia" });
+    const j2 = digestOf([{ req: justiceReq as never, payload: fixture("justice.html") }], home)?.checks.find((c) => c.registry === "justice-or");
+    expect(j2?.status).toBe("hits");
+    expect(j2?.namesakes).toBe(0);
+    expect(j2?.hits.every((h) => h.match === "city: Svaty")).toBe(true);
+    // City Ostrava, no employer: nothing attributed -> namesakes only, nothing listed
+    const away = baseContext({ subject: "Pavel Hlaváček", anchor: "Ostrava" });
+    const j3 = digestOf([{ req: justiceReq as never, payload: fixture("justice.html") }], away)?.checks.find((c) => c.registry === "justice-or");
+    expect(j3?.status).toBe("namesakes");
+    expect(j3?.hits).toEqual([]);
+    expect(czRegistries.parse(fixture("justice.html"), away, step, justiceReq)[0]?.excerpt).toContain("none at the candidate's city (Ostrava) or employers; left out as namesakes");
+  });
+
+  it("placeWords reads LinkedIn locations in Czech and English with declensions; non-placed registries keep every hit", () => {
+    expect(placeWords("Hlavní město Praha, Czechia")).toEqual(["praha", "praze", "prahy", "prahu", "prague", "prahe"]);
+    expect(placeWords("Prague Metropolitan Area")).toEqual(["prague", "praha", "praze", "prahy", "prahu"]);
+    expect(placeWords("Svatý Jan nad Malší", "Jan Novák")).toEqual(["svaty", "malsi"]);
+    expect(placeWords("Brno, South Moravia")).toEqual(["brno", "brne", "brna"]);
+    expect(placeWords("https://www.linkedin.com/in/x/")).toEqual([]);
+    expect(attribute({ label: "Jan Novák, Brně — notary" }, { places: placeWords("Brno"), tokens: [] })).toBe("city: Brne");
+    expect(attribute({ label: "Jan Novák, born 1980 — wanted" }, { places: placeWords("Brno"), tokens: [] })).toBeNull();
+    const reqs = czRegistries.requests(baseContext({ subject: "Marek Novák" }), step);
+    const policeReq = reqs.find((r) => r.via === "fetch" && r.url.includes("policie"));
+    const d = digestOf([{ req: policeReq as never, payload: fixture("police.html") }], baseContext({ subject: "Marek Novák", anchor: "Brno" }));
+    const p = d?.checks.find((c) => c.registry === "police");
+    expect(p?.status).toBe("hits");
+    expect(p?.namesakes).toBe(0);
   });
 });
 
@@ -172,14 +221,15 @@ describe("chamber parsers (recorded pages)", () => {
     expect(a.hits[0]?.label).toContain("field IP00");
   });
   it("notaries, bailiffs, pharmacists and health-care providers", () => {
-    expect(nkcr.parse(fixture("nkcr.html"), { full: "Miroslav Novák", first: "Miroslav", last: "Novák" }).hits[0]?.label).toContain("JUDr. Miroslav Novák — notary, Notářská komora");
+    expect(nkcr.parse(fixture("nkcr.html"), { full: "Miroslav Novák", first: "Miroslav", last: "Novák" }).hits[0]?.label).toContain("JUDr. Miroslav Novák — notary, Notářská komora pro hlavní město Prahu");
+    expect(nkcr.parse(fixture("nkcr.html"), { full: "Miroslav Novák", first: "Miroslav", last: "Novák" }).hits[0]?.label).toContain(", 11000 Praha 1");
     expect(ekcr.parse(fixture("ekcr.html"), { full: "Martin Svoboda", first: "Martin", last: "Svoboda" }).hits[0]?.label).toContain("č. soud. exek.: 110");
     const ph = clnk.parse(fixture("clnk.html"), { full: "Filip Novák", first: "Filip", last: "Novák" });
     expect(ph.hits.map((h) => h.label)).toEqual(["Novák Filip PharmDr. — pharmacist, member no. 7915", "Novák Filip PharmDr. — pharmacist, member no. 12613"]);
     const pr = nrpzs.parse(fixture("nrpzs.html"), jan);
     expect(pr.total).toBe(36);
     expect(pr.hits[0]).toMatchObject({ status: "registered provider", url: "https://nrpzs.uzis.cz/detail-94445-mddr-jan-novak.html" });
-    expect(pr.hits[0]?.label).toContain("zubní lékařství");
+    expect(pr.hits[0]?.label).toContain("zubní lékařství, 36005 Karlovy Vary");
   });
   it("ČKA and ČSK JSON: architects post-filtered to the name, dentists without the padding rows", () => {
     const ar = cka.parse(JSON.parse(fixture("cka.json")), { full: "Petr Dobrovolný", first: "Petr", last: "Dobrovolný" });

@@ -98,9 +98,9 @@ describe("goal recipes diverge", () => {
     expect(new Set(titles).size).toBe(titles.length);
   });
 
-  it("hiring stays within the 16 paid actor runs per run (seed scrape included)", () => {
+  it("hiring stays within the 18 paid actor runs per run (seed scrape included)", () => {
     const paid = hiringRecipe.steps.filter((s) => s.actor !== undefined && !s.actor.startsWith("rest/") && !s.actor.startsWith("ares/"));
-    expect(paid.length + 1).toBeLessThanOrEqual(16);
+    expect(paid.length + 1).toBeLessThanOrEqual(18);
   });
 
   it("recipeFor resolves both goals", () => {

@@ -10,8 +10,11 @@
  * - Question list and ordered step list for goal "hiring"; `seed_profile` first (manager's LinkedIn URL or CV, plans/006)
  * - One question per brief section: role, employer context, career, education, code, code contributions, talks, writing,
  *   press, social presence, community and awards, location, contradictions
- * - Paid actor runs stay under RUN_BUDGET_CALLS (16), and the extra web searches are packed as
- *   several queries into one SERP run (press_serp, talks_serp)
+ * - Paid actor runs stay under RUN_BUDGET_CALLS (18), and the extra web searches are packed as
+ *   several queries into one SERP run (social_serp: one `site:` query per platform, press_serp, talks_serp)
+ * - Instagram and Facebook are always searched by name on the platform itself (`instagram_search`, `facebook_search`,
+ *   before the lineup, so the accounts found are scored against the anchor and the confirmed employers like any other
+ *   hit); the profile steps after the lineup then scrape the confirmed and possibly-same-as accounts
  * - `github_deep` (technical roles only: engineering, data; src/domain/code-profile TECHNICAL_FAMILIES) scrapes every confirmed GitHub account in depth;
  *   `github_apify` then adds the profile page's own numbers (saswave/github-profile-scraper)
  * - `role_sites_serp`: the matched role template's evidence sites (src/domain/role-catalog) as one `site:` search
@@ -46,7 +49,15 @@ export const hiringRecipe: Recipe = {
   steps: [
     { id: "seed_profile", kind: "seed" },
     { id: "serp_person", kind: "serp", actor: "apify/google-search-scraper", query: '"{subject}" {anchor}\n{subject}', onEmpty: { gap: "no search hits for subject + anchor" } },
-    { id: "social_serp", kind: "serp", actor: "apify/google-search-scraper", query: '{subject} linkedin\n{subject} instagram OR twitter OR tiktok OR github OR facebook', onEmpty: { gap: "no social profiles indexed by Google" } },
+    {
+      id: "social_serp",
+      kind: "serp",
+      actor: "apify/google-search-scraper",
+      query: '{subject} linkedin\n"{subject}" site:instagram.com\n"{subject}" site:facebook.com\n"{subject}" site:github.com\n"{subject}" site:x.com OR site:twitter.com OR site:tiktok.com OR site:youtube.com',
+      onEmpty: { gap: "no social profiles indexed by Google" },
+    },
+    { id: "instagram_search", kind: "actor", actor: "apify/instagram-scraper", onEmpty: { gap: "Instagram profile search found no account under the candidate's name" } },
+    { id: "facebook_search", kind: "actor", actor: "apify/facebook-search-scraper", onEmpty: { gap: "Facebook people search found no profile under the candidate's name" } },
     { id: "resolve_lineup", kind: "resolve" },
     { id: "linkedin_profile", kind: "actor", actor: "harvestapi/linkedin-profile-scraper", onEmpty: { gap: "no LinkedIn profile URL known or profile not scrapable" } },
     { id: "linkedin_posts", kind: "actor", actor: "harvestapi/linkedin-profile-posts", onEmpty: { gap: "no public LinkedIn posts found" } },
@@ -59,10 +70,10 @@ export const hiringRecipe: Recipe = {
     { id: "orcid_search", kind: "actor", actor: "rest/orcid", onEmpty: { gap: "no ORCID record found" } },
     { id: "openalex_author", kind: "actor", actor: "rest/openalex", onEmpty: { gap: "no OpenAlex author record found" } },
     { id: "x_profile", kind: "actor", actor: "apidojo/tweet-scraper", onEmpty: { gap: "no public X profile found" } },
-    { id: "instagram_profile", kind: "actor", actor: "apify/instagram-profile-scraper", onEmpty: { gap: "no public Instagram profile" } },
+    { id: "instagram_profile", kind: "actor", actor: "apify/instagram-profile-scraper", onEmpty: { gap: "no public Instagram profile under the candidate's name (Instagram search and web search)" } },
     { id: "tiktok_profile", kind: "actor", actor: "clockworks/tiktok-profile-scraper", onEmpty: { gap: "no public TikTok profile found" } },
     { id: "youtube_channel", kind: "actor", actor: "streamers/youtube-scraper", onEmpty: { gap: "no YouTube videos or channel found" } },
-    { id: "facebook_page", kind: "actor", actor: "apify/facebook-pages-scraper", onEmpty: { gap: "no public Facebook page found" } },
+    { id: "facebook_page", kind: "actor", actor: "apify/facebook-pages-scraper", onEmpty: { gap: "no public Facebook page or profile under the candidate's name (Facebook search and web search)" } },
     { id: "bluesky_profile", kind: "actor", actor: "rest/bluesky", onEmpty: { gap: "no Bluesky account found" } },
     { id: "personal_site_crawl", kind: "actor", actor: "apify/website-content-crawler", onEmpty: { gap: "no personal site found" } },
     { id: "role_sites_serp", kind: "serp", actor: "apify/google-search-scraper", query: '"{subject}" {role_sites}', onEmpty: { gap: "no hits on the role's evidence sites (or the role matched no template)" } },
