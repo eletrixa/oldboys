@@ -11,7 +11,7 @@
  * - Czech: formal, gender-neutral; the words describe the research and the process, never the person
  *
  * Design constraints:
- * - Pure data; the phone panel and the kit sidebar stay English (lang="en") like before
+ * - Pure data; the phone panel and the kit sidebar labels live in phone-kit-text.ts (`report.t.call`, `report.t.kit`)
  */
 import { intakeLine, type RunIntake } from "@/app/intake/intake-rows";
 import type { ApplicationSource } from "@/domain/application";

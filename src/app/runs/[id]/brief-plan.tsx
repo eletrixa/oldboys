@@ -271,8 +271,8 @@ export function PlanPanel({ plan, role }: { plan: readonly PlanItem[]; role: str
           </section>
         );
       })}
-      <div lang="en" className="border-t border-divider pt-4">
-        <KitReviewCard lang={report.lang} />
+      <div className="border-t border-divider pt-4">
+        <KitReviewCard />
       </div>
     </>
   );

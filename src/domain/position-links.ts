@@ -37,7 +37,10 @@ export function ingestLabel(method: string): string {
   return INGEST_LABELS[method] ?? method;
 }
 
-const sameMustHaves = (a: readonly MustHave[], b: readonly MustHave[]): boolean => JSON.stringify(a) === JSON.stringify(b);
+/** Field by field, never key order (the stored must-haves come back through the Zod schema in its own key order). */
+const mustHaveKey = (m: MustHave): string => JSON.stringify([m.id, m.title ?? null, m.text, m.accepted_evidence]);
+const sameMustHaves = (a: readonly MustHave[], b: readonly MustHave[]): boolean =>
+  a.length === b.length && a.every((m, i) => b[i] !== undefined && mustHaveKey(m) === mustHaveKey(b[i]));
 
 /**
  * Where a position came from and whether a person changed its must-haves since. `catalog` = the role-catalog template's
