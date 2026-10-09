@@ -45,6 +45,7 @@ const SIMULATED: { kind: "mock" | "cached" | "no-ai" | null; text: string }[] = 
 const INCOMPLETE = [
   "No eval on real, consenting people with written ground truth yet. The only checks on real runs are hand-written reviews of team members' briefs (eval/reviews).",
   "The eval measures our rules and wiring, not the live AI's judgement: its AI answers are recorded.",
+  "The eval has no recruiter: a profile the lineup asks about (\"is this the same person?\") stays unconfirmed, so findings backed only by it count as misses.",
   "Nothing is written back to an ATS. \"Copy for ATS\" copies text to paste by hand; the interview invite is a downloaded calendar file.",
   "Facebook profiles are not opened (they need a login); only search snippets are read.",
   "The known misses listed above are not fixed yet.",

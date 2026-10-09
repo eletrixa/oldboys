@@ -3,12 +3,13 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/api/positions/routes.ts
- * Deps:    src/app/api/_lib/{session-or-bearer,session,body,position-body,candidate-body}, ./handler, src/workflow/{ingest-position,intake,enrich}, src/adapters/llm
+ * Deps:    src/app/api/_lib/{session-or-bearer,session,body,position-body,candidate-body}, src/domain/{application,digest,position,stable-id}, ./handler, src/workflow/{ingest-position,intake,enrich}, src/adapters/llm
  * Tested:  src/app/api/positions/__tests__/handler.test.ts
  *
  * Key responsibilities:
  * - `createPositionRoute`, `listPositionsRoute`, `getPositionRoute`, `patchPositionRoute`: session or bearer first, then body, then the tested function
  * - `addCandidateRoute`: add one person to the position's pool through the intake funnel (source manual, status pooled, never a run)
+ * - `addCandidateFileRoute`: the same for a CV file (multipart); the funnel extracts the text, the id is stable per file content
  * - `enrichRoute`: start one research run per selected pooled candidate; a session origin counts against its organization
  *
  * Design constraints:
@@ -25,7 +26,10 @@ import { requireSessionOrBearer } from "@/app/api/_lib/session-or-bearer";
 import { startEnrichment, type EnrichOrigin } from "@/workflow/enrich";
 import { estimatePositionUsd, ingestCapUsd, ingestPosition, type IngestDeps } from "@/workflow/ingest-position";
 import { ingestApplication, type IntakeEnv } from "@/workflow/intake";
+import { CvFile, NAME_MAX, toCvFile } from "@/domain/application";
+import { sha256Hex } from "@/domain/digest";
 import { POSITION_ID } from "@/domain/position";
+import { stableId } from "@/domain/stable-id";
 import { getPosition, listPositions, patchPosition } from "./handler";
 
 export type PositionsEnv = IntakeEnv & {
@@ -99,6 +103,32 @@ export function addCandidateRoute(request: Request, env: PositionsEnv, positionI
     const parsed = await parseJsonBody(request, CandidateBody);
     if (parsed.error) return parsed.error;
     const result = await ingestApplication(manualIntake(positionId, parsed.data), env, new Date());
+    if (result.status === "unmatched") return notFound();
+    return json(result, result.duplicate ? 200 : 201);
+  });
+}
+
+/** Multipart `cv` (PDF or text, at most CV_MAX_BYTES) and optional `name`: the funnel extracts the text and stores the file. */
+export function addCandidateFileRoute(request: Request, env: PositionsEnv, positionId: string): Promise<Response> {
+  return guarded(request, env, async () => {
+    if (!POSITION_ID.safeParse(positionId).success) return notFound();
+    const form = await request.formData().catch(() => null);
+    const file = form?.get("cv");
+    if (!(file instanceof File) || file.size === 0) return json({ error: "a CV file is required" }, 400);
+    const cv = CvFile.safeParse(toCvFile({ bytes: await file.arrayBuffer(), filename: file.name, contentType: file.type }));
+    if (!cv.success) return json({ error: "CV file over 10 MB" }, 400);
+    const name = form?.get("name");
+    const result = await ingestApplication(
+      {
+        source: "manual",
+        externalId: stableId(positionId, await sha256Hex(cv.data.bytes)),
+        positionId,
+        ...(typeof name === "string" && name.trim() !== "" && { name: name.trim().slice(0, NAME_MAX) }),
+        cv: cv.data,
+      },
+      env,
+      new Date(),
+    );
     if (result.status === "unmatched") return notFound();
     return json(result, result.duplicate ? 200 : 201);
   });

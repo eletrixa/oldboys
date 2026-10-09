@@ -41,15 +41,15 @@ test("paste a posting, research from it, find it in the list", async ({ page }) 
   await expect(page.getByRole("list", { name: "Must-haves" }).getByRole("listitem")).not.toHaveCount(0);
 
   await page.getByRole("link", { name: "Research a candidate" }).click();
-  await expect(page).toHaveURL(`/?positionId=${id}`);
+  await expect(page).toHaveURL(`/briefs/new?positionId=${id}`); // home carries the position into the New brief wizard
   await expect(page.getByText(TITLE)).toBeVisible();
   await expect(page.locator("input[name=role]")).toHaveCount(0);
 
   await page.goto(`/positions/${id}`);
   await page.getByLabel("LinkedIn URL").fill(`https://www.linkedin.com/in/e2e-${SUFFIX}`);
   await page.getByRole("button", { name: "Add to pool" }).click();
-  const row = page.getByRole("row", { name: /Added by hand/ });
-  await expect(row).toContainText("In pool");
+  const row = page.locator("#candidates").getByRole("row", { name: /LinkedIn/ });
+  await expect(row).toContainText("Pooled");
   await expect(page.getByRole("button", { name: "Start enrichment (0)" })).toBeDisabled(); // never started here: it spends budget
 
   await page.goto("/positions");

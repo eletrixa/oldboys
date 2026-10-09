@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/runs/[id]/parts.tsx
- * Deps:    react (client component, imported only by run-view.tsx), src/domain/claim (types), src/domain/run-cost, ../../ui (Radar vocabulary), ./sections, ./evidence, ./challenge, ./state, ./call-panel-view, ./report-lang, ./report-text, ./i18n (type)
+ * Deps:    react (client component, imported only by run-view.tsx), src/domain/claim (types), src/domain/run-cost, ../../ui (Radar vocabulary), ./profile-sections, ./sections, ./evidence, ./challenge, ./state, ./call-panel-view, ./report-lang, ./report-text, ./i18n (type)
  * Tested:  n/a
  *
  * Key responsibilities:
@@ -19,12 +19,13 @@
  * - Phone verification panel (CallPanel, client) right after "To verify"; it fetches its own data
  * - Interview kit exports (KitActions) after the gap lists, one block with AlsoFound and the removed line;
  *   gap rows split "Label: reason" into a medium label and muted reason; Check rows hang under a grid; gap labels come from state.ts (GAP_LABEL, gapText)
+ * - Enriched profile (ProfileSections) above the findings when the brief carries one; English only (lang="en") until it is translated
  * - Findings as sections by confidence (SectionList); briefs stored before sections render per question; both get the
  *   per-run evidence lookup (evidenceOf: sources with retrieval dates, saved text around quotes) for "Show evidence"
  * - Report language (idea #24): "EN | CZ" switch on top of the brief (LangSwitch); in Czech the brief area renders
  *   labels from the dictionary and the brief's own texts by id (tid), English per text when a translation is missing;
  *   the container gets lang="cs", quotes and excerpts keep their original language (lang=""), the call panel and the
- *   exports stay English (lang="en")
+ *   export buttons stay English (lang="en"); the exported texts follow the chosen language (language.exports)
  * - Accessibility: labelled progressbar with status text, QuestionCard focuses its heading on mount, 44px summary and link targets
  *
  * Design constraints:
@@ -45,6 +46,7 @@ import { type Evidence as ClaimEvidence, evidenceOf } from "./evidence";
 import type { Report } from "./i18n";
 import { LangSwitch, ReportContext, useReport, useReportLanguage } from "./report-lang";
 import { allUnavailable, tid } from "./report-text";
+import { ProfileSections } from "./profile-sections";
 import { ClaimList, SectionList } from "./sections";
 import { SummaryCard } from "./summary-card";
 import { STEP_LABEL } from "./source-labels";
@@ -488,6 +490,11 @@ function BriefBody({ state, brief }: { state: RunState; brief: Brief }): React.J
         <TopLine headline={brief.headline ?? null} locationNote={brief.location_note ?? null} role={hiringFor(state)} />
         {brief.degraded !== null && <DegradedNotice reason={brief.degraded} />}
         {brief.degraded !== null && <ConfirmedEvidence items={brief.evidence} />}
+        {brief.profile && (
+          <div lang={english}>
+            <ProfileSections profile={brief.profile} evidence={evidence} role={hiringFor(state)} />
+          </div>
+        )}
         {sections !== null && <SectionList sections={sections} claims={state.claims} evidence={evidence} />}
         {allUnavailable(brief) ? <RoleCriteria questions={state.questions} /> : sections === null && <PerQuestion state={state} brief={brief} evidence={evidence} />}
         <List title={t.interviewQuestions} items={brief.interview_questions.map((q, i) => report.text(tid.interviewQuestion(i), q))} numbered />
@@ -500,7 +507,7 @@ function BriefBody({ state, brief }: { state: RunState; brief: Brief }): React.J
         <List title={t.notSearched} items={brief.not_searched.map((g, i) => gapItem(report, tid.notSearched(i), g))} />
         <div className="flex flex-col gap-3">
           <div lang={english}>
-            <KitActions state={state} />
+            <KitActions state={state} language={language.exports} />
           </div>
           <AlsoFound items={brief.also_found} />
           {brief.removed_protected > 0 ? <p className="text-xs text-muted">{t.removedProtected(brief.removed_protected)}</p> : null}

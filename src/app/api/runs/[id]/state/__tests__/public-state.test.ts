@@ -45,6 +45,7 @@ const sources = [
 
 const brief = (over: Partial<Brief> = {}): Brief => ({
   run_id: "r1",
+  profile: null,
   per_question: [{ question_id: "mh-1", coverage: "evidenced", claim_ids: ["c-shown", "c-art9"], summary: "Data engineer." }],
   interview_questions: [],
   to_verify: [],

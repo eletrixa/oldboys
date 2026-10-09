@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/recipe/seams/synthesize.ts
- * Deps:    zod, src/domain/art9, src/domain/cv-check, src/recipe/seams/sections, src/recipe/seams/verify
+ * Deps:    zod, src/domain/art9, src/domain/cv-check, src/recipe/seams/sections, src/recipe/seams/verify, src/recipe/seams/profile
  * Tested:  src/recipe/__tests__/seams.test.ts, src/recipe/__tests__/cv-consistency.test.ts (CV check)
  *
  * Key responsibilities:
@@ -33,6 +33,7 @@
  * - `contradictions`: claims or a model summary saying "compatible" are dropped; no claim left = coverage none, no section
  * - Facebook: a Facebook candidate adds a static not_searched line (no collector; public pages need a login)
  * - `sections`: findings cut by what was found, confidence computed deterministically (seams/sections.ts), never by the model
+ * - `profile` (hiring): enriched profile from seams/profile.ts, two primary calls, degraded on its own when the model fails
  */
 import { z } from "zod";
 import { containsArt9Topic } from "@/domain/art9";
@@ -41,6 +42,7 @@ import { CV_QUESTION_ID, cvInterviewQuestion, cvOutcome, isCvSource } from "@/do
 import type { Ports } from "@/domain/ports";
 import { emptyOutcome } from "@/recipe/runner";
 import { recipeFor } from "@/recipe/goals";
+import { buildProfile } from "@/recipe/seams/profile";
 import { confirmedSources, PLATFORM_RANK, profileKey, UNCONFIRMED_GAP } from "@/recipe/seams/resolve";
 import { sectionsOf } from "@/recipe/seams/sections";
 import { aliasNoted, saysCompatible, screenClaims } from "@/recipe/seams/verify";
@@ -282,10 +284,13 @@ const MODEL_INTERVIEW_MAX = 5;
 /** Roles whose work is code or data: only these get the base `public-code` question turned into an interview question. */
 const TECH_ROLE = /\b(?:engineer\w*|develop\w*|devops|data|software|technical|programm\w*|architect\w*|scientist|sre|backend|frontend|full[- ]?stack|coder)\b/i;
 
+/** Context the recruiter reads, never something to ask the candidate about (their employer, press, social accounts). */
+const RESEARCH_ONLY = new Set(["employer-context", "press", "social-presence"]);
+
 /**
  * Which questions may carry a model-written interview question: `contradictions` only when a real contradiction
- * claim survived; with role must-haves (mh-), only those with coverage partial or none; without them, any
- * question not evidenced, `public-code` only for a technical role.
+ * claim survived; never the research-only context questions; with role must-haves (mh-), only those with coverage
+ * partial or none; without them, any question not evidenced, `public-code` only for a technical role.
  */
 export function interviewAllowed(ctx: Pick<StepContext, "questions" | "role">, byQ: ReadonlyMap<string, readonly Claim[]>): (questionId: string) => boolean {
   const hasMustHaves = ctx.questions.some((q) => q.id.startsWith("mh-"));
@@ -294,6 +299,7 @@ export function interviewAllowed(ctx: Pick<StepContext, "questions" | "role">, b
     // CV differences get a templated question (cvQuestions), never a model one
     if (id === CV_QUESTION_ID) return false;
     if (id === "contradictions") return cs.length > 0;
+    if (RESEARCH_ONLY.has(id)) return false;
     if (coverageOf(cs) === "evidenced") return false;
     if (hasMustHaves) return id.startsWith("mh-");
     return id !== "public-code" || TECH_ROLE.test(ctx.role ?? "");
@@ -400,6 +406,8 @@ export async function synthesizeBrief(ctx: StepContext, ports: Ports): Promise<S
     headline: headlineOf(ctx.candidates),
     location_note: locationNoteOf(ctx.anchor, ctx.candidates, ctx.sources),
     sections: sectionsOf(ctx.questions, kept, perQuestion, ctx.sources, confirmedSources(ctx), ctx.candidates.filter((c) => c.decision === "merge").flatMap((c) => c.profile_urls)),
+    // Hiring only: the enriched profile (seams/profile.ts), two more primary calls; degrades on its own
+    profile: ctx.goal === "hiring" ? await buildProfile(ctx, kept, ports, out) : null,
   };
   out.brief = brief;
   out.empty = false;

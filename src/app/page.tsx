@@ -1,84 +1,35 @@
 /**
- * Home page: the public landing for logged-out visitors; Radar intro, how the brief is made, and the start form once logged in.
+ * Home page: the public landing for logged-out visitors; a logged-in recruiter goes straight to their briefs (plans/012).
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/page.tsx
- * Deps:    next, next/link, ./start-form, ./login/next-path, ./api/_lib/current-user, ./ui, ./landing/landing
- * Tested:  n/a
+ * Deps:    next/navigation, ./api/_lib/current-user, ./login/next-path, ./landing/landing
+ * Tested:  by e2e/brief-flow.spec.ts (S1)
  *
  * Key responsibilities:
- * - Editorial heading, sub copy and the client start form (Screen 1) in a white card
- * - Three plain steps (what Radar does) and the "never a score" line
- * - Logged-out visitors see the landing (src/app/landing); with `?positionId=` or `?role=` they go to /login with it carried in `next`
- * - `?role=<title>` (a catalog title picked on /positions) prefills and focuses the role field
- * - Small link to /positions (pick or add a position; /roles stays reachable by URL)
+ * - Logged out: the landing (src/app/landing); with `?positionId=` or `?role=` go to /login with /briefs/new?positionId= (or ?role=) carried in `next`
+ * - Logged in: redirect to /briefs, or to /briefs/new?positionId= (or ?role=<catalog title>, picked on /positions) when one is carried
  *
  * Design constraints:
- * - Server component; interactivity lives in start-form.tsx
- * - Radar Visual Guideline: one primary action per view, plain language, no surveillance imagery
+ * - Server component; no data fetching beyond the session
  */
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { currentUser } from "./api/_lib/current-user";
 import { Landing } from "./landing/landing";
 import { loginHref } from "./login/next-path";
-import { ROLE_OPTIONS } from "@/domain/role-catalog";
-import { StartForm } from "./start-form";
-import { CARD, Eyebrow, LINK } from "./ui";
-
-const STEPS: readonly (readonly [string, string])[] = [
-  ["Gather evidence", "We read their public professional work and keep the exact words and the page each claim came from."],
-  ["Review claims", "Every point says if a source supports it, and the brief lists what we could not find or did not search."],
-  ["Prepare the conversation", "Gaps become suggested interview questions. You make the decision."],
-];
 
 export default async function HomePage({ searchParams }: { searchParams: Promise<{ positionId?: string; role?: string }> }): Promise<React.JSX.Element> {
   const user = await currentUser();
   const { positionId, role } = await searchParams;
-  const initialRole = typeof role === "string" ? role.trim().slice(0, 300) : "";
+  const carried =
+    typeof positionId === "string" && positionId !== ""
+      ? `/briefs/new?positionId=${encodeURIComponent(positionId)}`
+      : typeof role === "string" && role.trim() !== ""
+        ? `/briefs/new?role=${encodeURIComponent(role.trim().slice(0, 300))}`
+        : null;
   if (user === null) {
-    if (typeof positionId === "string" && positionId !== "") redirect(loginHref(`/?positionId=${encodeURIComponent(positionId)}`));
-    if (initialRole !== "") redirect(loginHref(`/?role=${encodeURIComponent(initialRole)}`));
-    return <Landing />;
+    if (carried === null) return <Landing />;
+    redirect(loginHref(carried));
   }
-  return (
-    <main className="mx-auto grid max-w-5xl gap-10 px-4 py-12 md:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] md:items-start md:py-16">
-      <section className="flex flex-col gap-6">
-        <Eyebrow>Evidence-led hiring</Eyebrow>
-        <h1 className="text-5xl leading-[1.05] md:text-6xl">
-          Who are you
-          <span className="block pl-8 md:pl-12">hiring?</span>
-        </h1>
-        <p className="max-w-[44ch] text-lg leading-relaxed text-muted">
-          Give us their LinkedIn profile or CV. Radar checks their public work and gives you a short brief with a source
-          for every point.
-        </p>
-        <ol className="flex flex-col border-t border-divider">
-          {STEPS.map(([title, body], i) => (
-            <li key={title} className="grid grid-cols-[2rem_minmax(0,1fr)] gap-3 border-b border-divider py-4">
-              <span className="font-serif text-xl text-action tabular-nums">{i + 1}</span>
-              <span className="flex flex-col gap-1">
-                <span className="font-semibold">{title}</span>
-                <span className="text-sm text-muted">{body}</span>
-              </span>
-            </li>
-          ))}
-        </ol>
-        <p className="text-sm text-muted">No overall score. Coverage describes the research, not the person.</p>
-      </section>
-      <section className="flex flex-col gap-4">
-        <div className={`${CARD} md:p-8`}>
-          <h2 className="mb-1 text-2xl">Start a brief</h2>
-          <p className="mb-5 text-sm text-muted">Hiring at {user.organizationName}</p>
-          <StartForm roleOptions={ROLE_OPTIONS} initialRole={initialRole} autoFocusRole={initialRole !== ""} />
-        </div>
-        <p className="px-1 text-sm text-muted">
-          Hiring for a position?{" "}
-          <Link href="/positions" className={LINK}>
-            See positions
-          </Link>
-        </p>
-      </section>
-    </main>
-  );
+  redirect(carried ?? "/briefs");
 }

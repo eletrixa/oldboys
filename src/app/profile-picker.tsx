@@ -9,7 +9,7 @@
  * Key responsibilities:
  * - A pasted linkedin.com/in/ URL is used as is; otherwise "Find profiles" (button or Enter) calls the suggest route once
  * - Listbox of up to 8 rows (name, headline, handle), arrow keys and Enter, click to pick; the pick collapses into a card with "Change"
- * - The hidden `profileUrl` input is what the form submits, so start-form.tsx stays unchanged
+ * - The hidden `profileUrl` input is what the form submits, so start-form.tsx stays unchanged; `onUrl` reports it to the New brief rows
  * - 503, 429 and failures degrade to calm copy; the typed URL path keeps working without the provider
  *
  * Design constraints:
@@ -18,7 +18,7 @@
  */
 "use client";
 
-import { useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import type { Suggestion } from "@/domain/profile-suggest";
 import { BTN_SECONDARY, CARD_SAGE, FIELD, LINK } from "./ui";
 
@@ -45,9 +45,10 @@ const STATUS_KIND: Record<number, Exclude<Lookup["kind"], "list" | "looking" | "
 const isProfileUrl = (text: string): boolean => /linkedin\.com\/in\//i.test(text);
 const handleOf = (url: string): string => url.replace(/^https:\/\/www\./, "");
 
-type Props = { invalid?: boolean };
+/** `onUrl` reports the chosen or pasted profile URL ("" when none) for pages that are not a plain form submit. */
+type Props = { invalid?: boolean; onUrl?: (url: string) => void };
 
-export function ProfilePicker({ invalid = false }: Props): React.JSX.Element {
+export function ProfilePicker({ invalid = false, onUrl }: Props): React.JSX.Element {
   const id = useId();
   const [text, setText] = useState("");
   const [hint, setHint] = useState("");
@@ -58,6 +59,10 @@ export function ProfilePicker({ invalid = false }: Props): React.JSX.Element {
 
   const url = isProfileUrl(text) ? text.trim() : (chosen?.url ?? "");
   const items = lookup.kind === "list" ? lookup.items : [];
+
+  useEffect(() => {
+    onUrl?.(url);
+  }, [url, onUrl]);
 
   async function find(): Promise<void> {
     const q = text.trim();

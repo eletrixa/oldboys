@@ -3,13 +3,14 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/runs/[id]/kit-review-card.tsx
- * Deps:    react, ../../ui (Radar tokens), ./kit-review
+ * Deps:    react, ../../ui (Radar tokens), ./kit-review, ./i18n (ReportLang type)
  * Tested:  n/a (parsing and texts are tested in __tests__/kit-review.test.ts)
  *
  * Key responsibilities:
  * - KitReviewCard: disclosure with a labelled textarea; for a parseable kit the answered / verified counts, the open
  *   points and a "Copy open points" button ("Copied" / "Copy failed" for 2 s, announced in an sr-only status span)
  * - Text without kit checklists: "This does not look like an interview kit from this page."
+ * - Reads English and Czech kits; the copied open points are in the report language (`lang`), the card's own labels stay English
  *
  * Design constraints:
  * - Client only and private: the pasted kit and its notes never leave the browser (no fetch, no storage); local state only
@@ -19,6 +20,7 @@
 
 import { useId, useState } from "react";
 import { BTN_SECONDARY, Chevron, FIELD, SUMMARY } from "../../ui";
+import type { ReportLang } from "./i18n";
 import { isKit, openPointsText, parseFilledKit, reviewSummary } from "./kit-review";
 
 type CopyStatus = "idle" | "copied" | "failed";
@@ -27,7 +29,7 @@ const STATUS_LABEL: Record<Exclude<CopyStatus, "idle">, string> = { copied: "Cop
 
 const plural = (n: number, word: string): string => `${String(n)} ${word}${n === 1 ? "" : "s"}`;
 
-export function KitReviewCard(): React.JSX.Element {
+export function KitReviewCard({ lang }: { lang: ReportLang }): React.JSX.Element {
   const [text, setText] = useState("");
   const [status, setStatus] = useState<CopyStatus>("idle");
   const fieldId = useId();
@@ -36,7 +38,7 @@ export function KitReviewCard(): React.JSX.Element {
 
   const copy = async (): Promise<void> => {
     try {
-      await navigator.clipboard.writeText(openPointsText(review));
+      await navigator.clipboard.writeText(openPointsText(review, lang));
       setStatus("copied");
     } catch {
       setStatus("failed");

@@ -10,12 +10,13 @@
  * - One `step.do` per recipe step: load context from D1 -> executeStep -> persist -> ledger row
  * - `seed` step (plans/006) runs first, before role_questions: the manager's LinkedIn URL / CV become the merged
  *   identity and set investigations.subject/anchor; a scrape or model failure is a ledger note, never a failed run;
- *   seed row ids are stable (stableId), so a retried seed step upserts instead of duplicating sources/candidates
+ *   seed row ids are stable (stableId), so a retried seed step upserts instead of duplicating sources/candidates;
+ *   the given profile's ProfileFacts go into its ledger ref as `digest`
  * - verify's ledger row carries `ref.challenge` (devil's advocate record, idea #8: checked, held, per claim ground + why)
  * - a collector's `digest` (StepOutcome.digest) lands in the step's ledger ref as `digest`
  * - `onEmpty`: run the declared fallback step once, or record a Gap (ledger decision with ref.gap)
- * - resolve: persist candidates; pause with `step.waitForEvent('lineup-answer')` when any candidate is
- *   possibly-same-as or none merged (lineupNeedsAnswer, seed merges count); apply the manager's decisions on resume
+ * - resolve: persist candidates; pause with `step.waitForEvent('lineup-answer')` only when candidates exist and none is
+ *   merged (lineupNeedsAnswer, seed merges count, so a given profile/CV never pauses); apply the manager's decisions on resume
  * - Budget (RUN_BUDGET_USD / RUN_BUDGET_CALLS) enforced here for collector steps, never by the LLM; parallel
  *   batches run at most (budget - spent) paid actor steps at once (planBatch), free REST steps always run
  * - Source identity re-marked after the lineup and before extract (applySourceIdentity), so only SERP hits on
@@ -251,7 +252,7 @@ export class ResearchRunWorkflow extends WorkflowEntrypoint<CloudflareEnv, Resea
       const r = await seedProfile({ runId, subject: head.subject, anchor: head.anchor, profileUrl: head.profile_url, cvText: head.cv_text }, this.ports());
       await persistOutcome(this.env.DB, runId, r.out);
       await this.env.DB.prepare("UPDATE investigations SET subject = ?, anchor = ? WHERE id = ?").bind(r.subject, r.anchor, runId).run();
-      const ref = { subject: r.subject, anchor: r.anchor, headline: r.headline, employer: r.employer, sources: r.out.sources.length, candidates: r.out.candidates.length, notes: r.out.notes };
+      const ref = { subject: r.subject, anchor: r.anchor, headline: r.headline, employer: r.employer, sources: r.out.sources.length, candidates: r.out.candidates.length, notes: r.out.notes, ...(r.facts.length > 0 ? { digest: r.facts } : {}) };
       const ms = Date.now() - started;
       if (head.profile_url !== null) await this.ledger(runId, recipeStep.id, "call", r.actor.cost_usd, ms, { ...ref, actor: HARVEST_ACTOR, calls: r.actor.calls });
       if (head.cv_text !== null) await this.ledger(runId, recipeStep.id, "llm", r.llm.cost_usd, ms, { ...ref, actor: CV_ACTOR, calls: r.llm.calls });

@@ -8,6 +8,7 @@
  *
  * Key responsibilities:
  * - addCandidateRoute: auth, 400 without profile/CV, 404 for an unmatched position, 201 new / 200 duplicate, funnel input
+ * - addCandidateFileRoute: 400 without a file, 201 with the CV file handed to the funnel
  * - enrichRoute: bearer -> via api, session -> via start with its organization, error status passthrough, 400 on a bad body
  *
  * Design constraints:
@@ -20,7 +21,7 @@ const enrich = vi.hoisted(() => vi.fn());
 vi.mock("@/workflow/intake", () => ({ ingestApplication: ingest }));
 vi.mock("@/workflow/enrich", () => ({ startEnrichment: enrich, ENRICH_MAX: 20 }));
 
-import { addCandidateRoute, enrichRoute, type PositionsEnv } from "../routes";
+import { addCandidateFileRoute, addCandidateRoute, enrichRoute, type PositionsEnv } from "../routes";
 
 const USER = { sessionId: "s1", accountId: "acc-1", email: "r@example.com", name: "R", organizationId: "org-1", organizationName: "Org" };
 
@@ -76,6 +77,25 @@ describe("addCandidateRoute", () => {
     const res = await addCandidateRoute(post({ cvText: "cv" }), env(), "gone");
     expect(res.status).toBe(404);
     expect(await res.json()).toEqual({ error: "position not found" });
+  });
+});
+
+describe("addCandidateFileRoute", () => {
+  const upload = (form: FormData) => new Request("http://x/api/positions/p1/candidates/file", { method: "POST", headers: { Authorization: "Bearer secret" }, body: form });
+
+  it("is 400 without a CV file", async () => {
+    expect((await addCandidateFileRoute(upload(new FormData()), env(), "p1")).status).toBe(400);
+    expect(ingest).not.toHaveBeenCalled();
+  });
+
+  it("hands the file to the funnel as a manual, position-bound row", async () => {
+    ingest.mockResolvedValue({ applicationId: "a1", status: "pooled", runId: null, duplicate: false, note: null });
+    const form = new FormData();
+    form.set("cv", new File(["Ada Lovelace, analyst"], "ada.txt", { type: "text/plain" }));
+    form.set("name", " Ada ");
+    const res = await addCandidateFileRoute(upload(form), env(), "p1");
+    expect(res.status).toBe(201);
+    expect(ingest.mock.calls[0]?.[0]).toMatchObject({ source: "manual", positionId: "p1", name: "Ada", cv: { filename: "ada.txt", contentType: "text/plain" } });
   });
 });
 

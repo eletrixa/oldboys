@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/api/runs/[id]/state/load.ts
- * Deps:    D1Database (passed in), src/domain/code-profile (readCodeProfile), src/domain/report-translation (TRANSLATE_STEP), src/recipe/goals, src/domain/run-cost, src/domain/cv-check, src/domain/challenge, src/app/runs/[id]/challenge, src/app/intake/intake-rows (type), ./public-state
+ * Deps:    D1Database (passed in), src/domain/code-profile (readCodeProfile), src/domain/profile-facts (readProfileFacts), src/domain/profile-signals (profileSignals), src/domain/report-translation (TRANSLATE_STEP), src/recipe/goals, src/domain/run-cost, src/domain/cv-check, src/domain/challenge, src/app/runs/[id]/challenge, src/app/intake/intake-rows (type), ./public-state
  * Tested:  src/app/api/runs/[id]/state/__tests__/route.test.ts (through the route; publicState: __tests__/public-state.test.ts; withCvQuestion: src/domain/__tests__/cv-check.test.ts; readChallenge: src/domain/__tests__/challenge.test.ts; challengeState: src/app/runs/[id]/__tests__/challenge.test.ts)
  *
  * Key responsibilities:
@@ -25,14 +25,17 @@
  * - cost = runCost over the ledger rows (seq order) from investigations.created_at
  * - intake = the applications row LEFT JOINed into the head query on investigations.application_id ({source, tag, receivedAt}), null for runs started by hand; never cv_text or cover_letter
  * - code_profile = readCodeProfile over the same ledger rows (the github_deep step's `ref.digest`); null for runs before it or non-technical roles
+ * - profile_signals = profileSignals over readProfileFacts(ledger), the same code profile and the mapped candidates, relative to the request time (plans/012); derived at read time, never stored
  *
  * Design constraints:
  * - Pure read; no Next.js imports; null for an unknown run (callers answer 404)
  */
-import type { Brief, Candidate, Claim } from "@/domain/claim";
+import type { Candidate, Claim } from "@/domain/claim";
+import { Brief, GoalId } from "@/domain/claim";
 import { readChallenge } from "@/domain/challenge";
-import { GoalId } from "@/domain/claim";
 import { readCodeProfile } from "@/domain/code-profile";
+import { readProfileFacts } from "@/domain/profile-facts";
+import { profileSignals } from "@/domain/profile-signals";
 import { readRegistryChecks } from "@/domain/cz-registry";
 import { withCvQuestion } from "@/domain/cv-check";
 import { TRANSLATE_STEP } from "@/domain/report-translation";
@@ -127,9 +130,17 @@ export async function loadRunState(db: D1Database, id: string): Promise<RunState
   const open = publicState({
     claims: runClaims,
     sources: sources.results,
-    brief: brief ? (JSON.parse(brief.brief_json) as Brief) : null,
+    // Brief.parse fills defaults (profile, sections...) for briefs stored before those fields existed
+    brief: brief ? Brief.parse(JSON.parse(brief.brief_json)) : null,
     failure: failure ?? null,
   });
+
+  const candidates = cands.results.map(({ profile_urls_json, reasons_json, ...c }) => ({
+    ...c,
+    profile_urls: parseList<string>(profile_urls_json),
+    reasons: parseList<string>(reasons_json),
+  }));
+  const codeProfile = readCodeProfile(ledger.results);
 
   const state: RunState = {
     id: head.id,
@@ -142,16 +153,13 @@ export async function loadRunState(db: D1Database, id: string): Promise<RunState
     status: head.status,
     step: last?.step ?? null,
     mentions: sources.results.length,
-    candidates: cands.results.map(({ profile_urls_json, reasons_json, ...c }) => ({
-      ...c,
-      profile_urls: parseList<string>(profile_urls_json),
-      reasons: parseList<string>(reasons_json),
-    })),
+    candidates,
     claims: open.claims,
     sources: sources.results.map(({ excerpt: _excerpt, identity: _identity, ...s }) => s),
     quote_contexts: open.quote_contexts,
     ...challengeState(readChallenge(ledger.results), new Set(open.claims.map((c) => c.id))),
-    code_profile: readCodeProfile(ledger.results),
+    code_profile: codeProfile,
+    profile_signals: profileSignals({ facts: readProfileFacts(ledger.results), codeProfile, candidates, now: new Date().toISOString() }),
     registry_checks: readRegistryChecks(ledger.results),
     questions: withCvQuestion(head.goal, [...base, ...extra], sources.results),
     brief: open.brief,
