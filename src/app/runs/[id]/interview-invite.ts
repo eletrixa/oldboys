@@ -3,13 +3,15 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/runs/[id]/interview-invite.ts
- * Deps:    src/domain/audit (deletionDate), ./summary (summary30s), ./state (RunState, hiringFor)
- * Tested:  src/app/runs/[id]/__tests__/interview-invite.test.ts
+ * Deps:    src/domain/audit (deletionDate), ./summary (summary30s), ./state (RunState, hiringFor), ./export-text (EXPORT_DICT, localSummary), ./i18n (Report)
+ * Tested:  src/app/runs/[id]/__tests__/interview-invite.test.ts, src/app/runs/[id]/__tests__/export-text.test.ts (Czech invite)
  *
  * Key responsibilities:
  * - interviewInvite: one VEVENT (UTC times) whose description carries the three 30-second summary lines, up to 8
  *   interview questions, up to 5 to-verify items, the link to the full brief and the footer, or null without a brief
- * - inviteFileName: interview-<run id prefix>.ics, never the candidate's name
+ * - Czech invite (idea #24 follow-up): SUMMARY and DESCRIPTION carry LANGUAGE=cs, Czech fixed lines, questions,
+ *   to-verify items and summary sentences by their brief ids (English per missing one), Czech deletion date
+ * - inviteFileName: interview-<run id prefix>.ics (-cs.ics in Czech), never the candidate's name
  *
  * Design constraints:
  * - Pure and deterministic; RFC 5545: CRLF line ends, TEXT escaping, lines folded at 75 octets without splitting a
@@ -19,6 +21,9 @@
  * - Rates the research, never the candidate: no scores, ranks, verdicts or traits
  */
 import { deletionDate } from "@/domain/audit";
+import { exportFileName, exportText, localSummary } from "./export-text";
+import { ENGLISH_REPORT, type Report, type ReportLang } from "./i18n";
+import { tid } from "./report-text";
 import { hiringFor, type RunState } from "./state";
 import { summary30s } from "./summary";
 
@@ -60,29 +65,44 @@ export function foldLine(line: string): string {
   return parts.join("\r\n ");
 }
 
-/** The invite, or null while there is no brief. */
+/** Non-empty brief items translated by id (index in the brief), at most `max`. */
+function items(list: readonly string[], idOf: (i: number) => string, text: (id: string, english: string) => string, max: number): string[] {
+  return list
+    .map((english, i) => ({ english, id: idOf(i) }))
+    .filter((e) => e.english.trim() !== "")
+    .slice(0, max)
+    .map((e) => text(e.id, e.english).trim());
+}
+
+/** The invite in the report language (English by default), or null while there is no brief. */
 export function interviewInvite(
   state: RunState,
   opts: { start: Date; minutes: number; briefUrl: string; now: Date },
+  report: Report = ENGLISH_REPORT,
 ): string | null {
-  const summary = summary30s(state);
-  if (summary === null || state.brief === null) return null;
-  const subject = state.subject.trim() === "" ? "unnamed person" : state.subject.trim();
+  const english = summary30s(state);
+  if (english === null || state.brief === null) return null;
+  const x = exportText(report);
+  const { invite } = x.d;
+  const summary = localSummary(english, x);
+  const subject = state.subject.trim() === "" ? x.d.unnamed : state.subject.trim();
   const role = hiringFor(state)?.trim() ?? "";
-  const questions = state.brief.interview_questions.filter((q) => q.trim() !== "").slice(0, MAX_QUESTIONS);
-  const toVerify = state.brief.to_verify.filter((t) => t.trim() !== "").slice(0, MAX_TO_VERIFY);
+  const questions = items(state.brief.interview_questions, tid.interviewQuestion, x.text, MAX_QUESTIONS);
+  const toVerify = items(state.brief.to_verify, tid.toVerify, x.text, MAX_TO_VERIFY);
   const until = deletionDate(state.created_at).slice(0, 10);
   const end = new Date(opts.start.getTime() + opts.minutes * 60_000);
+  // RFC 5545 languageparam on the two text properties; none in English, as before.
+  const param = x.lang === "en" ? "" : `;LANGUAGE=${x.lang}`;
 
   const description = [
     summary.documented,
     summary.missing,
     summary.ask,
-    ...(questions.length > 0 ? ["", "Questions for the interview:", ...questions.map((q, i) => `${String(i + 1)}. ${q.trim()}`)] : []),
-    ...(toVerify.length > 0 ? ["", "To verify:", ...toVerify.map((t) => `- ${t.trim()}`)] : []),
+    ...(questions.length > 0 ? ["", invite.questions, ...questions.map((q, i) => `${String(i + 1)}. ${q}`)] : []),
+    ...(toVerify.length > 0 ? ["", invite.toVerify, ...toVerify.map((t) => `- ${t}`)] : []),
     "",
-    `Full brief with sources: ${opts.briefUrl}`,
-    `This invite rates the research, not the candidate.${until === "" ? "" : ` Run data is deleted after ${until}.`}`,
+    `${invite.fullBrief}${opts.briefUrl}`,
+    `${invite.guardrail}${x.d.deletedAfter(until)}`,
   ].join("\n");
 
   const lines = [
@@ -96,16 +116,16 @@ export function interviewInvite(
     `DTSTAMP:${icsTime(opts.now)}`,
     `DTSTART:${icsTime(opts.start)}`,
     `DTEND:${icsTime(end)}`,
-    `SUMMARY:${escapeText(role === "" ? `Interview: ${subject}` : `Interview: ${subject} for ${role}`)}`,
+    `SUMMARY${param}:${escapeText(invite.summary(subject, role))}`,
     `URL:${opts.briefUrl}`,
-    `DESCRIPTION:${escapeText(description)}`,
+    `DESCRIPTION${param}:${escapeText(description)}`,
     "END:VEVENT",
     "END:VCALENDAR",
   ];
   return `${lines.map(foldLine).join("\r\n")}\r\n`;
 }
 
-/** interview-<first 8 characters of the run id>.ics; never the candidate's name. */
-export function inviteFileName(state: RunState): string {
-  return `interview-${state.id.slice(0, 8)}.ics`;
+/** interview-<first 8 characters of the run id>.ics ("-cs.ics" in Czech); never the candidate's name. */
+export function inviteFileName(state: RunState, lang: ReportLang = "en"): string {
+  return exportFileName(`interview-${state.id.slice(0, 8)}.ics`, lang);
 }
