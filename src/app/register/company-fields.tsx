@@ -111,8 +111,10 @@ export function CompanyFields({ value, onChange }: Props): React.JSX.Element {
             minLength={2}
             maxLength={2}
             autoComplete="country"
+            placeholder="GB"
             className={`${FIELD} w-24`}
           />
+          <span className="text-xs font-normal text-muted">For example GB, DE or US.</span>
         </label>
       ) : (
         <div className="flex flex-col gap-1.5">
