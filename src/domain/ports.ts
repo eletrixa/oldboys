@@ -26,7 +26,7 @@ export type ActorCall = (input: {
   maxTotalChargeUsd: number;
 }) => Promise<{ items: readonly unknown[]; cost_usd: number }>;
 
-/** One request against a public JSON API (GitHub, ARES, Bluesky ...). Throws on non-2xx. */
+/** One request against a public JSON API (GitHub, ARES, Bluesky ...). Throws on non-2xx. With `accept: text/...` the body is returned as a string (HTML / SOAP registries). */
 export type JsonFetch = (
   url: string,
   init?: { method?: string; headers?: Record<string, string>; body?: string },

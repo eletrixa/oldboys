@@ -3,13 +3,13 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/domain/profile-signals.ts
- * Deps:    src/domain/profile-facts (ProfileFacts), src/domain/code-profile (CodeProfile), src/domain/claim (Candidate), src/domain/similar (nearDuplicate, tokens)
+ * Deps:    src/domain/profile-facts (ProfileFacts, PLATFORM_LABEL, FACT_PLATFORMS), src/domain/code-profile (CodeProfile), src/domain/claim (Candidate), src/domain/similar (nearDuplicate, tokens), src/domain/number-text (fmtInt)
  * Tested:  src/domain/__tests__/profile-signals.test.ts
  *
  * Key responsibilities:
  * - `profileSignals(input)`: rules table (RULES in plans/012 00-SYNTHESIS): young-account, account-vs-career,
  *   follow-asymmetry, forks-only, linkedin-verified, few-connections, same-headline (pair), plus not-checked lines
- *   per platform without facts and the fixed LinkedIn creation-date line
+ *   per fact platform with a merged candidate but no facts and the fixed LinkedIn creation-date line
  * - Every sentence describes an ACCOUNT (one fact per sentence, numbers and dates), never the person; `ask` is a
  *   neutral interview question or null
  * - `PROFILE_SIGNAL_CAVEATS`: fixed honesty lines shown with the card
@@ -22,7 +22,8 @@
  */
 import type { Candidate } from "./claim";
 import type { CodeProfile } from "./code-profile";
-import type { ProfileFacts } from "./profile-facts";
+import { FACT_PLATFORMS, PLATFORM_LABEL, type ProfileFacts } from "./profile-facts";
+import { fmtInt } from "./number-text";
 import { nearDuplicate, tokens } from "./similar";
 
 export type SignalId =
@@ -73,7 +74,6 @@ export const PROFILE_SIGNAL_CAVEATS: readonly string[] = [
 export const LINKEDIN_CREATION_NOTE = "LinkedIn does not publish the account creation date without login.";
 
 const DAY_MS = 86_400_000;
-const THIN_SPACE = "\u2009";
 const YOUNG_DAYS = 180;
 const CAREER_ACCOUNT_DAYS = 365;
 const CAREER_YEARS = 5;
@@ -84,19 +84,7 @@ const FORKS_SHARE = 0.8;
 const FEW_CONNECTIONS = 50;
 const HEADLINE_MIN_TOKENS = 6;
 
-const PLATFORM_LABELS: Readonly<Record<string, string>> = {
-  x: "X",
-  linkedin: "LinkedIn",
-  github: "GitHub",
-  tiktok: "TikTok",
-  youtube: "YouTube",
-  bluesky: "Bluesky",
-  instagram: "Instagram",
-};
-const NOT_READ_PLATFORMS: readonly string[] = ["x", "github", "instagram"];
-
-const label = (platform: string): string => PLATFORM_LABELS[platform] ?? platform.charAt(0).toUpperCase() + platform.slice(1);
-const fmtInt = (n: number): string => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, THIN_SPACE);
+const label = (platform: string): string => PLATFORM_LABEL[platform] ?? platform.charAt(0).toUpperCase() + platform.slice(1);
 const isoDay = (ms: number): string => new Date(ms).toISOString().slice(0, 10);
 
 type Created = { ms: number; shown: string; text: string };
@@ -133,17 +121,9 @@ export function profileSignals(input: ProfileSignalsInput): ProfileSignals {
   const careerStart = careerYears.length > 0 ? Math.min(...careerYears) : null;
   const longCareer = careerStart !== null && careerStart <= nowYear - CAREER_YEARS ? careerStart : null;
 
-  const out: Record<SignalId, Signal[]> = {
-    "young-account": [],
-    "account-vs-career": [],
-    "follow-asymmetry": [],
-    "forks-only": [],
-    "linkedin-verified": [],
-    "few-connections": [],
-    "same-headline": [],
-  };
+  const signals: Signal[] = [];
   const push = (id: SignalId, f: ProfileFacts, text: string, ask: string | null): void => {
-    out[id].push({ id, platform: f.platform, profile_url: f.url, text, source_url: f.source_url, ask });
+    signals.push({ id, platform: f.platform, profile_url: f.url, text, source_url: f.source_url, ask });
   };
 
   for (const f of facts) {
@@ -169,7 +149,7 @@ export function profileSignals(input: ProfileSignalsInput): ProfileSignals {
 
   const cp = input.codeProfile;
   if (cp !== null && cp.repos_owned >= FORKS_MIN_OWNED && cp.forks_excluded >= FORKS_SHARE * cp.repos_owned) {
-    out["forks-only"].push({
+    signals.push({
       id: "forks-only",
       platform: "github",
       profile_url: cp.profile_url,
@@ -185,7 +165,7 @@ export function profileSignals(input: ProfileSignalsInput): ProfileSignals {
     for (const c of input.candidates) {
       const url = c.profile_urls[0];
       if (c.decision === "merge" || url === undefined || !nearDuplicate(c.snippet, headline)) continue;
-      out["same-headline"].push({
+      signals.push({
         id: "same-headline",
         platform: c.platform,
         profile_url: url,
@@ -196,13 +176,10 @@ export function profileSignals(input: ProfileSignalsInput): ProfileSignals {
     }
   }
 
-  const all = Object.values(out).flat();
-  const signals = [...all.filter((s) => s.ask !== null), ...all.filter((s) => s.ask === null)];
-
   const checked = [...new Set(facts.map((f) => f.platform))];
   const not_checked = [LINKEDIN_CREATION_NOTE];
-  for (const p of NOT_READ_PLATFORMS) {
+  for (const p of FACT_PLATFORMS) {
     if (!checked.includes(p) && merged.some((c) => c.platform === p)) not_checked.push(`${label(p)}: account details were not read on this run.`);
   }
-  return { signals, not_checked, checked };
+  return { signals: [...signals.filter((s) => s.ask !== null), ...signals.filter((s) => s.ask === null)], not_checked, checked };
 }

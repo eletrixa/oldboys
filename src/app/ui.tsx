@@ -54,7 +54,7 @@ export const SUMMARY_COMPACT =
 /** Disclosure marker that turns when the parent `details.group` is open. */
 export function Chevron(): React.JSX.Element {
   return (
-    <span aria-hidden="true" className="inline-block w-3 text-base leading-none text-action transition-transform group-open:rotate-90 motion-reduce:transition-none">
+    <span aria-hidden="true" className="inline-block w-3 text-base leading-none text-action group-open:rotate-90 motion-safe:transition-transform motion-safe:duration-150">
       ›
     </span>
   );

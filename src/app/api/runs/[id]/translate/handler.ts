@@ -11,11 +11,17 @@
  * - Body `{ lang: "cs" }` (Zod, 400); unknown run 404; another organization 403; no finished brief 409
  * - Cache: R2 SOURCES `translations/<runId>/brief-cs.json` = `{ lang, brief_hash, texts }`; served when brief_hash
  *   matches the current texts (a changed brief or new claims are translated again)
- * - Otherwise one `verify`-model call (translatePrompt), merged with mergeTranslation (unknown ids dropped, missing
- *   ids and new Art. 9 topics fall back to English), cached, and one `llm` ledger row (step TRANSLATE_STEP,
- *   cost_usd, ref `{ translate, texts, calls: 1 }`, no content) so the cost line and the audit's processors stay true
- * - Refuses before the call: 402 when the estimate exceeds TRANSLATE_BUDGET_USD, 503 without an AI key; 502 when the model fails
- * - Answer `{ lang, texts: { id: text }, cached }`
+ * - Otherwise the texts are cut into batches (translationBatches) and each batch is one `verify`-model call
+ *   (translatePrompt), TRANSLATE_CONCURRENCY at a time, so no call nears the output cap and the whole takes about one
+ *   batch's time; the outputs are merged with mergeTranslation (unknown ids dropped, missing ids and new Art. 9 topics
+ *   fall back to English)
+ * - Some batches failed: the translated part is answered with `partial: true` and not cached (a retry translates again);
+ *   all failed: 502. Each failure is logged as `translate failed` with the run, batch, error name and message, never a text
+ * - One `llm` ledger row for the whole translation (step TRANSLATE_STEP, cost_usd = all batches including what a failed
+ *   call reported, ref `{ translate, texts, translated, calls, failed_calls }`, no content), also when every batch failed, so
+ *   the cost line and the audit's processors stay true
+ * - Refuses before any call: 402 when the estimate over all batches exceeds TRANSLATE_BUDGET_USD, 503 without an AI key
+ * - Answer `{ lang, texts: { id: text }, cached, partial? }`
  *
  * Design constraints:
  * - Only the brief's own texts go to the model (reportTexts): no quotes, URLs, names or source excerpts
@@ -28,14 +34,18 @@ import type { RunState } from "@/app/runs/[id]/state";
 import type { LedgerAppend, LlmCall } from "@/domain/ports";
 import {
   CachedTranslation,
+  type ReportText,
   TRANSLATE_BUDGET_USD,
+  TRANSLATE_CONCURRENCY,
   TRANSLATE_STEP,
   TranslateBody,
   TranslationOutput,
   estimateTranslateUsd,
+  failedCallCost,
   mergeTranslation,
   textsHash,
   translatePrompt,
+  translationBatches,
   translationKey,
 } from "@/domain/report-translation";
 
@@ -67,6 +77,45 @@ async function readCache(bucket: R2Bucket, key: string): Promise<CachedTranslati
   }
 }
 
+/** fn over every item, at most `limit` at a time; results in item order. */
+async function mapLimit<T, R>(items: readonly T[], limit: number, fn: (item: T, index: number) => Promise<R>): Promise<R[]> {
+  const results: R[] = new Array<R>(items.length);
+  let next = 0;
+  const worker = async (): Promise<void> => {
+    while (next < items.length) {
+      const i = next++;
+      results[i] = await fn(items[i] as T, i);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return results;
+}
+
+type BatchResult = { ok: true; output: TranslationOutput; cost_usd: number } | { ok: false; cost_usd: number };
+
+/** Error class, message (capped) and finish reason only: never the texts the call carried. */
+function logFailure(runId: string, batch: number, error: unknown): void {
+  const e = error instanceof Error ? error : new Error(String(error));
+  const finishReason = (error as { finishReason?: unknown } | null)?.finishReason;
+  console.error("translate failed", {
+    runId,
+    batch,
+    name: e.name,
+    message: e.message.slice(0, 200),
+    ...(typeof finishReason === "string" ? { finishReason } : {}),
+  });
+}
+
+async function translateBatch(llm: LlmCall, runId: string, batch: readonly ReportText[], index: number): Promise<BatchResult> {
+  try {
+    const result = await llm({ model: "verify", ...translatePrompt(batch), schema: TranslationOutput });
+    return { ok: true, output: result.value, cost_usd: result.cost_usd };
+  } catch (error) {
+    logFailure(runId, index, error);
+    return { ok: false, cost_usd: failedCallCost(error) };
+  }
+}
+
 async function handle(request: Request, env: TranslateEnv, runId: string, deps: TranslateDeps): Promise<Response> {
   const { user, denied } = await authorizeRunAction(request, env);
   if (denied !== null) return denied;
@@ -92,21 +141,22 @@ async function handle(request: Request, env: TranslateEnv, runId: string, deps: 
   if (deps.llm === null) return json({ error: "translation is not available: no AI key configured" }, 503);
 
   const started = deps.now();
-  let result: { value: TranslationOutput; cost_usd: number };
-  try {
-    result = await deps.llm({ model: "verify", ...translatePrompt(texts), schema: TranslationOutput });
-  } catch {
-    return json({ error: "the translation service did not answer; try again later" }, 502);
-  }
-  const translated = mergeTranslation(texts, result.value);
+  const { llm } = deps;
+  const batches = translationBatches(texts);
+  const results = await mapLimit(batches, TRANSLATE_CONCURRENCY, (batch, i) => translateBatch(llm, runId, batch, i));
+  const outputs = results.flatMap((r) => (r.ok ? r.output.texts : []));
+  const failed = results.filter((r) => !r.ok).length;
+  const translated = mergeTranslation(texts, { texts: outputs });
   await deps.ledger({
     run_id: runId,
     step: TRANSLATE_STEP,
     kind: "llm",
-    cost_usd: result.cost_usd,
+    cost_usd: results.reduce((usd, r) => usd + r.cost_usd, 0),
     ms: Math.max(0, Math.round(deps.now() - started)),
-    ref: { translate: lang, texts: texts.length, translated: Object.keys(translated).length, calls: 1 },
+    ref: { translate: lang, texts: texts.length, translated: Object.keys(translated).length, calls: batches.length, failed_calls: failed },
   });
+  if (failed === batches.length) return json({ error: "the translation service did not answer; try again later" }, 502);
+  if (failed > 0) return json({ lang, texts: translated, cached: false, partial: true });
   const entry: CachedTranslation = { lang, brief_hash: hash, texts: translated };
   await env.SOURCES.put(key, JSON.stringify(entry), { httpMetadata: { contentType: "application/json" } });
   return json({ lang, texts: translated, cached: false });

@@ -15,9 +15,9 @@
  * - Excerpts go through clip(); malformed payloads parse to []
  */
 import { z } from "zod";
-import { clipBio, emptyFacts, type ProfileFacts } from "@/domain/profile-facts";
-import { count, digestOf } from "@/recipe/sources/facts";
-import type { Collector, StepContext } from "@/recipe/sources/types";
+import { clipBio, count, facts } from "@/domain/profile-facts";
+import { dedupeBy, digestOf, parsedAll } from "@/recipe/sources/facts";
+import type { Collector } from "@/recipe/sources/types";
 import { clip, identityFor } from "@/recipe/sources/types";
 
 const Item = z.object({
@@ -65,27 +65,23 @@ export const tiktok: Collector = {
       return [{ url, excerpt, raw: i, identity: identityFor(ctx, url) }];
     });
   },
-  digest: (fetched, ctx) => factsOf(fetched.map((f) => f.payload), ctx),
+  digest: (fetched, ctx) =>
+    digestOf(
+      dedupeBy(
+        parsedAll(z.array(Item), fetched).flatMap((items) => items.flatMap((i) => (i.authorMeta ? [i.authorMeta] : []))),
+        (a) => (a.name ?? "").toLowerCase(),
+      )
+        .map((a) => ({ a, url: a.profileUrl ?? `https://www.tiktok.com/@${a.name ?? ""}` }))
+        .filter(({ url }) => identityFor(ctx, url) === "merged")
+        .map(({ a, url }) =>
+          facts("tiktok", url, {
+            handle: a.name ?? null,
+            bio: clipBio(a.signature),
+            followers: count(a.fans),
+            following: count(a.following),
+            verified: a.verified ?? null,
+            photo_url: a.avatar ?? null,
+          }),
+        ),
+    ),
 };
-
-export function factsOf(payloads: readonly unknown[], ctx: StepContext): ProfileFacts[] | null {
-  const facts = new Map<string, ProfileFacts>();
-  for (const pl of payloads) {
-    const items = z.array(Item).safeParse(pl);
-    if (!items.success) continue;
-    for (const a of items.data.flatMap((i) => (i.authorMeta ? [i.authorMeta] : []))) {
-      const name = a.name ?? "";
-      const url = a.profileUrl ?? `https://www.tiktok.com/@${name}`;
-      if (name === "" || facts.has(name.toLowerCase()) || identityFor(ctx, url) !== "merged") continue;
-      const f = emptyFacts("tiktok", url, url);
-      f.handle = name;
-      f.bio = clipBio(a.signature);
-      f.followers = count(a.fans);
-      f.following = count(a.following);
-      f.verified = a.verified ?? null;
-      f.photo_url = a.avatar ?? null;
-      facts.set(name.toLowerCase(), f);
-    }
-  }
-  return digestOf([...facts.values()]);
-}

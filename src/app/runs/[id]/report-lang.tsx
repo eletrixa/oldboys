@@ -14,7 +14,8 @@
  * - exports: a Report in the chosen language with the translated texts once loaded, so the exports follow the switch
  *   at once and never wait for the translation (Czech fixed lines with English texts before it arrives or on failure)
  * - LangSwitch: "EN | CZ" (aria-pressed, 44px targets, same look as the candidate notice switch), "Překládám…",
- *   errors in plain words with a retry, a login link on 401, and the "quotes stay in the original" note
+ *   errors in plain words with a retry, a login link on 401, and the "quotes stay in the original" note; a partial
+ *   translation (some batches failed, `partial: true`) is shown with a plain line and the same retry
  *
  * Design constraints:
  * - Client only; nothing is sent but the run id and the language
@@ -73,7 +74,7 @@ function subscribe(onChange: () => void): () => void {
 const englishOnServer = (): ReportLang => "en";
 
 type Outcome =
-  | { kind: "ready"; texts: Record<string, string> }
+  | { kind: "ready"; texts: Record<string, string>; partial: boolean }
   | { kind: "login" }
   | { kind: "error"; message: string; retry: boolean };
 
@@ -94,8 +95,8 @@ async function fetchTranslation(runId: string): Promise<Outcome> {
     });
     if (res.status === 401) return { kind: "login" };
     if (!res.ok) return failure(res.status);
-    const body = await res.json<{ texts?: Record<string, string> }>();
-    return { kind: "ready", texts: body.texts ?? {} };
+    const body = await res.json<{ texts?: Record<string, string>; partial?: boolean }>();
+    return { kind: "ready", texts: body.texts ?? {}, partial: body.partial === true };
   } catch {
     return failure(0);
   }
@@ -150,11 +151,13 @@ const LANGS: readonly { lang: ReportLang; label: string; title: string }[] = [
   { lang: "cs", label: "CZ", title: "Podklad v češtině" },
 ];
 
+const PARTIAL_MESSAGE = "Část podkladu se nepodařilo přeložit, zbytek zůstává v angličtině.";
+
 function Status({ runId, language }: { runId: string; language: ReportLanguage }): React.JSX.Element | null {
   const { outcome } = language;
   if (language.loading) return <span className="text-xs text-muted">{REPORT_DICT.cs.translating}</span>;
   if (outcome === null) return null;
-  if (outcome.kind === "ready") return <span className="text-xs text-muted">{REPORT_DICT.cs.quotesNote}</span>;
+  if (outcome.kind === "ready" && !outcome.partial) return <span className="text-xs text-muted">{REPORT_DICT.cs.quotesNote}</span>;
   if (outcome.kind === "login") {
     return (
       <span className="text-xs text-conflict">
@@ -163,10 +166,12 @@ function Status({ runId, language }: { runId: string; language: ReportLanguage }
       </span>
     );
   }
+  const message = outcome.kind === "ready" ? PARTIAL_MESSAGE : outcome.message;
+  const retry = outcome.kind === "ready" || outcome.retry;
   return (
     <span className="flex flex-wrap items-center gap-x-2 text-xs text-conflict">
-      {outcome.message}
-      {outcome.retry && (
+      {message}
+      {retry && (
         <button type="button" className={`${BTN_QUIET} min-h-11`} onClick={language.retry}>
           Zkusit znovu
         </button>

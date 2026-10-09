@@ -3,11 +3,11 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/runs/[id]/code-profile-text.ts
- * Deps:    src/domain/code-profile (types, CODE_PROFILE_CAVEATS, codeTotals), src/domain/url (httpUrl)
+ * Deps:    src/domain/code-profile (types, CODE_PROFILE_CAVEATS, codeTotals), src/domain/url (httpUrl), src/domain/number-text (fmtInt)
  * Tested:  src/app/runs/[id]/__tests__/code-profile-card.test.ts
  *
  * Key responsibilities:
- * - fmtInt: integers with thin-space thousands separators (U+2009)
+ * - fmtInt: re-exported from src/domain/number-text for the card
  * - statGroups: the compact stat row (label, value, source link from `profile.sources` or null; http(s) only)
  * - codeProfileLines: the same numbers, repo table, merged-PR sample, orgs, the profile-page numbers (apify), pending stats and caveats as plain text lines;
  *   empty without a profile
@@ -16,16 +16,14 @@
  * - Pure; numbers only, no score and no adjective about the person; public work only
  */
 import { CODE_PROFILE_CAVEATS, type CodeProfile, codeTotals } from "@/domain/code-profile";
+import { fmtInt } from "@/domain/number-text";
 import { httpUrl } from "@/domain/url";
 
-const THIN_SPACE = " ";
 const MINUS = "−";
 
 export const PENDING_PREFIX = "GitHub had not computed statistics yet for: ";
 
-export function fmtInt(n: number): string {
-  return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, THIN_SPACE);
-}
+export { fmtInt };
 
 export type StatGroup = { label: string; value: string; source: string | null };
 

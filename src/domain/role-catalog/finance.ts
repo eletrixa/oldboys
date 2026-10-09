@@ -20,7 +20,7 @@ export const FINANCE: RoleTemplate[] = [
     key: "accountant",
     title: "Accountant",
     family: "finance",
-    aliases: ["účetní", "senior accountant", "general ledger accountant", "bookkeeper", "účetní auditor"],
+    aliases: ["účetní", "senior accountant", "general ledger accountant", "bookkeeper", "účetní auditor", "ap clerk", "accounts payable clerk", "accounts payable specialist", "accounts payable accountant", "accounts payable", "ap specialist", "ap accountant", "accounts receivable", "accounts receivable specialist", "ar specialist", "ar accountant", "fakturant", "fakturantka", "fakturant/ka", "účetní závazků", "účetní pohledávek", "junior accountant", "samostatná účetní", "samostatný účetní", "účetní/ho", "účetní/ka", "finanční účetní", "financial accountant"],
     profile: "verify-only",
     must_haves: [
       { id: "mh-accounting-experience", title: "Accounting experience", text: "Stated hands-on bookkeeping or general-ledger work at named employers", accepted_evidence: ["job history", "company filing"] },
@@ -34,7 +34,7 @@ export const FINANCE: RoleTemplate[] = [
     key: "chief-accountant",
     title: "Chief Accountant",
     family: "finance",
-    aliases: ["hlavní účetní", "head of accounting", "accounting manager", "vedoucí účtárny", "finanční účetní"],
+    aliases: ["hlavní účetní", "head of accounting", "accounting manager", "vedoucí účtárny"],
     profile: "track-record",
     must_haves: [
       { id: "mh-accounting-lead", title: "Led accounting team", text: "Held a lead or manager accounting role at a named company", accepted_evidence: ["job history", "company filing"] },
@@ -133,7 +133,7 @@ export const FINANCE: RoleTemplate[] = [
     key: "payroll-specialist",
     title: "Payroll Specialist",
     family: "finance",
-    aliases: ["mzdová účetní", "mzdový účetní", "mzdy a personalistika", "payroll accountant", "payroll administrator", "mzdový specialista"],
+    aliases: ["mzdová účetní", "mzdový účetní", "mzdy a personalistika", "payroll accountant", "payroll administrator", "mzdový specialista", "mzdový/á účetní", "mzdová/ý účetní", "mzdová účetní/personalistka", "personalistka/mzdová účetní"],
     profile: "verify-only",
     must_haves: [
       { id: "mh-payroll-experience", title: "Payroll experience", text: "Stated payroll processing work at named employers", accepted_evidence: ["job history", "company filing"] },

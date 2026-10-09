@@ -30,6 +30,8 @@
 import type { Challenge } from "@/domain/challenge";
 import type { CodeProfile } from "@/domain/code-profile";
 import type { ProfileSignals } from "@/domain/profile-signals";
+import type { RegistryChecks } from "@/domain/cz-registry";
+import { PLATFORM_LABEL } from "@/domain/profile-facts";
 import type { Brief, BriefSection, Candidate, Claim } from "@/domain/claim";
 import type { ClaimQuoteContext } from "@/domain/quote";
 import type { RunCost } from "@/domain/run-cost";
@@ -72,6 +74,8 @@ export type RunState = {
   code_profile?: CodeProfile | null;
   /** Profile signals (plans/012): sentences about the confirmed public accounts, each with a source; null or absent when the route did not compute them. */
   profile_signals?: ProfileSignals | null;
+  /** Czech public registry checks (cz_registries step digest); null or absent for older runs. */
+  registry_checks?: RegistryChecks | null;
   questions: { id: string; text: string; title?: string }[];
   brief: Brief | null;
   /** Reason recorded by the Workflow when status is failed; null otherwise. */
@@ -90,16 +94,7 @@ export type RowState = "done" | "active" | "todo" | "failed" | "skipped";
 
 export const PLATFORM_RANK: Record<string, number> = { linkedin: 0, github: 1, x: 2, instagram: 3, tiktok: 4, youtube: 5, bluesky: 6, facebook: 7 };
 
-export const PLATFORM_LABEL: Record<string, string> = {
-  linkedin: "LinkedIn",
-  github: "GitHub",
-  instagram: "Instagram",
-  x: "X",
-  tiktok: "TikTok",
-  youtube: "YouTube",
-  bluesky: "Bluesky",
-  facebook: "Facebook",
-};
+export { PLATFORM_LABEL };
 
 /**
  * Heading for an evidence row: the URL's platform label ("LinkedIn" even when a web search found it); plain web

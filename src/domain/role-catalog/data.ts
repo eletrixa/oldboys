@@ -21,7 +21,7 @@ export const DATA: RoleTemplate[] = [
     key: "data-engineer",
     title: "Data Engineer",
     family: "data",
-    aliases: ["datový inženýr", "data engineering", "etl developer", "big data engineer", "de"],
+    aliases: ["datový inženýr", "data engineering", "etl developer", "big data engineer", "data platform engineer"],
     profile: "makers",
     must_haves: [
       { id: "mh-pipelines", title: "Production data pipelines", text: "Has built production data pipelines (Airflow, dbt, Spark, Kafka)", accepted_evidence: ["repo", "job history", "blog post", "talk"] },
@@ -35,7 +35,7 @@ export const DATA: RoleTemplate[] = [
     key: "data-analyst",
     title: "Data Analyst",
     family: "data",
-    aliases: ["datový analytik", "analytik dat", "reporting analyst", "insights analyst", "da"],
+    aliases: ["datový analytik", "analytik dat", "reporting analyst", "insights analyst"],
     profile: "makers",
     must_haves: [
       { id: "mh-sql", title: "SQL analysis", text: "Shows SQL-based analysis work, public queries or case studies", accepted_evidence: ["repo", "notebook", "case study", "job history"] },
@@ -77,7 +77,7 @@ export const DATA: RoleTemplate[] = [
     key: "data-scientist",
     title: "Data Scientist",
     family: "data",
-    aliases: ["datový vědec", "datová vědkyně", "data science specialist", "applied scientist", "ds"],
+    aliases: ["datový vědec", "datová vědkyně", "data science specialist", "applied scientist"],
     profile: "makers",
     must_haves: [
       { id: "mh-modeling", title: "Applied modeling", text: "Has built predictive or statistical models shown in public notebooks or papers", accepted_evidence: ["notebook", "repo", "paper", "blog post"] },
@@ -119,7 +119,7 @@ export const DATA: RoleTemplate[] = [
     key: "ai-engineer",
     title: "AI Engineer",
     family: "data",
-    aliases: ["llm engineer", "ai inženýr", "generative ai engineer", "ai developer", "llm vývojář", "prompt engineer"],
+    aliases: ["llm engineer", "ai inženýr", "generative ai engineer", "ai developer", "llm vývojář", "prompt engineer", "ai software engineer", "ai software developer", "ai vývojář"],
     profile: "makers",
     must_haves: [
       { id: "mh-llm-apps", title: "LLM applications", text: "Has shipped an LLM-based product or agent, public demo or repo", accepted_evidence: ["repo", "product launch", "demo", "blog post"] },
@@ -231,7 +231,7 @@ export const DATA: RoleTemplate[] = [
     key: "business-analyst",
     title: "Business Analyst",
     family: "data",
-    aliases: ["byznys analytik", "obchodní analytik", "ba", "business systems analyst", "analytik", "it analytik"],
+    aliases: ["byznys analytik", "obchodní analytik", "business systems analyst", "it analytik", "business analytik", "byznys analytička", "business analytička"],
     profile: "track-record",
     must_haves: [
       { id: "mh-requirements", title: "Requirements work", text: "Has documented requirements, process models or user stories for named projects", accepted_evidence: ["job history", "case study", "portfolio"] },
@@ -245,7 +245,7 @@ export const DATA: RoleTemplate[] = [
     key: "data-steward",
     title: "Data Steward",
     family: "data",
-    aliases: ["data governance specialist", "správce dat", "datový steward", "data governance manager", "data quality analyst", "správa dat"],
+    aliases: ["data governance specialist", "správce dat", "datový steward", "data governance manager", "data quality analyst", "správa dat", "head of data governance", "data governance lead"],
     profile: "credentialed",
     must_haves: [
       { id: "mh-governance", title: "Governance program work", text: "Has run data governance, catalog or quality programs at a named company", accepted_evidence: ["job history", "case study", "talk"] },
