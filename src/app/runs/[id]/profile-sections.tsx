@@ -12,11 +12,14 @@
  * - Verdict strip: run's role fit with a neutral bar and must-haves evidenced, risks, questions, FACT / INFERENCE and
  *   source counts, current role; FACT / INFERENCE legend; section anchors
  * - Sections in Robert's order with caps (3 / 3 / 5 jobs / 3 sentences / run's role / 5) and "Show N more"; empty ones omitted
- * - Evidence line: serif quote on a hairline rule, then one meta line: Independent / Self-reported pill, FACT / INFERENCE,
+ * - Evidence line: serif quote on a hairline rule, then one meta line: Independent / Self-reported pill (none on a weak INFERENCE), FACT / INFERENCE,
  *   supports / weakens / context, [n] source deep-linked at the quote, retrieved day, note;
  *   "source missing" for an unknown id; numbered Sources list with retrieved dates
  * - History as a timeline (date column, hairline, org · title); working style on a muted card with trait rows
  * - Position fit: one bar row per role, weighted capability table, formula behind a disclosure, Σ(weight × status) ÷ Σ(weight) computed here
+ * - Position fit table stacks under 640px (name, status, labelled weights); each capability's evidence is a full-width row below it
+ * - Prose capped at a 65ch measure; evidence summaries carry the item name for screen readers; "·" separators bind to the
+ *   text before them so a wrap never starts a line with one
  *
  * Design constraints:
  * - Server-safe and pure: native <details>, no hooks; Radar semantic tokens only; no colour scale on fit %
@@ -31,7 +34,9 @@ import { CV_SOURCE_TEXT, host, isCvSource } from "./state";
 
 // Three type sizes inside the block: text-xs (meta), text-sm (body), text-xl serif (headings and figures).
 const NOTE = "text-xs text-muted";
-const INTRO = "mt-2 text-sm text-muted";
+/** 65ch measure for anything read as prose (quotes, intros, details, the read). */
+const MEASURE = "max-w-prose";
+const INTRO = `mt-2 ${MEASURE} text-sm text-muted`;
 const H2 = "mt-1 scroll-mt-6 font-serif text-xl";
 const FIGURE = "font-serif text-xl leading-tight text-ink tabular-nums";
 
@@ -116,11 +121,14 @@ function EvidenceLine({ e, ctx }: { e: ProfileEvidence; ctx: Ctx }): React.JSX.E
   );
   return (
     <li className={`border-l pl-4 ${direction === "contradicts" ? "border-conflict" : "border-divider"}`}>
-      <blockquote className="font-serif text-sm text-ink">“{e.quote}”</blockquote>
+      <blockquote className={`${MEASURE} font-serif text-sm text-ink`}>“{e.quote}”</blockquote>
       <p className={`mt-1 ${NOTE}`}>
-        <Pill tone={e.strength === "strong" ? "ok" : "unsure"} className="px-2 py-0">
-          {e.strength === "strong" ? "Independent" : "Self-reported"}
-        </Pill>
+        {/* A weak INFERENCE line gets no strength pill: the INFERENCE label already says it is not a checked quote. */}
+        {(e.strength === "strong" || e.kind === "FACT") && (
+          <Pill tone={e.strength === "strong" ? "ok" : "unsure"} className="px-2 py-0">
+            {e.strength === "strong" ? "Independent" : "Self-reported"}
+          </Pill>
+        )}
         {seg("kind", <span className={`font-semibold tracking-wide ${e.kind === "FACT" ? "text-ok" : "text-inference"}`}>{e.kind}</span>, true)}
         {seg("dir", <span className={dir.cls}>{dir.text}</span>)}
         {seg(
@@ -136,13 +144,14 @@ function EvidenceLine({ e, ctx }: { e: ProfileEvidence; ctx: Ctx }): React.JSX.E
           ),
         )}
         {info !== undefined && seg("day", <span className="tabular-nums">{retrievedDay(info.fetched_at)}</span>)}
-        {e.note !== "" && <span>{` · ${e.note}`}</span>}
+        {e.note !== "" && <span>{`\u00a0· ${e.note}`}</span>}
       </p>
     </li>
   );
 }
 
-function EvidenceList({ items, ctx }: { items: ProfileEvidence[]; ctx: Ctx }): React.JSX.Element | null {
+/** `about` names the item for screen readers, so a page of "Evidence (2)" summaries stays distinguishable. Each summary part ends with its own "·" so a wrap never starts a line with it. */
+function EvidenceList({ items, ctx, about }: { items: ProfileEvidence[]; ctx: Ctx; about: string }): React.JSX.Element | null {
   if (items.length === 0) return null;
   const against = items.filter((e) => directionOf(e) === "contradicts").length;
   const independent = items.filter((e) => e.strength === "strong").length;
@@ -150,9 +159,16 @@ function EvidenceList({ items, ctx }: { items: ProfileEvidence[]; ctx: Ctx }): R
     <details className="group mt-1">
       <summary className={SUMMARY_COMPACT}>
         <Chevron />
-        Evidence ({String(items.length)})
-        {independent === 0 ? <span className="font-medium text-unsure">· all self-reported</span> : <span className="font-medium">· {String(independent)} independent</span>}
-        {against > 0 && <span className="text-conflict">· {String(against)} weakens</span>}
+        <span>
+          {`Evidence (${String(items.length)})`}
+          <span className="sr-only">{` for ${about}`}</span>
+          {"\u00a0·"}
+        </span>
+        <span className={independent === 0 ? "font-medium text-unsure" : "font-medium"}>
+          {independent === 0 ? "all self-reported" : `${String(independent)} independent`}
+          {against > 0 && "\u00a0·"}
+        </span>
+        {against > 0 && <span className="text-conflict">{`${String(against)} weakens`}</span>}
       </summary>
       <ul className="mt-2 mb-2 space-y-4 [overflow-wrap:anywhere]">
         {items.map((e, i) => (
@@ -170,8 +186,8 @@ function ItemRows({ items, ctx, quiet = false }: { items: ProfileItem[]; ctx: Ct
       {items.map((it) => (
         <li key={it.text} className="py-4">
           <h3 className={`text-sm text-ink ${quiet ? "" : "font-semibold"}`}>{it.text}</h3>
-          {it.detail !== "" && <p className="mt-1 text-sm text-muted">{it.detail}</p>}
-          <EvidenceList items={it.evidence} ctx={ctx} />
+          {it.detail !== "" && <p className={`mt-1 ${MEASURE} text-sm text-muted`}>{it.detail}</p>}
+          <EvidenceList items={it.evidence} ctx={ctx} about={it.text} />
         </li>
       ))}
     </ul>
@@ -217,7 +233,7 @@ function HistoryRows({ entries, ctx }: { entries: HistoryEntry[]; ctx: Ctx }): R
               {dates(h)}
               {h.duration !== "" && (
                 <>
-                  <span className="text-muted sm:hidden"> · </span>
+                  <span className="text-muted sm:hidden">{"\u00a0· "}</span>
                   <span className="text-muted sm:block">{h.duration}</span>
                 </>
               )}
@@ -225,7 +241,7 @@ function HistoryRows({ entries, ctx }: { entries: HistoryEntry[]; ctx: Ctx }): R
             <h3 className="text-sm font-semibold text-ink">
               {h.organization}
               <span className="font-normal text-ink">
-                <span className="text-muted"> · </span>
+                <span className="text-muted">{"\u00a0· "}</span>
                 {h.title}
               </span>
               {h.kind !== "job" && (
@@ -235,8 +251,8 @@ function HistoryRows({ entries, ctx }: { entries: HistoryEntry[]; ctx: Ctx }): R
               )}
             </h3>
             {h.location !== "" && <p className={NOTE}>{h.location}</p>}
-            {h.summary !== "" && <p className="mt-1 text-sm text-muted">{h.summary}</p>}
-            <EvidenceList items={h.evidence} ctx={ctx} />
+            {h.summary !== "" && <p className={`mt-1 ${MEASURE} text-sm text-muted`}>{h.summary}</p>}
+            <EvidenceList items={h.evidence} ctx={ctx} about={`${h.organization}, ${h.title}`} />
           </div>
         </li>
       ))}
@@ -291,7 +307,8 @@ function WorkingStyle({ p, ctx }: { p: Profile["personality"]; ctx: Ctx }): Reac
       <p className={`mt-2 ${NOTE}`}>
         Based only on their own posts, articles and interview text. No health, political, religious, ethnic or sexual-orientation data is used.
       </p>
-      <dl className="mt-4 grid grid-cols-[5.5rem_minmax(0,1fr)] gap-x-4 gap-y-2 text-sm sm:grid-cols-[8rem_minmax(0,1fr)]">
+      {/* One column on phones (label above value) so the read and its evidence keep the full card width. */}
+      <dl className="mt-4 grid grid-cols-1 gap-x-4 gap-y-1 text-sm sm:grid-cols-[8rem_minmax(0,1fr)] sm:gap-y-2">
         {types.length === 0 ? (
           <>
             <dt className={NOTE}>Type</dt>
@@ -302,7 +319,8 @@ function WorkingStyle({ p, ctx }: { p: Profile["personality"]; ctx: Ctx }): Reac
             <div key={v.label} className="contents">
               <dt className={`${NOTE} pt-px`}>{v.label}</dt>
               <dd className="text-ink">
-                {`${v.label} ${v.type}`} <span className="text-muted">· {v.confidence} confidence</span>
+                {`${v.label} ${v.type}`}
+                <span className="text-muted">{`\u00a0· ${v.confidence} confidence`}</span>
               </dd>
             </div>
           ))
@@ -311,7 +329,7 @@ function WorkingStyle({ p, ctx }: { p: Profile["personality"]; ctx: Ctx }): Reac
           <>
             <dt className={`${NOTE} pt-px`}>Our read</dt>
             <dd>
-              <p className="text-ink">
+              <p className={`${MEASURE} text-ink`}>
                 {read.slice(0, VISIBLE).join(" ")}
                 {p.evidence.length === 0 && traits.length === 0 && <span className="text-muted"> (no supporting quote kept)</span>}
               </p>
@@ -319,12 +337,12 @@ function WorkingStyle({ p, ctx }: { p: Profile["personality"]; ctx: Ctx }): Reac
                 <details className="group">
                   <summary className={SUMMARY_COMPACT}>
                     <Chevron />
-                    Read the rest
+                    {`Show ${plural(read.length - VISIBLE, "more sentence", "more sentences")}`}
                   </summary>
-                  <p className="text-ink">{read.slice(VISIBLE).join(" ")}</p>
+                  <p className={`${MEASURE} text-ink`}>{read.slice(VISIBLE).join(" ")}</p>
                 </details>
               )}
-              <EvidenceList items={p.evidence} ctx={ctx} />
+              <EvidenceList items={p.evidence} ctx={ctx} about="our read" />
             </dd>
           </>
         )}
@@ -402,9 +420,11 @@ function Fit({ fits, dropped, ctx }: { fits: PositionFit[]; dropped: number; ctx
           Σ(weight × status) ÷ Σ(weight).
         </p>
       </details>
-      <div className="mt-4 overflow-x-auto">
-        <table className={`w-full border-collapse text-left text-sm ${fits.length > 1 ? "min-w-[32rem]" : ""}`}>
-          <thead className={NOTE}>
+      {/* From sm up a table (scrolls sideways past three roles); under 640px each capability stacks: name, status and
+          labelled weights, then its evidence. Evidence sits in its own full-width row below the capability, never in a cell. */}
+      <div className="mt-4 sm:overflow-x-auto">
+        <table className={`w-full border-collapse text-left text-sm max-sm:block ${fits.length > 1 ? "sm:min-w-[32rem]" : ""}`}>
+          <thead className={`${NOTE} max-sm:sr-only`}>
             <tr className="border-b border-divider">
               <th scope="col" className="py-2 pr-4 font-semibold">
                 Capability
@@ -420,28 +440,35 @@ function Fit({ fits, dropped, ctx }: { fits: PositionFit[]; dropped: number; ctx
               ))}
             </tr>
           </thead>
-          <tbody className="divide-y divide-divider">
-            {rows.map(({ name, per }) => {
-              const t = per.find((x) => x !== undefined);
-              return (
-                <tr key={name} className="align-top">
-                  <th scope="row" className="py-2 pr-4 font-normal text-ink">
+          {rows.map(({ name, per }) => {
+            const t = per.find((x) => x !== undefined);
+            return (
+              <tbody key={name} className="border-t border-divider max-sm:block max-sm:py-2 max-sm:first-of-type:border-t-0">
+                <tr className="align-top max-sm:flex max-sm:flex-wrap max-sm:items-center max-sm:gap-x-3 max-sm:gap-y-1">
+                  <th scope="row" className="py-2 pr-4 font-normal text-ink max-sm:w-full max-sm:p-0">
                     {name}
-                    {t !== undefined && <EvidenceList items={t.evidence} ctx={ctx} />}
                   </th>
-                  <td className="py-2 pr-4">{t !== undefined && <Pill tone={STATUS[t.status].tone} className="whitespace-nowrap">{STATUS[t.status].text}</Pill>}</td>
+                  <td className="py-2 pr-4 max-sm:p-0">{t !== undefined && <Pill tone={STATUS[t.status].tone} className="whitespace-nowrap">{STATUS[t.status].text}</Pill>}</td>
                   {per.map((x, i) => (
-                    <td key={fits[i]?.role ?? i} className="py-2 text-right text-muted tabular-nums">
+                    <td key={fits[i]?.role ?? i} className="py-2 text-right text-muted tabular-nums max-sm:p-0 max-sm:text-xs">
+                      <span className="sm:hidden">{fits.length > 1 ? `${fits[i]?.role ?? ""} weight ` : "weight "}</span>
                       {x === undefined ? "–" : String(x.weight)}
                     </td>
                   ))}
                 </tr>
-              );
-            })}
-          </tbody>
+                {t !== undefined && t.evidence.length > 0 && (
+                  <tr className="max-sm:block">
+                    <td colSpan={2 + fits.length} className="pb-2 max-sm:block max-sm:p-0">
+                      <EvidenceList items={t.evidence} ctx={ctx} about={name} />
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            );
+          })}
         </table>
       </div>
-      {main !== undefined && main.rationale !== "" && <p className={`mt-4 ${NOTE}`}>{main.rationale}</p>}
+      {main !== undefined && main.rationale !== "" && <p className={`mt-4 ${MEASURE} ${NOTE}`}>{main.rationale}</p>}
       <Dropped n={dropped} />
     </section>
   );
@@ -504,7 +531,7 @@ function Sources({ ctx }: { ctx: Ctx }): React.JSX.Element | null {
                     {info.url}
                   </a>
                 )}
-                <span className="text-muted"> · {retrievedLabel(info.fetched_at)}</span>
+                <span className="text-muted">{`\u00a0· ${retrievedLabel(info.fetched_at)}`}</span>
               </li>
             );
           })}

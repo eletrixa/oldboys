@@ -82,7 +82,7 @@ describe("ProfileSections", () => {
   it("evidence lines carry kind, direction, [n] deep link, retrieved day and the weakens count; sources list the retrieved date", () => {
     const out = html(profile);
     expect(out).toContain("Evidence (2)");
-    expect(out).toMatch(/text-conflict">· 1 weakens</);
+    expect(out).toMatch(/text-conflict">1 weakens</);
     expect(out).toContain(">supports<");
     expect(out).toContain(">weakens<");
     expect(out).toContain("border-conflict");
@@ -97,8 +97,10 @@ describe("ProfileSections", () => {
     const out = html(Profile.parse({ ...profile, achievements: [{ text: "Grew Acme", evidence: [ev(), ev({ strength: "strong" })] }], risks: [{ text: "Short tenure", evidence: [ev()] }] }));
     expect(out).toContain(">Independent<");
     expect(out).toContain(">Self-reported<");
-    expect(out).toContain("· 1 independent");
-    expect(out).toMatch(/text-unsure">· all self-reported</);
+    const inferenceOnly = Profile.parse({ ...profile, achievements: [{ text: "Leads by example", evidence: [ev({ kind: "INFERENCE" })] }], risks: [], history: [], position_fit: [], personality: { ...profile.personality, evidence: [] } });
+    expect(html(inferenceOnly)).not.toContain(">Self-reported<");
+    expect(out).toContain(">1 independent<");
+    expect(out).toMatch(/text-unsure">all self-reported</);
   });
 
   it("renders direction, note, detail, location, weights and style traits: context direction, note, detail, location, weights", () => {
@@ -111,7 +113,7 @@ describe("ProfileSections", () => {
     };
     const out = html(withExtras);
     expect(out).toContain(">context<");
-    expect(out).toContain("> · LinkedIn, self-reported<");
+    expect(out).toContain(">\u00a0· LinkedIn, self-reported<");
     expect(out).toContain("Company-level result.");
     expect(out).toContain("2019 – Present");
     expect(out).toContain(">1 yr 9 mos<");
@@ -160,5 +162,15 @@ describe("ProfileSections", () => {
     expect(out).toContain("Profile not built: ");
     expect(out).toContain("model timeout");
     expect(out).not.toContain("Achievements");
+  });
+
+  it("names evidence summaries for screen readers, keeps \"·\" off line starts, stacks the fit table on phones with evidence in its own full-width row", () => {
+    const out = html(profile);
+    expect(out).toMatch(/Evidence \(\d+\)<span class="sr-only"> for [^<]+<\/span>\u00a0·<\/span>/);
+    expect(out).not.toMatch(/> ?· /);
+    expect(out).toContain("max-sm:sr-only");
+    expect(out).toMatch(/<tr class="max-sm:block"><td colSpan="\d+"[^>]*>/);
+    expect(out).toContain('<span class="sm:hidden">weight </span>');
+    expect(out).toContain("max-w-prose font-serif");
   });
 });

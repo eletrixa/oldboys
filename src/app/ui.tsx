@@ -43,13 +43,13 @@ export const FIELD = "w-full rounded-lg border border-line bg-surface px-4 py-3 
 
 export const LINK = "font-medium whitespace-nowrap text-action underline decoration-action/40 underline-offset-4 hover:decoration-action";
 
-/** `<details className="group">` + `<summary className={SUMMARY}><Chevron />…</summary>`: 44px target, native marker hidden. */
+/** `<details className="group">` + `<summary className={SUMMARY}><Chevron />…</summary>`: 44px target, native marker hidden; rounded so the global focus ring reads as a control. */
 export const SUMMARY =
-  "flex min-h-11 cursor-pointer list-none items-center gap-2 text-sm font-semibold text-muted hover:text-ink [&::-webkit-details-marker]:hidden";
+  "flex min-h-11 cursor-pointer list-none items-center rounded-sm gap-2 text-sm font-semibold text-muted hover:text-ink [&::-webkit-details-marker]:hidden";
 
 /** SUMMARY for dense rows (evidence under each item): 32px target, above the WCAG 2.2 24px minimum, smaller type; parts wrap whole on narrow columns. */
 export const SUMMARY_COMPACT =
-  "flex min-h-8 cursor-pointer list-none flex-wrap items-center gap-x-2 text-xs font-semibold text-muted hover:text-ink [&::-webkit-details-marker]:hidden [&>span]:whitespace-nowrap";
+  "flex min-h-8 cursor-pointer list-none flex-wrap rounded-sm items-center gap-x-2 text-xs font-semibold text-muted hover:text-ink [&::-webkit-details-marker]:hidden [&>span]:whitespace-nowrap";
 
 /** Disclosure marker that turns when the parent `details.group` is open. */
 export function Chevron(): React.JSX.Element {
