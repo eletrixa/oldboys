@@ -4,7 +4,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/runs/[id]/scorecard-card.tsx
- * Deps:    react (Fragment), ./scorecard (Scorecard, ScoreItem, SCORECARD_NOTE), ./evidence (Evidence), ./state (host, isCvSource, CV_SOURCE_TEXT), src/domain/url (httpUrl), ../../ui (CARD, Eyebrow, KEY, LINK, SUMMARY_COMPACT, Chevron)
+ * Deps:    react (Fragment), ./scorecard (Scorecard, ScoreItem, labels, hasScorecard, SCORECARD_NOTE), ./evidence (Evidence), ./state (host, isCvSource, CV_SOURCE_TEXT), src/domain/url (httpUrl), ../../ui (CARD, Eyebrow, KEY, LINK, SUMMARY_COMPACT, Chevron)
  * Tested:  src/app/runs/[id]/__tests__/scorecard-card.test.ts
  *
  * Key responsibilities:
@@ -24,7 +24,7 @@ import { httpUrl } from "@/domain/url";
 import { Fragment } from "react";
 import { CARD, Chevron, Eyebrow, KEY, LINK, SUMMARY_COMPACT } from "../../ui";
 import type { Evidence } from "./evidence";
-import { SCORECARD_NOTE, type ScoreItem, type Scorecard } from "./scorecard";
+import { askLine, checkedLabel, hasScorecard, pointsLabel, SCORECARD_NOTE, type ScoreItem, type Scorecard } from "./scorecard";
 import { CV_SOURCE_TEXT, host, isCvSource } from "./state";
 
 const NOTE = "text-xs text-muted";
@@ -32,19 +32,6 @@ const NOTE = "text-xs text-muted";
 export const VISIBLE = 6;
 
 const KIND_CLASS: Record<ScoreItem["kind"], string> = { FACT: "text-ok", INFERENCE: "text-inference", CHECK: "text-muted" };
-
-/** "+14 pts", "−14 pts" or "no effect on fit". */
-export function pointsLabel(points: number): string {
-  if (points === 0) return "no effect on fit";
-  return `${points > 0 ? "+" : "−"}${String(Math.abs(points))} pts`;
-}
-
-/** "3 of 5 must-haves evidenced, 1 partly" / "no must-haves to score". */
-export function checkedLabel(c: Scorecard["checked"]): string {
-  if (c.total === 0) return "no must-haves to score";
-  const partly = c.partial > 0 ? `, ${String(c.partial)} partly` : "";
-  return `${String(c.evidenced)} of ${String(c.total)} must-have${c.total === 1 ? "" : "s"} evidenced${partly}`;
-}
 
 function Bar({ pct }: { pct: number }): React.JSX.Element {
   return (
@@ -96,7 +83,7 @@ function Line({ item, evidence }: { item: ScoreItem; evidence: Evidence }): Reac
           {item.points !== 0 && <span className="font-semibold text-ink tabular-nums">{pointsLabel(item.points)}</span>}
           <Sources item={item} evidence={evidence} />
         </span>
-        {item.ask !== null && <span className={`mt-1 block ${NOTE}`}>{item.ask.startsWith("Check:") ? item.ask : `Ask: ${item.ask}`}</span>}
+        {item.ask !== null && <span className={`mt-1 block ${NOTE}`}>{askLine(item.ask)}</span>}
       </span>
     </li>
   );
@@ -143,7 +130,7 @@ function Column({ title, items, evidence, empty }: { title: string; items: Score
 }
 
 export function ScorecardCard({ card, evidence }: { card: Scorecard | null; evidence: Evidence }): React.JSX.Element | null {
-  if (card === null || (card.fit === null && card.pluses.length === 0 && card.minuses.length === 0)) return null;
+  if (!hasScorecard(card)) return null;
   return (
     <section className={`profile ${CARD}`} aria-labelledby="scorecard">
       <Eyebrow>Pluses and minuses, with evidence</Eyebrow>

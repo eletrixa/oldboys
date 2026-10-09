@@ -18,8 +18,8 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { Evidence } from "../evidence";
-import { SCORECARD_NOTE, type ScoreItem, type Scorecard } from "../scorecard";
-import { checkedLabel, OPEN_POINTS_LABEL, pointsLabel, ScorecardCard, VISIBLE } from "../scorecard-card";
+import { checkedLabel, pointsLabel, SCORECARD_NOTE, type ScoreItem, type Scorecard } from "../scorecard";
+import { OPEN_POINTS_LABEL, ScorecardCard, VISIBLE } from "../scorecard-card";
 
 const evidence: Evidence = {
   sourceOf: new Map([
