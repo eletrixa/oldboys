@@ -9,7 +9,7 @@
  * Key responsibilities:
  * - textsHash is stable and changes with any id or text
  * - translationBatches: char budget, max texts, a text never split, order kept
- * - estimateTranslateUsd: a ~60-text brief fits the cap with the system prompt counted per batch
+ * - estimateTranslateUsd: a ~60-text brief and a deep 175-text brief fit the cap with the system prompt counted per batch
  * - failedCallCost: reads `cost_usd` off a failed call's error, 0 otherwise
  * - mergeTranslation: missing, unknown, duplicate and empty ids fall back; a new Art. 9 topic falls back; an Art. 9
  *   topic already in the English source is kept
@@ -80,6 +80,13 @@ describe("estimateTranslateUsd", () => {
   it("fits a normal ~60-text brief (system prompt once per batch) under the cap", () => {
     const brief = Array.from({ length: 60 }, (_, i) => ({ id: `c:claim-${String(i)}`, text: "x".repeat(180) }));
     expect(translationBatches(brief).length).toBeGreaterThan(1);
+    expect(estimateTranslateUsd(brief)).toBeLessThan(TRANSLATE_BUDGET_USD);
+  });
+
+  it("fits a deep brief of the plan 013 shape (175 texts, ~14k characters, 9 batches) under the cap", () => {
+    // Three production hiring briefs on 2026-10-09 measured 135–175 texts and 12.8–14.1k characters; the old $0.12 cap refused all three
+    const brief = Array.from({ length: 175 }, (_, i) => ({ id: `s:sec-${String(i)}:summary`, text: "x".repeat(81) }));
+    expect(translationBatches(brief).length).toBe(9);
     expect(estimateTranslateUsd(brief)).toBeLessThan(TRANSLATE_BUDGET_USD);
   });
 });

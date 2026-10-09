@@ -40,8 +40,12 @@ export type ReportText = { id: string; text: string };
 /** Ledger step of the translation call; its time is not research time (src/domain/run-cost.ts). */
 export const TRANSLATE_STEP = "translate";
 
-/** Most one translation may cost (USD), all batches together; a brief whose estimate is higher is not translated. */
-export const TRANSLATE_BUDGET_USD = 0.12;
+/**
+ * Most one translation may cost (USD), all batches together; a brief whose estimate is higher is not translated.
+ * Briefs since the plan 013 depth steps run 135–175 texts and 12–14k characters (estimate $0.12–0.15); the cap leaves
+ * about 2x headroom over the longest one seen while a runaway brief is still refused.
+ */
+export const TRANSLATE_BUDGET_USD = 0.3;
 
 /**
  * One batch holds at most this many English characters and texts (about 1.5k Czech output tokens with ids and JSON,
