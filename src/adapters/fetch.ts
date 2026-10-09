@@ -78,11 +78,11 @@ export function makeFetchJson(creds: FetchCreds = {}): JsonFetch {
         redirect: text ? "manual" : "follow",
       });
     let res = await attempt();
-    if (text && isRedirect(res)) res = await followWithCookies(res, url, headers);
     if (res.status === 429 || res.status === 503 || (res.status === 202 && method === "GET")) {
       await new Promise((r) => setTimeout(r, retryDelay));
       res = await attempt();
     }
+    if (text && isRedirect(res)) res = await followWithCookies(res, url, headers);
     if (!res.ok) {
       const snippet = (await res.text().catch(() => "")).replace(/\s+/g, " ").trim().slice(0, SNIPPET_CHARS);
       throw new Error(`${rawUrl}: HTTP ${String(res.status)}${snippet ? ` ${snippet}` : ""}`);

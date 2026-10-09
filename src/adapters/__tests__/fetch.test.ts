@@ -56,6 +56,13 @@ describe("makeFetchJson", () => {
     expect(headersOf(fn, 1).get("content-type")).toBeNull();
   });
 
+  it("follows the cookie redirect even after a 503 retry", async () => {
+    const redirect = new Response(null, { status: 302, headers: { location: "/Home/SearchResult", "set-cookie": "s=1" } });
+    const fn = stub(new Response("busy", { status: 503 }), redirect, new Response("ok"));
+    await expect(makeFetchJson({ retryDelayMs: 0 })("https://vyhledavac.cak.cz/", { method: "POST", headers: { accept: "text/html" }, body: "x" })).resolves.toBe("ok");
+    expect(fn).toHaveBeenCalledTimes(3);
+  });
+
   it("adds no authorization header without a token", async () => {
     const fn = stub(Response.json({}));
     await makeFetchJson()("https://api.github.com/users/x");

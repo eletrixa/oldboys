@@ -24,7 +24,7 @@ import { czRegistries, digestOf } from "@/recipe/sources/cz-registries";
 import { isir } from "@/recipe/sources/cz-registries/isir";
 import { justicePersons } from "@/recipe/sources/cz-registries/justice";
 import { police } from "@/recipe/sources/cz-registries/police";
-import { labelled, personName } from "@/recipe/sources/cz-registries/shared";
+import { labelled, namesMatch, personName } from "@/recipe/sources/cz-registries/shared";
 import { hiringRecipe } from "@/recipe/goals/hiring";
 import { baseContext } from "./fakes";
 
@@ -37,6 +37,8 @@ describe("personName", () => {
     expect(personName("Ing. Jan Novák, Ph.D.")).toEqual({ full: "Jan Novák", first: "Jan", last: "Novák" });
     expect(personName("Anna Marie Dvořáková")).toMatchObject({ first: "Anna", last: "Dvořáková" });
     expect(personName("Madonna")).toBeNull();
+    expect(personName("Ingrid Nováková")).toMatchObject({ first: "Ingrid", last: "Nováková" });
+    expect(personName("Drahomíra Dr. Archibald")).toMatchObject({ first: "Drahomíra", last: "Archibald" });
   });
 });
 
@@ -52,6 +54,8 @@ describe("requests", () => {
     const law = czRegistries.requests(baseContext({ role: "Advokát" }), step);
     expect(law.length).toBe(eng.length + 1);
     expect(czRegistries.requests(baseContext({ subject: "Cher" }), step)).toEqual([]);
+    expect(czRegistries.skipReason?.(baseContext({ subject: "Cher" }))).toContain("given name and surname");
+    expect(czRegistries.skipReason?.(baseContext())).toBeNull();
   });
 });
 
@@ -86,7 +90,7 @@ describe("parsers", () => {
     const a = police.parse(fixture("police.html"), { full: "Marek Novák", first: "Marek", last: "Novák" });
     expect(a.hits).toHaveLength(1);
     expect(a.hits[0]).toMatchObject({ status: "wanted", born: "13. 01. 1972" });
-    expect(a.hits[0]?.url).toMatch(/patrani-osoby\/\?id=\d+$/);
+    expect(a.hits[0]?.url).toMatch(/patrani-osoby\?id=\d+$/);
     expect(police.parse(fixture("police.html"), { full: "Zdeněk Novák", first: "Zdeněk", last: "Novák" }).hits[0]?.label).toContain("Zdeněk Novák");
     expect(police.parse(fixture("police.html"), jana).hits).toEqual([]);
   });
@@ -110,11 +114,17 @@ describe("parsers", () => {
       ],
     };
     const a = aresPerson.parse(payload, { full: "Jan Novák", first: "Jan", last: "Novák" });
-    expect(a.total).toBe(428);
+    expect(a.total).toBe(1);
     expect(a.hits).toHaveLength(1);
     expect(a.hits[0]).toMatchObject({ status: "active", url: "https://ares.gov.cz/ekonomicke-subjekty?ico=00719331" });
     const req = aresPerson.request(jana);
     expect(req.via === "fetch" ? req.init?.body : "").toContain('"pravniForma":["101"]');
+  });
+
+  it("namesMatch takes hyphenated surnames and ignores diacritics", () => {
+    expect(namesMatch("JANA NOVÁKOVÁ-SVOBODOVÁ", { full: "Jana Nováková-Svobodová", first: "Jana", last: "Nováková-Svobodová" })).toBe(true);
+    expect(namesMatch("Jana Novakova", { full: "Jana Nováková", first: "Jana", last: "Nováková" })).toBe(true);
+    expect(namesMatch("Jana Nováková", { full: "Jan Novák", first: "Jan", last: "Novák" })).toBe(false);
   });
 
   it("labelled pairs label lines with the values that follow", () => {

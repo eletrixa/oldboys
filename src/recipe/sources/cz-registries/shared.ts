@@ -21,7 +21,8 @@ import type { CollectorRequest } from "@/recipe/sources/types";
 
 export type PersonName = { full: string; first: string; last: string };
 
-const TITLES = /\b(ing|mgr|bc|judr|mudr|mddr|mvdr|phdr|rndr|phd|ph\.d|csc|drsc|dr|prof|doc|dis|mba|llm|ll\.m|arch|bca|mga|thdr|paeddr|pharmdr)\.?,?/gi;
+// Whole words only (a trailing boundary): "Ing." goes, "Ingrid" and "Drahomíra" stay.
+const TITLES = /\b(ing|mgr|bc|judr|mudr|mddr|mvdr|phdr|rndr|ph\.?d|csc|drsc|dr|prof|doc|dis|mba|ll\.?m|arch|bca|mga|thdr|paeddr|pharmdr)\b\.?,?/gi;
 
 export function personName(subject: string): PersonName | null {
   const tokens = subject
@@ -71,11 +72,13 @@ export function tidyName(s: string): string {
     .replace(/(^|[\s-])(\p{L})/gu, (m) => m.toUpperCase());
 }
 
-/** The hit names the same person as the query: both tokens present as whole words, diacritics- and case-insensitive. */
+const fold = (s: string) => s.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
+const words = (s: string) => fold(s).split(/[^a-z0-9]+/).filter((w) => w !== "");
+
+/** The hit names the same person as the query: every word of the given name and of the surname (a hyphenated one has two) is a whole word of the hit, diacritics- and case-insensitive. */
 export function namesMatch(hitName: string, name: PersonName): boolean {
-  const fold = (s: string) => s.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
-  const words = new Set(fold(hitName).split(/[^a-z0-9]+/));
-  return words.has(fold(name.first)) && words.has(fold(name.last));
+  const have = new Set(words(hitName));
+  return [...words(name.first), ...words(name.last)].every((w) => have.has(w));
 }
 
 export type Answer = { hits: RegistryHit[]; total: number | null; note: string | null };

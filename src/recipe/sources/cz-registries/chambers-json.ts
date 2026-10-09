@@ -33,7 +33,8 @@ export const cka: RegistrySource = {
       .filter((i) => namesMatch(`${i.firstname ?? ""} ${i.lastname ?? ""}`, name))
       .map((i) => ({
         label: `${i.title ?? `${i.firstname ?? ""} ${i.lastname ?? ""}`} — authorised architect no. ${i.certification_number ?? "?"}, ${i.contact_town ?? "town unknown"}`,
-        url: i["@id"],
+        // "@id" of a ++api++ answer is the JSON URL; the human page is the same path without the API prefix
+        url: i["@id"].replace("/++api++", ""),
         status: i.review_state === "approved" ? "listed" : (i.review_state ?? null),
         born: null,
       }));
@@ -62,6 +63,6 @@ export const csk: RegistrySource = {
       const where = [m.workplace?.name, m.workplace?.address?.print].filter((x): x is string => typeof x === "string" && x !== "").join(", ");
       return { label: `${(m.full_name ?? "").replace(/\s+/g, " ").trim()} — dentist, member of the Czech Dental Chamber${where === "" ? "" : `, ${where}`}`, url: "https://www.dent.cz/zubni-lekari", status: "member", born: null };
     });
-    return { hits, total: Math.max(hits.length, r.data.pagination?.object_count ?? 0), note: null };
+    return { hits, total: hits.length, note: null };
   },
 };

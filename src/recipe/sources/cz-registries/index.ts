@@ -82,6 +82,7 @@ export const czRegistries: Collector = {
     const a = source.parse(payload, name);
     return [{ url: source.url(name), excerpt: clip(sentence(source, name, a)), raw: { registry: source.id, ...a }, identity: "unverified" as const }];
   },
+  skipReason: (ctx) => (personName(ctx.subject) === null ? "name could not be split into given name and surname" : null),
   digest: (fetched, ctx) => digestOf(fetched, ctx),
 };
 
