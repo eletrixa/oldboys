@@ -360,3 +360,6 @@ Each agent appends: what it starts, progress, what it finishes. Newest at the bo
 
 ## 2026-10-09 · privacy-logout-agent (Minas)
 - Started: 05:32. Briefs-in-progress tray only for a signed-in user; logout clears the tray list, operator token and operator name from the tab.
+
+## 2026-10-09 · guide-walk agent (Minas)
+- Started: 05:35. Simulated first-time non-technical recruiter walk on production with /guide; copy-only fixes; result in docs/usability/first-brief.md and JURY.md.
