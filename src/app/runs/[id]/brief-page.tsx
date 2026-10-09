@@ -24,7 +24,8 @@
  *
  * Design constraints:
  * - Describes the research and the process, never scores the candidate; phone answers are always "not public evidence"
- * - The phone panel and the kit sidebar stay English (lang="en") except "About this research"; everything else follows the report language
+ * - Everything follows the report language, the phone panel and the kit sidebar too (`report.t.call`, `report.t.kit`);
+ *   DeleteCard is shared with the running / failed views and stays English (lang="en")
  */
 "use client";
 
@@ -150,9 +151,7 @@ function BriefMain({ state, brief, calls, confirmation, first }: { state: RunSta
           <RegistryChecksCard checks={state.registry_checks} />
         </TabPanel>
         <TabPanel k="call">
-          <div lang={english}>
-            <CallPanel state={state} onChanged={calls.reload} />
-          </div>
+          <CallPanel state={state} onChanged={calls.reload} />
         </TabPanel>
         <TabPanel k="sources">
           <ConfirmedProfiles candidates={state.candidates} />
@@ -247,7 +246,7 @@ function BriefShell({
   language: ReturnType<typeof useReportLanguage>;
 }): React.JSX.Element {
   const report = useReport();
-  const { ui } = report.t;
+  const { ui, kit } = report.t;
   const calls = useRunCalls(state.id, true);
   const call = calls.data === null ? null : latestAnswered(calls.data.calls);
   const merged = state.candidates.filter((c) => c.decision === "merge").length;
@@ -290,17 +289,19 @@ function BriefShell({
       </header>
       <div className="flex flex-col gap-10 lg:grid lg:grid-cols-[minmax(0,1fr)_300px] lg:items-start lg:gap-10">
         <BriefMain state={state} brief={brief} calls={calls} confirmation={confirmation} first={first} />
-        <aside className="flex flex-col gap-6 lg:sticky lg:top-6" lang="en" aria-label="Interview kit and research details">
+        <aside className="flex flex-col gap-6 lg:sticky lg:top-6" aria-label={kit.asideLabel}>
           <KitActions state={state} language={language.exports} />
           <section className={`${CARD} flex flex-col gap-6`}>
             <AboutResearch state={state} id={state.id} />
           </section>
           <section className="rounded-2xl border border-conflict/40 px-5 pb-4 print:hidden">
-            <DeleteCard runId={state.id} onDeleted={onDeleted} />
-            <p className="text-xs text-muted">Do this when the candidate is rejected.</p>
+            <div lang={report.lang === "en" ? undefined : "en"}>
+              <DeleteCard runId={state.id} onDeleted={onDeleted} />
+            </div>
+            <p className="text-xs text-muted">{kit.deleteWhen}</p>
           </section>
-          <p className={`${CARD_SAGE} text-sm text-ink`}>Radar prepares evidence and never scores people. A person makes every decision.</p>
-          <Link href="/briefs" className={`${LINK} w-fit text-sm print:hidden`}>My briefs</Link>
+          <p className={`${CARD_SAGE} text-sm text-ink`}>{kit.neverScores}</p>
+          <Link href="/briefs" className={`${LINK} w-fit text-sm print:hidden`}>{kit.allBriefs}</Link>
         </aside>
       </div>
       <KitActions state={state} language={language.exports} layout="bar" />
@@ -321,9 +322,7 @@ export function BriefView({ state }: { state: RunState }): React.JSX.Element | n
         <div id="brief" lang={language.report.lang === "en" ? undefined : language.report.lang} className="flex scroll-mt-6 flex-col gap-6">
           <LangSwitch runId={state.id} language={language} />
           <BriefMain state={state} brief={brief} calls={calls} confirmation={null} first="" />
-          <div lang="en">
-            <KitActions state={state} language={language.exports} />
-          </div>
+          <KitActions state={state} language={language.exports} />
         </div>
       </BriefNavContext>
     </ReportContext>
