@@ -11,6 +11,8 @@
  * - useReportLanguage: the viewer's choice in localStorage (try/catch, memory fallback), and for CZ one
  *   POST /api/runs/:id/translate per page view (the server caches it per brief); the brief stays English until the
  *   translation arrives and whenever it fails
+ * - exports: a Report in the chosen language with the translated texts once loaded, so the exports follow the switch
+ *   at once and never wait for the translation (Czech fixed lines with English texts before it arrives or on failure)
  * - LangSwitch: "EN | CZ" (aria-pressed, 44px targets, same look as the candidate notice switch), "Překládám…",
  *   errors in plain words with a retry, a login link on 401, and the "quotes stay in the original" note
  *
@@ -103,6 +105,8 @@ export type ReportLanguage = {
   chosen: ReportLang;
   choose: (lang: ReportLang) => void;
   report: Report;
+  /** What the exports are built in: the chosen language, translated texts once they are here. */
+  exports: Report;
   loading: boolean;
   outcome: Outcome | null;
   retry: () => void;
@@ -126,11 +130,13 @@ export function useReportLanguage(runId: string): ReportLanguage {
   }, [chosen, done, runId, attempt]);
 
   const outcome = chosen === "cs" && result !== null && result.attempt === attempt ? result.outcome : null;
-  const report = outcome?.kind === "ready" ? makeReport("cs", outcome.texts) : ENGLISH_REPORT;
+  const texts = outcome?.kind === "ready" ? outcome.texts : null;
+  const report = texts !== null ? makeReport("cs", texts) : ENGLISH_REPORT;
   return {
     chosen,
     choose: storeLang,
     report,
+    exports: makeReport(chosen, texts),
     loading: chosen === "cs" && !done,
     outcome,
     retry: () => {

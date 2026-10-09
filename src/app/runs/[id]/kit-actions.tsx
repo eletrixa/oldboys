@@ -3,12 +3,17 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/runs/[id]/kit-actions.tsx
- * Deps:    react, ../../ui (Radar tokens), ./call-panel (types), ./interview-kit, ./candidate-copy, ./ats-note, ./reference-check, ./kit-review-card, ./invite-form, ./report-lang (LANG_BTN)
- * Tested:  n/a (the texts are tested in __tests__/{interview-kit,candidate-copy,ats-note,reference-check}.test.ts)
+ * Deps:    react, ../../ui (Radar tokens), ./call-panel (types), ./interview-kit, ./candidate-copy, ./ats-note, ./reference-check, ./kit-review-card, ./invite-form, ./report-lang (LANG_BTN), ./i18n (Report)
+ * Tested:  n/a (the texts are tested in __tests__/{interview-kit,candidate-copy,ats-note,reference-check,interview-invite,export-text}.test.ts)
  *
  * Key responsibilities:
  * - KitActions: build the kit (generatedAt = now) or the candidate notice at click time, copy it or download it as .md
- * - Candidate notice: an "EN | CZ" switch inside the disclosure (local state, default EN) picks the language of the copied and downloaded notice
+ * - Report language (idea #24 follow-up): the kit, ATS note, reference questions, calendar invite and open points are
+ *   built with the Report of the brief's EN | CZ switch (`language` = useReportLanguage().exports, one source of truth);
+ *   Czech downloads get a "-cs" file name; before the translation arrives (or when it failed) they use the Czech fixed
+ *   lines with English texts, so a copy is never blocked
+ * - Candidate notice: an "EN | CZ" switch inside the disclosure picks the language of the copied and downloaded notice;
+ *   it starts at the report language until the recruiter picks one
  * - Copy for ATS: a short plain-text note (atsNote) with the link to this brief, for pasting into any ATS card
  * - Copy reference questions: research gaps as plain-text questions for a former manager or colleague (idea #18)
  * - KitReviewCard below the row: paste the filled kit back after the interview to see the open points (idea #23, client only)
@@ -16,7 +21,6 @@
  * - One top-aligned row: primary copy button + "More exports" disclosure (group/chevron from ui.tsx); opening it never moves the button
  * - One sr-only role="status" span reports "Copied" / "Copy failed" for the last copy that ran; that button's label shows it too for 2 s
  * - EN/CZ buttons are 44px targets (LANG_BTN, shared with the report language switch); the row carries the brief tail's divider
- * - The exports stay English when the brief is shown in Czech (idea #24 covers the page only)
  * - The kit fetches GET /api/runs/:id/calls at click time for the phone verification section; on any error
  *   the kit is built without it
  *
@@ -37,6 +41,7 @@ import { referenceQuestions } from "./reference-check";
 import { KitReviewCard } from "./kit-review-card";
 import { InviteForm } from "./invite-form";
 import { LANG_BTN } from "./report-lang";
+import type { Report } from "./i18n";
 
 const LANGS: readonly { lang: NoticeLang; label: string; title: string }[] = [
   { lang: "en", label: "EN", title: "Candidate notice in English" },
@@ -90,20 +95,22 @@ function downloadText(text: string | null, fileName: string): void {
   }, 0);
 }
 
-export function KitActions({ state }: { state: RunState }): React.JSX.Element | null {
+export function KitActions({ state, language }: { state: RunState; language: Report }): React.JSX.Element | null {
   const [status, setStatus] = useState<CopyStatus>("idle");
   const [last, setLast] = useState<"kit" | "notice" | "ats" | "refs">("kit");
   const setCopy = (which: typeof last) => (s: CopyStatus): void => {
     setLast(which);
     setStatus(s);
   };
-  const [noticeLang, setNoticeLang] = useState<NoticeLang>("en");
+  // null until the recruiter picks a notice language: it then follows the report language.
+  const [pickedNoticeLang, setNoticeLang] = useState<NoticeLang | null>(null);
+  const noticeLang = pickedNoticeLang ?? language.lang;
   if (state.brief === null) return null;
 
-  const kit = async (): Promise<string | null> => interviewKit(state, new Date().toISOString(), await runCalls(state.id));
+  const kit = async (): Promise<string | null> => interviewKit(state, new Date().toISOString(), await runCalls(state.id), language);
   const notice = (): string | null => candidateCopy(state, noticeLang);
-  const ats = (): string | null => atsNote(state, `${window.location.origin}/runs/${state.id}`);
-  const refs = (): string | null => referenceQuestions(state);
+  const ats = (): string | null => atsNote(state, `${window.location.origin}/runs/${state.id}`, language);
+  const refs = (): string | null => referenceQuestions(state, language);
 
   const item = "w-full justify-start";
   const exportBtn = `${BTN_QUIET} ${item}`;
@@ -119,7 +126,7 @@ export function KitActions({ state }: { state: RunState }): React.JSX.Element | 
             More exports
           </summary>
           <div className="mt-2 flex flex-col divide-y divide-divider rounded-lg border border-divider bg-surface">
-            <button type="button" className={exportBtn} onClick={() => void kit().then((text) => { downloadText(text, kitFileName(state)); })}>
+            <button type="button" className={exportBtn} onClick={() => void kit().then((text) => { downloadText(text, kitFileName(state, language.lang)); })}>
               Download .md
             </button>
             <div className="flex items-center gap-2 px-3 py-1">
@@ -154,8 +161,8 @@ export function KitActions({ state }: { state: RunState }): React.JSX.Element | 
           </div>
         </details>
       </div>
-      <KitReviewCard />
-      <InviteForm state={state} />
+      <KitReviewCard lang={language.lang} />
+      <InviteForm state={state} language={language} />
       <span role="status" className="sr-only">
         {status === "idle" ? "" : STATUS_LABEL[status]}
       </span>
