@@ -149,7 +149,7 @@ function global:cheatoldboys {
     Write-Host "    POST /api/intake/startupjobs/<token>   " -NoNewline -ForegroundColor Green
     Write-Host "StartupJobs webhook (test button sends test:true)" -ForegroundColor White
     Write-Host "    GET /api/intake/applications           " -NoNewline -ForegroundColor Green
-    Write-Host "Queue, last 200 (Bearer RUN_TOKEN); UI at /intake" -ForegroundColor White
+    Write-Host "Queue, last 200 (Bearer RUN_TOKEN); no UI page, bound tags show on the position page" -ForegroundColor White
     Write-Host "    GET|POST /api/intake/tags              " -NoNewline -ForegroundColor Green
     Write-Host "List / create tag -> role (Bearer RUN_TOKEN)" -ForegroundColor White
     Write-Host "    jobs+<tag>@asajj.cz                    " -NoNewline -ForegroundColor Green

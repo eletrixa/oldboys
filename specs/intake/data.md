@@ -41,7 +41,7 @@ ALTER TABLE investigations ADD COLUMN application_id TEXT;   -- set by startRun 
 
 `via` (0006) has no CHECK; the new value is `'intake'`.
 
-`idx_applications_received` covers `(received_at, id)` so the `/intake` list query (`ORDER BY received_at DESC, id DESC`) reads the index in order. 0009 is not applied remotely yet, so the migration is edited in place rather than followed by a new one.
+`idx_applications_received` covers `(received_at, id)` so the queue query of `GET /api/intake/applications` (`ORDER BY received_at DESC, id DESC`) reads the index in order. 0009 is not applied remotely yet, so the migration is edited in place rather than followed by a new one.
 
 ## `src/domain/application.ts` (pure, Zod 4)
 

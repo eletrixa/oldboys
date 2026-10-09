@@ -1,4 +1,6 @@
-# Unit: operator UI (`/intake`, `GET /api/intake/applications`, run banner)
+# Unit: operator UI (`GET /api/intake/applications`, tags API, run banner)
+
+> **2026-10-09: the `/intake` page is removed.** It asked for the team `RUN_TOKEN` inside the recruiter UI and duplicated the position page (bound tags: pooled applications, the bind form, run links). `page.tsx`, `intake-view.tsx`, `intake-tables.tsx`, `tag-form.tsx`, `src/app/_lib/operator-token.tsx` and the "Applications" nav link are gone, and `shapeRow` left `intake-rows.ts`. Applications on a tag without a position and `unmatched` ones are read from `GET /api/intake/applications` (bearer); a tag without a position is created with `POST /api/intake/tags` or SQL. The API sections below still hold; the page sections are history.
 
 ## Files
 - `src/app/api/intake/applications/route.ts` (GET, bearer `RUN_TOKEN` like `GET /api/roles`)
@@ -13,8 +15,8 @@ Last 200 rows: `id, source, tag, name, email, status, run_id, note, received_at`
 - `GET` -> `{ tags: [{tag, role, goal, startupjobs_offer_id, created_at}] }`, newest first.
 - `POST {tag, role, goal?, startupjobsOfferId?}`: the tag is trimmed and lowercased, then checked against `IntakeTag`; role 1..300; goal `hiring` only (default; `due-diligence` is a 400 because the funnel has no subject + anchor); `startupjobsOfferId` optional, <= 40. `201` with the stored row, `400` invalid body (`parseJsonBody`), `409` when the tag exists or the StartupJobs offer id is already mapped (decided by the D1 UNIQUE constraint, not a pre-check). Both methods need the `RUN_TOKEN` bearer.
 
-## `/intake` page
+## `/intake` page (removed 2026-10-09)
 Columns: received (UTC `YYYY-MM-DD HH:MM`), tag, source, name (email under it), status badge, run link (`/runs/<id>`) when present, note (truncated at 80 characters, full on title). Empty state: "No applications yet. Point a job posting at /apply/<tag> or jobs+<tag>@asajj.cz." Tags section: table + create form. No ranking, no scores.
 
 ## Tests
-- Pure helpers only (the label and tone maps, date format, row shaping, the run-page line) in `src/app/intake/__tests__/intake-rows.test.ts`; the tag body schema and duplicate classifier in `src/app/api/intake/tags/__tests__/tag-body.test.ts`. Routes exercised by the QA pass (Playwright) rather than unit tests, like `/api/roles`.
+- Pure helpers only (the label and tone maps, date format, the run-page line) in `src/app/intake/__tests__/intake-rows.test.ts`; the tag body schema and duplicate classifier in `src/app/api/intake/tags/__tests__/tag-body.test.ts`. Routes exercised by the QA pass (Playwright) rather than unit tests, like `/api/roles`.
