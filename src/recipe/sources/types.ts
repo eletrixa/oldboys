@@ -30,6 +30,7 @@
 import type { ChallengeRecord } from "@/domain/challenge";
 import type { Brief, Candidate, Claim, Gap, GoalId, Source, SourceIdentity } from "@/domain/claim";
 import type { Family } from "@/domain/position";
+import type { TregRequest } from "@/domain/ports";
 import type { Question, Step } from "@/recipe/step";
 
 export const EXCERPT_MAX = 2000;
@@ -56,7 +57,7 @@ export type StepContext = {
 export type CollectorRequest =
   | { via: "actor"; actor: string; input: Record<string, unknown>; maxTotalChargeUsd: number; timeoutSecs: number }
   | { via: "fetch"; url: string; init?: { method?: string; headers?: Record<string, string>; body?: string } }
-  | { via: "treg"; endpoint: string; method: "GET" | "POST"; params: Record<string, string | number | boolean | string[]>; maxCostUsd: number };
+  | ({ via: "treg" } & TregRequest);
 
 export type ParsedSource = {
   url: string;

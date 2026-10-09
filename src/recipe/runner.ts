@@ -93,7 +93,7 @@ async function perform(req: CollectorRequest, ports: Ports): Promise<{ payload: 
     case "treg":
       // followUp waves skip the up-front TREG_TOKEN filter, so the port can still be null here
       if (ports.callTreg === null) throw new Error("TREG_TOKEN not set");
-      return ports.callTreg({ endpoint: req.endpoint, method: req.method, params: req.params, maxCostUsd: req.maxCostUsd });
+      return ports.callTreg(req);
     case "fetch":
       return { payload: await ports.fetchJson(req.url, req.init), cost_usd: 0 };
   }
@@ -126,13 +126,12 @@ export async function collectWith(collector: Collector, step: Step, ctx: StepCon
     if (requests.length === 0) return out;
   }
   // An enriching collector stores its page beside the earlier search hit of the same URL; others keep one source per URL per run
-  const seen = new Set(collector.enriches === true ? [] : ctx.sources.map((s) => canonicalUrl(s.url)));
   const existing = new Map(ctx.sources.map((s) => [canonicalUrl(s.url), s]));
+  const seen = new Set(collector.enriches === true ? [] : existing.keys());
   const done: Fetched[] = [];
   let parsedHits = 0;
   let deduped = 0;
   let replaced = 0;
-  let tregDropNoted = false; // one "run budget reached" per step however many treg requests are dropped
   const attempt = (req: CollectorRequest): Promise<Attempt> => perform(req, ports).then((ok) => ({ ok }), (error: unknown) => ({ error }));
   // Applies one performed request: tallies, parse, dedup, store. Called in request order whatever order the fetches finished in.
   const apply = async (req: CollectorRequest, res: Attempt): Promise<void> => {
@@ -207,17 +206,16 @@ export async function collectWith(collector: Collector, step: Step, ctx: StepCon
       const nextActor = queue.findIndex((r) => r.via === "actor");
       const taken = queue.splice(0, Math.min(FETCH_CONCURRENCY, nextActor === -1 ? queue.length : nextActor));
       // treg spend is only known after the call: reserve each request's cap against the USD budget up front
-      let reserved = 0;
-      const chunk = taken.filter((r) => {
-        if (r.via !== "treg") return true;
-        if (ctx.spent.usd + out.cost_usd + reserved + r.maxCostUsd > ctx.budget.usd) {
-          if (!tregDropNoted) out.notes.push("run budget reached");
-          tregDropNoted = true;
-          return false;
+      let room = ctx.budget.usd - ctx.spent.usd - out.cost_usd;
+      const chunk: CollectorRequest[] = [];
+      for (const r of taken) {
+        if (r.via === "treg") {
+          if (r.maxCostUsd > room) continue;
+          room -= r.maxCostUsd;
         }
-        reserved += r.maxCostUsd;
-        return true;
-      });
+        chunk.push(r);
+      }
+      if (chunk.length < taken.length && !out.notes.includes("run budget reached")) out.notes.push("run budget reached");
       for (const { req, res } of await Promise.all(chunk.map(async (req) => ({ req, res: await attempt(req) })))) await apply(req, res);
     }
   };

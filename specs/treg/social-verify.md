@@ -7,7 +7,7 @@ Plan: `plans/016-treg-enrichment/00-SYNTHESIS.md`. Pure collector, no fetch; the
 - Feeds `ProfileFacts[]` (digest) to the profile-signals card; `mergeAccounts` combines both readings.
 
 ## Files
-- `src/recipe/sources/treg/social-verify.ts` (`tregSocialVerify`), `social-readers.ts` (`READERS`: linkedin, x, youtube, facebook and the merged table), `social-readers-tikhub.ts` (`TIKHUB_READERS`: instagram, tiktok), `social-account.ts` (`Account`, `Reader`, `TregParams`, helpers).
+- `src/recipe/sources/treg/social-verify.ts` (`tregSocialVerify`), `social-readers.ts` (`READERS`: linkedin, x, youtube, facebook and the merged table), `social-readers-tikhub.ts` (`TIKHUB_READERS`: instagram, tiktok), `social-account.ts` (`Read`, `Reader`, helpers).
 - Test: `src/recipe/__tests__/treg-social-verify.test.ts`. Consumers: `src/domain/profile-facts.ts`, `src/domain/profile-signals.ts` (`mergeAccounts`).
 
 ## Inputs
@@ -33,7 +33,7 @@ Requests, one per merged candidate per platform, all `{ via: "treg", maxCostUsd:
 - `parse`: one `ParsedSource` per successful read:
   - `url` = canonical profile URL (`https://www.instagram.com/<h>/`, `https://www.tiktok.com/@<h>`, `https://x.com/<h>`, `https://www.youtube.com/@<h>` or `/channel/<id>`, the given LinkedIn/Facebook URL).
   - `excerpt` = `clip(plain sentences)`: `The <Platform> <kind> @<handle> (<name>) has N followers, follows N accounts, has N connections and has N <posts|videos>.`, then `Verified badge: yes|no.`, `Premium: …`, `Open to work: …`, `Created: …`, `The earliest listed position starts in YYYY.`, platform extras (Facebook `Category:`, `The page has N likes.`, `Website:`), `Bio: …`, and a closing `Read by <provider> via treg …`. Every number the read has is in a sentence so a FACT can quote it; the provider name (Fetchin, TikHub, AnyAPI, ScrapeCreators) is always present. Kind: profile (linkedin), account (instagram, tiktok, x, youtube), page (facebook).
-  - `raw` = `{ endpoint, ...Account }`, allow-listed fields only.
+  - `raw` = `{ endpoint, ...Read }`, allow-listed fields only.
   - `identity` = `identityFor(ctx, url)`.
   - Because `enriches: true`, the runner stores this page as a second Source beside the Apify one for the same URL.
 - `digest`: `ProfileFacts[]` (via `digestOf`) for accounts with `identityFor === "merged"` only, deduped by lower-cased profile URL; `source_url` = `https://treg.to/call/<endpoint>?<params>` built from request params only (the token travels in a header and never appears); `handle` from the request, never the payload.

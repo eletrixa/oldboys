@@ -2,7 +2,7 @@
 
 ## Purpose
 - Before the identity lineup, find the candidate's other public accounts (x, github, facebook) from the confirmed LinkedIn profile, so the lineup has hits that cross-link to a merged profile.
-- Dossier: `plans/016-treg-enrichment/00-SYNTHESIS.md` (step `treg_person_enrich`, hiring search pool). Code: `src/recipe/sources/treg/person-enrich.ts` (`tregPersonEnrich: Collector`, `normaliseSocialUrl`). Tests: `src/recipe/__tests__/treg-search.test.ts`.
+- Dossier: `plans/016-treg-enrichment/00-SYNTHESIS.md` (step `treg_person_enrich`, hiring search pool). Code: `src/recipe/sources/treg/person-enrich.ts` (`tregPersonEnrich: Collector`). Tests: `src/recipe/__tests__/treg-search.test.ts`.
 - Pure collector: no fetch; the runner executes the `via: "treg"` request through `Ports.callTreg`.
 
 ## Inputs
@@ -25,7 +25,7 @@
 - Allow-listed `Person` fields only (Zod, every field `nullish`): `name`, `first_name`, `last_name`, `headline`, `title`, `linkedin_url`, `twitter_url`, `github_url`, `facebook_url`, `photo_url`, `city`, `country`, `organization.name`, `employment_history[].{title, organization_name, start_date, end_date}`. Anything else (emails, phones, `personal_*`, demographics, nested org phones, history emails) is dropped by the parse and never reaches `raw`.
 - Returns `[]` when the payload is not `{ person: object }`, `person` is null/missing, a field has the wrong type, the confirmed LinkedIn URL is missing, or no social URL survives normalisation.
 - One `ParsedSource` per distinct normalised URL from `twitter_url`, `github_url`, `facebook_url` (in that order, deduplicated):
-  - `url`: `normaliseSocialUrl(value)`.
+  - `url`: the canonical profile URL (below).
   - `raw`: the allow-listed person record.
   - `identity`: `identityFor(ctx, url)`; in practice `"unverified"` (a provider's link alone never merges).
   - `excerpt` (`clip`ped, lines joined with `\n`, empty lines omitted):
@@ -36,13 +36,11 @@
     5. Up to 5 history lines `<title> @ <org> (<start>–<end or "now">)`, only for entries with a title or organisation.
 - Same excerpt on every Source of the payload.
 
-### normaliseSocialUrl(raw)
-- Trimmed; not a parseable absolute URL: `null`; empty path: `null`.
-- Host lower-cased; a leading `www.` is stripped for github, twitter, x and facebook only.
-- `twitter.com` and `x.com`: `https://x.com/<first path segment>`.
-- `github.com`: `https://github.com/<first path segment>` (repository paths dropped).
-- `facebook.com` keeps its full path and, for `profile.php`, the `?id=<id>` query; every other query is dropped.
-- Other hosts: `https://<host>/<path segments>`; scheme forced to https, no query, no fragment, no trailing slash.
+### Social URL canonicalisation (internal `socialUrl`)
+- Not a parseable http(s) URL: dropped.
+- Social hosts (`platformOf` not `web`): `canonicalProfile(url)` from `src/recipe/seams/resolve.ts`; kept only when it yields a handle, so group, share and root links (e.g. `facebook.com/groups/...`, `twitter.com/`) are dropped. This is a small intended tightening over the earlier local helper, which kept them; it also drops Facebook vanity names containing a dot, which `canonicalProfile` treats as non-profile.
+- Forms: `https://x.com/<handle>` (twitter.com folded), `https://github.com/<handle>`, `https://www.facebook.com/<name>` or `.../profile.php?id=<id>`.
+- Other hosts: the URL as given minus query, fragment and trailing slash.
 
 ### digest(fetched, ctx)
 - First fetched payload with a person and at least one social URL wins; otherwise `null` (also for `[]`).
@@ -66,5 +64,5 @@
 - parse: one Source per social URL in order (twitter→`https://x.com/janad`, github), line 1 `Jana Dvořáková – Data engineer at Kiwi`, line 2 the literal sentence with the confirmed URL, `Current:`, `Location:` and history lines, identity `unverified`; headline fallback `<title> @ <org>`; name fallbacks (first+last, subject).
 - parse: `raw` contains none of email, `personal_emails`, `primary_phone`, history emails; `[]` for null person, no usable URL, `"nope"`, `null`, `{ person: { name: 5 } }`.
 - parse then `corroboration()`: an enrichment Source for a merged LinkedIn candidate yields reason `cross-link` .
-- normaliseSocialUrl: twitter with query and trailing slash, `www.x.com` with status path, github trailing slash, root path `null`, garbage `null`; `www.github.com/janad` and `github.com/janad/repo` (with or without query) to `https://github.com/janad`.
+- parse-level canonical URLs: twitter with query and trailing slash, `www.x.com` with status path, `www.github.com/janad` and `github.com/janad/repo?tab=x`, facebook name and `profile.php?id=`, other host minus query; root path, `garbage` and `facebook.com/groups/...` yield no Source.
 - digest: full shape, `null` for no person and `[]`; the same dedupe of URLs as parse.

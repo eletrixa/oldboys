@@ -1,3 +1,10 @@
+  it("keeps a dotted Facebook username (jana.dvorakova.9) as a profile, drops a PHP page", () => {
+    const fb = (facebook_url: string) =>
+      tregPersonEnrich.parse({ person: { ...apollo.person, twitter_url: null, github_url: null, facebook_url } }, baseContext({ candidates: [linkedin()] }), step).map((s) => s.url);
+    expect(fb("https://www.facebook.com/jana.dvorakova.9/")).toEqual(["https://www.facebook.com/jana.dvorakova.9"]);
+    expect(fb("https://www.facebook.com/story.php?id=1")).toEqual([]);
+  });
+
 /**
  * Tests for the pre-lineup treg collectors: Apollo person enrichment and Exa people search.
  *
@@ -16,7 +23,7 @@
 import { describe, expect, it } from "vitest";
 import type { Candidate } from "@/domain/claim";
 import { tregPeopleSearch } from "@/recipe/sources/treg/people-search";
-import { normaliseSocialUrl, tregPersonEnrich } from "@/recipe/sources/treg/person-enrich";
+import { tregPersonEnrich } from "@/recipe/sources/treg/person-enrich";
 import { corroboration } from "@/recipe/seams/resolve";
 import { baseContext } from "./fakes";
 
@@ -105,21 +112,23 @@ describe("tregPersonEnrich", () => {
     expect(tregPersonEnrich.parse({ person: { name: 5 } }, ctx, step)).toEqual([]);
   });
 
-  it("normalises social URLs", () => {
-    expect(normaliseSocialUrl("http://twitter.com/janad/?ref=x")).toBe("https://x.com/janad");
-    expect(normaliseSocialUrl("https://www.x.com/janad/status/1")).toBe("https://x.com/janad");
-    expect(normaliseSocialUrl("https://github.com/janad/")).toBe("https://github.com/janad");
-    expect(normaliseSocialUrl("https://twitter.com/")).toBeNull();
-    expect(normaliseSocialUrl("garbage")).toBeNull();
+  it("yields the canonical profile URL for every host", () => {
+    const urls = (twitter_url: string | null, github_url: string | null = null, facebook_url: string | null = null) =>
+      tregPersonEnrich.parse({ person: { ...apollo.person, twitter_url, github_url, facebook_url } }, baseContext({ candidates: [linkedin()] }), step).map((s) => s.url);
+    expect(urls("http://twitter.com/janad/?ref=x")).toEqual(["https://x.com/janad"]);
+    expect(urls("https://www.x.com/janad/status/1")).toEqual(["https://x.com/janad"]);
+    expect(urls(null, "https://www.github.com/janad")).toEqual(["https://github.com/janad"]);
+    expect(urls(null, "https://github.com/janad/repo?tab=x")).toEqual(["https://github.com/janad"]);
+    expect(urls(null, null, "https://www.facebook.com/janad/?ref=x")).toEqual(["https://www.facebook.com/janad"]);
+    expect(urls(null, null, "http://www.facebook.com/profile.php?id=123&ref=x")).toEqual(["https://www.facebook.com/profile.php?id=123"]);
+    expect(urls("https://Example.COM/Jana/?q=1#h")).toEqual(["https://example.com/Jana"]);
   });
 
-  it("yields the canonical profile URL for every host", () => {
-    expect(normaliseSocialUrl("https://www.github.com/janad")).toBe("https://github.com/janad");
-    expect(normaliseSocialUrl("https://github.com/janad/repo")).toBe("https://github.com/janad");
-    expect(normaliseSocialUrl("https://github.com/janad/repo?tab=x")).toBe("https://github.com/janad");
-    expect(normaliseSocialUrl("https://www.facebook.com/jana.d/?ref=x")).toBe("https://facebook.com/jana.d");
-    expect(normaliseSocialUrl("http://www.facebook.com/profile.php?id=123&ref=x")).toBe("https://facebook.com/profile.php?id=123");
-    expect(normaliseSocialUrl("https://Example.COM/Jana/?q=1#h")).toBe("https://example.com/Jana");
+  it("drops links without a profile handle", () => {
+    const urls = (twitter_url: string, facebook_url: string | null = null) =>
+      tregPersonEnrich.parse({ person: { ...apollo.person, twitter_url, github_url: null, facebook_url } }, baseContext({ candidates: [linkedin()] }), step);
+    expect(urls("https://twitter.com/")).toEqual([]);
+    expect(urls("garbage", "https://www.facebook.com/groups/123")).toEqual([]);
   });
 
   it("makes corroboration() report a cross-link to the merged LinkedIn candidate", () => {
@@ -204,7 +213,7 @@ describe("tregPeopleSearch", () => {
 
   it("keeps LinkedIn profiles that spell the full name, drops namesakes and non-profiles, dedupes", () => {
     const out = tregPeopleSearch.parse(exa, baseContext(), step);
-    expect(out.map((s) => s.url)).toEqual(["https://www.linkedin.com/in/jana-dvorakova-123/"]);
+    expect(out.map((s) => s.url)).toEqual(["https://www.linkedin.com/in/jana-dvorakova-123"]);
     const lines = out[0]?.excerpt.split("\n") ?? [];
     expect(lines[0]).toBe("Jana Dvořáková – Senior Data Engineer @ Kiwi.com");
     expect(lines[1]).toBe('Found by Exa people search for "Jana Dvořáková Brno" via treg');
@@ -225,9 +234,9 @@ describe("tregPeopleSearch", () => {
   const parse = (payload: unknown) => tregPeopleSearch.parse(payload, baseContext(), step);
 
   it("accepts only linkedin.com and its subdomains", () => {
-    expect(parse(hit("https://notlinkedin.com/in/x", "Jana Dvořáková"))).toEqual([]);
+    expect(parse(hit("https://notlinkedin.com/in/xy", "Jana Dvořáková"))).toEqual([]);
     expect(parse(hit("https://linkedin.com.evil.io/in/x", "Jana Dvořáková"))).toEqual([]);
-    expect(parse(hit("https://linkedin.com/in/x", "Jana Dvořáková"))).toHaveLength(1);
+    expect(parse(hit("https://linkedin.com/in/xy", "Jana Dvořáková"))).toHaveLength(1);
   });
 
   it("drops LinkedIn paths that are not /in/", () => {
@@ -237,11 +246,11 @@ describe("tregPeopleSearch", () => {
   });
 
   it("uses the entity name only, falling back to the title when the entity name is missing", () => {
-    expect(parse(hit("https://www.linkedin.com/in/x", "Petr Novák", {}, "Jana Dvořáková - CEO"))).toEqual([]);
-    expect(parse(hit("https://www.linkedin.com/in/x", undefined, {}, "Jana Dvořáková - CEO"))).toHaveLength(1);
-    expect(parse(hit("https://www.linkedin.com/in/x", "", {}, "Jana Dvořáková"))).toHaveLength(1);
-    expect(parse(hit("https://www.linkedin.com/in/x", undefined))).toEqual([]);
-    expect(parse({ results: [{ url: "https://www.linkedin.com/in/x", title: "Jana Dvořáková" }] })).toHaveLength(1);
+    expect(parse(hit("https://www.linkedin.com/in/xy", "Petr Novák", {}, "Jana Dvořáková - CEO"))).toEqual([]);
+    expect(parse(hit("https://www.linkedin.com/in/xy", undefined, {}, "Jana Dvořáková - CEO"))).toHaveLength(1);
+    expect(parse(hit("https://www.linkedin.com/in/xy", "", {}, "Jana Dvořáková"))).toHaveLength(1);
+    expect(parse(hit("https://www.linkedin.com/in/xy", undefined))).toEqual([]);
+    expect(parse({ results: [{ url: "https://www.linkedin.com/in/xy", title: "Jana Dvořáková" }] })).toHaveLength(1);
   });
 
   it("omits missing parts of history lines", () => {
@@ -251,7 +260,7 @@ describe("tregPeopleSearch", () => {
       { title: "Dev", company: { name: "Beta" }, dates: { to: "2020" } },
       { title: "CTO", company: { name: "Gamma" }, dates: { from: "2021" } },
     ];
-    const lines = parse(hit("https://www.linkedin.com/in/x", "Jana Dvořáková", { workHistory }))[0]?.excerpt.split("\n") ?? [];
+    const lines = parse(hit("https://www.linkedin.com/in/xy", "Jana Dvořáková", { workHistory }))[0]?.excerpt.split("\n") ?? [];
     expect(lines).toContain("Analyst");
     expect(lines).toContain("Acme (2019–now)");
     expect(lines).toContain("Dev @ Beta");
@@ -260,10 +269,10 @@ describe("tregPeopleSearch", () => {
   });
 
   it("handles a history of only truncation markers and caps history at 4 lines", () => {
-    const only = parse(hit("https://www.linkedin.com/in/x", "Jana Dvořáková", { workHistory: ["… 5 more item(s) truncated", 3] }));
+    const only = parse(hit("https://www.linkedin.com/in/xy", "Jana Dvořáková", { workHistory: ["… 5 more item(s) truncated", 3] }));
     expect(only[0]?.excerpt.split("\n")[0]).toBe("Jana Dvořáková");
     const workHistory = Array.from({ length: 7 }, (_, n) => ({ title: `T${String(n)}`, company: { name: "C" } }));
-    const lines = parse(hit("https://www.linkedin.com/in/x", "Jana Dvořáková", { workHistory }))[0]?.excerpt.split("\n") ?? [];
+    const lines = parse(hit("https://www.linkedin.com/in/xy", "Jana Dvořáková", { workHistory }))[0]?.excerpt.split("\n") ?? [];
     expect(lines.filter((l) => l.startsWith("T"))).toHaveLength(4);
   });
 });

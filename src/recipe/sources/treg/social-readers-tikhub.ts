@@ -14,7 +14,7 @@
  */
 import { z } from "zod";
 import { clipBio, count } from "@/domain/profile-facts";
-import { type Reader, acct, flag, handleReq, nil, num, str, text } from "@/recipe/sources/treg/social-account";
+import { type Reader, bare, flag, nil, num, text } from "@/recipe/sources/treg/social-account";
 
 const Instagram = z.object({
   data: z.object({ data: z.object({ user: z.object({
@@ -37,31 +37,33 @@ const isoDay = (unixSeconds: number | null | undefined): string | null => {
 
 const instagramReader: Reader = {
   platform: "instagram", endpoint: "tikhub.instagram.user.profile", method: "GET", provider: "TikHub", kind: "account", postsLabel: "posts",
-  request: (c) => handleReq(c, "username"),
-  profileUrl: (p) => `https://www.instagram.com/${str(p.username)}/`,
-  read: (payload, p) => {
+  param: () => "username",
+  request: (c) => bare(c.handle) || null,
+  profileUrl: (id) => `https://www.instagram.com/${id}/`,
+  read: (payload, id) => {
     const u = Instagram.safeParse(payload).data?.data?.data?.user;
     if (nil(u)) return null;
-    return acct({
-      handle: str(p.username), name: u.full_name ?? null, bio: clipBio(u.biography), followers: count(u.edge_followed_by?.count),
+    return {
+      handle: id, display_name: u.full_name ?? null, bio: clipBio(u.biography), followers: count(u.edge_followed_by?.count),
       following: count(u.edge_follow?.count), posts: count(u.edge_owner_to_timeline_media?.count), verified: u.is_verified ?? null,
       photo_url: u.profile_pic_url ?? null,
-    });
+    };
   },
 };
 const tiktokReader: Reader = {
   platform: "tiktok", endpoint: "tikhub.tiktok.user.profile", method: "GET", provider: "TikHub", kind: "account", postsLabel: "videos",
-  request: (c) => handleReq(c, "uniqueId"),
-  profileUrl: (p) => `https://www.tiktok.com/@${str(p.uniqueId)}`,
-  read: (payload, p) => {
+  param: () => "uniqueId",
+  request: (c) => bare(c.handle) || null,
+  profileUrl: (id) => `https://www.tiktok.com/@${id}`,
+  read: (payload, id) => {
     const info = TikTok.safeParse(payload).data?.data?.userInfo;
     const u = info?.user;
     if (nil(u)) return null;
-    return acct({
-      handle: str(p.uniqueId), name: u.nickname ?? null, bio: clipBio(u.signature), followers: count(info?.stats?.followerCount),
+    return {
+      handle: id, display_name: u.nickname ?? null, bio: clipBio(u.signature), followers: count(info?.stats?.followerCount),
       following: count(info?.stats?.followingCount), posts: count(info?.stats?.videoCount), verified: u.verified ?? null,
       created_at: isoDay(u.createTime), photo_url: u.avatarLarger ?? null,
-    });
+    };
   },
 };
 

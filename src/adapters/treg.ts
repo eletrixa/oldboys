@@ -19,15 +19,13 @@
  * - A 2xx body that is not JSON throws `treg <endpoint>: invalid JSON <snippet>`
  */
 import { TIMEOUT_MS, UA } from "@/adapters/fetch";
-import type { TregCall } from "@/domain/ports";
+import type { TregCall, TregRequest } from "@/domain/ports";
 
 const TREG_BASE = "https://treg.to/call";
 const SNIPPET_CHARS = 160;
 const MICRO_PER_USD = 1_000_000;
 
-type Params = Parameters<TregCall>[0]["params"];
-
-function tregUrl(endpoint: string, params: Params, method: "GET" | "POST"): string {
+function tregUrl(endpoint: string, params: TregRequest["params"], method: "GET" | "POST"): string {
   const base = `${TREG_BASE}/${endpoint}`;
   if (method === "POST") return base;
   const q = new URLSearchParams();
@@ -52,15 +50,15 @@ export function makeTregCall(token: string): TregCall {
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
     const body = await res.text();
-    const snippet = body.replace(/\s+/g, " ").trim().replaceAll(token, "[token]").slice(0, SNIPPET_CHARS);
-    if (!res.ok) throw new Error(`treg ${endpoint}: HTTP ${String(res.status)} ${snippet}`);
+    const snippet = (): string => body.slice(0, SNIPPET_CHARS * 4).replace(/\s+/g, " ").trim().replaceAll(token, "[token]").slice(0, SNIPPET_CHARS);
+    if (!res.ok) throw new Error(`treg ${endpoint}: HTTP ${String(res.status)} ${snippet()}`);
     const micro = Number(res.headers.get("x-treg-cost-micro") ?? "0");
     const cost_usd = Number.isFinite(micro) ? Math.max(0, micro) / MICRO_PER_USD : 0;
     if (body.trim() === "") return { payload: null, cost_usd };
     try {
       return { payload: JSON.parse(body) as unknown, cost_usd };
     } catch {
-      throw new Error(`treg ${endpoint}: invalid JSON ${snippet}`);
+      throw new Error(`treg ${endpoint}: invalid JSON ${snippet()}`);
     }
   };
 }

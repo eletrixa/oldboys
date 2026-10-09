@@ -96,7 +96,8 @@ export function canonicalProfile(url: string): { url: string; handle: string | n
     if (host.endsWith("facebook.com") || host === "fb.com") {
       const id = u.searchParams.get("id");
       if (seg[0] === "profile.php" && id !== null) return { url: `https://www.facebook.com/profile.php?id=${id}`, handle: id };
-      if (seg[0] === undefined || FB_NOT_PROFILE.has(seg[0].toLowerCase()) || seg[0].includes(".")) return { url, handle: null };
+      // A dotted segment is a username (jana.dvorakova.9) unless it is a PHP page (story.php, photo.php)
+      if (seg[0] === undefined || FB_NOT_PROFILE.has(seg[0].toLowerCase()) || seg[0].endsWith(".php")) return { url, handle: null };
       return { url: `https://www.facebook.com/${clean(seg[0])}`, handle: clean(seg[0]) };
     }
     if (host.endsWith("youtube.com")) {

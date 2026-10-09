@@ -16,65 +16,57 @@
  * - Pure: no fetch; platform and handle come from the request, never from the payload
  * - Sensitive provider fields never reach the excerpt, raw or facts (the readers are allow-lists)
  */
-import { PLATFORM_LABEL, facts } from "@/domain/profile-facts";
+import { PLATFORM_LABEL, type ProfileFacts, facts } from "@/domain/profile-facts";
 import { dedupeBy, digestOf } from "@/recipe/sources/facts";
 import { acceptedCandidates, clip, type Collector, type CollectorRequest, type Fetched, identityFor, type ParsedSource, type StepContext } from "@/recipe/sources/types";
-import type { Account, Reader, TregParams } from "@/recipe/sources/treg/social-account";
+import type { Reader } from "@/recipe/sources/treg/social-account";
 import { READERS } from "@/recipe/sources/treg/social-readers";
 
 const MAX_REQUESTS = 6;
 const MAX_COST_USD = 0.005;
 const yesNo = (v: boolean): string => (v ? "yes" : "no");
-const n = (v: number): string => String(v);
+const when = <T>(v: T | null | undefined, f: (v: T) => string): string[] => (v === null || v === undefined ? [] : [f(v)]);
 
-type Read = { reader: Reader; params: TregParams; url: string; account: Account };
-
-function readerOf(req: CollectorRequest | undefined): { reader: Reader; params: TregParams } | null {
-  if (req?.via !== "treg") return null;
-  const reader = READERS.find((r) => r.endpoint === req.endpoint);
-  return reader === undefined ? null : { reader, params: req.params };
-}
+type Params = Extract<CollectorRequest, { via: "treg" }>["params"];
+type Read = { reader: Reader; params: Params; url: string; a: Partial<ProfileFacts>; extras: string[] };
 
 function readOf(payload: unknown, req: CollectorRequest | undefined): Read | null {
-  const found = readerOf(req);
-  if (found === null) return null;
-  const account = found.reader.read(payload, found.params);
-  return account === null ? null : { ...found, url: found.reader.profileUrl(found.params), account };
+  if (req?.via !== "treg") return null;
+  const reader = READERS.find((r) => r.endpoint === req.endpoint);
+  const id = String(Object.values(req.params)[0] ?? "");
+  const read = reader?.read(payload, id) ?? null;
+  if (reader === undefined || read === null) return null;
+  const { extras = [], ...a } = read;
+  return { reader, params: req.params, url: reader.profileUrl(id), a, extras };
 }
 
-function sentences({ reader, account: a }: Read): string {
+function sentences({ reader, a, extras }: Read): string {
   const label = PLATFORM_LABEL[reader.platform] ?? reader.platform;
-  const subject = `The ${label} ${reader.kind}${a.handle === null ? "" : ` @${a.handle}`}${a.name === null ? "" : ` (${a.name})`}`;
+  const subject = `The ${label} ${reader.kind}${when(a.handle, (h) => ` @${h}`).join("")}${when(a.display_name, (v) => ` (${v})`).join("")}`;
   const parts = [
-    ...(a.followers === null ? [] : [`has ${n(a.followers)} followers`]),
-    ...(a.following === null ? [] : [`follows ${n(a.following)} accounts`]),
-    ...(a.connections === null ? [] : [`has ${n(a.connections)} connections`]),
-    ...(a.posts === null ? [] : [`has ${n(a.posts)} ${reader.postsLabel}`]),
+    ...when(a.followers, (v) => `has ${String(v)} followers`),
+    ...when(a.following, (v) => `follows ${String(v)} accounts`),
+    ...when(a.connections, (v) => `has ${String(v)} connections`),
+    ...when(a.posts, (v) => `has ${String(v)} ${reader.postsLabel}`),
   ];
-  const counts = parts.length === 0 ? [] : [`${subject} ${parts.length === 1 ? (parts[0] ?? "") : `${parts.slice(0, -1).join(", ")} and ${parts.at(-1) ?? ""}`}.`];
   return [
-    ...counts.length === 0 ? [`${subject}.`] : counts,
-    ...(a.verified === null ? [] : [`Verified badge: ${yesNo(a.verified)}.`]),
-    ...(a.premium === null ? [] : [`Premium: ${yesNo(a.premium)}.`]),
-    ...(a.open_to_work === null ? [] : [`Open to work: ${yesNo(a.open_to_work)}.`]),
-    ...(a.created_at === null ? [] : [`Created: ${a.created_at}.`]),
-    ...(a.first_year === null ? [] : [`The earliest listed position starts in ${n(a.first_year)}.`]),
-    ...a.extras,
-    ...(a.bio === null ? [] : [`Bio: ${a.bio}`]),
+    parts.length === 0 ? `${subject}.` : `${subject} ${new Intl.ListFormat("en-GB").format(parts)}.`,
+    ...when(a.verified, (v) => `Verified badge: ${yesNo(v)}.`),
+    ...when(a.premium, (v) => `Premium: ${yesNo(v)}.`),
+    ...when(a.open_to_work, (v) => `Open to work: ${yesNo(v)}.`),
+    ...when(a.created_at, (v) => `Created: ${v}.`),
+    ...when(a.earliest_experience_year, (v) => `The earliest listed position starts in ${String(v)}.`),
+    ...extras,
+    ...when(a.bio, (v) => `Bio: ${v}`),
     `Read by ${reader.provider} via treg (second source; the Apify scrape is the first).`,
   ].join(" ");
 }
 
-const sourceUrl = (endpoint: string, params: TregParams): string =>
+const sourceUrl = (endpoint: string, params: Params): string =>
   `https://treg.to/call/${endpoint}?${new URLSearchParams(Object.entries(params).map(([k, v]) => [k, String(v)])).toString()}`;
 
-/** Platform + the lower-cased handle (channel id, profile URL): the first param is always that identifier. */
-function dedupeKey(r: CollectorRequest): string {
-  if (r.via !== "treg") return "";
-  const id = Object.values(r.params)[0];
-  const platform = READERS.find((x) => x.endpoint === r.endpoint)?.platform ?? r.endpoint;
-  return id === undefined ? "" : `${platform}|${String(id).toLowerCase()}`;
-}
+/** The endpoint maps 1:1 to a platform, so endpoint + lower-cased params is platform + handle (channel id, profile URL). */
+const dedupeKey = (r: CollectorRequest): string => (r.via === "treg" ? `${r.endpoint}|${JSON.stringify(r.params).toLowerCase()}` : "");
 
 export const tregSocialVerify: Collector = {
   id: "treg/social-verify",
@@ -82,15 +74,17 @@ export const tregSocialVerify: Collector = {
   requests: (ctx: StepContext) => {
     const reqs = acceptedCandidates(ctx).flatMap((c): CollectorRequest[] => {
       const reader = READERS.find((r) => r.platform === c.platform);
-      const params = reader?.request(c) ?? null;
-      return reader === undefined || params === null ? [] : [{ via: "treg", endpoint: reader.endpoint, method: reader.method, params, maxCostUsd: MAX_COST_USD }];
+      const id = reader?.request(c) ?? null;
+      return reader === undefined || id === null
+        ? []
+        : [{ via: "treg", endpoint: reader.endpoint, method: reader.method, params: { [reader.param(id)]: id, ...reader.extra }, maxCostUsd: MAX_COST_USD }];
     });
     return dedupeBy(reqs, dedupeKey).slice(0, MAX_REQUESTS);
   },
   skipReason: () => "no confirmed social account to read a second time",
   parse: (payload, ctx, _step, req): ParsedSource[] => {
     const r = readOf(payload, req);
-    return r === null ? [] : [{ url: r.url, excerpt: clip(sentences(r)), raw: { endpoint: r.reader.endpoint, ...r.account }, identity: identityFor(ctx, r.url) }];
+    return r === null ? [] : [{ url: r.url, excerpt: clip(sentences(r)), raw: { endpoint: r.reader.endpoint, ...r.a, extras: r.extras }, identity: identityFor(ctx, r.url) }];
   },
   digest: (fetched: readonly Fetched[], ctx) =>
     digestOf(
@@ -99,12 +93,6 @@ export const tregSocialVerify: Collector = {
         (r) => r.url.toLowerCase(),
       )
         .filter((r) => identityFor(ctx, r.url) === "merged")
-        .map(({ reader, params, url, account: a }) =>
-          facts(reader.platform, url, {
-            handle: a.handle, display_name: a.name, created_at: a.created_at, followers: a.followers, following: a.following, posts: a.posts,
-            connections: a.connections, verified: a.verified, premium: a.premium, open_to_work: a.open_to_work, bio: a.bio, photo_url: a.photo_url,
-            earliest_experience_year: a.first_year, source_url: sourceUrl(reader.endpoint, params),
-          }),
-        ),
+        .map(({ reader, params, url, a }) => facts(reader.platform, url, { ...a, source_url: sourceUrl(reader.endpoint, params) })),
     ),
 };

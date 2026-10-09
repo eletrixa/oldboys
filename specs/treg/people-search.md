@@ -29,7 +29,7 @@ Plan: `plans/016-treg-enrichment/00-SYNTHESIS.md` (step `treg_people_search`, pr
 - `query` = `` `${subject} ${anchor}`.trim() `` (empty anchor gives the subject alone).
 
 ### Sources (`ParsedSource[]`)
-- `url`: `https://www.linkedin.com/in/<slug>/` (canonical; scheme, subdomain such as `cz.`, query and trailing path dropped).
+- `url`: `normalizeLinkedinProfile` (`src/domain/profile-url.ts`): `https://www.linkedin.com/in/<slug>` (lower-cased slug, no trailing slash; scheme, subdomain such as `cz.`, query and extra path dropped). This is the form the other LinkedIn collectors store, so dedup works; a slug under 2 characters is rejected.
 - `excerpt` (`clip`ped), newline-joined, empty lines omitted, in this order:
   1. `<name> – <latest title> @ <latest company>`; with only one of title/company: that part alone; with no work history: `<name>`.
   2. `Found by Exa people search for "<query>" via treg`
@@ -61,6 +61,6 @@ Plan: `plans/016-treg-enrichment/00-SYNTHESIS.md` (step `treg_people_search`, pr
 ## Tests that prove it
 - Request: exact body above for `baseContext()` (`query "Jana Dvořáková Brno"`); empty anchor gives `query "Jana Dvořáková"`.
 - Skips: merged LinkedIn candidate → `[]` and the "already confirmed" reason; `decision: "rejected"` LinkedIn candidate → still one request; blank subject → `[]` and `"no name to search"`.
-- Parse: full-name LinkedIn profile kept with canonical URL (`cz.linkedin.com/in/jana-dvorakova-123?trk=x` → `https://www.linkedin.com/in/jana-dvorakova-123/`); `Jana Dvořák` namesake, `/company/`, non-LinkedIn host dropped; duplicate canonical URL (`Dvořáková, Jana`) emitted once.
+- Parse: full-name LinkedIn profile kept with canonical URL (`cz.linkedin.com/in/jana-dvorakova-123?trk=x` → `https://www.linkedin.com/in/jana-dvorakova-123`); `Jana Dvořák` namesake, `/company/`, non-LinkedIn host dropped; duplicate canonical URL (`Dvořáková, Jana`) emitted once.
 - Excerpt: line 1, line 2 (`Found by Exa people search for "Jana Dvořáková Brno" via treg`), `Location: Brno, Czechia`, `Data Engineer @ Red Hat (2018-01-01–2021-02-01)`, truncation marker skipped, `identity === "unverified"`.
 - Malformed: `null`, `{ results: "x" }`, `{ results: [{ nope: 1 }, 5] }` → `[]`.

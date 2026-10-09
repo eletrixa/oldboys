@@ -34,12 +34,13 @@ export type JsonFetch = (
 ) => Promise<unknown>;
 
 /** One treg.to endpoint call (GET query or POST JSON body) with a per-call cost cap; returns the payload (null = empty body) and the real charge. */
-export type TregCall = (req: {
+export type TregRequest = {
   endpoint: string;
   method: "GET" | "POST";
   params: Record<string, string | number | boolean | string[]>;
   maxCostUsd: number;
-}) => Promise<{ payload: unknown; cost_usd: number }>;
+};
+export type TregCall = (req: TregRequest) => Promise<{ payload: unknown; cost_usd: number }>;
 
 /** One structured LLM call at a declared seam, validated against the given schema. */
 export type LlmCall = <T>(input: {

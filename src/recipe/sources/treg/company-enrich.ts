@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/recipe/sources/treg/company-enrich.ts
- * Deps:    zod, src/recipe/sources/types
+ * Deps:    zod, src/domain/url (httpUrl), src/recipe/sources/types
  * Tested:  src/recipe/__tests__/treg-company.test.ts
  *
  * Key responsibilities:
@@ -19,6 +19,7 @@
  * - A domain with no company behind it answers an empty object, parsed to no source
  */
 import { z } from "zod";
+import { httpUrl } from "@/domain/url";
 import type { Collector, Fetched, ParsedSource, StepContext } from "@/recipe/sources/types";
 import { clip, identityFor } from "@/recipe/sources/types";
 
@@ -44,14 +45,10 @@ const Company = z.object({
 const filled = (x: string | null | undefined): x is string => x !== undefined && x !== null && x !== "";
 
 function anchorDomain(anchor: string): string | null {
-  try {
-    const u = new URL(anchor);
-    if (u.protocol !== "http:" && u.protocol !== "https:") return null;
-    const host = u.hostname.replace(/^www\./, "");
-    return host.includes(".") ? host : null;
-  } catch {
-    return null;
-  }
+  const url = httpUrl(anchor);
+  if (url === null) return null;
+  const host = new URL(url).hostname.replace(/^www\./, "");
+  return host.includes(".") ? host : null;
 }
 
 function read(payload: unknown, ctx: StepContext) {

@@ -7,7 +7,8 @@
  * Tested:  src/recipe/__tests__/batch.test.ts
  *
  * Key responsibilities:
- * - `isPaid`: a step that runs an Apify actor (REST `rest/*`, `ares/*` and `treg/*` collectors never take an Apify slot)
+ * - `isPaid`: a step that runs an Apify actor (REST free REST, Czech registries and treg reads never take an Apify slot:
+ *   `rest/`, `ares/`, `treg/` prefixes; treg spend is USD-gated in the runner)
  * - `nextToStart`: first pending step that may start now: window not full; free steps always; paid steps while paid calls
  *   are left, or when no paid step is running
  *
@@ -19,10 +20,12 @@
  */
 import type { Step } from "@/recipe/step";
 
+// Free REST, Czech registries, and treg reads (USD-gated in the runner, never an Apify run)
+const FREE_ACTOR_PREFIXES = ["rest/", "ares/", "treg/"] as const;
+
 export function isPaid(step: Step): boolean {
   const actor = step.actor ?? "";
-  // treg spend is USD-gated in the runner and is never an Apify run
-  return actor !== "" && !actor.startsWith("rest/") && !actor.startsWith("ares/") && !actor.startsWith("treg/");
+  return actor !== "" && !FREE_ACTOR_PREFIXES.some((p) => actor.startsWith(p));
 }
 
 // ponytail: one paid call per paid step; a multi-query step can still overshoot by its extra calls, the runner's

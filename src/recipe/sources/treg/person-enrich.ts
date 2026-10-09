@@ -3,13 +3,13 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/recipe/sources/treg/person-enrich.ts
- * Deps:    zod, src/recipe/sources/types (acceptedCandidates, clip, identityFor, platformOf)
+ * Deps:    zod, src/domain/url (httpUrl), src/recipe/seams/resolve (canonicalProfile), src/recipe/sources/text (txt), src/recipe/sources/types
  * Tested:  src/recipe/__tests__/treg-search.test.ts
  *
  * Key responsibilities:
  * - Runs before the lineup, only when a LinkedIn profile is merged (the given profile): one `apollo.people.enrich`
  *   call with that URL (cost $0.026, capped at $0.03)
- * - One Source per twitter / github / facebook URL Apollo lists: canonical profile URL, excerpt line 1 `<Name> – <headline>`,
+ * - One Source per twitter / github / facebook URL Apollo lists: canonical profile URL (`canonicalProfile`; group, share and root links without a handle are dropped), excerpt line 1 `<Name> – <headline>`,
  *   then a line carrying the confirmed LinkedIn URL literally, so the lineup's cross-link rule corroborates the hit
  * - Digest: provider, LinkedIn URL, accounts found, employer and title
  *
@@ -18,6 +18,9 @@
  * - Allow-list parse: no emails, phones, personal_* or demographic fields reach `raw`; reveal_* flags are never sent
  */
 import { z } from "zod";
+import { httpUrl } from "@/domain/url";
+import { canonicalProfile } from "@/recipe/seams/resolve";
+import { txt } from "@/recipe/sources/text";
 import type { Collector, Fetched, ParsedSource, StepContext } from "@/recipe/sources/types";
 import { acceptedCandidates, clip, identityFor, platformOf } from "@/recipe/sources/types";
 
@@ -46,8 +49,6 @@ const Person = z.object({
 const Payload = z.object({ person: Person.nullish() });
 type PersonRecord = z.infer<typeof Person>;
 
-const text = (v: string | null | undefined): string => v?.trim() ?? "";
-
 /** The first linkedin.com/in/ profile URL of a merged LinkedIn candidate, or null. */
 function confirmedLinkedin(ctx: StepContext): string | null {
   for (const c of acceptedCandidates(ctx)) {
@@ -58,24 +59,16 @@ function confirmedLinkedin(ctx: StepContext): string | null {
   return null;
 }
 
-/** Canonical profile URL: https, no www for github/x/facebook, handle only for github and x (twitter.com becomes x.com), no query (Facebook keeps profile.php?id=), no trailing slash; null when not a URL or no path. */
-export function normaliseSocialUrl(raw: string): string | null {
-  let u: URL;
-  try {
-    u = new URL(raw.trim());
-  } catch {
-    return null;
+/** Canonical profile URL: social hosts via `canonicalProfile` (null without a handle: groups, shares, root); other hosts as given minus query, fragment and trailing slash; null when not http(s). */
+function socialUrl(raw: string): string | null {
+  const url = httpUrl(raw.trim());
+  if (url === null) return null;
+  if (platformOf(url) !== "web") {
+    const c = canonicalProfile(url);
+    return c.handle === null ? null : c.url;
   }
-  const lower = u.hostname.toLowerCase();
-  const host = /^www\.(?:github|twitter|x|facebook)\.com$/.test(lower) ? lower.slice(4) : lower;
-  const segs = u.pathname.split("/").filter((s) => s !== "");
-  const first = segs[0];
-  if (first === undefined) return null;
-  if (host === "twitter.com" || host === "x.com") return `https://x.com/${first}`;
-  if (host === "github.com") return `https://github.com/${first}`;
-  const id = u.searchParams.get("id");
-  const query = host === "facebook.com" && first === "profile.php" && id !== null ? `?id=${id}` : "";
-  return `https://${host}/${segs.join("/")}${query}`;
+  const u = new URL(url);
+  return `${u.origin}${u.pathname.replace(/\/+$/, "")}`;
 }
 
 function personOf(payload: unknown): PersonRecord | null {
@@ -84,13 +77,13 @@ function personOf(payload: unknown): PersonRecord | null {
 }
 
 function socialUrls(p: PersonRecord): string[] {
-  const urls = [p.twitter_url, p.github_url, p.facebook_url].map((u) => normaliseSocialUrl(text(u))).filter((u): u is string => u !== null);
+  const urls = [p.twitter_url, p.github_url, p.facebook_url].map((u) => socialUrl(txt(u))).filter((u): u is string => u !== null);
   return [...new Set(urls)];
 }
 
 function fullName(p: PersonRecord, ctx: StepContext): string {
-  const joined = `${text(p.first_name)} ${text(p.last_name)}`.trim();
-  return text(p.name) || joined || ctx.subject.trim();
+  const joined = `${txt(p.first_name)} ${txt(p.last_name)}`.trim();
+  return txt(p.name) || joined || ctx.subject.trim();
 }
 
 /** `<title> @ <org>` or whichever part exists; "" when neither. */
@@ -100,14 +93,14 @@ function titleAtOrg(title: string, org: string): string {
 
 /** Excerpt lines: name – headline, the literal confirmed LinkedIn URL (cross-link rule), current job, place, up to 5 history entries. */
 function excerptLines(p: PersonRecord, linkedin: string, ctx: StepContext): string[] {
-  const org = text(p.organization?.name);
-  const title = text(p.title);
-  const headline = text(p.headline) || (title === "" ? "" : titleAtOrg(title, org)); // an org alone is no headline
-  const place = [text(p.city), text(p.country)].filter((s) => s !== "").join(", ");
+  const org = txt(p.organization?.name);
+  const title = txt(p.title);
+  const headline = txt(p.headline) || (title === "" ? "" : titleAtOrg(title, org)); // an org alone is no headline
+  const place = [txt(p.city), txt(p.country)].filter((s) => s !== "").join(", ");
   const history = (p.employment_history ?? [])
-    .filter((j) => text(j.title) !== "" || text(j.organization_name) !== "")
+    .filter((j) => txt(j.title) !== "" || txt(j.organization_name) !== "")
     .slice(0, 5)
-    .map((j) => `${text(j.title)} @ ${text(j.organization_name)} (${text(j.start_date)}–${text(j.end_date) || "now"})`);
+    .map((j) => `${txt(j.title)} @ ${txt(j.organization_name)} (${txt(j.start_date)}–${txt(j.end_date) || "now"})`);
   const lines = [
     headline === "" ? fullName(p, ctx) : `${fullName(p, ctx)} – ${headline}`,
     `Linked from the confirmed LinkedIn profile ${linkedin} by Apollo people enrichment via treg`,
@@ -134,12 +127,13 @@ export const tregPersonEnrich: Collector = {
     return socialUrls(p).map((url): ParsedSource => ({ url, excerpt, raw: p, identity: identityFor(ctx, url) }));
   },
   digest: (fetched: readonly Fetched[], ctx) => {
+    const linkedin = confirmedLinkedin(ctx);
     for (const { payload } of fetched) {
       const p = personOf(payload);
       if (p === null) continue;
       const found = socialUrls(p).map((url) => ({ platform: platformOf(url), url }));
       if (found.length === 0) continue;
-      return { provider: "apollo", linkedin_url: confirmedLinkedin(ctx), found, employer: text(p.organization?.name) || null, title: text(p.title) || null };
+      return { provider: "apollo", linkedin_url: linkedin, found, employer: txt(p.organization?.name) || null, title: txt(p.title) || null };
     }
     return null;
   },
