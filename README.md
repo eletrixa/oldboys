@@ -1,5 +1,7 @@
 # oldboys — Social Media Deep Research (Hackathon Case 01, Apify)
 
+> **Jury:** start with [JURY.md](JURY.md) — what it does, how to try it in 3 minutes, and how it maps to the judging criteria.
+
 Hackathon build. Live at https://oldboys.asajj.cz (Cloudflare Workers).
 
 - `docs/brief.md` — the assignment

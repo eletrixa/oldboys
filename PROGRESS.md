@@ -284,3 +284,8 @@ Each agent appends: what it starts, progress, what it finishes. Newest at the bo
 
 ## 2026-10-09 · translate-consistency agent (Minas)
 - Started: 03:38. Idea #24 polish: Czech brief terms drift between parallel translation batches (job titles kept vs translated, "Vlastnictví" for "Owner of", "ÚSUDEK:" in section summaries vs the "Odvození" pill, date styles). Kind markers via placeholders and the dictionary words, one fixed glossary + style + few-shot block in the system prompt, prompt version in the cache hash.
+
+## 2026-10-09 · jury-report agent (Minas)
+- Started: 03:36. JURY.md, a report for the jury: pitch, try it in 3 minutes, recruiter journey, how it works, criteria mapping, numbers, guardrails, limits and known issues, how we built it.
+- Finished: 03:55. Every claim checked in the code (register, intake, brief, exports, GDPR routes, collectors, model seams, budget) or in eval/RESULTS.md and docs/ops/llm-manual-runs.md; numbers from `pnpm check` (1873 + 21 tests). Known issues list as of 03:50: per-candidate Fit %, DISC/MBTI working style, name-only Czech registry checks for every position, Art. 9 rows kept in D1, notice sending not recorded, thin access control, budget gates collectors only. One line added at the top of README.md. Docs only, no CHANGELOG line.
+- Files: JURY.md (new), README.md (one line), PROGRESS.md.
