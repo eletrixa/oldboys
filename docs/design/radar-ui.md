@@ -38,7 +38,7 @@ Never write `zinc-*`, `teal-*`, `amber-*`, `red-*`, `emerald-*`, `violet-*` in a
 
 ## Layout rhythm
 
-- Page width: run and audit pages `max-w-3xl`, roles `max-w-5xl`, home as is. Gutter `px-4`, vertical `py-10 md:py-14`.
+- Page width: run page while running and audit page `max-w-3xl`, finished brief `max-w-6xl`, roles `max-w-5xl`, home as is. Gutter `px-4`, vertical `py-10 md:py-14`.
 - Page header block: eyebrow, h1, one muted sentence, then a meta line (`text-sm text-muted`). Gap `gap-3`. A `border-b border-divider pb-8` closes the header.
 - Between major blocks `gap-8`; inside a card `gap-3`.
 - Lists of homogeneous rows (profiles, evidence, roles, sources) use hairline dividers (`divide-y divide-divider`), not nested cards.
@@ -53,14 +53,25 @@ Never write `zinc-*`, `teal-*`, `amber-*`, `red-*`, `emerald-*`, `violet-*` in a
 ## Per-surface composition
 
 ### Run page (`/runs/[id]`)
-1. Header: eyebrow "Candidate brief" (or "Research in progress"), serif h1 with the existing `headerText`, headline muted, meta line = cost line, CACHED pill when cached.
+While running, paused or failed (one column, `max-w-3xl`):
+1. Header: eyebrow "Research in progress", serif h1 with the existing `headerText`, headline muted, meta line = cost line, CACHED pill when cached.
 2. Progress: a vertical timeline. Left rail of 20px marks joined by a 1px line; done = ok-green filled check, active = rust ring with a slow pulse (respect reduced motion), todo = divider ring, failed = conflict, skipped = muted dash. A slim `h-1.5` bar above it keeps the percent. Labels `text-sm`, muted for todo.
 3. Question card: `CARD_PEACH`, serif h2, the profile row, buttons: primary "Yes, it's them", secondary "No", quiet "I'm not sure".
 4. Identity map card on the canvas (no card chrome) with a sans h3; SVG colours via `fill-ok`, `stroke-unsure`, `fill-divider` etc.
 5. Profiles list: h3 + hairline rows, platform mark = 36px circle `bg-sage` with ink initials, decision `<Pill>`.
-6. "See the brief" is the single primary button; "Back" is a quiet link.
-7. Brief: summary card = `CARD` with a 4px rust left border (`border-l-4 border-l-action`), eyebrow "In 30 seconds"; TopLine as a two-column `dl` on the canvas; kit actions = secondary buttons; sections = `CARD` with h3, confidence `<Pill>`, claims with FACT (neutral) / INFERENCE (inference) pills and `<SourceLink>`s; lists (interview questions, to verify, gaps) = h3 + hairline rows on the canvas; "Also found" as a `details` on the canvas.
-8. Failure = `CARD` with `border-conflict bg-conflict-bg`.
+6. Failure = `CARD` with `border-conflict bg-conflict-bg`.
+
+Finished brief (`brief-page.tsx`, `max-w-6xl`, root `id="brief"` with the report `lang`):
+1. Header: `<Eyebrow>` "Candidate brief · <role>" (role links the position), h1 = full name, headline muted, pills (identity ok, phone screen done ok, CACHED), the EN | CZ switch top right; below, five equal steps in the `TILE` idiom (2px rule: ok = done, ink = next, divider = later): Research, Identity, Phone screen, Interview, Decision ("Made by a person"). Only state the run proves is marked done.
+2. Grid at `lg`: main column + 300px sidebar (`lg:sticky lg:top-6`). Below `lg` the sidebar follows the content and a fixed bottom bar (`lg:hidden`) holds "Copy interview kit" (primary) and "Calendar"; the main element has `pb-28 lg:pb-14` so the bar never covers content.
+3. "In 30 seconds": `CARD` with the 4px rust left border, three columns divided by hairlines at `md` (`KEY` label, serif `text-4xl` number, a short dot list, a `LINK` that opens a tab); the sentences sit under an "In sentences" disclosure and are what Read aloud reads.
+4. "Before the interview (n)": serif h2 + `CARD_FLUSH` with hairline rows, only items that need action; public source vs phone answer as two `FRAG`s with a neutral "Compare" pill (never an automatic conflict); `conflict` tone only for research-vs-research contradictions; each row links to its plan question (scroll + one flash inside `prefers-reduced-motion: no-preference`).
+5. Tabs: WAI-ARIA tablist, sticky on top of the main column, rust underline on the selected tab, count badge per tab (`unsure` on Phone screen when answers are open), hash `#plan|#evidence|#call|#sources`. Inactive panels are `tab-inactive hidden`; the print rule shows every panel and hides the bar.
+   - Interview plan: one numbered list (serif rust numbers, hairline rows) in groups Role criteria / To verify / Interview questions; topic `<Pill>`, muted "Why:" line, the question, a canvas "Phone" row (answer badge, summary, quote + "at m:ss" + "Said by the candidate. Not public evidence."), a "Covered" checkbox (React state only); the filled-kit review closes the panel.
+   - Evidence: TopLine, scorecard, role criteria table in `CARD_FLUSH` (third column from `md`), career timeline `CARD` (label column + bar on a year axis; ink bar, ok for an open end), ProfileSections, findings as compact disclosure rows in one `CARD_FLUSH` (title, one-line summary, confidence pill, claim count; short quotes inline), code profile, registries.
+   - Phone screen: the call panel, results first, setup folded under "Call again · N of M calls left" after a finished call.
+   - Sources and gaps: confirmed profiles (hairline rows), "How we confirmed it is X" disclosure (progress, identity map, lineup), gaps grouped by reason in plain words as neutral pills (raw reason in `title`), Also found, removed line, profile signals.
+6. Sidebar: `CARD` "Interview kit" (`BTN_PRIMARY` copy = the page's one rust action, `BTN_SECONDARY` calendar disclosure, "More exports"), `CARD` "About this research" (`dl`, Audit record link), the delete disclosure in a conflict hairline box ("Do this when the candidate is rejected."), `CARD_SAGE` "Radar prepares evidence and never scores people. A person makes every decision.", "All briefs" link.
 
 ### Start form (home card)
 Fields with `FIELD`; labels `text-sm font-semibold`; helper `text-xs text-muted`; CV in a `details` with a hairline; privacy note in `CARD_SAGE`; submit `BTN_PRIMARY` with the "2 to 4 minutes" note beside it; error in `text-conflict`.

@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/runs/[id]/run-view.tsx
- * Deps:    react, next/link, ../../ui, ./parts, ./state, ./identity-map-card, ./delete-card
+ * Deps:    react, next/link, ../../ui, ./parts, ./brief-page, ./state, ./identity-map-card, ./delete-card
  * Tested:  n/a
  *
  * Key responsibilities:
@@ -11,7 +11,8 @@
  * - Header: derived name once the seed step knows it ("the candidate" before), the seed headline under it,
  *   then "From <source> · <tag> · <date>" when an intake application started the run
  * - "Researched for: <position title>" link to /positions/<id> under the name when the run came from a position
- * - When done, the brief comes first and the confirmation steps fold into a closed "How we confirmed it" disclosure
+ * - When done with a brief, the whole page is BriefPage (brief-page.tsx: header with hiring steps, tabs, kit sidebar); the
+ *   confirmation steps (progress, identity map, profile list) go into its "How we confirmed it" disclosure (Sources tab)
  * - One footer closes the page: running hint (not done), then "All briefs" and "Audit record" links, then the
  *   "Delete candidate data" disclosure (any status); after a delete the whole page becomes the deletion receipt
  * - Not-found view: eyebrow, heading, muted sentence and a primary back link on the header rhythm
@@ -31,14 +32,12 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { intakeLine } from "@/app/intake/intake-rows";
 import type { Candidate, CandidateDecision } from "@/domain/claim";
-import { BTN_SECONDARY, CARD_CONFLICT, CARD_UNSURE, Chevron, Eyebrow, LINK, SimulatedPill, SUMMARY } from "../../ui";
+import { BTN_SECONDARY, CARD_CONFLICT, CARD_UNSURE, Eyebrow, LINK, SimulatedPill } from "../../ui";
 import type { DeletionReceipt } from "@/domain/deletion";
-import { CodeProfileCard } from "./code-profile-card";
-import { ProfileSignalsCard } from "./profile-signals-card";
-import { RegistryChecksCard } from "./registry-checks-card";
+import { BriefPage, BriefView } from "./brief-page";
 import { DeleteCard, DeletedView } from "./delete-card";
 import { IdentityMapCard } from "./identity-map-card";
-import { type Answer, BriefView, CostLine, ProfileList, ProgressSteps, QuestionCard } from "./parts";
+import { type Answer, CostLine, ProfileList, ProgressSteps, QuestionCard } from "./parts";
 import { LINEUP_MAX_QUESTIONS, type RunState, firstName, headerText, questionsToAsk, retryHref, sortLineup, startedAgo, stalledNotice, stepRows } from "./state";
 
 const POLL_MS = 2000;
@@ -222,10 +221,29 @@ export function RunView({ id }: { id: string }): React.JSX.Element {
       {sent && !sendFailed && state.status === "paused" && <p className="text-sm text-muted">Thanks, continuing...</p>}
     </>
   );
-  const briefFirst = state.status === "done" && state.brief !== null;
+  if (state.status === "done" && state.brief !== null) {
+    return (
+      <main className="mx-auto flex w-full max-w-6xl flex-col px-4 pt-10 pb-28 md:pt-14 lg:pb-14">
+        <BriefPage
+          state={state}
+          brief={state.brief}
+          cached={cached}
+          first={first}
+          onDeleted={setDeleted}
+          confirmation={
+            <>
+              {progress}
+              {identity}
+              {sendRows}
+            </>
+          }
+        />
+      </main>
+    );
+  }
 
   return (
-    <main className={`mx-auto flex max-w-3xl flex-col px-4 py-10 md:py-14 ${briefFirst ? "gap-10" : "gap-8"}`}>
+    <main className="mx-auto flex max-w-3xl flex-col gap-8 px-4 py-10 md:py-14">
       <header className="flex flex-col gap-3 border-b border-divider pb-8">
         <Eyebrow>{state.status === "done" ? "Candidate brief" : "Research in progress"}</Eyebrow>
         <h1 className="font-serif text-4xl leading-[1.05] md:text-5xl">
@@ -246,39 +264,17 @@ export function RunView({ id }: { id: string }): React.JSX.Element {
         )}
         <CostLine cost={state.cost} />
       </header>
-      {briefFirst ? (
-        <>
-          <BriefView state={state} />
-          <CodeProfileCard profile={state.code_profile} />
-          <ProfileSignalsCard signals={state.profile_signals} />
-          <RegistryChecksCard checks={state.registry_checks} />
-          <details className="group border-t border-divider pt-4">
-            <summary className={`${SUMMARY} text-base text-ink`}>
-              <Chevron />
-              How we confirmed it is {first}
-            </summary>
-            <div className="mt-4 flex flex-col gap-8">
-              {progress}
-              {identity}
-              {sendRows}
-            </div>
-          </details>
-        </>
-      ) : (
-        <>
-          {stalled !== null && (
-            <div role="status" className={`${CARD_UNSURE} text-sm`}>
-              No progress for 30 minutes. The run was probably interrupted;{" "}
-              <Link href={stalled.href} className={LINK}>start it again</Link> from the position or My briefs.
-            </div>
-          )}
-          {progress}
-          {failed}
-          {identity}
-          {sendRows}
-        </>
+      {stalled !== null && (
+        <div role="status" className={`${CARD_UNSURE} text-sm`}>
+          No progress for 30 minutes. The run was probably interrupted;{" "}
+          <Link href={stalled.href} className={LINK}>start it again</Link> from the position or My briefs.
+        </div>
       )}
-      {!briefFirst && <BriefView state={state} />}
+      {progress}
+      {failed}
+      {identity}
+      {sendRows}
+      <BriefView state={state} />
       {running && <p className="text-sm text-muted">The brief appears here when the research is done.</p>}
       <div className="flex items-center gap-6 border-t border-divider pt-6 text-sm">
         <Link href="/briefs" className={LINK}>All briefs</Link>

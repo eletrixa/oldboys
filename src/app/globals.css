@@ -179,3 +179,23 @@
     break-inside: avoid;
   }
 }
+
+/*
+ * Finished brief (src/app/runs/[id]/brief-tabs.tsx, brief-plan.tsx): every tab panel prints, the tab bar does not; a plan
+ * question reached from "Before the interview" flashes once (motion only without reduced motion).
+ */
+@media print {
+  .tab-inactive {
+    display: flex !important;
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .plan-flash {
+    animation: plan-flash 1.6s ease-out;
+  }
+}
+@keyframes plan-flash {
+  from {
+    background-color: var(--color-peach);
+  }
+}
