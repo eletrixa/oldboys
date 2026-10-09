@@ -32,7 +32,7 @@ Limits you may hit: 6 started runs per hour per company and 20 runs per hour acr
    - manual add (LinkedIn URL, pasted CV, CV file)
    - the browser extension
 
-   Incoming applications sit in a pool per position (`/intake`, the position page) until the recruiter starts research.
+   Incoming applications sit in a pool per position (the position page) until the recruiter starts research.
 3. **Research run.** One declared recipe runs 28 steps (searches, profiles, code, registries, model steps). A given LinkedIn profile or CV is the confirmed person. Other same-name profiles stay "possibly the same person" and are not used. When nothing is confirmed, the run pauses with "Quick question: is this … profile also …?" (at most 3 questions). The **identity map** shows which profiles are linked to the candidate and which belong to someone else (hidden on phones).
 4. **The brief** (`/runs/<id>`):
    - **"In 30 seconds"** summary: confirmed, missing, ask, check.

@@ -4,6 +4,9 @@ All notable changes to oldboys are documented here. The format follows [Keep a C
 
 ## [Unreleased]
 
+### Removed
+- The operator page `/intake` and its "Applications" link in the signed-in menu: it asked a logged-in recruiter for the team token and repeated what the position page already shows (pooled applications of a bound tag, the bind form, run links). Applications on a tag without a position and unmatched ones are read from `GET /api/intake/applications` (bearer `RUN_TOKEN`); a tag without a position is created with `POST /api/intake/tags` or SQL. Runbook `docs/ops/intake.md` and `specs/intake/` updated
+
 ### Fixed
 - A brief started from a position (the New brief page, the candidate pool, intake into a bound tag) now matches the role catalog by the position title before the collectors run, so the role's evidence-site search (`role_sites_serp`) and the GitHub steps for technical roles run as they do for a role typed on the start form; before, these runs had no template and recorded "not searched: no confirmed profile to look up" for the role sites
 - Czech brief translation reads the same in every batch: one fixed glossary, date style ("říjen 2022 – květen 2026", "od října 2022 do května 2026") and four examples in the system prompt; job titles stay in English with a Czech preposition ("Owner ve společnosti Naveky.cz", never "Vlastnictví"), a text that translated one falls back to English; FACT / INFERENCE / STATEMENT inside section summaries go to the model as placeholders and come back as the pill words FAKT: / ODVOZENÍ: / VÝROK: (no more "ÚSUDEK:"), a lost placeholder falls back to English; PROMPT_VERSION is part of the cache hash, so briefs cached with the old prompt are translated again once

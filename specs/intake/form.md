@@ -22,7 +22,7 @@ export async function handleFormIntake(request: Request, env: FormIntakeEnv, now
 1. `requireBearer(request, env.INTAKE_TOKEN, "INTAKE_TOKEN")` → 503 unset, 401 wrong.
 2. `parseJsonBody(request, IntakeFormBody)` → 400.
 3. `ingestApplication({ source: "form", ...mapped }, env, now)`.
-4. Duplicate → 200 `{ applicationId, status, duplicate: true }`; else 201 `{ applicationId, status }`. **Never return `runId`** (the token holder is the form owner, not an operator; runs are visible on `/intake`).
+4. Duplicate → 200 `{ applicationId, status, duplicate: true }`; else 201 `{ applicationId, status }`. **Never return `runId`** (the token holder is the form owner, not an operator; runs are visible on the position page and in `GET /api/intake/applications`).
 5. A funnel exception is logged and answers 500 `{ error: "intake failed" }` (no internals); the Apps Script throws on it and `resendAll` re-sends, the duplicate rule making that safe.
 
 ## Apps Script (ships in `docs/ops/intake.md`, not in `src/`)

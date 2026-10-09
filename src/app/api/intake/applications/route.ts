@@ -1,14 +1,14 @@
 /**
- * GET /api/intake/applications: the intake queue, last 200 applications newest first.
+ * GET /api/intake/applications: the operator's intake queue (curl, no UI page), last 200 applications newest first.
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/api/intake/applications/route.ts
  * Deps:    @opennextjs/cloudflare (getCloudflareContext), binding DB, secret RUN_TOKEN, src/app/intake/intake-rows (type)
- * Tested:  row type and shaping in src/app/intake/__tests__/intake-rows.test.ts; route n/a (QA pass, like /api/roles)
+ * Tested:  labels in src/app/intake/__tests__/intake-rows.test.ts; route n/a (QA pass, like /api/roles)
  *
  * Key responsibilities:
  * - Bearer auth against RUN_TOKEN (401/503 like GET /api/roles)
- * - One D1 read of the rendered queue columns only (no external_id, linkedin_url or cv_key); never cached
+ * - One D1 read of the queue columns only (no external_id, linkedin_url or cv_key); never cached
  *
  * Design constraints:
  * - No runtime = "edge"
