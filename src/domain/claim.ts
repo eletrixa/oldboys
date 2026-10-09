@@ -202,6 +202,27 @@ export const PositionFit = z.object({
 });
 export type PositionFit = z.infer<typeof PositionFit>;
 
+export const BIG_FIVE = ["openness", "conscientiousness", "extraversion", "agreeableness", "neuroticism"] as const;
+export type BigFiveDimension = (typeof BIG_FIVE)[number];
+/** One Big Five dimension read from the person's own writing: a lean with its quotes, never a number shown as a score. */
+export const BigFiveTrait = z.object({
+  dimension: z.enum(BIG_FIVE),
+  lean: z.enum(["low", "balanced", "high"]),
+  /** 0..100 marker position along the dimension, for the chart only. */
+  position: z.number().int().min(0).max(100),
+  confidence: z.enum(["low", "medium", "high"]),
+  /** One or two sentences: what the writing shows for this dimension. */
+  summary: z.string(),
+  evidence: z.array(ProfileEvidence),
+});
+export type BigFiveTrait = z.infer<typeof BigFiveTrait>;
+export const BigFive = z.object({
+  traits: z.array(BigFiveTrait),
+  /** How to work with and interview them given the read; each tied to a dimension. */
+  recommendations: z.array(z.object({ text: z.string().min(1), dimension: z.enum(BIG_FIVE).nullable().default(null) })),
+});
+export type BigFive = z.infer<typeof BigFive>;
+
 /**
  * Enriched hiring profile (Robert, 2026-10-09): achievements, risks, history, personality read, position fit and
  * questions, every item with its evidence lines. Personality and fit are inferences from public writing, labelled so
@@ -214,6 +235,8 @@ export const Profile = z.object({
   personality: z.object({
     disc: z.object({ type: z.string().min(1), confidence: z.enum(["low", "medium", "high"]) }).nullable(),
     mbti: z.object({ type: z.string().min(1), confidence: z.enum(["low", "medium", "high"]) }).nullable(),
+    /** Big Five lean per dimension with quotes and recommendations; null when their own writing is too thin. Defaulted for older briefs. */
+    big5: BigFive.nullable().default(null),
     read: z.string(),
     /** Working-style trait rows, each backed by the person's own quotes. */
     traits: z.array(ProfileItem).default([]),

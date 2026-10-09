@@ -13,7 +13,7 @@
  *   failed call left at 'received' (src/workflow/intake.ts)
  *
  * Design constraints:
- * - Never returns runId: the token holder owns the form, not the research (runs are visible on /intake)
+ * - Never returns runId: the token holder owns the form, not the research (runs are visible on the position page and in GET /api/intake/applications)
  * - Takes bindings and the clock as parameters so tests run under plain Node; no Next.js imports
  */
 import { requireBearer } from "@/app/api/_lib/auth";

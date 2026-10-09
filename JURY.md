@@ -32,7 +32,7 @@ Limits you may hit: 6 started runs per hour per company and 20 runs per hour acr
    - manual add (LinkedIn URL, pasted CV, CV file)
    - the browser extension
 
-   Incoming applications sit in a pool per position (`/intake`, the position page) until the recruiter starts research.
+   Incoming applications sit in a pool per position (the position page) until the recruiter starts research.
 3. **Research run.** One declared recipe runs 28 steps (searches, profiles, code, registries, model steps). A given LinkedIn profile or CV is the confirmed person. Other same-name profiles stay "possibly the same person" and are not used. When nothing is confirmed, the run pauses with "Quick question: is this … profile also …?" (at most 3 questions). The **identity map** shows which profiles are linked to the candidate and which belong to someone else (hidden on phones).
 4. **The brief** (`/runs/<id>`):
    - **"In 30 seconds"** summary: confirmed, missing, ask, check.
@@ -83,7 +83,7 @@ Limits you may hit: 6 started runs per hour per company and 20 runs per hour acr
   | Czech translation | verify |
   | Position extraction | primary |
   | Call transcript ingest | primary |
-- **Budget:** the runner enforces it, never the model. Each run gets $0.50 and 16 paid actor runs for collectors. When the budget is used up, the remaining collectors are skipped with "run budget reached" (`src/recipe/runner.ts`, `src/workflow/research-run.ts`).
+- **Budget:** the runner enforces it, never the model. Each run gets $0.50 and 18 paid actor runs for collectors. When the budget is used up, the remaining collectors are skipped with "run budget reached" (`src/recipe/runner.ts`, `src/workflow/research-run.ts`).
 - **Ledger:** `ledger_entries` is append-only (`seq` per run). Every step, model call and cost is a row. The UI streams it over SSE.
 - **Calls:** ElevenLabs agent + Twilio, dialled once on operator approval, never from a Workflow step. With `CALL_PROVIDER=mock`, calls are labelled MOCK. Plan: [`plans/005-call-verification/`](plans/005-call-verification/00-SYNTHESIS.md).
 

@@ -14,7 +14,7 @@ POST /api/intake/startupjobs/<token>  (StartupJobs webhook)                     
 - The **tag** is the position: `[a-z0-9][a-z0-9-]{1,39}`, one row in `intake_tags` (tag, role, goal, optional company shown on the apply page (migration `0015_intake_company.sql`), optional StartupJobs offer id). It is the plus-address, the apply page path, the Google Form "Position code" and the StartupJobs internal position name. An unknown tag never starts a run.
 - Idempotent per `(source, external_id)`: sending the same application twice returns the first row and starts no second run. A repeat that carries other details (another LinkedIn URL, CV file or text) keeps the first send and leaves a note on the row: `resent <time>Z with other details (LinkedIn ..., CV ...), the first send is kept` (only the latest). On the apply page the key is position + email, so this is how a candidate's correction, or someone applying under another person's email, shows up: check the note and contact the address.
 - Spend brakes: known tag required, `INTAKE_PER_HOUR_CAP` (default 10) intake runs per hour, on top of the global `RUNS_PER_HOUR_CAP` (20) and the per-run budget of $0.50.
-- The candidate never learns a run exists. The apply page and the webhook answer "received"; run ids appear only on `/intake` and in operator routes.
+- The candidate never learns a run exists. The apply page and the webhook answer "received"; run ids appear only on the position page (bound tags) and in the operator queue `GET /api/intake/applications` (bearer `RUN_TOKEN`).
 - Statuses: `received` (inserted, not decided; stays here only when something threw: the row's note then says "delivery failed after it was stored; the next delivery resumes it", and the next delivery of the same source resumes it at once; an unmarked one after 5 minutes) -> `run-started` | `unmatched` (unknown or missing tag, sender not allowed) | `incomplete` (no LinkedIn URL and no readable CV text) | `capped`. The `note` column says why.
 - Raw mail is not kept. Only the CV file (R2 `intake/<applicationId>/<filename>`, written only for a known tag and an allowed sender, purged with the other raw data) and the extracted text are stored.
 - Public data only, outreach drafted never sent, no Art. 9 inference: the brief's hard rules apply to intake runs unchanged.
@@ -58,14 +58,14 @@ A tag bound to a position (`intake_tags.position_id` set) pools applications ins
 2. **Add manually** on the same Candidates section: paste a LinkedIn URL or CV text, optional name and email (`POST /api/positions/:id/candidates`); results in `pooled` status right away.
 3. **Select and enrich**: check the desired pooled rows in the table, click "Start enrichment" (`POST /api/positions/:id/enrich` max 20 per call); each starts one `ResearchRunWorkflow` with the position's must-haves as questions and updates the row status to `run-started`. Hourly caps (`RUNS_PER_HOUR_CAP` global, `START_PER_HOUR_CAP` per organization when origin is `via='start'`) apply; 429 if reached.
 
-Tags without a position (`intake_tags.position_id = NULL`) keep the original behaviour: known tag → auto-start a run (status `run-started`), unknown tag → `unmatched`. The position page pools are for positions only; older intake-only workflows remain in `/intake` with the original status labels and flows.
+Tags without a position (`intake_tags.position_id = NULL`) keep the original behaviour: known tag → auto-start a run (status `run-started`), unknown tag → `unmatched`. The position page pools are for positions only; applications on a tag without a position (and `unmatched` ones) have no UI page since the `/intake` page was removed, read them from the operator queue `GET /api/intake/applications` (see the smoke loop).
 
 ## Create a position tag
 
-One tag per open position. Any of the three ways works; the UI and the API need `RUN_TOKEN`.
+One tag per open position. Any of the three ways works; the API takes a login session or `RUN_TOKEN`; a tag without a position can be created only by the API or SQL.
 
 ```bash
-# UI: https://oldboys.asajj.cz/intake  (Tags section, create form)
+# UI: the position page, Candidates section, bind form (the tag is bound to that position; recruiter login session)
 
 # API
 curl -X POST https://oldboys.asajj.cz/api/intake/tags \
@@ -106,7 +106,7 @@ curl -s -H "Authorization: Bearer $CF_API_TOKEN" "https://api.cloudflare.com/cli
 
 ### Seznam: copy a mailbox to a position
 
-Seznam has no API; use its rule. Email -> Nastavení -> **Pravidla** -> new rule. Condition: **Pro: `<the seznam address>`** (a match-all condition is unverified). Action: **Pošli kopii** to `jobs+<tag>@asajj.cz`. If Seznam asks to confirm the target address, the confirmation arrives in the `INTAKE_FORWARD_TO` inbox. Whether Seznam accepts a `+` in the target address is unverified: send a test mail and check `/intake`.
+Seznam has no API; use its rule. Email -> Nastavení -> **Pravidla** -> new rule. Condition: **Pro: `<the seznam address>`** (a match-all condition is unverified). Action: **Pošli kopii** to `jobs+<tag>@asajj.cz`. If Seznam asks to confirm the target address, the confirmation arrives in the `INTAKE_FORWARD_TO` inbox. Whether Seznam accepts a `+` in the target address is unverified: send a test mail and check the queue (`GET /api/intake/applications`).
 
 ### Jobs.cz (and Prace.cz)
 
@@ -216,7 +216,7 @@ The endpoint answers 201 `{applicationId, status}` or, for a repeated response i
 
 ## Door 3: hosted apply page
 
-`https://oldboys.asajj.cz/apply/<tag>` (404 for an unknown tag). Public, candidate-facing, no mention of research. Fields: full name, email, LinkedIn URL and/or CV (one is enough), optional message, a hidden honeypot (`hp_contact`) plus the time from page render to Send (`fill_ms`, under 3 s counts as a bot). Title and link preview say "Apply: <role> at <company>" (company from the tag's optional `company`, set in the `/intake` tag form); `?lang=cs` gives the Czech page for the Jobs.cz ad. Under the button: who uses the data, the 7-day deletion and a link to `/apply/<tag>/privacy`. The CV is a PDF, Word `.docx` or `.txt` file up to 10 MB, picked or dropped on one zone; an older `.doc` is kept but not read, so it needs LinkedIn beside it; images are refused on the spot with "Please attach your CV as a PDF, Word or text file.". Fallback: "No file at hand? Paste your CV text" swaps the zone for a textarea (up to 20,000 characters) that is sent as `cvText`; a file wins if both arrive. The kind is taken from the file's bytes when they show one (a `.docx` sent as a PDF is read as Word). Text is read from PDF (`unpdf`), DOCX (`mammoth`) and TXT (UTF-8, UTF-16 with a BOM, or Czech windows-1250; binary junk is refused); a `.docx` or PDF that would inflate past 40 MB (a decompression bomb) is never parsed; a file without readable text (a phone scan) is answered on the spot with "We could not read any text in that PDF. Please add your LinkedIn profile or paste the text of your CV." unless a LinkedIn URL came with it (then it is stored and noted). The upload shows progress and times out only after 90 s without progress, a network error or 5xx offers "Try again" with the form still filled, and the done card says "Received. We'll reply to <email>." with what was attached. One application per email per position: a resubmit is a duplicate (with other details it is noted on the row, see the rules above). The page 404s an unknown tag on purpose (a mistyped link should say so before anyone fills it in), while the API answers an unknown tag like a known one. The page says "Received" only once the application is stored (a capped one too: the cron starts it later); a send that failed after storing marks the row, and Try again resumes it at once; while an earlier send is still being stored it asks to try again. All invalid fields are marked at once, and a double tap sends once. This is the URL for LinkedIn "external website", the Jobs.cz ad text and StartupJobs ad text.
+`https://oldboys.asajj.cz/apply/<tag>` (404 for an unknown tag). Public, candidate-facing, no mention of research. Fields: full name, email, LinkedIn URL and/or CV (one is enough), optional message, a hidden honeypot (`hp_contact`) plus the time from page render to Send (`fill_ms`, under 3 s counts as a bot). Title and link preview say "Apply: <role> at <company>" (company from the tag's optional `company`, set with `POST /api/intake/tags` `company`); `?lang=cs` gives the Czech page for the Jobs.cz ad. Under the button: who uses the data, the 7-day deletion and a link to `/apply/<tag>/privacy`. The CV is a PDF, Word `.docx` or `.txt` file up to 10 MB, picked or dropped on one zone; an older `.doc` is kept but not read, so it needs LinkedIn beside it; images are refused on the spot with "Please attach your CV as a PDF, Word or text file.". Fallback: "No file at hand? Paste your CV text" swaps the zone for a textarea (up to 20,000 characters) that is sent as `cvText`; a file wins if both arrive. The kind is taken from the file's bytes when they show one (a `.docx` sent as a PDF is read as Word). Text is read from PDF (`unpdf`), DOCX (`mammoth`) and TXT (UTF-8, UTF-16 with a BOM, or Czech windows-1250; binary junk is refused); a `.docx` or PDF that would inflate past 40 MB (a decompression bomb) is never parsed; a file without readable text (a phone scan) is answered on the spot with "We could not read any text in that PDF. Please add your LinkedIn profile or paste the text of your CV." unless a LinkedIn URL came with it (then it is stored and noted). The upload shows progress and times out only after 90 s without progress, a network error or 5xx offers "Try again" with the form still filled, and the done card says "Received. We'll reply to <email>." with what was attached. One application per email per position: a resubmit is a duplicate (with other details it is noted on the row, see the rules above). The page 404s an unknown tag on purpose (a mistyped link should say so before anyone fills it in), while the API answers an unknown tag like a known one. The page says "Received" only once the application is stored (a capped one too: the cron starts it later); a send that failed after storing marks the row, and Try again resumes it at once; while an earlier send is still being stored it asks to try again. All invalid fields are marked at once, and a double tap sends once. This is the URL for LinkedIn "external website", the Jobs.cz ad text and StartupJobs ad text.
 
 ## Door 4: StartupJobs webhook
 
@@ -228,14 +228,14 @@ Facts (StartupJobs developer docs, 2024-07-25): a webhook URL is set per offer; 
    - create the tag with `startupjobsOfferId` set to the numeric offer id (the offer id mapping wins when both exist).
 3. In the StartupJobs employer admin (`firmy.startupjobs.cz`), open the offer -> **Additional options** -> Webhook URL:
    `https://oldboys.asajj.cz/api/intake/startupjobs/<STARTUPJOBS_WEBHOOK_TOKEN>`
-4. Press the **test** button. StartupJobs sends the payload with `"test": true`. Expect HTTP 200 `{"received":true,"test":true}` and a new row on `/intake` with status `unmatched` and the note "StartupJobs test payload". Nothing is downloaded and no run starts.
+4. Press the **test** button. StartupJobs sends the payload with `"test": true`. Expect HTTP 200 `{"received":true,"test":true}` and a new row in the queue (`GET /api/intake/applications`) with status `unmatched` and the note "StartupJobs test payload". Nothing is downloaded and no run starts.
 5. The CV is the first `files[]` entry ending in `.pdf`. A failed download never fails the webhook; the row becomes `incomplete` unless the payload carries a LinkedIn URL.
 
 Rotate the token by putting a new secret value and pasting the new URL into every offer.
 
 ## Smoke loop
 
-Order: tag exists -> endpoint answers -> row on `/intake` -> status as expected. A known tag plus a LinkedIn URL or CV **starts a real run that spends up to $0.50** (recorded in the run's ledger). For spend-free smokes use an unknown tag (`unmatched`) or send neither LinkedIn nor CV (`incomplete`).
+Order: tag exists -> endpoint answers -> row in the queue (`GET /api/intake/applications`, or the position page for a bound tag) -> status as expected. A known tag plus a LinkedIn URL or CV **starts a real run that spends up to $0.50** (recorded in the run's ledger). For spend-free smokes use an unknown tag (`unmatched`) or send neither LinkedIn nor CV (`incomplete`).
 
 Local: `pnpm db:migrate:local`, `pnpm dev` (Next on `http://localhost:3141`, secrets from `.dev.vars`). Production: replace the host with `https://oldboys.asajj.cz` and the secrets with the real ones.
 
@@ -272,7 +272,7 @@ curl -i -X POST "$H/api/intake/startupjobs/$STARTUPJOBS_WEBHOOK_TOKEN" -H "Conte
   -d '{"date":"2026-10-09T10:00:00+02:00","candidateID":2,"offerID":1234,"name":"Test Candidate","position":"Senior Backend Engineer","why":"<p>Hello</p>","email":"test@example.com","linkedin":"https://linkedin.com/in/example-candidate","internalPositionName":"senior-be","files":[],"gdpr_accepted":true}'
 
 # Operator: queue and tags (Bearer RUN_TOKEN)
-curl -s $H/api/intake/applications -H "Authorization: Bearer $RUN_TOKEN" | jq '.[0:5]'
+curl -s $H/api/intake/applications -H "Authorization: Bearer $RUN_TOKEN" | jq '.applications[0:5]'
 curl -s $H/api/intake/tags -H "Authorization: Bearer $RUN_TOKEN"
 ```
 
@@ -292,7 +292,7 @@ That fixture carries a LinkedIn URL and a PDF, so with the tag `senior-be` prese
 
 ```bash
 pnpm exec wrangler tail oldboys      # look for: intake email <applicationId> <status>
-curl -s https://oldboys.asajj.cz/api/intake/applications -H "Authorization: Bearer $RUN_TOKEN" | jq '.[0]'
+curl -s https://oldboys.asajj.cz/api/intake/applications -H "Authorization: Bearer $RUN_TOKEN" | jq '.applications[0]'
 ```
 
 Also check the Cloudflare dashboard Activity log under Email Routing: it shows delivered, rejected and forwarded mail per message.

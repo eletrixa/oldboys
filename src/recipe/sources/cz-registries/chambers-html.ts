@@ -22,6 +22,12 @@ const rows = (html: string, marker: string, name: PersonName): string[][] =>
 
 const href = (html: string, re: RegExp): string | null => re.exec(html)?.[1] ?? null;
 
+/** The row's town line ("11000 Praha 1"), so the collector can attribute the record by the candidate's city. */
+const postal = (l: readonly string[]): string => {
+  const town = l.find((x) => /^\d{3} ?\d{2} \S/.test(x));
+  return town === undefined ? "" : `, ${town}`;
+};
+
 export const kdp: RegistrySource = {
   id: "kdp",
   request: (name) => ({ via: "fetch", url: "https://www.kdpcr.cz/seznam-danovych-poradcu", init: { method: "POST", headers: FORM, body: form({ "f[ft]": name.last, "f[t][1]": "1" }) } }),
@@ -82,7 +88,7 @@ export const nkcr: RegistrySource = {
   parse: (payload, name) => {
     if (typeof payload !== "string") return unavailable("nkcr.cz answered without a body");
     if (!payload.includes("Výsledky vyhledávání")) return unavailable("nkcr.cz answered with an unexpected page");
-    const hits = rows(payload, '<li class="search__result"', name).map((l) => ({ label: `${l[0] ?? ""} — notary, ${l.find((x) => x.startsWith("Notářská komora")) ?? "office listed"}`, url: nkcr.url(name), status: "appointed", born: null }));
+    const hits = rows(payload, '<li class="search__result"', name).map((l) => ({ label: `${l[0] ?? ""} — notary, ${l.find((x) => x.startsWith("Notářská komora")) ?? "office listed"}${postal(l)}`, url: nkcr.url(name), status: "appointed", born: null }));
     return { hits, total: hits.length, note: null };
   },
 };
@@ -133,7 +139,7 @@ export const nrpzs: RegistrySource = {
       const l = text(b).split("\n");
       const link = href(b, /href="(detail-\d+-[^"]+\.html)"/);
       if (!namesMatch(l[0] ?? "", name)) return [];
-      return [{ label: `${l[0] ?? ""} — health-care provider, ${l[1] ?? "field unknown"}, ${l.find((x) => x.startsWith("IČO")) ?? ""}`, url: link === null ? nrpzs.url(name) : `https://nrpzs.uzis.cz/${link}`, status: "registered provider", born: null }];
+      return [{ label: `${l[0] ?? ""} — health-care provider, ${l[1] ?? "field unknown"}${postal(l)}, ${l.find((x) => x.startsWith("IČO")) ?? ""}`, url: link === null ? nrpzs.url(name) : `https://nrpzs.uzis.cz/${link}`, status: "registered provider", born: null }];
     });
     return { hits, total: Number.isFinite(total) ? total : hits.length, note: null };
   },

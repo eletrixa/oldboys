@@ -16,12 +16,14 @@ import { aresSearch, aresVr } from "@/recipe/sources/ares";
 import { bluesky } from "@/recipe/sources/bluesky";
 import { czRegistries } from "@/recipe/sources/cz-registries";
 import { facebookPage } from "@/recipe/sources/facebook";
+import { facebookSearch } from "@/recipe/sources/facebook-search";
 import { github } from "@/recipe/sources/github";
 import { githubApify } from "@/recipe/sources/github-apify";
 import { githubDeep } from "@/recipe/sources/github-deep";
 import { googleSearch } from "@/recipe/sources/google-search";
 import { huggingface } from "@/recipe/sources/huggingface";
 import { instagram } from "@/recipe/sources/instagram";
+import { instagramSearch } from "@/recipe/sources/instagram-search";
 import { linkedinProfile, linkedinProfileDetail } from "@/recipe/sources/linkedin";
 import { linkedinCompany } from "@/recipe/sources/linkedin-company";
 import { linkedinPosts } from "@/recipe/sources/linkedin-posts";
@@ -50,6 +52,7 @@ const all: readonly Collector[] = [
   bluesky,
   x,
   instagram,
+  instagramSearch,
   tiktok,
   websiteCrawler,
   linkedinProfile,
@@ -57,6 +60,7 @@ const all: readonly Collector[] = [
   linkedinCompany,
   linkedinPosts,
   facebookPage,
+  facebookSearch,
 ];
 
 const byId = new Map(all.map((c) => [c.id, c]));

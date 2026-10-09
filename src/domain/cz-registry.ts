@@ -13,13 +13,14 @@
  *   role title names the licensed profession (doctors, dentists, pharmacists, lawyers, architects, construction engineers,
  *   tax advisors, auditors, financial intermediaries, bailiffs, notaries, court experts and interpreters, veterinarians)
  * - `registriesFor(role)`: everyone + the role-matched ones, in catalog order; `registryById`
- * - `RegistryCheck` / `RegistryChecks`: one row per registry queried (clear / hits / unavailable), what was searched, hits
- *   with the registry's own wording and a link; the digest the collector writes into its ledger ref and `readRegistryChecks` reads back
+ * - `RegistryCheck` / `RegistryChecks`: one row per registry queried (clear / hits / namesakes / unavailable), what was searched,
+ *   hits with the registry's own wording, a link and `match` (why the record is the candidate's: city or company), the count of
+ *   records under the name set aside as namesakes; the digest the collector writes into its ledger ref and `readRegistryChecks` reads back
  * - `REGISTRY_CAVEATS`: the fixed honesty lines (name-only search, namesakes, a hit is never a judgment)
  *
  * Design constraints:
- * - Pure, no I/O. A hit is a possible namesake until confirmed at the interview: the digest says "a record under this name exists",
- *   never "the candidate is insolvent". No Art. 9 data; nothing here scores the person
+ * - Pure, no I/O. A hit is attributed by the candidate's city or employers (the collector decides), never by name alone; the digest
+ *   says "a record under this name at the candidate's city exists", never "the candidate is insolvent". No Art. 9 data; nothing here scores the person
  * - "architect" alone never triggers the architects' chamber: software / solution / cloud / data / enterprise architects are excluded
  */
 import { z } from "zod";
@@ -114,18 +115,25 @@ export const RegistryHit = z.object({
   status: z.string().nullable().default(null),
   /** Birth date or year when the registry lists one; null otherwise. */
   born: z.string().nullable().default(null),
+  /** Why the record is the candidate's and not a namesake's ("city: Brno", "company: Snuggs"); null when only the name matches. */
+  match: z.string().nullable().default(null),
 });
 export type RegistryHit = z.infer<typeof RegistryHit>;
 
 export const RegistryCheck = z.object({
   registry: RegistryId,
-  /** clear: searched, no record under the name; hits: records under the name (namesakes possible); unavailable: the registry did not answer. */
-  status: z.enum(["clear", "hits", "unavailable"]),
+  /**
+   * clear: searched, no record under the name; hits: records attributed to the candidate (or, without a known city, every record
+   * under the name); namesakes: records under the name exist but none is at the candidate's city or employers; unavailable: no answer.
+   */
+  status: z.enum(["clear", "hits", "namesakes", "unavailable"]),
   /** What was typed into the registry's search (name, birth date, city). */
   searched: z.string().min(1),
   /** The search page or API call that answered; a reader can repeat it. */
   source_url: z.string().min(1),
   hits: z.array(RegistryHit).default([]),
+  /** Records under the name set aside because their city or company is not the candidate's (not listed in `hits`). */
+  namesakes: z.number().int().nonnegative().default(0),
   /** Total the registry reported when it exceeds the listed hits; null when unknown. */
   total: z.number().int().nonnegative().nullable().default(null),
   /** Error text or registry notice for `unavailable`; null otherwise. */
@@ -148,7 +156,7 @@ export function readRegistryChecks(rows: readonly LedgerRow[]): RegistryChecks |
 }
 
 export const REGISTRY_CAVEATS: readonly string[] = [
-  "Searches are by name only (no birth number or birth date): a hit may be a namesake. Confirm at the interview, never assume.",
+  "Searches are by name only (no birth number or birth date). A record is listed as the candidate's when its city or company matches the profile; records under the name elsewhere are counted as namesakes and left out. Confirm at the interview, never assume.",
   "A clear result means no record under this exact spelling on the day of the search; registries lag and spellings vary.",
   "A chamber entry shows the licence exists; its absence for a role that needs one is a question to ask, not a verdict.",
   "Nothing here is a score of the person; it is the registry's own wording with a link.",

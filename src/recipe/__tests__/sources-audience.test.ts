@@ -54,20 +54,20 @@ describe("instagram", () => {
       ],
     });
     expect(instagram.requests(ctx, step)).toEqual([
-      { via: "actor", actor: "apify/instagram-profile-scraper", input: { usernames: ["jana", "jana2"] }, maxTotalChargeUsd: 0.02, timeoutSecs: 45 },
+      { via: "actor", actor: "apify/instagram-profile-scraper", input: { usernames: ["jana", "jana2"] }, maxTotalChargeUsd: 0.03, timeoutSecs: 45 },
     ]);
   });
-  it("parses a profile with 3 captions", () => {
+  it("parses a profile with 6 captions", () => {
     const out = instagram.parse(
-      [{ username: "jana", fullName: "Jana D", biography: "Data", followersCount: 10, verified: false, latestPosts: [1, 2, 3, 4].map((n) => ({ caption: `cap${String(n)}` })) }],
+      [{ username: "jana", fullName: "Jana D", biography: "Data", followersCount: 10, verified: false, latestPosts: [1, 2, 3, 4, 5, 6, 7].map((n) => ({ caption: `cap${String(n)}` })) }],
       baseContext(),
       step,
     );
     expect(out).toHaveLength(1);
     expect(out[0]?.url).toBe("https://www.instagram.com/jana/");
     expect(out[0]?.excerpt).toContain("Followers: 10");
-    expect(out[0]?.excerpt).toContain("cap3");
-    expect(out[0]?.excerpt).not.toContain("cap4");
+    expect(out[0]?.excerpt).toContain("cap6");
+    expect(out[0]?.excerpt).not.toContain("cap7");
   });
   it("returns [] on garbage", () => {
     expect(instagram.parse({ error: "x" }, baseContext(), step)).toEqual([]);

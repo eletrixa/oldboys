@@ -64,11 +64,12 @@ describe("linkedinPosts", () => {
 });
 
 describe("facebookPage", () => {
-  it("asks only for merged facebook candidates", () => {
+  it("asks for merged and possibly-same-as facebook candidates, never rejected ones", () => {
     const fb = cand({ platform: "facebook", profile_urls: ["https://www.facebook.com/janadata"], handle: "janadata" });
-    expect(facebookPage.requests(baseContext({ candidates: [{ ...fb, decision: "possibly-same-as" }] }), step)).toEqual([]);
+    expect(facebookPage.requests(baseContext({ candidates: [{ ...fb, decision: "rejected" }] }), step)).toEqual([]);
+    expect(facebookPage.requests(baseContext({ candidates: [{ ...fb, decision: "possibly-same-as" }] }), step)).toHaveLength(1);
     expect(facebookPage.requests(baseContext({ candidates: [fb] }), step)).toEqual([
-      { via: "actor", actor: "apify/facebook-pages-scraper", input: { startUrls: [{ url: "https://www.facebook.com/janadata" }] }, maxTotalChargeUsd: 0.03, timeoutSecs: 45 },
+      { via: "actor", actor: "apify/facebook-pages-scraper", input: { startUrls: [{ url: "https://www.facebook.com/janadata" }] }, maxTotalChargeUsd: 0.04, timeoutSecs: 45 },
     ]);
   });
 
