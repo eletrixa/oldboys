@@ -13,6 +13,7 @@
  *   the bytes' kind over the declared one, a decompression bomb, a binary .txt, file-wins-over-text, a non-Latin file
  *   name, duplicate (a resend with other details noted), unmatched and capped answering 201 like any other, a funnel
  *   failure 500 and its retry storing the CV, an in-flight duplicate 503
+ * - A 400 about the CV file carries `field: "cv"` (the page shows it under the file), any other 400 only `error`
  * - Prove no response ever carries an application id, status or run id
  *
  * Design constraints:
@@ -62,10 +63,12 @@ async function post(
   return new Request(url, { method: "POST", headers: { "Content-Type": draft.headers.get("Content-Type") ?? "", ...sized, ...headers }, body });
 }
 
-/** The `error` string of a JSON error response; fails the test when the body has any other shape. */
-async function errorOf(res: Response): Promise<string> {
+/** The `error` string of a JSON error response; fails the test when the body has any other shape (`field` only for "cv"). */
+async function errorOf(res: Response, field?: "cv"): Promise<string> {
   const body = await res.json<Record<string, unknown>>();
-  expect(Object.keys(body)).toEqual(["error"]);
+  expect(Object.keys(body).sort()).toEqual(field === undefined ? ["error"] : ["error", "field"]);
+  expect(body.field).toBe(field);
+  expect(typeof body.error).toBe("string");
   return String(body.error);
 }
 
@@ -130,7 +133,7 @@ describe("handleApply", () => {
     const { env, writes } = makeEnv();
     const res = await handleApply(await post({ cv: new File([], "cv.pdf", { type: "application/pdf" }) }), env, NOW);
     expect(res.status).toBe(400);
-    expect(await errorOf(res)).toBe(MESSAGES.cvEmpty);
+    expect(await errorOf(res, "cv")).toBe(MESSAGES.cvEmpty);
     expect(writes).toEqual([]);
   });
 
@@ -147,7 +150,7 @@ describe("handleApply", () => {
     const cfb = new Uint8Array([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1, 0, 0, 0, 0]);
     const res = await handleApply(await post({ linkedinUrl: "", cv: new File([cfb], "cv.docx", { type: CV_MEDIA_TYPE.docx }) }), env, NOW);
     expect(res.status).toBe(400);
-    expect(await errorOf(res)).toBe(MESSAGES.cvDoc);
+    expect(await errorOf(res, "cv")).toBe(MESSAGES.cvDoc);
     expect(writes).toEqual([]);
   });
 
@@ -156,7 +159,7 @@ describe("handleApply", () => {
     const { env, apps } = makeEnv();
     const alone = await handleApply(await post({ linkedinUrl: "", cv: bomb() }), env, NOW);
     expect(alone.status).toBe(400);
-    expect(await errorOf(alone)).toBe(MESSAGES.cvUnreadable.docx);
+    expect(await errorOf(alone, "cv")).toBe(MESSAGES.cvUnreadable.docx);
     expect((await handleApply(await post({ cv: bomb() }), env, NOW)).status).toBe(201);
     expect([...apps.values()][0]?.note).toContain("Word file would inflate past 40 MB, not read");
   });
@@ -166,7 +169,7 @@ describe("handleApply", () => {
     const binary = new File([new Uint8Array(4000).map((_, i) => (i * 37) % 256)], "cv.txt", { type: "text/plain" });
     const res = await handleApply(await post({ linkedinUrl: "", cv: binary }), env, NOW);
     expect(res.status).toBe(400);
-    expect(await errorOf(res)).toBe(MESSAGES.cvUnreadable.txt);
+    expect(await errorOf(res, "cv")).toBe(MESSAGES.cvUnreadable.txt);
     expect(writes).toEqual([]);
   });
 
@@ -193,24 +196,24 @@ describe("handleApply", () => {
   });
 
   it.each([
-    ["bad tag", { tag: "Not A Tag!" }],
-    ["missing tag", { tag: undefined }],
-    ["missing name", { name: undefined }],
-    ["blank name", { name: "   " }],
-    ["bad email", { email: "nope" }],
-    ["neither LinkedIn nor CV", { linkedinUrl: "" }],
-    ["not a LinkedIn link", { linkedinUrl: "https://example.com/in/x" }],
-    ["old Word .doc CV", { linkedinUrl: "", cv: new File(["x"], "cv.doc", { type: "application/msword" }) }],
-    ["image CV", { cv: new File(["x"], "cv.png", { type: "image/png" }) }],
-    ["blank pasted CV and no LinkedIn", { linkedinUrl: "", cvText: "   " }],
-    ["pasted CV over 20000 characters", { linkedinUrl: "", cvText: "x".repeat(CV_MAX + 1) }],
-    ["CV over 10 MiB", { cv: new File([new Uint8Array(10 * 1024 * 1024 + 1)], "cv.pdf", { type: "application/pdf" }) }],
-    ["message over 10000 characters", { coverLetter: "x".repeat(10_001) }],
-  ])("answers 400 with an error and stores nothing: %s", async (_label, fields) => {
+    ["bad tag", { tag: "Not A Tag!" }, undefined],
+    ["missing tag", { tag: undefined }, undefined],
+    ["missing name", { name: undefined }, undefined],
+    ["blank name", { name: "   " }, undefined],
+    ["bad email", { email: "nope" }, undefined],
+    ["neither LinkedIn nor CV", { linkedinUrl: "" }, undefined],
+    ["not a LinkedIn link", { linkedinUrl: "https://example.com/in/x" }, undefined],
+    ["old Word .doc CV", { linkedinUrl: "", cv: new File(["x"], "cv.doc", { type: "application/msword" }) }, "cv"],
+    ["image CV", { cv: new File(["x"], "cv.png", { type: "image/png" }) }, "cv"],
+    ["blank pasted CV and no LinkedIn", { linkedinUrl: "", cvText: "   " }, undefined],
+    ["pasted CV over 20000 characters", { linkedinUrl: "", cvText: "x".repeat(CV_MAX + 1) }, undefined],
+    ["CV over 10 MiB", { cv: new File([new Uint8Array(10 * 1024 * 1024 + 1)], "cv.pdf", { type: "application/pdf" }) }, "cv"],
+    ["message over 10000 characters", { coverLetter: "x".repeat(10_001) }, undefined],
+  ] as const)("answers 400 with an error and stores nothing: %s", async (_label, fields, field) => {
     const { env, writes } = makeEnv();
     const res = await handleApply(await post(fields), env, NOW);
     expect(res.status).toBe(400);
-    expect(await errorOf(res)).not.toBe("");
+    expect(await errorOf(res, field)).not.toBe("");
     expect(writes).toEqual([]);
   });
 
@@ -218,7 +221,7 @@ describe("handleApply", () => {
     const { env } = makeEnv();
     const res = await handleApply(await post({ linkedinUrl: "", cv: new File(["x"], "scan.jpg", { type: "image/jpeg" }) }), env, NOW);
     expect(res.status).toBe(400);
-    expect(await errorOf(res)).toBe(MESSAGES.cvType);
+    expect(await errorOf(res, "cv")).toBe(MESSAGES.cvType);
   });
 
   it("answers 400 in Czech when the page asked for Czech", async () => {
@@ -232,7 +235,7 @@ describe("handleApply", () => {
     const { env, writes } = makeEnv();
     const res = await handleApply(await post({ linkedinUrl: "", cv: docFile() }), env, NOW);
     expect(res.status).toBe(400);
-    expect(await errorOf(res)).toBe(MESSAGES.cvDoc);
+    expect(await errorOf(res, "cv")).toBe(MESSAGES.cvDoc);
     expect(writes).toEqual([]);
   });
 
@@ -249,7 +252,7 @@ describe("handleApply", () => {
     const { env, writes } = makeEnv();
     const res = await handleApply(await post({ linkedinUrl: "", cv: scanFile() }), env, NOW);
     expect(res.status).toBe(400);
-    expect(await errorOf(res)).toBe("We could not read any text in that PDF. Please add your LinkedIn profile or paste the text of your CV.");
+    expect(await errorOf(res, "cv")).toBe("We could not read any text in that PDF. Please add your LinkedIn profile or paste the text of your CV.");
     expect(writes).toEqual([]);
   });
 
@@ -265,6 +268,7 @@ describe("handleApply", () => {
     const { env } = makeEnv();
     const res = await handleApply(await post({}, { ...SAME_ORIGIN, "Content-Length": String(11 * 1024 * 1024) }), env, NOW);
     expect(res.status).toBe(400);
+    expect(await errorOf(res, "cv")).toBe(MESSAGES.cvSize);
   });
 
   it("LinkedIn-only application: 201 {received:true}, run started for the tag's role", async () => {

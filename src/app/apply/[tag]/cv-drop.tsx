@@ -10,7 +10,8 @@
  * - Pick by click, keyboard or drag-and-drop (zone highlighted while a file is over it); a second file replaces the first;
  *   of several dropped at once the first usable one is taken and a line under the zone says so
  * - Type and size checked the moment a file is chosen (`cvFileProblem`); a refused file never replaces a good one, and
- *   the refusal names both files (`cvRefusal`) while the zone keeps its neutral border
+ *   the refusal names both files (`cvRefusal`) while the zone keeps its neutral border; the zone turns red when there
+ *   is no file, or the server refused the attached one (`refused`); no aria-invalid (a button does not support it)
  * - Shows the chosen file (cv-file-row.tsx); its Remove hands focus back to the zone
  *
  * Design constraints:
@@ -34,6 +35,8 @@ type Props = {
   /** The current problem when it belongs to the file, else null; `alert` when it is the one announced. */
   error: string | null;
   alert: boolean;
+  /** The attached file itself is the problem (the server could not use it), not only a refused second pick. */
+  refused: boolean;
   /** A picked file was refused: why, the picked name, and the name of the file that stays attached (or null). */
   onReject: (problem: FileProblem, picked: string, kept: string | null) => void;
   copy: Copy;
@@ -41,7 +44,7 @@ type Props = {
 
 const ZONE = "flex min-h-28 w-full flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed px-4 py-6 text-center transition-colors motion-reduce:transition-none";
 
-export function CvDrop({ file, onFile, error, alert, onReject, copy }: Readonly<Props>): React.JSX.Element {
+export function CvDrop({ file, onFile, error, alert, refused, onReject, copy }: Readonly<Props>): React.JSX.Element {
   const input = useRef<HTMLInputElement>(null);
   const zone = useRef<HTMLButtonElement>(null);
   const [over, setOver] = useState(false);
@@ -56,10 +59,12 @@ export function CvDrop({ file, onFile, error, alert, onReject, copy }: Readonly<
     else onFile(picked);
   }
 
-  // Red only when the problem is the zone's own (no file yet); a refused second file leaves the good one, and a calm zone.
+  // Red only when the problem is the zone's own (no file yet, or the attached one refused by the server); a refused
+  // second file leaves the good one, and a calm zone.
+  const invalid = error !== null && (file === null || refused);
   const tone = over
     ? "border-action bg-peach/40"
-    : error !== null && file === null
+    : invalid
       ? "border-conflict bg-surface"
       : "border-line bg-canvas hover:border-ink hover:bg-sage/40";
 

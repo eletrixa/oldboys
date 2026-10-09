@@ -10,7 +10,9 @@
  * Key responsibilities:
  * - Same-origin check (403), per-IP rate limit (429, the `APPLY_RATE_LIMIT` binding), a declared body size required and
  *   capped before anything is buffered (400), multipart parse, silent bot drop (honeypot `hp_contact` filled, or sent
- *   under MIN_FILL_MS after the page rendered: 200), validation (400) in the page's language (`?lang=cs`)
+ *   under MIN_FILL_MS after the page rendered: 200), validation (400) in the page's language (`?lang=cs`); a 400
+ *   about the CV file (format, size, empty, .doc alone, no readable text) is `{error, field: "cv"}`, so the page
+ *   shows it under the file, not above Send
  * - CV as a PDF / DOCX / TXT file (stored under its canonical media type), an older .doc stored beside LinkedIn, or
  *   pasted `cvText`; a file wins over text. The kind is the bytes' magic when they carry one (`sniffCvKind`). The file's
  *   text is read here, before answering: a file without readable text and no LinkedIn profile is a 400 the candidate
@@ -23,6 +25,7 @@
  * Design constraints:
  * - Takes bindings as parameters so Vitest runs it under plain Node
  * - The candidate never learns an application id, status or run id: the body is `{received: true}` or `{error}`
+ *   (plus `field: "cv"` on a CV 400)
  * - An unknown tag is stored as `unmatched` and answered like a success (no tag oracle through the API; the page
  *   itself 404s an unknown tag on purpose, so a candidate with a mistyped link learns it before filling anything in)
  * - Browsers always declare Content-Length for a FormData body; a chunked body (no length) is refused, so nothing
@@ -43,6 +46,8 @@ import { ingestApplication, type IntakeEnv } from "@/workflow/intake";
 const BODY_MAX_BYTES = CV_MAX_BYTES + 256 * 1024;
 
 const bad = (error: string): Response => Response.json({ error }, { status: 400 });
+/** A 400 about the CV file: the page shows it under the file row. */
+const badCv = (error: string): Response => Response.json({ error, field: "cv" }, { status: 400 });
 const received = (status: 200 | 201): Response => Response.json({ received: true }, { status });
 
 /** The route's bindings: the funnel's, plus the per-IP limit (wrangler `ratelimits`; absent in unit tests). */
@@ -60,7 +65,7 @@ export async function handleApply(request: Request, env: ApplyEnv, now: Date): P
 
   const length = request.headers.get("Content-Length");
   if (length === null || !/^\d+$/.test(length)) return bad(m.unreadableForm);
-  if (Number(length) > BODY_MAX_BYTES) return bad(m.cvSize);
+  if (Number(length) > BODY_MAX_BYTES) return badCv(m.cvSize);
 
   let form: FormData;
   try {
@@ -87,7 +92,7 @@ export async function handleApply(request: Request, env: ApplyEnv, now: Date): P
     message: formText(form, "coverLetter"),
   };
   const problem = checkApply(draft, lang);
-  if (problem !== null) return bad(problem.message);
+  if (problem !== null) return problem.field === "cv" ? badCv(problem.message) : bad(problem.message);
   const email = draft.email.trim();
   const linkedinUrl = draft.linkedinUrl.trim();
 
@@ -98,10 +103,10 @@ export async function handleApply(request: Request, env: ApplyEnv, now: Date): P
   const kind = bytes === null || declared === null ? null : sniffCvKind(bytes, declared);
   const cvFile = cv === null || bytes === null || kind === null ? null : toCvFile({ bytes, filename: cv.name, contentType: CV_MEDIA_TYPE[kind] });
   // A .doc is never read: it needs LinkedIn beside it (checkApply asked by its name; this asks by its bytes).
-  if (kind === "doc" && linkedinUrl === "") return bad(m.cvDoc);
+  if (kind === "doc" && linkedinUrl === "") return badCv(m.cvDoc);
   // Read the file now so a scan without text is the candidate's to fix while the form is still open.
   const extracted = cvFile === null ? null : await extractCvText(cvFile);
-  if (kind !== null && kind !== "doc" && extracted?.text === null && linkedinUrl === "") return bad(m.cvUnreadable[kind]);
+  if (kind !== null && kind !== "doc" && extracted?.text === null && linkedinUrl === "") return badCv(m.cvUnreadable[kind]);
   const cvText = cv === null ? draft.cvText.trim() : (extracted?.text ?? "");
   const cvNote = extracted?.text === null ? (extracted.note ?? undefined) : undefined;
 

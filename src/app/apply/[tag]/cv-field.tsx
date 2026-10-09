@@ -28,31 +28,35 @@ import { useNoStrayDrop } from "./stray-drop";
 
 export type CvMode = "file" | "paste";
 
-type Props = {
-  mode: CvMode;
+/** What the section reports: a mode switch, a picked or removed file, typed text, and a refused pick. */
+export type CvEvents = {
   onMode: (mode: CvMode) => void;
-  file: File | null;
   onFile: (file: File | null) => void;
-  text: string;
   onText: (text: string) => void;
+  onReject: (problem: FileProblem, picked: string, kept: string | null) => void;
+};
+
+type Props = CvEvents & {
+  mode: CvMode;
+  file: File | null;
+  text: string;
   /** The sentence under the zone and under the textarea, or null; `alert` names the one that is announced. */
   errors: { cv: string | null; cvText: string | null };
   alert: "cv" | "cvText" | null;
-  onReject: (problem: FileProblem, picked: string, kept: string | null) => void;
-  copy: { legend: string; optional: string; cv: ApplyCopy["cv"] };
+  /** The server refused the attached file (its sentence is `errors.cv`): the zone turns red although a file is there. */
+  refused: boolean;
+  copy: { legend: string; cv: ApplyCopy["cv"] };
 };
 
-export function CvField({ mode, onMode, file, onFile, text, onText, errors, alert, onReject, copy }: Readonly<Props>): React.JSX.Element {
+export function CvField({ mode, onMode, file, onFile, text, onText, errors, alert, refused, onReject, copy }: Readonly<Props>): React.JSX.Element {
   const textError = errors.cvText;
   useNoStrayDrop();
 
   return (
     <fieldset className="flex min-w-0 flex-col gap-2">
-      <legend className="mb-1.5 text-sm font-semibold">
-        {copy.legend} <span className="font-normal text-muted">{copy.optional}</span>
-      </legend>
+      <legend className="mb-1.5 text-sm font-semibold">{copy.legend}</legend>
       {mode === "file" ? (
-        <CvDrop file={file} onFile={onFile} error={errors.cv} alert={alert === "cv"} onReject={onReject} copy={copy.cv} />
+        <CvDrop file={file} onFile={onFile} error={errors.cv} alert={alert === "cv"} refused={refused} onReject={onReject} copy={copy.cv} />
       ) : (
         <>
           <label htmlFor={fieldId("cvText")} className="sr-only">

@@ -13,7 +13,9 @@
  *   after 90 s without progress
  * - One send at a time: a synchronous ref guard, so a double tap never sends twice; while sending the fields are
  *   disabled (the draft was already taken) and focus rests on the send button, which stays focusable (aria-disabled)
- * - Network error or 5xx: the sentence, and the send button reads "Try again" and resubmits the same, untouched draft
+ * - Network error or 5xx: the sentence, and the send button reads "Try again" and resubmits the same, untouched draft;
+ *   a 400 about the CV file (`field: "cv"`) shows under the file row instead; any edit or CV change clears either
+ * - LinkedIn and CV under one line saying one of them is enough; only the message is marked optional
  * - Done card naming the reply address, what was attached and when to expect a reply
  *
  * Design constraints:
@@ -25,7 +27,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { COPY, type Lang } from "./apply-copy";
-import { checkApplyAll, cvRefusal, MESSAGE_MAX } from "./apply-fields";
+import { checkApplyAll, MESSAGE_MAX, type SendFailure } from "./apply-fields";
 import { CONTROL, DoneCard, Field, Honeypot, SendFooter } from "./apply-parts";
 import { CvField } from "./cv-field";
 import { sendApplication } from "./post-form";
@@ -42,8 +44,11 @@ export function ApplyForm({ tag, lang, privacy }: Readonly<Props>): React.JSX.El
   const shownAt = useRef(0);
   const busy = useRef(false);
   const [stage, setStage] = useState<Stage>({ kind: "editing" });
-  const [failure, setFailure] = useState<{ message: string; retry: boolean } | null>(null);
-  const d = useDraft(formRef, lang);
+  const [failure, setFailure] = useState<SendFailure | null>(null);
+  // A failed send's sentence describes that send: any edit or CV change clears it (the button reads Send again).
+  const d = useDraft(formRef, lang, () => {
+    setFailure(null);
+  });
   const { cv } = d;
   useEffect(() => {
     shownAt.current = Date.now();
@@ -81,6 +86,7 @@ export function ApplyForm({ tag, lang, privacy }: Readonly<Props>): React.JSX.El
 
   const hasCv = cv.mode === "file" ? cv.file !== null : cv.text.trim() !== "";
   const sending = stage.kind === "sending";
+  const cvFailure = failure?.field === "cv" ? failure.message : null;
 
   return (
     <form
@@ -101,33 +107,23 @@ export function ApplyForm({ tag, lang, privacy }: Readonly<Props>): React.JSX.El
         <Field {...d.shell("email")} label={copy.form.email}>
           <input {...d.fieldProps("email")} type="email" autoComplete="email" maxLength={200} className={CONTROL} />
         </Field>
-        <Field {...d.shell("linkedinUrl")} label={copy.form.linkedin} optional={copy.form.optional} hint={copy.form.linkedinHint}>
-          {/* type="text" with a url keyboard (the browser would reject "linkedin.com/in/..." without https); no autofill: it offers a personal site */}
-          <input {...d.fieldProps("linkedinUrl", true)} type="text" inputMode="url" autoComplete="off" maxLength={500} placeholder={copy.form.linkedinPlaceholder} className={CONTROL} />
-        </Field>
-        <CvField
-          mode={cv.mode}
-          onMode={(mode) => {
-            cv.setMode(mode);
-            d.recheck({ mode });
-          }}
-          file={cv.file}
-          onFile={(file) => {
-            cv.setFile(file);
-            d.recheck({ file });
-          }}
-          text={cv.text}
-          onText={(text) => {
-            cv.setText(text);
-            if (d.hasErrors) d.recheck({ text });
-          }}
-          errors={{ cv: d.errorFor("cv"), cvText: d.errorFor("cvText") }}
-          alert={d.alertOn === "cv" || d.alertOn === "cvText" ? d.alertOn : null}
-          onReject={(problem, picked, kept) => {
-            d.mark("cv", cvRefusal(problem, picked, kept, lang));
-          }}
-          copy={{ legend: copy.form.cv, optional: copy.form.optional, cv: copy.cv }}
-        />
+        <div role="group" aria-labelledby="either-note" className="flex min-w-0 flex-col gap-5">
+          <p id="either-note" className="-mb-2 text-sm text-muted">
+            {copy.form.either}
+          </p>
+          <Field {...d.shell("linkedinUrl")} label={copy.form.linkedin}>
+            {/* type="text" with a url keyboard (the browser would reject "linkedin.com/in/..." without https); no autofill: it offers a personal site */}
+            <input {...d.fieldProps("linkedinUrl")} type="text" inputMode="url" autoComplete="off" maxLength={500} placeholder={copy.form.linkedinPlaceholder} className={CONTROL} />
+          </Field>
+          <CvField
+            {...cv}
+            {...d.cvEvents}
+            errors={{ cv: d.errorFor("cv") ?? cvFailure, cvText: d.errorFor("cvText") }}
+            alert={d.alertOn === "cv" || d.alertOn === "cvText" ? d.alertOn : cvFailure !== null ? "cv" : null}
+            refused={cvFailure !== null}
+            copy={{ legend: copy.form.cv, cv: copy.cv }}
+          />
+        </div>
         <Field {...d.shell("coverLetter")} label={copy.form.message} optional={copy.form.optional}>
           <textarea {...d.fieldProps("coverLetter")} rows={4} maxLength={MESSAGE_MAX} className={CONTROL} />
         </Field>
@@ -136,7 +132,7 @@ export function ApplyForm({ tag, lang, privacy }: Readonly<Props>): React.JSX.El
       <SendFooter
         copy={copy}
         sendRef={sendRef}
-        failure={failure}
+        failure={failure !== null && failure.field === undefined ? failure : null}
         percent={sending ? stage.percent : null}
         checking={hasCv ? copy.progress.checkingCv : copy.progress.checkingDetails}
         privacy={privacy}

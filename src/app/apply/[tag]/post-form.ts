@@ -13,7 +13,8 @@
  *   CV on a slow phone line finishes (and Try again is never a wall the same file hits again)
  * - `sendApplication`: the multipart body built from the draft (fields, tag, the CV file or pasted text, the honeypot
  *   and the fill time), the POST in the page's language and what the candidate sees: done with the attached line, or
- *   the sentence and whether to retry; a trapped send (200) clears the honeypot so the retry goes through
+ *   the sentence, whether to retry and the field it belongs to (`cv`); a trapped send (200) clears the honeypot so the
+ *   retry goes through
  *
  * Design constraints:
  * - XMLHttpRequest, not fetch: fetch has no upload progress
@@ -21,7 +22,7 @@
  * - The body is the draft as it was at Send, never the live form: an edit during the upload is not half-sent
  */
 import { COPY, type Lang } from "./apply-copy";
-import { attachedLine, FILL_MS, HONEYPOT, replyOutcome, type ApplyDraft } from "./apply-fields";
+import { attachedLine, FILL_MS, HONEYPOT, replyOutcome, type ApplyDraft, type SendFailure } from "./apply-fields";
 
 /** Longest silence (no upload progress, no answer) before a send counts as timed out. */
 export const POST_IDLE_MS = 90_000;
@@ -85,7 +86,7 @@ export function postForm(url: string, data: FormData, onProgress: (percent: numb
   });
 }
 
-export type SendResult = { kind: "done"; attached: string } | { kind: "error"; message: string; retry: boolean };
+export type SendResult = { kind: "done"; attached: string } | ({ kind: "error" } & SendFailure);
 
 /** The honeypot input; a 200 answer means it (or the fill time) trapped a real send, so it is cleared for the retry. */
 type Trap = { input: HTMLInputElement | null; fillMs: number };

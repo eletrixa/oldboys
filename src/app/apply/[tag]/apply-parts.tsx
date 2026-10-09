@@ -7,7 +7,7 @@
  * Tested:  n/a (visual; copy helpers in apply-fields.test.ts, the page is driven in the browser QA of specs/intake/apply-page.md)
  *
  * Key responsibilities:
- * - `Field`: label (+ "optional"), control, hint and the error under it, wired with ids and aria-describedby
+ * - `Field`: label (+ "optional"), control and the error under it, wired with ids and aria-describedby
  * - `FieldError`: an error sentence under its field; only the one passed `alert` is the `role=alert` region
  * - `Honeypot`: the `hp_contact` trap, visually hidden, out of tab order and the accessibility tree, with a label no
  *   autofill heuristic maps to a person's data
@@ -50,9 +50,9 @@ export function FieldError({ field, message, alert }: Readonly<ErrorProps>): Rea
   );
 }
 
-type FieldShell = { field: ApplyField; label: string; optional?: string; hint?: string; error: string | null; alert: boolean; children: React.ReactNode };
+type FieldShell = { field: ApplyField; label: string; optional?: string; error: string | null; alert: boolean; children: React.ReactNode };
 
-export function Field({ field, label, optional, hint, error, alert, children }: Readonly<FieldShell>): React.JSX.Element {
+export function Field({ field, label, optional, error, alert, children }: Readonly<FieldShell>): React.JSX.Element {
   return (
     <div className="flex flex-col gap-1.5">
       <label htmlFor={fieldId(field)} className="text-sm font-semibold">
@@ -60,11 +60,6 @@ export function Field({ field, label, optional, hint, error, alert, children }: 
         {optional !== undefined && <span className="font-normal text-muted"> {optional}</span>}
       </label>
       {children}
-      {hint !== undefined && (
-        <p id={`${field}-hint`} className="text-xs text-muted">
-          {hint}
-        </p>
-      )}
       <FieldError field={field} message={error} alert={alert} />
     </div>
   );
