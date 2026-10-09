@@ -11,6 +11,7 @@
  *   is known) / "N namesakes left out" / "not available", each with the search link; hits listed under the row with their status
  *   word, match reason and link; registries the role needs but no Worker may query are listed as "check by hand"
  *   with the search page; the fixed caveats close the card; nothing when `checks` is null
+ * - What a record means is phrased as "A record here means: …", so a clear row never reads as a finding
  *
  * Design constraints:
  * - No hooks, English only; the registry's wording and a link, never a judgment about the person
@@ -48,7 +49,7 @@ function Row({ check }: { check: RegistryCheck }): React.JSX.Element {
         <Ext url={check.source_url}>repeat the search</Ext>
       </div>
       <p className="mt-1 text-xs text-muted">
-        Searched: {check.searched}. {r.means.charAt(0).toUpperCase() + r.means.slice(1)}.
+        Searched: {check.searched}. A record here means: {r.means}.
         {check.note !== null && ` ${check.note}`}
         {check.namesakes > 0 && ` ${String(check.namesakes)} record${check.namesakes === 1 ? "" : "s"} under the same name elsewhere left out as namesakes (repeat the search to see them).`}
       </p>
