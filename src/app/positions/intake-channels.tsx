@@ -19,7 +19,7 @@
 import { useState } from "react";
 import { postJson, writeToken } from "@/app/_components/token";
 import type { TagRow } from "@/app/intake/intake-rows";
-import { BTN_SECONDARY, CARD, FIELD } from "@/app/ui";
+import { BTN_SECONDARY, CARD, FIELD, FRAG, KEY } from "@/app/ui";
 import { channelsFor, defaultTag } from "./pool-rows";
 
 type Props = { positionId: string; title: string; tags: TagRow[]; onReload: () => Promise<void> };
@@ -94,14 +94,17 @@ export function IntakeChannels({ positionId, title, tags, onReload }: Props): Re
         <BindTag positionId={positionId} title={title} onReload={onReload} />
       ) : (
         tags.map((t) => (
-          <dl key={t.tag} className={`${CARD} grid gap-x-6 gap-y-2 text-sm md:grid-cols-[auto_1fr]`} aria-label={`Channels for ${t.tag}`}>
-            {channelsFor(t, origin).map((c) => (
-              <div key={c.label} className="contents">
-                <dt className="text-muted">{c.label}</dt>
-                <dd className="break-all font-mono">{c.value}</dd>
-              </div>
-            ))}
-          </dl>
+          <div key={t.tag} className={FRAG}>
+            <span className={KEY}>Channels for {t.tag}</span>
+            <dl className="grid gap-x-6 gap-y-2 md:grid-cols-[auto_1fr]" aria-label={`Channels for ${t.tag}`}>
+              {channelsFor(t, origin).map((c) => (
+                <div key={c.label} className="contents">
+                  <dt className="text-muted">{c.label}</dt>
+                  <dd className="break-all font-mono">{c.value}</dd>
+                </div>
+              ))}
+            </dl>
+          </div>
         ))
       )}
     </section>

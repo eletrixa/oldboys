@@ -12,6 +12,7 @@ An editorial dossier on warm paper. The product prepares evidence for a person t
 |---|---|
 | Page background | `bg-canvas` (#faf7f2) |
 | Card / input surface | `bg-surface` (#fff) |
+| UI fragment surface (a piece of real UI shown as illustration or a channel list) | `bg-paper` (#fffefb) |
 | Body text | `text-ink` (#282d2b) |
 | Secondary text | `text-muted` (#59635d, AA on canvas) |
 | Primary action | `bg-action text-white hover:bg-action-hover` |
@@ -28,7 +29,7 @@ Never write `zinc-*`, `teal-*`, `amber-*`, `red-*`, `emerald-*`, `violet-*` in a
 
 ## Type
 
-- Display `h1`: `font-serif text-4xl md:text-5xl leading-[1.05]` (the base layer already sets serif + 600 on h1/h2).
+- Display `h1`: `font-serif text-4xl md:text-5xl leading-[1.05]` (the base layer sets serif on h1/h2; h1 is weight 500 with `-0.02em` tracking, h2 weight 600, since landing v9).
 - Section `h2`: `font-serif text-2xl`.
 - Card title `h3`: `font-sans text-base font-semibold`.
 - Eyebrow above a display heading: `<Eyebrow>` (xs, uppercase, tracked, rust).
@@ -42,11 +43,12 @@ Never write `zinc-*`, `teal-*`, `amber-*`, `red-*`, `emerald-*`, `violet-*` in a
 - Between major blocks `gap-8`; inside a card `gap-3`.
 - Lists of homogeneous rows (profiles, evidence, roles, sources) use hairline dividers (`divide-y divide-divider`), not nested cards.
 - Cards (`CARD` from ui.tsx) only for: the question card, the 30-second summary, brief sections, the start form, audit sections. Everything else sits on the canvas.
+- Sets of equal items (steps, trust tiles, the validation lists, the wizard steps) are `TILE`s: an ink rule on top, no box, no shadow, in a grid at `md`. A fragment of real UI inside a tile or beside a photo is `FRAG` with a `KEY` label above it (landing v9 idiom).
 - Depth: one soft shadow on cards, no borders on buttons inside cards except secondary buttons.
 
 ## Components (ui.tsx)
 
-`CARD`, `CARD_PEACH`, `CARD_SAGE`, `BTN_PRIMARY`, `BTN_SECONDARY`, `BTN_QUIET`, `FIELD`, `LINK`, `<Eyebrow>`, `<Pill tone>`, `<SourceLink url>`. Use them; extend ui.tsx rather than inventing a parallel class string.
+`CARD`, `CARD_PEACH`, `CARD_SAGE`, `TILE`, `FRAG`, `KEY`, `BTN_PRIMARY`, `BTN_SECONDARY`, `BTN_QUIET`, `FIELD`, `LINK`, `<Eyebrow>`, `<Pill tone>`, `<SourceLink url>`. Use them; extend ui.tsx rather than inventing a parallel class string.
 
 ## Per-surface composition
 

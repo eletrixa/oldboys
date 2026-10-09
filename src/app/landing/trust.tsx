@@ -17,7 +17,7 @@
  * - FAQ uses native <details> so it works without JavaScript; its own summary class keeps the questions ink and 18px
  */
 import Link from "next/link";
-import { BTN_PRIMARY, Chevron, Eyebrow } from "../ui";
+import { BTN_PRIMARY, Chevron, Eyebrow, TILE } from "../ui";
 import { Ctas, PROOF, Section, Title } from "./parts";
 
 const STEPS: readonly (readonly [string, string])[] = [
@@ -47,7 +47,7 @@ export function How(): React.JSX.Element {
       </div>
       <ol className="mt-10 grid gap-8 md:grid-cols-3 md:gap-6">
         {STEPS.map(([t, b], i) => (
-          <li key={t} className="flex flex-col gap-2.5 border-t-2 border-ink pt-4">
+          <li key={t} className={TILE}>
             <span className="font-serif text-4xl leading-none text-action tabular-nums">{i + 1}</span>
             <h3 className="text-lg font-semibold">{t}</h3>
             <p className="text-sm leading-relaxed text-pretty text-muted">{b}</p>

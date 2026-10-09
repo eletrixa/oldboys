@@ -7,7 +7,8 @@
  * Tested:  n/a (visual)
  *
  * Key responsibilities:
- * - Semantic Radar tokens (canvas, surface, ink, muted, action, sage, peach, divider, focus, evidence states)
+ * - Semantic Radar tokens (canvas, surface, paper, ink, muted, action, sage, peach, divider, focus, evidence states)
+ * - Display h1 at medium weight with tight tracking (landing v9); h2 keeps semibold
  * - Inference tokens for INFERENCE claim badges
  * - Self-hosted fonts, serif headings, focus ring, reduced motion
  *
@@ -39,6 +40,7 @@
   /* Radar semantic tokens (design kit V2) */
   --color-canvas: #faf7f2;
   --color-surface: #ffffff;
+  --color-paper: #fffefb;
   --color-ink: #282d2b;
   --color-muted: #59635d;
   --color-action: #a44732;
@@ -74,6 +76,10 @@
     font-weight: 600;
     letter-spacing: -0.01em;
     text-wrap: balance;
+  }
+  h1 {
+    font-weight: 500;
+    letter-spacing: -0.02em;
   }
   p,
   li {

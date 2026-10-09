@@ -95,7 +95,7 @@ export function EvidenceExample(): React.JSX.Element {
 
   const running = phase !== 0;
   return (
-    <div ref={card} className="overflow-hidden rounded-2xl border border-divider bg-[#fffefb] shadow-[0_1px_2px_rgba(40,45,43,0.05),0_24px_60px_rgba(40,45,43,0.10)]">
+    <div ref={card} className="overflow-hidden rounded-2xl border border-divider bg-paper shadow-[0_1px_2px_rgba(40,45,43,0.05),0_24px_60px_rgba(40,45,43,0.10)]">
       <div className="flex items-center justify-between gap-3 border-b border-divider px-4 py-3 sm:px-5">
         <span className="text-xs font-semibold tracking-[0.06em] text-muted uppercase">Interactive example · fictional candidate</span>
         <button
