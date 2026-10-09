@@ -21,7 +21,7 @@ import { describe, expect, it } from "vitest";
 import { JUDGEMENT } from "@/domain/challenge";
 import type { Brief, Claim, Profile, ProfileEvidence } from "@/domain/claim";
 import type { RunState } from "../state";
-import { fitPct, scorecard } from "../scorecard";
+import { askLine, fitPct, scorecard } from "../scorecard";
 
 const line = (source_id: string, over: Partial<ProfileEvidence> = {}): ProfileEvidence => ({ quote: "led the data platform team", source_id, kind: "FACT", supports: true, direction: "supports", note: "", strength: "weak", ...over });
 
@@ -213,6 +213,22 @@ describe("scorecard", () => {
     expect(reg[0]?.urls).toEqual(["https://isir.justice.cz/search"]);
     expect(reg[0]?.ask).toMatch(/namesake/);
     expect(reg[1]?.ask).toBe("Check: matched by city: Brno.");
+  });
+
+  it("drops the person line from a registry label and keeps a challenge reason unprefixed", () => {
+    const card = scorecard(
+      run({
+        registry_checks: {
+          subject: "Jan Novak",
+          role: null,
+          checks: [{ registry: "justice-or", status: "hits", searched: "Jan Novak", source_url: "https://or.justice.cz/s", hits: [{ label: "Jan Novák, Dlouhá 1, 110 00 Praha 1 \u2014 společník at Acme s.r.o. (IČO 123), entered 2010", url: "https://or.justice.cz/r/1", status: null, born: null, match: "city: Praha" }], namesakes: 0, total: null, note: null }],
+        },
+      }),
+    );
+    expect(card?.minuses.find((i) => i.area === "registry")?.text).toBe("Public register persons: společník at Acme s.r.o. (IČO 123), entered 2010");
+    expect(askLine("Challenged: evidence may be outdated")).toBe("Challenged: evidence may be outdated");
+    expect(askLine("Check: x")).toBe("Check: x");
+    expect(askLine("Why?")).toBe("Ask: Why?");
   });
 
   it("says when a must-have rests on the CV alone", () => {

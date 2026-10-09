@@ -102,9 +102,9 @@ function share(weight: number, total: number): number {
   return total === 0 ? 0 : Math.round((weight / total) * 100);
 }
 
-/** "Ask: …" unless the producer already wrote a "Check: …" line. */
+/** "Ask: …" unless the producer already wrote a "Check: …" or "Challenged: …" line. */
 export function askLine(ask: string): string {
-  return ask.startsWith("Check:") ? ask : `Ask: ${ask}`;
+  return /^(?:Check|Challenged):/.test(ask) ? ask : `Ask: ${ask}`;
 }
 
 /** "+14 pts", "−14 pts" or "no effect on fit". */
@@ -123,6 +123,15 @@ export function checkedLabel(c: Scorecard["checked"]): string {
 /** A card worth showing: a figure or at least one line. */
 export function hasScorecard(card: Scorecard | null): card is Scorecard {
   return card !== null && (card.fit !== null || card.pluses.length > 0 || card.minuses.length > 0);
+}
+
+/**
+ * The record's substance without the person line: registry labels read "<name>, <address> — <role> at <company> …", and
+ * the address belongs in the registry card, not in a scorecard line. Labels without the separator are kept whole.
+ */
+function recordText(label: string): string {
+  const i = label.indexOf(" \u2014 ");
+  return i === -1 ? label : label.slice(i + 3);
 }
 
 /** Suffix of a must-have line whose only evidence is the candidate's own CV. */
@@ -217,7 +226,7 @@ function registryItems(state: RunState): ScoreItem[] {
       id: `reg-${check.registry}-${String(i)}`,
       side: "minus" as const,
       area: "registry" as const,
-      text: `${name}: ${h.label}`,
+      text: `${name}: ${recordText(h.label)}`,
       kind: "CHECK" as const,
       points: 0,
       source_ids: [],
