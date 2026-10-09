@@ -15,8 +15,8 @@
  * - Excerpts go through clip(); malformed payloads parse to []
  */
 import { z } from "zod";
-import { emptyFacts, type ProfileFacts } from "@/domain/profile-facts";
-import { count, digestOf } from "@/recipe/sources/facts";
+import { count, facts } from "@/domain/profile-facts";
+import { parsedAll } from "@/recipe/sources/facts";
 import type { Collector } from "@/recipe/sources/types";
 import type { Candidate } from "@/domain/claim";
 import type { StepContext } from "@/recipe/sources/types";
@@ -66,19 +66,16 @@ export const youtube: Collector = {
       identity: merged ? ("merged" as const) : identityFor(ctx, v.url),
     }));
   },
-  digest: (fetched, ctx) => factsOf(fetched.map((f) => f.payload), ctx),
+  digest: (fetched, ctx) => {
+    const ch = channel(ctx);
+    if (ch === undefined || identityFor(ctx, ch.url) !== "merged") return null;
+    const video = parsedAll(z.array(Video), fetched).flat()[0];
+    return [
+      facts("youtube", ch.url, {
+        handle: /\/@([^/?#]+)/.exec(ch.url)?.[1] ?? null,
+        display_name: video?.channelName ?? null,
+        followers: count(video?.numberOfSubscribers),
+      }),
+    ];
+  },
 };
-
-export function factsOf(payloads: readonly unknown[], ctx: StepContext): ProfileFacts[] | null {
-  const ch = channel(ctx);
-  if (ch === undefined || identityFor(ctx, ch.url) !== "merged") return null;
-  const video = payloads.flatMap((pl) => {
-    const items = z.array(Video).safeParse(pl);
-    return items.success ? items.data : [];
-  })[0];
-  const f = emptyFacts("youtube", ch.url, ch.url);
-  f.handle = /\/@([^/?#]+)/.exec(ch.url)?.[1] ?? null;
-  f.display_name = video?.channelName ?? null;
-  f.followers = count(video?.numberOfSubscribers);
-  return digestOf([f]);
-}

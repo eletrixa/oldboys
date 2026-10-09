@@ -9,7 +9,6 @@
  * Key responsibilities:
  * - signalLines: "sentence (source: url)" per signal, then "Not checked: …" lines, then the caveats; [] without signals data
  * - askLines: the distinct non-null interview questions, in signal order
- * - safeHref: http(s)-only link check (httpUrl), shared with the card
  *
  * Design constraints:
  * - Pure; the sentences are written by the domain and only joined here, never reworded
@@ -17,13 +16,11 @@
 import { PROFILE_SIGNAL_CAVEATS, type ProfileSignals } from "@/domain/profile-signals";
 import { httpUrl } from "@/domain/url";
 
-export const safeHref = httpUrl;
-
 export function signalLines(ps: ProfileSignals | null): string[] {
   if (ps === null) return [];
   return [
     ...ps.signals.map((s) => {
-      const href = safeHref(s.source_url);
+      const href = httpUrl(s.source_url);
       return href === null ? s.text : `${s.text} (source: ${href})`;
     }),
     ...ps.not_checked.map((n) => `Not checked: ${n}`),

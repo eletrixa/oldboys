@@ -16,9 +16,9 @@
  */
 import { z } from "zod";
 import type { Candidate } from "@/domain/claim";
-import { clipBio, emptyFacts, type ProfileFacts } from "@/domain/profile-facts";
-import { count, digestOf } from "@/recipe/sources/facts";
-import type { Collector, StepContext } from "@/recipe/sources/types";
+import { clipBio, count, facts } from "@/domain/profile-facts";
+import { digestOf, parsedAll } from "@/recipe/sources/facts";
+import type { Collector } from "@/recipe/sources/types";
 import { clip, identityFor } from "@/recipe/sources/types";
 
 const Profile = z.object({
@@ -74,27 +74,22 @@ export const instagram: Collector = {
       return { url, excerpt: clip(lines.join("\n")), raw: p, identity: identityFor(ctx, url) };
     });
   },
-  digest: (fetched, ctx) => factsOf(fetched.map((f) => f.payload), ctx),
+  digest: (fetched, ctx) =>
+    digestOf(
+      parsedAll(z.array(Profile), fetched)
+        .flat()
+        .filter((p) => identityFor(ctx, `https://www.instagram.com/${p.username}/`) === "merged")
+        .map((p) =>
+          facts("instagram", `https://www.instagram.com/${p.username}/`, {
+            handle: p.username,
+            display_name: p.fullName ?? null,
+            bio: clipBio(p.biography),
+            followers: count(p.followersCount),
+            following: count(p.followsCount),
+            posts: count(p.postsCount),
+            verified: p.verified ?? null,
+            photo_url: p.profilePicUrl ?? null,
+          }),
+        ),
+    ),
 };
-
-export function factsOf(payloads: readonly unknown[], ctx: StepContext): ProfileFacts[] | null {
-  return digestOf(
-      payloads.flatMap((pl) => {
-        const items = z.array(Profile).safeParse(pl);
-        return items.success ? items.data : [];
-      }).flatMap((p) => {
-        const url = `https://www.instagram.com/${p.username}/`;
-        if (identityFor(ctx, url) !== "merged") return [];
-        const f = emptyFacts("instagram", url, url);
-        f.handle = p.username;
-        f.display_name = p.fullName ?? null;
-        f.bio = clipBio(p.biography);
-        f.followers = count(p.followersCount);
-        f.following = count(p.followsCount);
-        f.posts = count(p.postsCount);
-        f.verified = p.verified ?? null;
-        f.photo_url = p.profilePicUrl ?? null;
-        return [f];
-      }),
-    );
-}
