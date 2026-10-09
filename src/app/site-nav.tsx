@@ -7,7 +7,7 @@
  * Tested:  n/a
  *
  * Key responsibilities:
- * - Logged out: landing anchors (Product, How it works, Trust; md and up), Log in, Create account, always on one row beside the mark. Logged in: Positions, Roles, Applications, My briefs, organization name, Log out, New brief (primary)
+ * - Logged out: landing anchors (The brief, How it works, Trust, FAQ; md and up), Log in, Create account, always on one row beside the mark. Logged in: Positions, Roles, Applications, My briefs, organization name, Log out, New brief (primary)
  *
  * Design constraints:
  * - Server component; rendered inside the layout's header next to the Radar mark
@@ -27,9 +27,10 @@ export function SiteNav({ user }: { user: SessionUser | null }): React.JSX.Eleme
     <nav aria-label="Main" className={user === null ? "flex items-center gap-1" : "flex w-full flex-wrap items-center gap-1 sm:w-auto sm:justify-end"}>
       {user === null ? (
         <>
-          <Link href="/#product" className={ANCHOR}>Product</Link>
+          <Link href="/#product" className={ANCHOR}>The brief</Link>
           <Link href="/#how" className={ANCHOR}>How it works</Link>
           <Link href="/#trust" className={ANCHOR}>Trust</Link>
+          <Link href="/#faq" className={ANCHOR}>FAQ</Link>
           <NavLink href="/login">Log in</NavLink>
           <Link href="/register" className={BTN_SECONDARY}>Create account</Link>
         </>
