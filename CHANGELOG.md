@@ -52,6 +52,7 @@ All notable changes to oldboys are documented here. The format follows [Keep a C
 - Ledger entries include successful AI model call counts and cost tracking
 
 ### Fixed
+- The open ledger stream (`GET /api/runs/:id/events`) now sends only whitelisted, scrubbed process facts of each ledger row (counts, labels, flags, decision counts, spent and challenge numbers; gap and failure reasons with URLs reduced to their host, no e-mails or phone numbers): no runner notes, no seed profile fields, no lineup candidate URLs, snippets or reasons, no candidate ids, no provider failure text on call rows; a stored ref that does not parse is sent as `ref: null` instead of breaking the stream.
 - CV runs no longer send the pasted CV itself to the identity check as a "profile found by search" (found by the eval set)
 - The open run state (`GET /api/runs/:id/state`) now returns only what the brief shows: no claims before the brief, only the claims the brief lists and never one touching a GDPR Art. 9 topic, the saved text around a quote only from confirmed sources, and not-searched / searched-empty reasons and the failure reason without URLs, e-mails or phone numbers. The saved copy around a quote is dropped whole (no quote either) when it touches an Art. 9 topic
 - Phone verification proposal never reads internal gap reasons to the candidate: a source gap becomes a question only when it is a plain "no … found" statement (scrubbed of links, e-mails and numbers); failed requests (URLs, HTTP codes), budget, fallback and namesake-only gaps are no longer asked about
