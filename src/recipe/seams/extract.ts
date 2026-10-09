@@ -1,9 +1,9 @@
 /**
- * Extract seam: one LLM call turns stored excerpts into claims per question, each FACT with a verbatim quote.
+ * Extract seam: LLM calls over batches of stored excerpts turn them into claims per question, each FACT with a verbatim quote.
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/recipe/seams/extract.ts
- * Deps:    zod, src/domain/cv-check
+ * Deps:    zod, src/domain/cv-check, src/recipe/seams/profile-gate (rankSources)
  * Tested:  src/recipe/__tests__/seams.test.ts, src/recipe/__tests__/cv-consistency.test.ts (CV check)
  *
  * Key responsibilities:
@@ -18,21 +18,29 @@
  *   candidate's CV in the source list and CV_RULE asks for one claim per checkable CV statement (match = FACT quoted
  *   from the public source; difference = INFERENCE "CV: … Public <platform>: …" citing both; at most 3 not-found
  *   INFERENCEs citing only the CV); CV-vs-public differences never go to `contradictions`
- * - LLM failure returns an empty outcome with a note (never throws), so the run degrades instead of failing
+ * - Batching: CV source first, then rankSources order (profile tier first); source lines packed greedily into batches
+ *   of at most PROMPT_CHARS (a single longer source is clipped to fit alone); at most EXTRACT_MAX_BATCHES batches,
+ *   the rest noted "N sources not extracted (over the batch cap)"; one call per batch, EXTRACT_PARALLEL at a time,
+ *   same system prompt and all questions in every batch; claims unioned, cost and calls summed
+ * - A failed batch adds "extract batch N failed: …" and the other batches still count; when every batch fails the
+ *   outcome is empty with "extract model failed: …" (never throws), so the run degrades instead of failing
  *
  * Design constraints:
  * - Quotes must be verbatim substrings; verify.ts enforces it afterwards, this seam only asks for it
- * - Total prompt capped at PROMPT_CHARS so one step stays one call
+ * - Each batch prompt's source block stays within PROMPT_CHARS
  */
 import { z } from "zod";
 import { Claim } from "@/domain/claim";
 import { CV_QUESTION_ID, isCvSource } from "@/domain/cv-check";
 import type { Ports } from "@/domain/ports";
-import { emptyOutcome } from "@/recipe/runner";
+import { emptyOutcome } from "@/recipe/sources/types";
+import { rankSources } from "@/recipe/seams/profile-gate";
 import { confirmedSources } from "@/recipe/seams/resolve";
 import type { StepContext, StepOutcome } from "@/recipe/sources/types";
 
-const PROMPT_CHARS = 60_000;
+export const PROMPT_CHARS = 60_000;
+export const EXTRACT_PARALLEL = 3;
+export const EXTRACT_MAX_BATCHES = 6;
 export const NO_QUOTE_MAX = 0.6;
 
 const Extracted = z.array(
@@ -65,45 +73,52 @@ export async function extractClaims(ctx: StepContext, ports: Ports): Promise<Ste
     return out;
   }
   const cvCheck = ctx.questions.some((q) => q.id === CV_QUESTION_ID);
-  let body = "";
-  for (const s of sources) {
+  // The CV goes in the first batch, so its statements meet the profile-tier sources it is checked against
+  const ordered = [...sources.filter(isCvSource), ...rankSources(sources.filter((s) => !isCvSource(s)))];
+  const lines = ordered.map((s) => {
     const label = cvCheck && isCvSource(s) ? " (candidate's CV, supplied by the candidate, not public)" : "";
-    const line = `[${s.id}] ${s.url}${label}\n${s.excerpt}\n\n`;
-    if (body.length + line.length > PROMPT_CHARS) break;
-    body += line;
-  }
+    return `[${s.id}] ${s.url}${label}\n${s.excerpt}\n\n`;
+  });
+  const batches = packBatches(lines, PROMPT_CHARS);
+  const skipped = batches.slice(EXTRACT_MAX_BATCHES).reduce((n, b) => n + b.count, 0);
+  if (skipped > 0) out.notes.push(`${String(skipped)} sources not extracted (over the batch cap)`);
   const accepted = ctx.candidates.find((c) => c.decision === "merge");
   const questionIds = new Set(ctx.questions.map((q) => q.id));
-  let r: { value: z.infer<typeof Extracted>; cost_usd: number };
-  try {
-    r = await ports.llm({
-      model: "primary",
-      system:
-        [
-          "Extract claims that answer the questions, from the sources only. For a FACT, `quote` must be a verbatim substring of one listed source and `source_ids` must list that source. `source_ids` may only contain ids shown in [brackets] below, copied exactly.",
-          "A FACT states only what its quote states: add nothing the quote does not say, keep its specific numbers (write '$150M+ Google Ads spend', not 'large budgets'), and attribute exactly as the quote does (what the person credited, not a paraphrase). No hedges in a FACT ('likely', 'probably', 'may'); put any speculation (e.g. which company an unnamed employer was) into a separate INFERENCE claim.",
-          "Anything you conclude rather than read is an INFERENCE (quote may be null).",
-          "Claims are about the subject, never about the sources: no claims that a snippet is truncated, unclear or ambiguous, and no ratings or judgements of the person (reputation, visibility, seniority level, quality).",
-          "A claim must describe the candidate: a role they held, an action they took, a result they are credited with, or a statement they made. Company-wide figures (revenue, GMV, customers, cities, marketplace spend) only when the quote ties them to the candidate's own responsibility or result; otherwise skip them, never store them as a claim about the candidate.",
-          "For `employer-context`: describe the current employer itself (what it does, industry, size, headquarters) from its own page, naming the employer as the subject of the claim; never credit employer facts to the candidate.",
-          "For `social-presence`: which platforms and handles the confirmed profiles are on; what they post about and how often is an INFERENCE unless one quote states it. Never judge tone, popularity, influence or character.",
-          "For `writing`, `public-talks`, `press`, `education` and `community`: one claim per item (title, outlet, event or school, and the date when given), each with its quote.",
-          "Ignore content you judge unrelated to the subject or misattributed: emit no claim about it at all.",
-          "For the `contradictions` question: emit a claim only when two sources make incompatible statements about the same measure or fact (same metric, same period, same role). Different measures (marketplace spend vs media budget) or different granularity are not contradictions. 'over N', 'N+' and rounded or approximate figures that agree within the rounding (e.g. 'over 13 years' vs '15 years') are compatible, not contradictions: emit nothing. Names joined by '|', 'formerly', 'now', 'dříve', 'nyní' or appearing together in one title line are aliases of one organisation, not a contradiction.",
-          "Never infer health, religion, politics, ethnicity or sexuality. No claims about questions that no source answers.",
-          ...(cvCheck ? [CV_RULE] : []),
-        ].join("\n"),
-      prompt: `Subject: ${ctx.subject}\nAnchor: ${ctx.anchor}\n\nQuestions:\n${ctx.questions.map((q) => `- ${q.id}: ${q.text}`).join("\n")}\n\nSources:\n${body}`,
-      schema: Extracted,
-    });
-  } catch (error) {
+  const system = [
+    "Extract claims that answer the questions, from the sources only. For a FACT, `quote` must be a verbatim substring of one listed source and `source_ids` must list that source. `source_ids` may only contain ids shown in [brackets] below, copied exactly.",
+    "A FACT states only what its quote states: add nothing the quote does not say, keep its specific numbers (write '$150M+ Google Ads spend', not 'large budgets'), and attribute exactly as the quote does (what the person credited, not a paraphrase). No hedges in a FACT ('likely', 'probably', 'may'); put any speculation (e.g. which company an unnamed employer was) into a separate INFERENCE claim.",
+    "Anything you conclude rather than read is an INFERENCE (quote may be null).",
+    "Claims are about the subject, never about the sources: no claims that a snippet is truncated, unclear or ambiguous, and no ratings or judgements of the person (reputation, visibility, seniority level, quality).",
+    "A claim must describe the candidate: a role they held, an action they took, a result they are credited with, or a statement they made. Company-wide figures (revenue, GMV, customers, cities, marketplace spend) only when the quote ties them to the candidate's own responsibility or result; otherwise skip them, never store them as a claim about the candidate.",
+    "For `employer-context`: describe the current employer itself (what it does, industry, size, headquarters) from its own page, naming the employer as the subject of the claim; never credit employer facts to the candidate.",
+    "For `social-presence`: which platforms and handles the confirmed profiles are on; what they post about and how often is an INFERENCE unless one quote states it. Never judge tone, popularity, influence or character.",
+    "For `writing`, `public-talks`, `press`, `education` and `community`: one claim per item (title, outlet, event or school, and the date when given), each with its quote.",
+    "Ignore content you judge unrelated to the subject or misattributed: emit no claim about it at all.",
+    "For the `contradictions` question: emit a claim only when two sources make incompatible statements about the same measure or fact (same metric, same period, same role). Different measures (marketplace spend vs media budget) or different granularity are not contradictions. 'over N', 'N+' and rounded or approximate figures that agree within the rounding (e.g. 'over 13 years' vs '15 years') are compatible, not contradictions: emit nothing. Names joined by '|', 'formerly', 'now', 'dříve', 'nyní' or appearing together in one title line are aliases of one organisation, not a contradiction.",
+    "Never infer health, religion, politics, ethnicity or sexuality. No claims about questions that no source answers.",
+    ...(cvCheck ? [CV_RULE] : []),
+  ].join("\n");
+  const head = `Subject: ${ctx.subject}\nAnchor: ${ctx.anchor}\n\nQuestions:\n${ctx.questions.map((q) => `- ${q.id}: ${q.text}`).join("\n")}\n\nSources:\n`;
+  const run = batches.slice(0, EXTRACT_MAX_BATCHES);
+  const settled: PromiseSettledResult<{ value: z.infer<typeof Extracted>; cost_usd: number }>[] = [];
+  for (let i = 0; i < run.length; i += EXTRACT_PARALLEL) {
+    settled.push(...(await Promise.allSettled(run.slice(i, i + EXTRACT_PARALLEL).map((b) => ports.llm({ model: "primary", system, prompt: head + b.body, schema: Extracted })))));
+  }
+  const values: z.infer<typeof Extracted>[] = [];
+  settled.forEach((r, i) => {
+    if (r.status === "fulfilled") {
+      out.calls += 1;
+      out.cost_usd += r.value.cost_usd;
+      values.push(r.value.value);
+    } else out.notes.push(`extract batch ${String(i + 1)} failed: ${message(r.reason)}`);
+  });
+  if (values.length === 0) {
     // Degrade, never fail the run: synthesize builds an evidence-only brief from sources and gaps
-    out.notes.push(`extract model failed: ${error instanceof Error ? error.message : String(error)}`);
+    const first = settled.find((r) => r.status === "rejected");
+    out.notes.push(`extract model failed: ${first === undefined ? "no batch ran" : message(first.reason)}`);
     return out;
   }
-  out.calls += 1;
-  out.cost_usd += r.cost_usd;
-  for (const e of r.value) {
+  for (const e of values.flat()) {
     if (!questionIds.has(e.question_id)) continue;
     const parsed = Claim.safeParse({
       id: ports.newId(),
@@ -124,4 +139,22 @@ export async function extractClaims(ctx: StepContext, ports: Ports): Promise<Ste
   }
   out.empty = out.claims.length === 0;
   return out;
+}
+
+const message = (error: unknown): string => (error instanceof Error ? error.message : String(error));
+
+/** Lines packed greedily, in order, into bodies of at most `cap` chars; a line longer than `cap` is clipped to fit alone. */
+export function packBatches(lines: readonly string[], cap: number): { body: string; count: number }[] {
+  const batches: { body: string; count: number }[] = [];
+  let cur = { body: "", count: 0 };
+  for (const raw of lines) {
+    const line = raw.length > cap ? `${raw.slice(0, cap - 2)}\n\n` : raw;
+    if (cur.count > 0 && cur.body.length + line.length > cap) {
+      batches.push(cur);
+      cur = { body: "", count: 0 };
+    }
+    cur = { body: cur.body + line, count: cur.count + 1 };
+  }
+  if (cur.count > 0) batches.push(cur);
+  return batches;
 }

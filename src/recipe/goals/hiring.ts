@@ -25,6 +25,10 @@
  * - treg second source (plans/016): `treg_person_enrich` (Apollo, other accounts linked from the confirmed LinkedIn profile)
  *   and `treg_people_search` (Exa, LinkedIn profiles for a CV-only run) run before the lineup; `treg_social_verify` reads
  *   every confirmed account a second time through an independent provider after it (`enriches`, second Source per page)
+ * - Depth (plans/013): free REST collectors `sec_edgar` (SEC EDGAR full-text search), `wikipedia` (en + cs), `podcast_episodes`
+ *   (Apple Podcasts index); four more packed SERP steps (regulatory_serp, legal_serp, business_press_serp, boards_serp); and
+ *   `read_pages` (`rest/read-pages`) last before extract: fetches the confirmed web pages and replaces their SERP snippets with
+ *   the page text around the person's name, so extract reads articles and filings, not snippets
  * - `cz_registries` (`rest/cz-registries`): Czech public registries for every position (insolvency, ARES, public register
  *   persons, Police wanted list) plus the chamber the role title names (src/domain/cz-registry); free REST / HTML, no Apify
  *
@@ -51,6 +55,8 @@ export const hiringRecipe: Recipe = {
     { id: "social-presence", text: "Which social profiles are theirs, what topics do they post about, and how often?" },
     { id: "community", text: "What community roles, awards, volunteering or mentoring are documented?" },
     { id: "location-match", text: "Does their stated location match the anchor?" },
+    { id: "regulatory-filings", text: "Which regulatory or stock-market filings (SEC EDGAR, stock exchange notices, proxy statements, Schedule 13D or 13G, Form 4), shareholdings, board seats or investment vehicles name them, and what do those documents state?", title: "Filings and markets" },
+    { id: "legal-record", text: "Which court cases, insolvency or enforcement proceedings, regulatory penalties, sanctions or disputes name them in public records or press, and what is stated?", title: "Legal record" },
     { id: "public-registries", text: "What do Czech public registries list under the candidate's name: insolvency proceedings, own businesses or statutory-body seats, the Police wanted list, and the professional chamber the role requires?", title: "Public registries" },
     { id: "contradictions", text: "Which sources disagree with each other?" },
   ],
@@ -71,6 +77,9 @@ export const hiringRecipe: Recipe = {
     { id: "github_search", kind: "actor", actor: "rest/github-search", onEmpty: { gap: "GitHub user search found no account under the candidate's name (technical roles only)" } },
     { id: "resolve_lineup", kind: "resolve" },
     { id: "linkedin_profile", kind: "actor", actor: "harvestapi/linkedin-profile-scraper", onEmpty: { gap: "no LinkedIn profile URL known or profile not scrapable" } },
+    { id: "sec_edgar", kind: "actor", actor: "rest/sec-edgar", onEmpty: { gap: "no SEC EDGAR filing names them" } },
+    { id: "wikipedia", kind: "actor", actor: "rest/wikipedia", onEmpty: { gap: "no Wikipedia article (English or Czech) names them in full" } },
+    { id: "podcast_episodes", kind: "actor", actor: "rest/podcasts", onEmpty: { gap: "no podcast episode in the Apple Podcasts index names them" } },
     { id: "linkedin_posts", kind: "actor", actor: "harvestapi/linkedin-profile-posts", onEmpty: { gap: "no public LinkedIn posts found" } },
     { id: "employer_company", kind: "actor", actor: "harvestapi/linkedin-company", onEmpty: { gap: "no LinkedIn company page for the current employer" } },
     { id: "github_profile", kind: "actor", actor: "rest/github", onEmpty: { gap: "no public GitHub profile found" } },
@@ -92,6 +101,11 @@ export const hiringRecipe: Recipe = {
     { id: "cz_registries", kind: "actor", actor: "rest/cz-registries", onEmpty: { gap: "Czech public registries not checked (name could not be split into given name and surname)" } },
     { id: "talks_serp", kind: "serp", actor: "apify/google-search-scraper", query: '"{subject}" talk OR podcast OR conference OR webinar OR přednáška\n"{subject}" blog OR article OR medium.com OR substack.com', onEmpty: { gap: "no talks, podcasts or articles found in web search" } },
     { id: "press_serp", kind: "serp", actor: "apify/google-search-scraper", query: '"{subject}" interview OR rozhovor OR "tisková zpráva" OR "press release"\n"{subject}" award OR ocenění OR volunteer OR mentor OR meetup', onEmpty: { gap: "no press, awards or community mentions found in web search" } },
+    { id: "regulatory_serp", kind: "serp", actor: "apify/google-search-scraper", query: '"{subject}" site:sec.gov OR "Schedule 13D" OR "proxy statement" OR "SEC filing" OR shareholder OR akcionář\n"{subject}" shares OR stock OR akcie OR investor OR fund OR "private equity" OR acquisition OR akvizice OR IPO', onEmpty: { gap: "no regulatory or stock-market pages name them" } },
+    { id: "legal_serp", kind: "serp", actor: "apify/google-search-scraper", query: '"{subject}" lawsuit OR court OR žaloba OR soud OR arbitráž OR insolvence OR exekuce OR sanctions OR fine OR pokuta OR regulator', onEmpty: { gap: "no court, insolvency or enforcement pages name them" } },
+    { id: "business_press_serp", kind: "serp", actor: "apify/google-search-scraper", query: '"{subject}" site:hn.cz OR site:e15.cz OR site:seznamzpravy.cz OR site:forbes.cz OR site:czechcrunch.cz OR site:lupa.cz OR site:idnes.cz OR site:novinky.cz OR site:ekonom.cz\n"{subject}" site:bloomberg.com OR site:reuters.com OR site:ft.com OR site:wsj.com OR site:techcrunch.com OR site:businessinsider.com OR site:cnbc.com OR site:forbes.com', onEmpty: { gap: "no business-press pages name them" } },
+    { id: "boards_serp", kind: "serp", actor: "apify/google-search-scraper", query: '"{subject}" "board of directors" OR "board member" OR "dozorčí rada" OR představenstvo OR jednatel OR founder OR zakladatel OR partner OR CEO\n"{subject}" wikipedia OR crunchbase OR "about us" OR tým OR team OR "o nás"', onEmpty: { gap: "no board, founder or team pages name them" } },
+    { id: "read_pages", kind: "actor", actor: "rest/read-pages", onEmpty: { gap: "no confirmed web pages to read in full" } },
     { id: "extract_claims", kind: "extract" },
     { id: "verify_claims", kind: "verify" },
     { id: "synthesize_report", kind: "synthesize" },

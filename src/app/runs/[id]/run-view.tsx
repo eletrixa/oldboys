@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/runs/[id]/run-view.tsx
- * Deps:    react, next/link, ../../ui, ./parts, ./brief-page, ./state, ./identity-map-card, ./delete-card
+ * Deps:    react, next/link, ../../ui, ./parts, ./brief-page, ./state, ./identity-map-card, ./delete-card, ./issues-card
  * Tested:  n/a
  *
  * Key responsibilities:
@@ -16,10 +16,13 @@
  * - One footer closes the page: running hint (not done), then "Home" and "Audit record" links, then the
  *   "Delete candidate data" disclosure (any status); after a delete the whole page becomes the deletion receipt
  * - Not-found view: eyebrow, heading, muted sentence and a primary back link on the header rhythm
- * - Stalled notice above the progress when no ledger activity for 30 minutes (stalledNotice); "Started N min ago" under the steps while running
+ * - Stalled notice above the progress when no ledger activity for 30 minutes (stalledNotice); the progress panel
+ *   (progress-panel.tsx, plans/015) says how much is left, what is read now and what was found, ticking once a second (useNow)
  * - Show the run cost and research time line (ledger projection) while running and when done
  * - Identity map above the profile list (same live decisions)
  * - On failure keep the progress rows, mark the failed one, show the reason, sources so far and a retry link
+ * - "Issues so far" (IssuesCard) under the progress while the run is not done: failed requests, skipped sources,
+ *   empty searches and AI off, with counts, so a problem shows as it happens and not only when the run dies
  * - Show one question at a time (at most LINEUP_MAX_QUESTIONS) above the lineup, so it is never below the fold; send every
  *   decision in one answer event
  *
@@ -38,8 +41,11 @@ import type { DeletionReceipt } from "@/domain/deletion";
 import { BriefPage, BriefView } from "./brief-page";
 import { DeleteCard, DeletedView } from "./delete-card";
 import { IdentityMapCard } from "./identity-map-card";
-import { type Answer, CostLine, ProfileList, ProgressSteps, QuestionCard } from "./parts";
-import { LINEUP_MAX_QUESTIONS, type RunState, firstName, headerText, questionsToAsk, retryHref, sortLineup, startedAgo, stalledNotice, stepRows } from "./state";
+import { IssuesCard } from "./issues-card";
+import { useNow } from "@/app/_components/use-now";
+import { type Answer, CostLine, ProfileList, QuestionCard } from "./parts";
+import { ProgressPanel } from "./progress-panel";
+import { LINEUP_MAX_QUESTIONS, type RunState, clockSkew, firstName, headerText, questionsToAsk, retryHref, sortLineup, stalledNotice, stepRows } from "./state";
 
 const POLL_MS = 2000;
 /** A finished run older than this is shown as a replay of an earlier run. */
@@ -69,7 +75,6 @@ function failureText(state: RunState): string {
 
 export function RunView({ id }: { id: string }): React.JSX.Element {
   const [state, setState] = useState<RunState | null>(null);
-  const [polledAt, setPolledAt] = useState(() => Date.now());
   const [missing, setMissing] = useState(false);
   const [local, setLocal] = useState<Record<string, Answer>>({});
   const [unsure, setUnsure] = useState<Record<string, true>>({});
@@ -80,6 +85,9 @@ export function RunView({ id }: { id: string }): React.JSX.Element {
   const [sendFailed, setSendFailed] = useState(false);
   const [deleted, setDeleted] = useState<DeletionReceipt | null>(null);
   const thanksRef = useRef<HTMLParagraphElement>(null);
+  const live = state !== null && state.status !== "done" && state.status !== "failed";
+  const [skew, setSkew] = useState(0);
+  const nowMs = useNow(live) - skew;
 
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -93,9 +101,9 @@ export function RunView({ id }: { id: string }): React.JSX.Element {
           next = false;
         } else if (res.ok) {
           const s = await res.json<RunState>();
+          setSkew(clockSkew(s, Date.now()));
           setState(s);
           if (s.status !== "done" && s.status !== "failed") trackRun(id);
-          setPolledAt(Date.now());
           next = s.status !== "done" && s.status !== "failed";
         }
       } catch {
@@ -179,26 +187,9 @@ export function RunView({ id }: { id: string }): React.JSX.Element {
   const created = Date.parse(state.created_at);
   const cached = state.status === "done" && !Number.isNaN(created) && openedAt - created > CACHED_AFTER_MS;
   const degraded = state.brief !== null && state.brief.degraded !== null;
-  const labels = [
-    state.mentions === 0 ? "Searching public sources (Google can take up to 2 minutes)" : `Found ${String(state.mentions)} public ${state.mentions === 1 ? "mention" : "mentions"}`,
-    `Making sure we have the right ${firstName(state.subject) ?? "person"}`,
-    degraded ? "Reading their work history and projects (skipped: AI unavailable)" : "Reading their work history and projects",
-    degraded ? "Double-checking facts against each other (skipped: AI unavailable)" : "Double-checking facts against each other",
-    "Writing your brief",
-  ];
-
   const running = state.status !== "done" && state.status !== "failed";
-  const nowMs = polledAt;
   const stalled = stalledNotice(state, new Date(nowMs).toISOString());
-  const progress = (
-    <ProgressSteps
-      rows={stepRows({ ...state, degraded })}
-      labels={labels}
-      stepIndex={state.step_index}
-      stepCount={state.step_count}
-      elapsed={running ? startedAgo(state.created_at, nowMs) : null}
-    />
-  );
+  const progress = <ProgressPanel state={state} nowMs={nowMs} degraded={degraded} />;
   const failed = state.status === "failed" && (
     <div role="alert" className={`${CARD_CONFLICT} flex flex-col gap-2 text-sm text-conflict`}>
       <p>{failureText(state)}</p>
@@ -265,7 +256,7 @@ export function RunView({ id }: { id: string }): React.JSX.Element {
           </p>
         )}
         {state.status !== "done" && (
-          <p className="text-sm text-muted">Usually 6 to 12 minutes. You can leave; the brief waits in My briefs and the tray at the bottom follows it.</p>
+          <p className="text-sm text-muted">The steps below say how much is left. You can leave this page; the panel at the bottom follows the research and the brief waits in My briefs.</p>
         )}
         {cached && (
           <SimulatedPill kind="cached" detail={`run from ${state.created_at.slice(0, 16).replace("T", " ")} UTC`} className="w-fit" />
@@ -280,6 +271,7 @@ export function RunView({ id }: { id: string }): React.JSX.Element {
       )}
       {progress}
       {failed}
+      <IssuesCard issues={state.issues ?? []} />
       {identity}
       {sendRows}
       <BriefView state={state} />

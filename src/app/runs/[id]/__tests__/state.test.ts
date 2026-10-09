@@ -19,7 +19,7 @@
  */
 import { describe, expect, it } from "vitest";
 import type { Brief, Candidate } from "@/domain/claim";
-import { briefSections, confidenceBand, CV_SOURCE_TEXT, evidenceGroup, isCvSource, firstName, gapLine, gapText, headerText, questionsToAsk, retryHref, roleCriteria, searchedTitle, seedHeadline, stalledNotice, startedAgo, stepRows } from "../state";
+import { briefSections, clockSkew, confidenceBand, CV_SOURCE_TEXT, evidenceGroup, isCvSource, firstName, gapLine, gapText, headerText, questionsToAsk, retryHref, roleCriteria, searchedTitle, seedHeadline, stalledNotice, startedAgo, stepRows } from "../state";
 
 const cand = (id: string, platform: string, score: number, decision: Candidate["decision"] = "possibly-same-as"): Candidate => ({
   id, run_id: "r", name: "x", profile_urls: [`https://${id}`], anchor_match: null, score, decision, platform, handle: id, snippet: "", reasons: [],
@@ -164,5 +164,13 @@ describe("stalled run helpers", () => {
     expect(startedAgo("2026-10-09T10:00:00.000Z", t + 60_000)).toBe("Started 1 min ago");
     expect(startedAgo("2026-10-09T10:00:00.000Z", t + 135 * 60_000)).toBe("Started 2 h 15 min ago");
     expect(startedAgo("nope", t)).toBeNull();
+  });
+});
+
+describe("clockSkew", () => {
+  it("is the browser clock minus the server clock, 0 without a readable server time", () => {
+    expect(clockSkew({ now: "2026-10-09T10:00:00.000Z" }, Date.parse("2026-10-09T10:00:05.000Z"))).toBe(5000);
+    expect(clockSkew({ now: "nope" }, 1)).toBe(0);
+    expect(clockSkew({}, 1)).toBe(0);
   });
 });

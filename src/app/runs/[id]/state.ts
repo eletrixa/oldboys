@@ -3,15 +3,17 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/runs/[id]/state.ts
- * Deps:    src/domain/claim, src/domain/challenge, src/domain/code-profile (type), src/domain/profile-signals (type), src/domain/run-cost, src/domain/quote, src/app/intake/intake-rows (types only)
+ * Deps:    src/domain/claim, src/domain/run-eta, src/domain/challenge, src/domain/code-profile (type), src/domain/profile-signals (type), src/domain/run-issues (type), src/domain/run-cost, src/domain/quote, src/app/intake/intake-rows (types only)
  * Tested:  src/app/runs/[id]/__tests__/state.test.ts
  *
  * Key responsibilities:
  * - RunState: the GET /api/runs/:id/state contract (incl. position {id, title} | null, organization_name, and intake = the application that started the run, or null;
  *   sources carry fetched_at / expires_at and quote_contexts the saved text around each claim's quote, never whole excerpts;
  *   challenges / challenge_summary = the devil's advocate record, optional for older runs; code_profile = the GitHub deep scrape digest, null or absent without one;
- *   profile_signals = deterministic sentences about the confirmed public accounts, null or absent for older payloads)
- * - stepRows: map the ledger step + status to the five human progress rows
+ *   profile_signals = deterministic sentences about the confirmed public accounts, null or absent for older payloads;
+ *   issues = problems the ledger recorded so far (readRunIssues, reasons scrubbed), shown while the run loads; absent for older payloads)
+ * - stepRows: map the ledger step + status to the five human progress rows (from `progress` when the payload has it, plans/015)
+ * - PHASE_LABEL / phaseLabels: the five human rows; readingText: "Reading LinkedIn, X and 3 more" from the step ids still open
  * - sortLineup: confirmed first, social platforms before web hits
  * - questionsToAsk: one open profile per platform; roleCriteria: role must-haves (mh-) only
   * - evidenceGroup: the heading a confirmed source sits under, from its URL's platform (LinkedIn, X, CV), not the actor
@@ -23,6 +25,7 @@
  * - briefSections (confidence descending, null for briefs stored before sections), isShown (sections worth a card), confidenceBand, host
  * - headerText / firstName: the run page title; "the candidate" until the seed step derived a name (plans/006)
  * - retryHref / stalledNotice / startedAgo: where "start again" goes, whether to show the stalled notice, the elapsed line
+ * - clockSkew: browser clock minus server clock (`now` in the payload), subtracted from Date.now() before any elapsed time
  * - seedHeadline: the headline the seed_profile ledger row recorded
  *
  * Design constraints:
@@ -32,10 +35,12 @@ import type { Challenge } from "@/domain/challenge";
 import type { CodeProfile } from "@/domain/code-profile";
 import type { ProfileSignals } from "@/domain/profile-signals";
 import type { RegistryChecks } from "@/domain/cz-registry";
+import type { RunIssue } from "@/domain/run-issues";
 import { PLATFORM_LABEL } from "@/domain/profile-facts";
 import type { Brief, BriefSection, Candidate, Claim } from "@/domain/claim";
 import type { ClaimQuoteContext } from "@/domain/quote";
 import type { RunCost } from "@/domain/run-cost";
+import { type PhaseKey, PHASES, type RunProgress } from "@/domain/run-eta";
 import type { RunIntake } from "@/app/intake/intake-rows";
 import { isStalled } from "@/domain/run-status";
 import { platformOf } from "@/recipe/sources/types";
@@ -80,15 +85,21 @@ export type RunState = {
   profile_signals?: ProfileSignals | null;
   /** Czech public registry checks (cz_registries step digest); null or absent for older runs. */
   registry_checks?: RegistryChecks | null;
+  /** Problems the ledger recorded so far (failed requests, budget stops, sources not searched, searched empty, AI off); [] for a clean run, absent for older payloads. */
+  issues?: RunIssue[];
   questions: { id: string; text: string; title?: string }[];
   brief: Brief | null;
   /** Reason recorded by the Workflow when status is failed; null otherwise. */
   failure: string | null;
   /** Recipe step that was running when the run failed (the first one without a ledger row); null otherwise. */
   failed_step: string | null;
-  /** Recipe steps already in the ledger, and the recipe length; drives the progress bar. */
+  /** Recipe steps already in the ledger, and the recipe length; drives the progress bar for payloads without `progress`. */
   step_index: number;
   step_count: number;
+  /** Phase projection (plans/015): typical times, open steps, known start / end per phase; absent for older payloads. */
+  progress?: RunProgress;
+  /** Server clock when the state was read (ISO); the client measures elapsed time against it, not its own clock. */
+  now?: string;
   cost: RunCost;
   /** The intake application that started this run (source, tag, received time); null for runs started by hand. */
   intake: RunIntake | null;
@@ -160,17 +171,65 @@ export function roleCriteria(questions: readonly { id: string; text: string }[])
   return questions.filter((q) => q.id.startsWith("mh-")).map((q) => q.text);
 }
 
-export function stepRows(state: Pick<RunState, "status" | "step" | "mentions" | "failed_step"> & { degraded?: boolean }): RowState[] {
+export function stepRows(state: Pick<RunState, "status" | "step" | "mentions" | "failed_step" | "progress"> & { degraded?: boolean }): RowState[] {
   // Degraded brief: nothing was read or double-checked by a model, so those two rows are skipped, not ticked.
   if (state.status === "done") return Array.from({ length: 5 }, (_, i) => (state.degraded === true && (i === 2 || i === 3) ? "skipped" : "done"));
-  if (state.status === "failed") {
-    const at = rowOf(state.failed_step ?? state.step ?? "");
-    return Array.from({ length: 5 }, (_, i) => (i < at ? "done" : i === at ? "failed" : "todo"));
+  let current: number;
+  if (state.progress !== undefined) {
+    // The first phase that has not ended is the one under way; with parallel pools the last ledger step says nothing
+    const open = state.progress.phases.findIndex((p) => p.ended_at === null);
+    current = open < 0 ? 5 : open;
+  } else if (state.status === "failed") {
+    current = rowOf(state.failed_step ?? state.step ?? "");
+  } else {
+    current = state.step === null ? 0 : rowOf(state.step);
+    if (current === 0 && state.mentions > 0) current = 1;
   }
-  let current = state.step === null ? 0 : rowOf(state.step);
-  if (current === 0 && state.mentions > 0) current = 1;
-  return Array.from({ length: 5 }, (_, i) => (i < current ? "done" : i === current ? "active" : "todo"));
+  const mark: RowState = state.status === "failed" ? "failed" : "active";
+  return Array.from({ length: 5 }, (_, i) => (i < current ? "done" : i === current ? mark : "todo"));
 }
+
+/** The five human rows, by phase key (plans/015). */
+export const PHASE_LABEL: Readonly<Record<PhaseKey, string>> = {
+  search: "Searching public sources",
+  lineup: "Making sure we have the right person",
+  read: "Reading their work history and projects",
+  check: "Double-checking facts against each other",
+  write: "Writing your brief",
+};
+
+/** Row labels in phase order; the first name and a degraded brief change the wording. */
+export function phaseLabels(first: string | null, mentions: number, degraded: boolean): string[] {
+  return PHASES.map((key) => {
+    if (key === "search" && mentions > 0) return `Found ${String(mentions)} public ${mentions === 1 ? "mention" : "mentions"}`;
+    if (key === "lineup") return `Making sure we have the right ${first ?? "person"}`;
+    if (degraded && (key === "read" || key === "check")) return `${PHASE_LABEL[key]} (skipped: AI unavailable)`;
+    return PHASE_LABEL[key];
+  });
+}
+
+/** Human names of the sources a phase still reads: "LinkedIn, GitHub, X and 9 more"; null when nothing is open. */
+export function readingText(stepIds: readonly string[], max = 3): string | null {
+  const names = [...new Set(stepIds.map((id) => READING_LABEL[id] ?? GAP_LABEL[id] ?? null).filter((n): n is string => n !== null))];
+  if (names.length === 0) return null;
+  const shown = names.slice(0, max);
+  const rest = names.length - shown.length;
+  return rest > 0 ? `${shown.join(", ")} and ${String(rest)} more` : shown.join(", ");
+}
+
+/** Short names for the open-steps line; everything else falls back to GAP_LABEL. */
+const READING_LABEL: Readonly<Record<string, string>> = {
+  seed_profile: "the given profile",
+  serp_person: "Google",
+  social_serp: "social profile search",
+  instagram_search: "Instagram search",
+  facebook_search: "Facebook search",
+  github_search: "GitHub search",
+  resolve_lineup: "the identity lineup",
+  extract_claims: "the facts in every source",
+  verify_claims: "each fact against the others",
+  synthesize_report: "the brief",
+};
 
 /** First name for copy, or null while the name is not known yet (profile-first run before the seed step). */
 export function firstName(subject: string): string | null {
@@ -242,6 +301,14 @@ export const GAP_LABEL: Record<string, string> = {
   github_deep: "GitHub contributions",
   github_apify: "GitHub profile page",
   cz_registries: "Czech public registries",
+  sec_edgar: "SEC EDGAR filings",
+  wikipedia: "Wikipedia",
+  podcast_episodes: "Podcast episodes",
+  regulatory_serp: "Regulatory and market search",
+  legal_serp: "Court and enforcement search",
+  business_press_serp: "Business press search",
+  boards_serp: "Board and founder search",
+  read_pages: "Page reading",
 };
 
 type Gap = Brief["not_searched"][number];
@@ -301,6 +368,12 @@ export function retryHref(position: RunState["position"]): string {
 /** The notice for a run with no ledger activity for 30 minutes (same rule as My briefs), else null. */
 export function stalledNotice(state: Pick<RunState, "status" | "created_at" | "last_at" | "position">, nowIso: string): { href: string } | null {
   return isStalled(state.status, state.last_at ?? state.created_at, nowIso) ? { href: retryHref(state.position) } : null;
+}
+
+/** Milliseconds the browser clock is ahead of the server's (0 when the payload has no `now` or it is unreadable). */
+export function clockSkew(state: Pick<RunState, "now">, receivedAt: number): number {
+  const server = state.now === undefined ? Number.NaN : Date.parse(state.now);
+  return Number.isNaN(server) ? 0 : receivedAt - server;
 }
 
 /** "Started 1 min ago", from the creation time; null when the time is unreadable. */

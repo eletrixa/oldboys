@@ -48,7 +48,9 @@ describe("GET /api/runs/:id/state position", () => {
     head = row({ position_id: "p1", position_title: "Head of Growth" });
     const state = await get();
     expect(state.position).toEqual({ id: "p1", title: "Head of Growth" });
-    for (const key of ["id", "subject", "role", "status", "questions", "claims", "cost", "step_count"]) expect(state).toHaveProperty(key);
+    for (const key of ["id", "subject", "role", "status", "questions", "claims", "cost", "step_count", "progress"]) expect(state).toHaveProperty(key);
+    // plans/015: five phases, nothing finished on an empty ledger
+    expect((state.progress as { phases: { key: string; ended_at: string | null }[] }).phases.map((p) => p.key)).toEqual(["search", "lineup", "read", "check", "write"]);
   });
 
   it("returns null without a position or when it was purged", async () => {
@@ -77,5 +79,28 @@ describe("GET /api/runs/:id/state code_profile", () => {
     expect((await get()).code_profile).toBeNull();
     ledger = [{ step: "github_deep", ts: "2026-10-09T10:01:00.000Z", kind: "step", cost_usd: 0, ms: 5, ref_json: JSON.stringify({ digest: { handle: "x" } }) }];
     expect((await get()).code_profile).toBeNull();
+  });
+});
+
+describe("GET /api/runs/:id/state issues", () => {
+  const step = (over: Record<string, unknown>) => ({ ts: "2026-10-09T10:01:00.000Z", kind: "step", cost_usd: 0, ms: 5, ...over });
+
+  it("is empty for a clean run", async () => {
+    head = row({});
+    ledger = [step({ step: "serp_person", ref_json: JSON.stringify({ sources: 3, notes: ["already fetched at seed"] }) })];
+    expect((await get()).issues).toEqual([]);
+  });
+
+  it("lists failed requests, skipped and empty sources with the reason scrubbed", async () => {
+    head = row({});
+    ledger = [
+      step({ step: "serp_person", ref_json: JSON.stringify({ notes: ["request failed: HTTP 429 from https://api.apify.com/v2/acts?token=secret"] }) }),
+      step({ step: "youtube_channel", ref_json: JSON.stringify({ skipped: "run budget reached", spent: { calls: 18, usd: 0.4 } }) }),
+      step({ step: "github_profile", ref_json: JSON.stringify({ gap: true, reason: "no public GitHub profile found" }) }),
+    ];
+    const issues = (await get()).issues as { step: string; kind: string; reason: string }[];
+    expect(issues.map((i) => [i.step, i.kind])).toEqual([["serp_person", "request_failed"], ["youtube_channel", "budget"], ["github_profile", "gap"]]);
+    expect(issues[0]?.reason).toContain("api.apify.com");
+    expect(issues[0]?.reason).not.toContain("token=secret");
   });
 });

@@ -76,7 +76,7 @@ async function dropProtected(claims: readonly Claim[], ports: Ports, out: StepOu
   return claims.filter((c) => !flagged.has(c.id));
 }
 
-const EVIDENCE_MAX = 40;
+const EVIDENCE_MAX = 120;
 const INTERVIEW_MAX = 6;
 const NOT_SEARCHED = "not searched:";
 const CONTRADICTIONS = "contradictions";

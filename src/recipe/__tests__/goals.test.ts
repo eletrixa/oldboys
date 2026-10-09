@@ -92,16 +92,16 @@ describe("goal recipes diverge", () => {
   });
 
   it("hiring asks one question per brief section, each with a short fixed title", () => {
-    const want = ["current-role", "employer-context", "career-history", "education", "public-code", "code-contributions", "public-talks", "writing", "press", "social-presence", "community", "location-match", "public-registries", "contradictions"];
+    const want = ["current-role", "employer-context", "career-history", "education", "public-code", "code-contributions", "public-talks", "writing", "press", "social-presence", "community", "location-match", "regulatory-filings", "legal-record", "public-registries", "contradictions"];
     expect(hiringRecipe.questions.map((q) => q.id)).toEqual(want);
     const titles = hiringRecipe.questions.map((q) => sectionTitle({ id: q.id, text: "x" }));
     expect(titles.every((t) => t !== "x")).toBe(true);
     expect(new Set(titles).size).toBe(titles.length);
   });
 
-  it("hiring stays within the 18 paid actor runs per run (seed scrape included)", () => {
+  it("hiring stays within the 24 paid actor runs per run (seed scrape included)", () => {
     const paid = hiringRecipe.steps.filter(isPaid); // treg/* steps are USD-only reads, never an Apify run
-    expect(paid.length + 1).toBeLessThanOrEqual(18);
+    expect(paid.length + 1).toBeLessThanOrEqual(24);
   });
 
   it("recipeFor resolves both goals", () => {

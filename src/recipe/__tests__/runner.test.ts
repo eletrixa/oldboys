@@ -1,5 +1,5 @@
 /**
- * Runner tests: collection through fake ports, budget stop, failure notes, REST path.
+ * Runner tests: collection through fake ports, budget stop, failure notes, REST path, excerpt replacement.
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/recipe/__tests__/runner.test.ts
@@ -268,5 +268,38 @@ describe("treg requests", () => {
     expect(out.notes).toContain("run budget reached");
     expect(ports.calls.treg).toHaveLength(1);
     expect(out.sources).toHaveLength(1);
+  });
+});
+
+describe("collectWith replaces", () => {
+  const step: Step = { id: "read_pages", kind: "actor", actor: "fake/read" };
+  const prior = { id: "s-old", run_id: "run-1", url: "https://example.cz/clanek/", actor: "apify/google-search-scraper", fetched_at: "2026-10-01T00:00:00.000Z", excerpt: "snippet", r2_key: "run-1/s-old.json", expires_at: "x", identity: "merged" as const };
+  const reader = (url: string): Collector => ({
+    id: "fake/read",
+    requests: () => [{ via: "fetch", url }],
+    parse: () => [{ url, excerpt: "full page text", raw: { title: "T" }, identity: "merged", replaces: true }],
+  });
+
+  it("rewrites the existing source's excerpt under its id instead of deduping it", async () => {
+    const stored: unknown[] = [];
+    const ports = fakePorts({
+      storeSource: (s, raw) => {
+        stored.push({ s, raw });
+        return Promise.resolve({ ...s, r2_key: `${s.run_id}/${s.id}.json` });
+      },
+    });
+    const out = await collectWith(reader("https://example.cz/clanek"), step, baseContext({ sources: [prior] }), ports);
+    const { r2_key: _k, ...kept } = prior;
+    expect(stored).toEqual([{ s: { ...kept, excerpt: "full page text" }, raw: { title: "T" } }]);
+    expect(out.sources).toEqual([{ ...prior, excerpt: "full page text" }]);
+    expect(out.notes).toEqual(["replaced excerpts of 1 pages"]);
+    expect(out.empty).toBe(false);
+  });
+
+  it("stores a replacement for a page not yet in the run as a new source", async () => {
+    const ports = fakePorts();
+    const out = await collectWith(reader("https://example.cz/new"), step, baseContext({ sources: [prior] }), ports);
+    expect(out.sources.map((s) => [s.id, s.url, s.actor])).toEqual([["id-1", "https://example.cz/new", "fake/read"]]);
+    expect(out.notes).toEqual([]);
   });
 });

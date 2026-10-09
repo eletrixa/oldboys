@@ -43,7 +43,7 @@ Endpoints and price (cap = `maxCostUsd`):
 | `treg_social_verify` x | `anyapi.x.user.profile` | POST | `handle` | $0.00022 | $0.005 |
 | `treg_social_verify` youtube | `scrapecreators.youtube.channel.profile` | GET | `handle` (or `channelId` for a `UC...` id) | $0.00188 | $0.005 |
 | `treg_social_verify` facebook | `scrapecreators.x.v1-facebook-profile` | GET | `url`, `cache_max_age=7d` | $0.00188 | $0.005 |
-| `treg_company_enrich` | `thecompaniesapi.companies.enrich` | GET | `domain` (anchor host, `www.` stripped) | $0.0019 (free when not found) | $0.005 |
+| `treg_company_enrich` | `thecompaniesapi.companies.enrich` | GET | `domain` (anchor host, `www.` stripped) | $0.0019 | $0.005 |
 
 - Step results: Sources with plain-sentence excerpts (numbers inline so FACTs can quote them); digests: `treg/person-enrich` accounts found, `treg/social-verify` `ProfileFacts[]` (merged accounts only, `source_url` = `https://treg.to/call/<endpoint>?<params>` with no token), `treg/company-enrich` `{ provider, domain, employees, founded, hq, socials }`.
 - Expected treg spend per run about $0.04 to $0.06.
