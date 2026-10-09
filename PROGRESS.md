@@ -347,3 +347,6 @@ Each agent appends: what it starts, progress, what it finishes. Newest at the bo
 - Checked: pnpm check green after the rebase (1979 + 21 tests; new: 13 drafter tests, 4 call-brief tests, 1 call-panel test, 5 proposal handler tests incl. cache and no-LLM-on-GET), opennextjs build (route `/api/runs/[id]/calls/proposal` listed), wrangler dry-run bundle (18.6 MiB / gzip 3.9 MiB), both re-run after the rebase. No live LLM call (no `ANTHROPIC_API_KEY` in the env); eval personas p1/p3 run through `drafterInput` + safety + `composeCallBrief` with hand-written model output. No deploy, no migration, no ElevenLabs/Twilio change.
 - Docs: docs/ops/call-verification.md, plans/005-call-verification/06-elevenlabs-contract.md, /architecture page (Opus also drafts the call questions), call.ts / call-brief.ts headers.
 - Open: a live smoke of the prompt against a real brief (needs the key); rebased on origin/main 2cc502b (call-panel-view conflict with the brief-redesign "Call again" fold resolved: both kept); the phone-kit-cs agent works next to the call panel, a merge may touch call-setup.tsx.
+
+## 2026-10-09 · positions-org-scope agent (Minas)
+- Started: 05:08. Positions scoped to the organization: migration 0017 (applied by hand) + filtering in list/read/edit/start.
