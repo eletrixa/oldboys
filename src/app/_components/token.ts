@@ -9,12 +9,14 @@
  * Key responsibilities:
  * - readToken / writeToken: the RUN_TOKEN kept in sessionStorage under oldboys.runToken
  * - authFetch: no-store fetch that adds the Authorization header when a token is present
+ * - OPERATOR_KEY / clearOperator: the operator name the call form remembers (call-setup.tsx), cleared on logout
  *
  * Design constraints:
  * - The token never leaves sessionStorage except as the Authorization header
  * - Storage may be blocked: reads give null, writes are ignored
  */
 const TOKEN_KEY = "oldboys.runToken";
+export const OPERATOR_KEY = "oldboys.operator";
 
 export function readToken(): string | null {
   try {
@@ -30,6 +32,14 @@ export function writeToken(token: string | null): void {
     else sessionStorage.setItem(TOKEN_KEY, token);
   } catch {
     // Storage blocked: the user is asked again next time.
+  }
+}
+
+export function clearOperator(): void {
+  try {
+    sessionStorage.removeItem(OPERATOR_KEY);
+  } catch {
+    // Storage blocked: nothing was kept.
   }
 }
 

@@ -8,13 +8,14 @@
  *
  * Key responsibilities:
  * - addRun puts the newest first, dedupes and caps at TRAY_MAX; dropRun removes
- * - readTray survives missing or broken storage; trackRun of the newest id is a no-op
+ * - readTray survives missing or broken storage; trackRun of the newest id is a no-op; clearTray removes the list and
+ *   notifies the tray even when storage is blocked
  * - trayRow: title before and after the name is known, progress share (time-weighted with a phase projection), live flag per status
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { runProgress } from "@/domain/run-eta";
 import { hiringRecipe } from "@/recipe/goals/hiring";
-import { addRun, dropRun, isLive, readTray, TRAY_MAX, trackRun, trayRow } from "../run-tray-store";
+import { addRun, clearTray, dropRun, isLive, readTray, TRAY_MAX, trackRun, trayRow } from "../run-tray-store";
 
 const base = {
   id: "r1",
@@ -68,6 +69,32 @@ describe("trackRun", () => {
     expect(dispatchEvent).not.toHaveBeenCalled();
     trackRun("b");
     expect(setItem).toHaveBeenCalledWith("oldboys.tray", JSON.stringify(["b", "a"]));
+    expect(dispatchEvent).toHaveBeenCalledOnce();
+  });
+});
+
+describe("clearTray", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("removes the list and dispatches the tray event", () => {
+    const removeItem = vi.fn();
+    const dispatchEvent = vi.fn();
+    vi.stubGlobal("sessionStorage", { removeItem });
+    vi.stubGlobal("window", { dispatchEvent });
+    clearTray();
+    expect(removeItem).toHaveBeenCalledWith("oldboys.tray");
+    expect(dispatchEvent).toHaveBeenCalledOnce();
+  });
+
+  it("still notifies the tray when storage is blocked", () => {
+    const dispatchEvent = vi.fn();
+    vi.stubGlobal("sessionStorage", undefined);
+    vi.stubGlobal("window", { dispatchEvent });
+    expect(() => {
+      clearTray();
+    }).not.toThrow();
     expect(dispatchEvent).toHaveBeenCalledOnce();
   });
 });
