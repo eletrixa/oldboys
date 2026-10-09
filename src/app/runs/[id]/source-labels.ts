@@ -19,6 +19,7 @@ export const STEP_LABEL: Record<string, string> = {
   "harvestapi/linkedin-company": "LinkedIn company",
   "rest/github": "GitHub",
   "rest/github-deep": "GitHub contributions",
+  "rest/github-search": "GitHub search",
   "saswave/github-profile-scraper": "GitHub profile page",
   "rest/cz-registries": "Czech public registries",
   "apify/instagram-scraper": "Instagram search",
@@ -40,6 +41,11 @@ export const STEP_LABEL: Record<string, string> = {
   "rest/podcasts": "Podcasts",
   "rest/read-pages": "Page reading",
   "apify/website-content-crawler#personal-site": "Personal website",
+  // treg second source (plans/016)
+  "treg/person-enrich": "People enrichment (Apollo via treg)",
+  "treg/people-search": "LinkedIn people search (Exa via treg)",
+  "treg/social-verify": "Second read of confirmed accounts (treg)",
+  "treg/company-enrich": "Company record (The Companies API via treg)",
   "ares/ekonomicke-subjekty/vyhledat": "ARES registry",
   "ares/ekonomicke-subjekty-vr": "ARES public register",
 };
