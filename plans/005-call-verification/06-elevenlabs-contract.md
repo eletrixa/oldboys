@@ -145,7 +145,7 @@ General knowledge, not legal advice. Verify with counsel.
 - EU AI Act Art. 50: disclose that the callee is talking to an AI system.
 - Czech Republic: no flat two-party recording rule. Announce recording and purpose. GDPR Art. 6(1)(f) legitimate-interest balancing, a retention limit, and an Art. 14 notice apply.
 - Zákon č. 127/2005 Sb. limits unsolicited marketing calls. A verification call to a business line is not marketing; keep the script non-promotional.
-- Opener: "I'm an automated AI assistant calling on behalf of X to verify one fact. This call may be recorded. Do you agree?"
+- Opener: "I'm an automated AI assistant calling on behalf of X to verify one fact. This call may be recorded. Do you agree?" As built (2026-10-09, shortened after live calls where callees talked over an 18 s opener): "Hi, this is an AI assistant calling for the hiring team about the <role> role. This call is recorded. Do you have three minutes for a few questions?" (at most 220 characters); "You can skip any question or stop at any time." follows right after the callee agrees.
 - Hang up on refusal. Never ask for sensitive data (GDPR Art. 9 categories are denylisted in `buildCallBrief`).
 - The brief always asks an identity-confirmation question first.
 
@@ -176,7 +176,7 @@ No auth (same as `/state`). `404` unknown run. Response `200`:
 }
 ```
 
-`proposal` is what `POST` without `questions` would draft now; it is never stored. `used` counts calls that are not `drafted` or `skipped` (the same rule as the approve guard). `calls` are all non-skipped calls of the run, newest first, each in the `GET /api/calls/:id` shape.
+`proposal` is what `POST` without `questions` would draft now; it is never stored. `used` counts calls in status `dialing`, `done` or `refused` (in progress or reached the person; the same rule as the approve guard, `countsTowardCallLimit` / `COUNTED_CALL_SQL` in `src/domain/call.ts`); `failed` and `no_answer` calls never connected and do not count. `calls` are all non-skipped calls of the run, newest first, each in the `GET /api/calls/:id` shape.
 
 ### `POST /api/runs/:id/calls`
 
@@ -188,19 +188,19 @@ Request (session or bearer): optional body `{"language": "en", "questions": [{"q
   "brief": {
     "language": "en",
     "identity_question": "Am I speaking with Jane Doe?",
-    "questions": [{ "question_id": "mh-1", "text": "Can you tell me about your experience with Go backend? We could not find public evidence for it.", "expected": "", "why": "No public evidence: Go backend" }],
+    "questions": [{ "question_id": "mh-1", "text": "Do you have Go backend experience?", "expected": "", "why": "No public evidence: Go backend" }],
     "script": "I am an automated AI assistant calling on behalf of ...\nThis call may be recorded and transcribed. Do you agree to continue?\n...",
-    "first_message": "Hello, this is an automated AI assistant calling on behalf of the hiring team for the Senior Go engineer role. ...",
+    "first_message": "Hi, this is an AI assistant calling for the hiring team about the Senior Go engineer role. This call is recorded. Do you have three minutes for a few questions?",
     "agent_prompt": "# Role\n...\n# Steps\n...\n# Questions\n1. ...\n# Rules\n..."
   }
 }
 ```
 
-Without `questions` the brief is deterministic (no LLM): identity question first, then at most 5 of, in order, role must-haves (`mh-*`) with coverage `none`, with coverage `partial`, the brief's `to_verify` items (`tv-<n>`), one question per gap, one verification question per claim with confidence under 0.6 or a contradiction; never a GDPR Art. 9 topic. Without a stored brief it is gaps then weak claims, as before.
+Without `questions` the brief is deterministic (no LLM): identity question first, then at most 5 of, in order, role must-haves (`mh-*`) with coverage `none`, with coverage `partial`, the brief's `to_verify` items (`tv-<n>`), one question per gap, one verification question per claim with confidence under 0.6 or a contradiction; never a GDPR Art. 9 topic. Without a stored brief it is gaps then weak claims, as before. Wording (`src/domain/call-wording.ts`, deterministic): a must-have stored as a third-person question becomes second person ("Does the candidate have …?" → "Do you have …?"), otherwise "Can you tell me about your <title>?" (`none`) or "Can you tell me a bit more about your <title>?" (`partial`); a `to_verify` item becomes "We read that <first clause, the candidate's name as you/your>. Is that right?", or the whole text plus "Is that right?" when it cannot be cut cleanly. The missing evidence is only in `why`, never read out.
 
 With `questions` (the operator edited the proposal): 1 to 5 questions, each 5 to 300 characters after trimming; a question touching an Art. 9 topic, or any invalid one, is `400 {"error": "...", "index": <n|null>}` (never a silent drop). Proposed ids (`mh-…`, `tv-…`) are kept, new questions get `hr-1`, `hr-2`, ….
 
-`first_message` (AI disclosure, purpose, recording, skip/stop, consent question) and `agent_prompt` (role, steps, questions in order, rules: no evaluation, no decision/salary/other candidates, no personal topics, voicemail, `end_call`) go to ElevenLabs as the per-call overrides `agent.first_message` and `agent.prompt.prompt`. Both are optional in the schema: calls drafted before they existed fall back to the script and its first line.
+`first_message` (AI disclosure, who for and why, recording, consent question; at most 220 characters) and `agent_prompt` (role, steps with the skip/stop sentence right after consent, questions in order, rules: no evaluation, no decision/salary/other candidates, no personal topics, voicemail, `end_call`) go to ElevenLabs as the per-call overrides `agent.first_message` and `agent.prompt.prompt`. Both are optional in the schema: calls drafted before they existed fall back to the script and its first line.
 
 ### `POST /api/calls/:id/approve`
 
@@ -210,7 +210,7 @@ Request (session or bearer):
 { "to_number": "+420123456789", "consent_ack": true, "consent_note": "volunteer, agreed verbally", "operator": "robert" }
 ```
 
-Responses: `202 {"id","status":"dialing","provider":"elevenlabs"}` (with the mock provider the result is immediate and `status` is already `done`); `400` invalid body or number not E.164; `401` no session and no or a wrong bearer; `404` unknown call; `409` call not `drafted` or the run already has `RUN_CALL_MAX` (2) non-skipped calls; `502` provider rejected the call (row goes to `failed` with the reason, no Workflow is created).
+Responses: `202 {"id","status":"dialing","provider":"elevenlabs"}` (with the mock provider the result is immediate and `status` is already `done`); `400` invalid body or number not E.164; `401` no session and no or a wrong bearer; `404` unknown call; `409` call not `drafted` or the run already has `RUN_CALL_MAX` (2) calls in status `dialing`, `done` or `refused` (failed or unanswered calls do not count); `502` provider rejected the call (row goes to `failed` with the reason, no Workflow is created).
 
 ### `POST /api/calls/:id/skip`
 

@@ -9,6 +9,7 @@
  * Key responsibilities:
  * - Call, CallBrief and CallResult parse their canonical examples unchanged
  * - Every legal transition is listed; every other (status, event) pair throws
+ * - Only calls in progress or that reached the person count toward RUN_CALL_MAX
  *
  * Design constraints:
  * - Fixtures stay inline
@@ -20,6 +21,8 @@ import {
   CallBrief,
   CallResult,
   CallStatus,
+  COUNTED_CALL_SQL,
+  countsTowardCallLimit,
   IllegalCallTransition,
   maskNumber,
   targetStatus,
@@ -135,5 +138,19 @@ describe("maskNumber", () => {
 
   it("masks short inputs completely", () => {
     expect(maskNumber("12345")).toBe("+***");
+  });
+});
+
+describe("countsTowardCallLimit", () => {
+  it("counts a call in progress or one that reached the person", () => {
+    expect(CallStatus.options.filter(countsTowardCallLimit)).toEqual(["dialing", "done", "refused"]);
+  });
+
+  it("never counts a call that did not connect, a draft or a skipped call", () => {
+    for (const s of ["drafted", "failed", "no_answer", "skipped"] as const) expect(countsTowardCallLimit(s)).toBe(false);
+  });
+
+  it("states the same rule as SQL", () => {
+    expect(COUNTED_CALL_SQL).toBe("status IN ('dialing', 'done', 'refused')");
   });
 });
