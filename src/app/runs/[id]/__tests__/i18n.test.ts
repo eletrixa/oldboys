@@ -54,6 +54,9 @@ describe("REPORT_DICT", () => {
     expect(REPORT_DICT.cs.ui.costValue(0.784)).toBe("0,78 USD");
     expect(REPORT_DICT.cs.ui.cachedFrom("2026-10-09 02:46")).toBe("běh z 2026-10-09 02:46 UTC");
     expect(Object.keys(REPORT_DICT.cs.ui.aboutRows)).toEqual(Object.keys(REPORT_DICT.en.ui.aboutRows));
+    expect(REPORT_DICT.en.ui.day("2026-10-09T02:46:39Z")).toBe("9 Oct");
+    expect(REPORT_DICT.cs.ui.day("2026-10-09T02:46:39Z")).toBe("9. 10.");
+    expect(REPORT_DICT.cs.ui.day("nope")).toBe("");
   });
 
   it("has the same phone panel (call) and kit sidebar (kit) labels in English and Czech, all filled", () => {

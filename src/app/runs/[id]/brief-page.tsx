@@ -33,7 +33,7 @@ import Link from "next/link";
 import { formatDuration } from "@/domain/run-cost";
 import type { Brief } from "@/domain/claim";
 import { CARD, CARD_SAGE, Chevron, Eyebrow, KEY, LINK, Pill, SUMMARY, SimulatedPill } from "../../ui";
-import { type HiringStep, backgroundCounts, hiringSteps, latestAnswered, phoneNumbers, planItems, shortDay, tabCounts } from "./brief-layout";
+import { type HiringStep, backgroundCounts, hiringSteps, latestAnswered, phoneNumbers, planItems, tabCounts } from "./brief-layout";
 import { CareerTimeline, ConfirmedProfiles, CriteriaTable, GapGroups } from "./brief-evidence";
 import { BeforeInterview, PlanPanel } from "./brief-plan";
 import { BriefNavContext, TabBar, TabPanel, useBriefNav } from "./brief-tabs";
@@ -80,7 +80,7 @@ function Steps({ steps }: { steps: HiringStep[] }): React.JSX.Element {
           <span className={`font-semibold ${STEP_TONE[s.state].text}`}>
             {s.state === "done" && <span aria-hidden="true">✓ </span>}
             {ui.step[s.key]}
-            {s.state === "done" && <span className="sr-only"> (done)</span>}
+            {s.state === "done" && <span className="sr-only">{ui.doneSr}</span>}
           </span>
           <span className="text-xs text-muted">{detail(s)}</span>
         </li>
@@ -125,7 +125,7 @@ function BriefMain({ state, brief, calls, confirmation, first }: { state: RunSta
   return (
     <div className="flex min-w-0 flex-col gap-8">
       {brief.degraded !== null && <DegradedNotice reason={brief.degraded} />}
-      <SummaryCard state={state} answers={answers} callDay={call === null ? "" : shortDay(call.approved_at ?? call.created_at)} />
+      <SummaryCard state={state} answers={answers} callDay={call === null ? "" : t.ui.day(call.approved_at ?? call.created_at)} />
       <BeforeInterview plan={plan} claims={state.claims} brief={brief} evidence={evidence} devilsAdvocate={t.devilsAdvocate(state.challenge_summary)} criteria={criteria} />
       <div>
         <TabBar tabs={tabs} label={t.ui.tabsLabel} />
@@ -251,7 +251,7 @@ function BriefShell({
   const call = calls.data === null ? null : latestAnswered(calls.data.calls);
   const merged = state.candidates.filter((c) => c.decision === "merge").length;
   const role = hiringFor(state);
-  const steps = hiringSteps(state, formatDuration(state.cost.duration_ms), call);
+  const steps = hiringSteps(state, formatDuration(state.cost.duration_ms), call, ui.day);
   return (
     <div id="brief" lang={report.lang === "en" ? undefined : report.lang} className="flex scroll-mt-6 flex-col gap-8">
       <header className="flex flex-col gap-6 border-b border-divider pb-8">
@@ -277,7 +277,7 @@ function BriefShell({
             {state.intake !== null && <p className="text-sm text-muted">{ui.intakeLine(state.intake)}</p>}
             <div className="flex flex-wrap gap-2">
               <Pill tone={merged > 0 ? "ok" : "neutral"}>{merged > 0 ? ui.identityPill(merged) : ui.noIdentity}</Pill>
-              {call !== null && <Pill tone="ok">{ui.phonePill(shortDay(call.approved_at ?? call.created_at))}</Pill>}
+              {call !== null && <Pill tone="ok">{ui.phonePill(ui.day(call.approved_at ?? call.created_at))}</Pill>}
               {cached && <SimulatedPill kind="cached" detail={ui.cachedFrom(state.created_at.slice(0, 16).replace("T", " "))} />}
             </div>
           </div>

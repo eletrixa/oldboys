@@ -163,13 +163,13 @@ export function shortDay(iso: string | null | undefined): string {
  * Research, Identity, Phone screen, Interview, Decision. Only what the state proves is done; the interview is never marked
  * done (nothing stores it), the decision is always a person's.
  */
-export function hiringSteps(state: Pick<RunState, "created_at" | "candidates">, durationText: string, call: CallView | null): HiringStep[] {
+export function hiringSteps(state: Pick<RunState, "created_at" | "candidates">, durationText: string, call: CallView | null, day: (iso: string) => string = shortDay): HiringStep[] {
   const merged = state.candidates.filter((c) => c.decision === "merge").length;
   const phoneDone = call !== null;
   return [
-    { key: "research", state: "done", detail: [shortDay(state.created_at), durationText].filter((s) => s !== "").join(" · ") },
+    { key: "research", state: "done", detail: [day(state.created_at), durationText].filter((s) => s !== "").join(" · ") },
     { key: "identity", state: merged > 0 ? "done" : "todo", detail: String(merged) },
-    { key: "phone", state: phoneDone ? "done" : "next", detail: phoneDone ? shortDay(call.approved_at ?? call.created_at) : "" },
+    { key: "phone", state: phoneDone ? "done" : "next", detail: phoneDone ? day(call.approved_at ?? call.created_at) : "" },
     { key: "interview", state: phoneDone ? "next" : "todo", detail: "" },
     { key: "decision", state: "todo", detail: "" },
   ];

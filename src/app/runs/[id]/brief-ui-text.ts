@@ -17,7 +17,7 @@ import { intakeLine, type RunIntake } from "@/app/intake/intake-rows";
 import type { ApplicationSource } from "@/domain/application";
 import { plural } from "@/app/_lib/plural";
 import type { CallAnswerStatus } from "@/domain/call";
-import type { GapGroup, HiringStep } from "./brief-layout";
+import { type GapGroup, type HiringStep, shortDay } from "./brief-layout";
 
 export type BriefUi = {
   eyebrow: string;
@@ -105,6 +105,10 @@ export type BriefUi = {
   aboutRows: { run: string; time: string; sourceCalls: string; aiCalls: string; cost: string };
   costValue: (usd: number) => string;
   auditRecord: string;
+  /** Short day for the steps and the phone pill: "9 Oct" / "9. 10."; "" when it does not parse. */
+  day: (iso: string) => string;
+  /** Screen-reader suffix of a finished step. */
+  doneSr: string;
 };
 
 export const UI_EN: BriefUi = {
@@ -200,6 +204,8 @@ export const UI_EN: BriefUi = {
   aboutRows: { run: "Run", time: "Research time", sourceCalls: "Source calls", aiCalls: "AI calls", cost: "Cost" },
   costValue: (usd) => `$${usd.toFixed(2)}`,
   auditRecord: "Audit record",
+  day: (iso) => shortDay(iso),
+  doneSr: " (done)",
 };
 
 const INTAKE_FROM_CS: Readonly<Record<ApplicationSource, string>> = {
@@ -312,4 +318,9 @@ export const UI_CS: BriefUi = {
   aboutRows: { run: "Běh", time: "Doba výzkumu", sourceCalls: "Volání zdrojů", aiCalls: "Volání AI", cost: "Náklady" },
   costValue: (usd) => `${usd.toFixed(2).replace(".", ",")} USD`,
   auditRecord: "Záznam pro audit",
+  day: (iso) => {
+    const d = new Date(iso);
+    return Number.isNaN(d.getTime()) ? "" : `${String(d.getUTCDate())}. ${String(d.getUTCMonth() + 1)}.`;
+  },
+  doneSr: " (hotovo)",
 };
