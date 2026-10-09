@@ -8,6 +8,9 @@
  *
  * Key responsibilities:
  * - textsHash is stable and changes with any id or text
+ * - translationBatches: char budget, max texts, a text never split, order kept
+ * - estimateTranslateUsd: a ~60-text brief fits the cap with the system prompt counted per batch
+ * - failedCallCost: reads `cost_usd` off a failed call's error, 0 otherwise
  * - mergeTranslation: missing, unknown, duplicate and empty ids fall back; a new Art. 9 topic falls back; an Art. 9
  *   topic already in the English source is kept
  *
@@ -16,11 +19,15 @@
  */
 import { describe, expect, it } from "vitest";
 import {
+  TRANSLATE_BATCH_CHARS,
+  TRANSLATE_BATCH_TEXTS,
   TRANSLATE_BUDGET_USD,
   estimateTranslateUsd,
+  failedCallCost,
   mergeTranslation,
   textsHash,
   translatePrompt,
+  translationBatches,
   translationKey,
   translationKeys,
 } from "../report-translation";
@@ -53,6 +60,47 @@ describe("estimateTranslateUsd", () => {
     expect(estimateTranslateUsd(typical)).toBeLessThan(TRANSLATE_BUDGET_USD);
     const huge = Array.from({ length: 200 }, (_, i) => ({ id: `c:${String(i)}`, text: "x".repeat(300) }));
     expect(estimateTranslateUsd(huge)).toBeGreaterThan(TRANSLATE_BUDGET_USD);
+  });
+
+  it("fits a normal ~60-text brief (system prompt once per batch) under the cap", () => {
+    const brief = Array.from({ length: 60 }, (_, i) => ({ id: `c:claim-${String(i)}`, text: "x".repeat(180) }));
+    expect(translationBatches(brief).length).toBeGreaterThan(1);
+    expect(estimateTranslateUsd(brief)).toBeLessThan(TRANSLATE_BUDGET_USD);
+  });
+});
+
+const text = (id: string, length: number): { id: string; text: string } => ({ id, text: "x".repeat(length) });
+
+describe("translationBatches", () => {
+  it("cuts at the character budget, keeps order and never splits a text", () => {
+    const texts = [text("a", 1000), text("b", 1000), text("c", 1000), text("d", 3000), text("e", 10)];
+    const batches = translationBatches(texts);
+    expect(batches.map((b) => b.map((t) => t.id))).toEqual([["a", "b"], ["c"], ["d"], ["e"]]);
+    expect(batches.flat()).toEqual(texts);
+    expect(batches[2]?.[0]?.text).toHaveLength(3000);
+  });
+
+  it("starts a new batch after the maximum number of texts", () => {
+    const texts = Array.from({ length: TRANSLATE_BATCH_TEXTS * 2 + 1 }, (_, i) => text(`t${String(i)}`, 5));
+    const batches = translationBatches(texts);
+    expect(batches.map((b) => b.length)).toEqual([TRANSLATE_BATCH_TEXTS, TRANSLATE_BATCH_TEXTS, 1]);
+    expect(batches.flat().map((t) => t.id)).toEqual(texts.map((t) => t.id));
+  });
+
+  it("fills a batch up to the budget exactly and takes custom limits", () => {
+    expect(translationBatches([text("a", TRANSLATE_BATCH_CHARS - 1), text("b", 1), text("c", 1)]).map((b) => b.length)).toEqual([2, 1]);
+    expect(translationBatches([text("a", 4), text("b", 4), text("c", 4)], 8, 10).map((b) => b.length)).toEqual([2, 1]);
+    expect(translationBatches([])).toEqual([]);
+  });
+});
+
+describe("failedCallCost", () => {
+  it("reads a positive cost_usd off the error and is 0 for anything else", () => {
+    expect(failedCallCost(Object.assign(new Error("No object generated"), { cost_usd: 0.08 }))).toBe(0.08);
+    expect(failedCallCost(new Error("overloaded"))).toBe(0);
+    expect(failedCallCost(Object.assign(new Error("x"), { cost_usd: -1 }))).toBe(0);
+    expect(failedCallCost(Object.assign(new Error("x"), { cost_usd: "0.1" }))).toBe(0);
+    expect(failedCallCost(null)).toBe(0);
   });
 });
 
