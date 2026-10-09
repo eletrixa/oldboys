@@ -252,9 +252,9 @@ export class ResearchRunWorkflow extends WorkflowEntrypoint<CloudflareEnv, Resea
       const r = await seedProfile({ runId, subject: head.subject, anchor: head.anchor, profileUrl: head.profile_url, cvText: head.cv_text }, this.ports());
       await persistOutcome(this.env.DB, runId, r.out);
       await this.env.DB.prepare("UPDATE investigations SET subject = ?, anchor = ? WHERE id = ?").bind(r.subject, r.anchor, runId).run();
-      const ref = { subject: r.subject, anchor: r.anchor, headline: r.headline, employer: r.employer, sources: r.out.sources.length, candidates: r.out.candidates.length, notes: r.out.notes, ...(r.facts.length > 0 ? { digest: r.facts } : {}) };
+      const ref = { subject: r.subject, anchor: r.anchor, headline: r.headline, employer: r.employer, sources: r.out.sources.length, candidates: r.out.candidates.length, notes: r.out.notes };
       const ms = Date.now() - started;
-      if (head.profile_url !== null) await this.ledger(runId, recipeStep.id, "call", r.actor.cost_usd, ms, { ...ref, actor: HARVEST_ACTOR, calls: r.actor.calls });
+      if (head.profile_url !== null) await this.ledger(runId, recipeStep.id, "call", r.actor.cost_usd, ms, { ...ref, ...(r.out.digest === undefined ? {} : { digest: r.out.digest }), actor: HARVEST_ACTOR, calls: r.actor.calls });
       if (head.cv_text !== null) await this.ledger(runId, recipeStep.id, "llm", r.llm.cost_usd, ms, { ...ref, actor: CV_ACTOR, calls: r.llm.calls });
       return { subject: r.subject, anchor: r.anchor };
     });

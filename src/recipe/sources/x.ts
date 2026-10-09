@@ -15,9 +15,9 @@
  * - Excerpts go through clip(); malformed payloads parse to []
  */
 import { z } from "zod";
-import { clipBio, emptyFacts, type ProfileFacts } from "@/domain/profile-facts";
-import { count, digestOf } from "@/recipe/sources/facts";
-import type { Collector, StepContext } from "@/recipe/sources/types";
+import { clipBio, count, facts } from "@/domain/profile-facts";
+import { dedupeBy, digestOf, parsedAll } from "@/recipe/sources/facts";
+import type { Collector } from "@/recipe/sources/types";
 import { clip, identityFor } from "@/recipe/sources/types";
 
 const Author = z.object({
@@ -76,29 +76,24 @@ export const x: Collector = {
     };
     return [profile, ...tweets];
   },
-  digest: (fetched, ctx) => factsOf(fetched.map((f) => f.payload), ctx),
+  digest: (fetched, ctx) =>
+    digestOf(
+      dedupeBy(
+        parsedAll(z.array(Tweet), fetched).flatMap((items) => items.flatMap((t) => (t.author ? [t.author] : []))),
+        (a) => (a.userName ?? "").toLowerCase(),
+      )
+        .filter((a) => identityFor(ctx, `https://x.com/${a.userName ?? ""}`) === "merged")
+        .map((a) =>
+          facts("x", `https://x.com/${a.userName ?? ""}`, {
+            handle: a.userName ?? null,
+            display_name: a.name ?? null,
+            bio: clipBio(a.description),
+            created_at: a.createdAt ?? null,
+            followers: count(a.followers),
+            following: count(a.following),
+            verified: a.isBlueVerified ?? a.isVerified ?? null,
+            photo_url: a.profilePicture ?? null,
+          }),
+        ),
+    ),
 };
-
-export function factsOf(payloads: readonly unknown[], ctx: StepContext): ProfileFacts[] | null {
-  const facts = new Map<string, ProfileFacts>();
-  for (const pl of payloads) {
-    const items = z.array(Tweet).safeParse(pl);
-    if (!items.success) continue;
-    for (const a of items.data.flatMap((t) => (t.author ? [t.author] : []))) {
-      const handle = a.userName ?? "";
-      const url = `https://x.com/${handle}`;
-      if (handle === "" || facts.has(handle.toLowerCase()) || identityFor(ctx, url) !== "merged") continue;
-      const f = emptyFacts("x", url, url);
-      f.handle = handle;
-      f.display_name = a.name ?? null;
-      f.bio = clipBio(a.description);
-      f.created_at = a.createdAt ?? null;
-      f.followers = count(a.followers);
-      f.following = count(a.following);
-      f.verified = a.isBlueVerified ?? a.isVerified ?? null;
-      f.photo_url = a.profilePicture ?? null;
-      facts.set(handle.toLowerCase(), f);
-    }
-  }
-  return digestOf([...facts.values()]);
-}

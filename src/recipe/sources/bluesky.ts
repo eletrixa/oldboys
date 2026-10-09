@@ -15,9 +15,9 @@
  * - Excerpts go through clip(); malformed payloads parse to []
  */
 import { z } from "zod";
-import { clipBio, emptyFacts, type ProfileFacts } from "@/domain/profile-facts";
-import { count, digestOf } from "@/recipe/sources/facts";
-import type { Collector, StepContext } from "@/recipe/sources/types";
+import { clipBio, count, facts } from "@/domain/profile-facts";
+import { digestOf, parsedAll } from "@/recipe/sources/facts";
+import type { Collector } from "@/recipe/sources/types";
 import { clip, identityFor } from "@/recipe/sources/types";
 
 const Result = z.object({
@@ -61,27 +61,22 @@ export const bluesky: Collector = {
       raw: a,
     }));
   },
-  digest: (fetched, ctx) => factsOf(fetched.map((f) => f.payload), ctx),
+  digest: (fetched, ctx) =>
+    digestOf(
+      parsedAll(Result, fetched)
+        .flatMap((r) => r.actors)
+        .filter((a) => identityFor(ctx, `https://bsky.app/profile/${a.handle}`) === "merged")
+        .map((a) =>
+          facts("bluesky", `https://bsky.app/profile/${a.handle}`, {
+            handle: a.handle,
+            display_name: a.displayName ?? null,
+            bio: clipBio(a.description),
+            created_at: a.createdAt ?? null,
+            followers: count(a.followersCount),
+            following: count(a.followsCount),
+            posts: count(a.postsCount),
+            photo_url: a.avatar ?? null,
+          }),
+        ),
+    ),
 };
-
-export function factsOf(payloads: readonly unknown[], ctx: StepContext): ProfileFacts[] | null {
-  return digestOf(
-      payloads.flatMap((pl) => {
-        const r = Result.safeParse(pl);
-        return r.success ? r.data.actors : [];
-      }).flatMap((a) => {
-        const url = `https://bsky.app/profile/${a.handle}`;
-        if (identityFor(ctx, url) !== "merged") return [];
-        const f = emptyFacts("bluesky", url, url);
-        f.handle = a.handle;
-        f.display_name = a.displayName ?? null;
-        f.bio = clipBio(a.description);
-        f.created_at = a.createdAt ?? null;
-        f.followers = count(a.followersCount);
-        f.following = count(a.followsCount);
-        f.posts = count(a.postsCount);
-        f.photo_url = a.avatar ?? null;
-        return [f];
-      }),
-    );
-}

@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/domain/code-profile.ts
- * Deps:    zod
+ * Deps:    zod, src/domain/ledger-digest (readDigest)
  * Tested:  src/domain/__tests__/code-profile.test.ts
  *
  * Key responsibilities:
@@ -11,7 +11,6 @@
  * - `TECHNICAL_FAMILIES`: role families for which the hiring recipe scrapes GitHub in depth (engineering, data; AI falls
  *   under one of them in `familyOf`); `isTechnicalRole` also accepts a technical title in another family ("Product Engineer"); `technicalSkipReason` is the truthful "not searched" text for the others
  * - `ApifyGithubProfile`: what the Apify profile actor step (`github_apify`) adds (last-year contributions, pinned repos, achievements)
- * - `readDigest` (shared with src/domain/cz-registry): latest `ref.digest` of a step among ledger rows
  * - `readCodeProfile`: latest `github_deep` digest from ledger rows with the `github_apify` digest attached (same handle), parsed
  *   defensively (null for runs before the feature or non-technical roles)
  * - `codeTotals`: repos sampled, commits, lines added and removed summed over `repos`
@@ -22,6 +21,7 @@
  * - Numbers describe public code only; never a score of the person
  */
 import { z } from "zod";
+import { type LedgerRow, readDigest } from "./ledger-digest";
 import type { Family } from "./position";
 
 export const TECHNICAL_FAMILIES: readonly Family[] = ["engineering", "data"];
@@ -133,25 +133,6 @@ export const CODE_PROFILE_CAVEATS: readonly string[] = [
   "Per-repo statistics are GitHub's own, computed for the sampled repositories only.",
   "Only the GitHub account confirmed in the identity lineup is counted; a namesake's account never is.",
 ];
-
-export type LedgerRow = { step?: string | null; ref_json?: string | null };
-
-/** Latest `ref.digest` of `step` among ledger rows that parses with `schema`; null when absent or malformed. Shared with cz-registry. */
-export function readDigest<T>(rows: readonly LedgerRow[], step: string, schema: z.ZodType<T>): T | null {
-  for (let i = rows.length - 1; i >= 0; i -= 1) {
-    const row = rows[i];
-    if (row?.step !== step || typeof row.ref_json !== "string") continue;
-    try {
-      const ref: unknown = JSON.parse(row.ref_json);
-      const digest = typeof ref === "object" && ref !== null && "digest" in ref ? ref.digest : undefined;
-      const parsed = schema.safeParse(digest);
-      if (parsed.success) return parsed.data;
-    } catch {
-      /* malformed row: keep looking */
-    }
-  }
-  return null;
-}
 
 /** github_deep digest, with the github_apify digest attached when both exist; null for older runs and non-technical roles. */
 export function readCodeProfile(rows: readonly LedgerRow[]): CodeProfile | null {

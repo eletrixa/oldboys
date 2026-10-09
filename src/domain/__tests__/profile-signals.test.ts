@@ -10,14 +10,14 @@ import { describe, expect, it } from "vitest";
 import type { Candidate } from "@/domain/claim";
 import { JUDGEMENT } from "@/domain/challenge";
 import type { CodeProfile } from "@/domain/code-profile";
-import { emptyFacts, type ProfileFacts } from "@/domain/profile-facts";
+import { facts as makeFacts, type ProfileFacts } from "@/domain/profile-facts";
 import { LINKEDIN_CREATION_NOTE, PROFILE_SIGNAL_CAVEATS, profileSignals, type ProfileSignalsInput } from "@/domain/profile-signals";
 
 const NOW = "2026-10-09T10:00:00.000Z";
 const BANNED = /cheat|plagiar|steal|mislead|misrepresent|pretend|deceiv|exaggerat|bogus|scam|fake|suspicious|fraud/i;
 
 const facts = (platform: string, over: Partial<ProfileFacts> = {}): ProfileFacts => ({
-  ...emptyFacts(platform, `https://${platform}.example/me`, `https://${platform}.example/me.json`),
+  ...makeFacts(platform, `https://${platform}.example/me`, { source_url: `https://${platform}.example/me.json` }),
   ...over,
 });
 
@@ -195,7 +195,7 @@ describe("profileSignals", () => {
       facts: [facts("linkedin", { verified: true }), facts("x", { created_at: "2026-09-01", followers: 1, following: 800 })],
       codeProfile: code({ repos_owned: 6, forks_excluded: 6 }),
     });
-    expect(ids(r)).toEqual(["young-account", "forks-only", "follow-asymmetry", "linkedin-verified"]);
+    expect(ids(r)).toEqual(["young-account", "forks-only", "linkedin-verified", "follow-asymmetry"]);
   });
 
   it("lists merged platforms without facts as not read", () => {
@@ -205,9 +205,10 @@ describe("profileSignals", () => {
         cand({ id: "1", platform: "x" }),
         cand({ id: "2", platform: "github" }),
         cand({ id: "3", platform: "instagram", decision: "rejected" }),
+        cand({ id: "4", platform: "tiktok" }),
       ],
     });
-    expect(r.not_checked).toEqual([LINKEDIN_CREATION_NOTE, "GitHub: account details were not read on this run."]);
+    expect(r.not_checked).toEqual([LINKEDIN_CREATION_NOTE, "TikTok: account details were not read on this run.", "GitHub: account details were not read on this run."]);
   });
 
   it("keeps every sentence free of verdict words", () => {
