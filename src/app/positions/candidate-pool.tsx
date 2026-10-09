@@ -1,5 +1,5 @@
 /**
- * Candidates of a position: add a person by hand, the results table (status, fit, independent evidence, profile link), start enrichment.
+ * Candidates of a position: add a person by hand, the results table (status, fit, independent evidence, profile link), start research.
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/positions/candidate-pool.tsx
@@ -14,7 +14,7 @@
  *
  * Design constraints:
  * - Client component; no ranking or verdict on a person, never sorted by fit (fit is the evidence share of the must-haves)
- * - Enrichment starts only on the button click (it spends budget)
+ * - Research starts only on the button click (it spends budget)
  */
 "use client";
 
@@ -83,20 +83,20 @@ function AddCandidate({ positionId, onReload }: Pick<Props, "positionId" | "onRe
     <form onSubmit={(e) => void submit(e)} className={`${CARD} flex flex-col gap-3`} aria-label="Add a candidate">
       <h3 className="font-medium">Add a candidate</h3>
       <div className="grid gap-3 md:grid-cols-2">
-        <label className="flex flex-col gap-1 text-xs text-muted">
+        <label className="flex flex-col gap-1.5 text-sm font-semibold text-ink">
           Name (optional)
           <input className={`${FIELD} px-3 py-2`} value={name} maxLength={200} onChange={(e) => { setName(e.target.value); }} />
         </label>
-        <label className="flex flex-col gap-1 text-xs text-muted">
+        <label className="flex flex-col gap-1.5 text-sm font-semibold text-ink">
           Email (optional)
           <input type="email" className={`${FIELD} px-3 py-2`} value={email} onChange={(e) => { setEmail(e.target.value); }} />
         </label>
       </div>
-      <label className="flex flex-col gap-1 text-xs text-muted">
+      <label className="flex flex-col gap-1.5 text-sm font-semibold text-ink">
         LinkedIn URL
         <input className={`${FIELD} px-3 py-2`} value={linkedin} maxLength={500} placeholder="https://www.linkedin.com/in/…" onChange={(e) => { setLinkedin(e.target.value); }} />
       </label>
-      <label className="flex flex-col gap-1 text-xs text-muted">
+      <label className="flex flex-col gap-1.5 text-sm font-semibold text-ink">
         CV text
         <textarea className={`${FIELD} px-3 py-2`} rows={4} value={cv} placeholder="Paste the CV if there is no LinkedIn URL" onChange={(e) => { setCv(e.target.value); }} />
       </label>
@@ -136,7 +136,7 @@ export function CandidatePool({ positionId, rows, onReload }: Props): React.JSX.
     try {
       const res = await postJson(`/api/positions/${encodeURIComponent(positionId)}/enrich`, { applicationIds: chosen });
       if (!res.ok) {
-        setNotice({ kind: "error", text: failText(res.status, "We could not start the enrichment. Please try again.") });
+        setNotice({ kind: "error", text: failText(res.status, "We could not start the research. Please try again.") });
         return;
       }
       const out = await res.json<EnrichResponse>();
@@ -156,11 +156,11 @@ export function CandidatePool({ positionId, rows, onReload }: Props): React.JSX.
       <h2 id="pool-heading" className="font-serif text-2xl">Candidates</h2>
       <AddCandidate positionId={positionId} onReload={onReload} />
       {views.length === 0 ? (
-        <p className="text-muted">No candidates yet. Add one by hand or bind an intake channel.</p>
+        <p className="text-muted">No candidates yet. Add one below, or bind an intake channel so applications land here.</p>
       ) : (
         <>
-          <div className="overflow-x-auto rounded-xl border border-divider bg-surface">
-            <table className="w-full text-left text-sm">
+          <div className="relative overflow-x-auto rounded-xl border border-divider bg-surface">
+            <table className="w-full min-w-[40rem] text-left text-sm">
               <caption className="sr-only">Candidates in the order they were added; fit is the evidence share of this position&apos;s must-haves</caption>
               <thead className="bg-sage/50 text-xs text-muted">
                 <tr>
@@ -185,7 +185,7 @@ export function CandidatePool({ positionId, rows, onReload }: Props): React.JSX.
                         onChange={() => { toggle(v.id); }}
                       />
                     </td>
-                    <th scope="row" className="px-3 py-2 font-medium">
+                    <th scope="row" className="min-w-[10rem] px-3 py-2 font-medium">
                       {v.name}
                       {v.email !== null && <span className="block text-xs font-normal text-muted">{v.email}</span>}
                     </th>
@@ -203,7 +203,7 @@ export function CandidatePool({ positionId, rows, onReload }: Props): React.JSX.
           </div>
           <div className="flex flex-wrap items-center gap-3">
             <button type="button" className={BTN_PRIMARY} disabled={chosen.length === 0 || busy} onClick={() => void enrich()}>
-              Start enrichment ({chosen.length})
+              Research selected ({chosen.length})
             </button>
             <span role="status" className={`text-sm ${notice?.kind === "error" ? "text-conflict" : "text-muted"}`}>{notice?.text}</span>
           </div>

@@ -54,7 +54,7 @@ export function RolePicker({ options, defaultValue = "", autoFocus = false }: Pr
           aria-autocomplete="list"
           aria-activedescendant={active >= 0 ? `${listId}-${String(active)}` : undefined}
           aria-describedby="role-help"
-          placeholder="Search 170 roles or type your own"
+          placeholder={options.length > 0 ? `Search ${String(options.length)} roles or type your own` : "Type the role you are hiring for"}
           className={FIELD}
           onChange={(e) => {
             setValue(e.target.value);
@@ -111,7 +111,7 @@ export function RolePicker({ options, defaultValue = "", autoFocus = false }: Pr
         )}
       </div>
       <span id="role-help" className="text-xs text-muted">
-        Pick a preselected role or type your own. A preselected role gets its criteria and evidence sites at once; a custom one is read by the model.
+        Pick a preselected role (it brings its criteria and evidence sites) or type your own.
       </span>
     </div>
   );

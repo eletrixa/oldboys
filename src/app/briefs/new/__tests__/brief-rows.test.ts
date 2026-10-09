@@ -13,7 +13,7 @@
  * - Pure; File comes from the Node global
  */
 import { describe, expect, it } from "vitest";
-import { candidateBody, emptyRow, enrichIds, failText, patchRow, researchCount, rowReady, type DraftRow } from "../brief-rows";
+import { candidateBody, emptyRow, enrichIds, failText, nextAfterStart, patchRow, researchCount, rowReady, type DraftRow } from "../brief-rows";
 
 const row = (over: Partial<DraftRow>): DraftRow => ({ ...emptyRow("r1"), ...over });
 
@@ -50,5 +50,11 @@ describe("brief rows", () => {
   it("says the cap calmly and keeps other fallbacks", () => {
     expect(failText(429, "x")).toMatch(/kept here/);
     expect(failText(500, "x")).toBe("x");
+  });
+
+  it("goes to the run when one started, to the position's candidates otherwise", () => {
+    expect(nextAfterStart("p 1", [{ runId: "r/1" }])).toBe("/runs/r%2F1");
+    expect(nextAfterStart("p 1", [{ runId: "a" }, { runId: "b" }])).toBe("/positions/p%201#candidates");
+    expect(nextAfterStart("p1", [])).toBe("/positions/p1#candidates");
   });
 });

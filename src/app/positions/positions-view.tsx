@@ -9,7 +9,7 @@
  * Key responsibilities:
  * - GET /api/positions with the stored token; rows = titleChoices(catalog, positions): the team's ingested positions
  *   (link to their page, run count) and the 170 preselected catalog titles (link to the start form with the role prefilled)
- * - Group by family, filter by title client-side; the company is never shown
+ * - "Your positions" (rows with runs) first, then the catalog per family inside a "Preselected roles (N)" disclosure (open when the team has none or a search is typed); filter by title client-side; the company is never shown
  *
  * Design constraints:
  * - Client component; no request without a token; `catalog` comes from the server page (title, family, aliases only)
@@ -20,7 +20,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { AuthStates } from "@/app/_components/auth-states";
 import { useAuthedJson } from "@/app/_components/use-authed-json";
-import { BTN_PRIMARY, Eyebrow, FIELD, LINK } from "@/app/ui";
+import { BTN_PRIMARY, Chevron, Eyebrow, FIELD, LINK, SUMMARY } from "@/app/ui";
 import type { PositionListItem } from "@/domain/position";
 import { filterTitles, groupByFamily, indexTitles, type TitleChoice, titleChoices } from "@/domain/position-links";
 import type { RoleOption } from "@/domain/role-catalog";
@@ -49,7 +49,11 @@ function TitleRow({ c }: { c: TitleChoice }): React.JSX.Element {
 function TitleSections({ rows }: { rows: TitleChoice[] }): React.JSX.Element {
   const [query, setQuery] = useState("");
   const index = useMemo(() => indexTitles(rows), [rows]);
-  const groups = useMemo(() => groupByFamily(filterTitles(index, query)), [index, query]);
+  const found = useMemo(() => filterTitles(index, query), [index, query]);
+  const own = found.filter((c) => c.runs !== null);
+  const groups = useMemo(() => groupByFamily(found.filter((c) => c.runs === null)), [found]);
+  const catalogCount = groups.reduce((n, g) => n + g.items.length, 0);
+  const open = query !== "" || !rows.some((c) => c.runs !== null);
   return (
     <>
       <label className="flex flex-col gap-1.5 text-sm font-semibold">
@@ -62,15 +66,30 @@ function TitleSections({ rows }: { rows: TitleChoice[] }): React.JSX.Element {
           className={`${FIELD} font-normal`}
         />
       </label>
-      {groups.length === 0 && <p className="text-muted">No position matches that search.</p>}
-      {groups.map((g) => (
-        <section key={g.family} aria-labelledby={`fam-${g.family}`} className="flex flex-col gap-2">
-          <h2 id={`fam-${g.family}`} className="text-xs font-semibold tracking-[0.08em] text-muted uppercase">{g.family}</h2>
+      {found.length === 0 && <p className="text-muted">No position matches that search.</p>}
+      {own.length > 0 && (
+        <section aria-labelledby="own-positions" className="flex flex-col gap-2">
+          <h2 id="own-positions" className="font-serif text-2xl">Your positions</h2>
           <ul className="flex flex-col divide-y divide-divider">
-            {g.items.map((c) => <TitleRow key={c.href} c={c} />)}
+            {own.map((c) => <TitleRow key={c.href} c={c} />)}
           </ul>
         </section>
-      ))}
+      )}
+      {groups.length > 0 && (
+        <details key={String(open)} className="group" open={open}>
+          <summary className={SUMMARY}><Chevron />Preselected roles ({String(catalogCount)})</summary>
+          <div className="mt-2 flex flex-col gap-6">
+            {groups.map((g) => (
+              <section key={g.family} aria-labelledby={`fam-${g.family}`} className="flex flex-col gap-2">
+                <h3 id={`fam-${g.family}`} className="text-xs font-semibold tracking-[0.08em] text-muted uppercase">{g.family}</h3>
+                <ul className="flex flex-col divide-y divide-divider">
+                  {g.items.map((c) => <TitleRow key={c.href} c={c} />)}
+                </ul>
+              </section>
+            ))}
+          </div>
+        </details>
+      )}
     </>
   );
 }

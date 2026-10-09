@@ -22,6 +22,7 @@
  * - Radar look per docs/design/radar-ui.md: ui.tsx primitives and semantic tokens only, no raw colours
  */
 import { getCloudflareContext } from "@opennextjs/cloudflare";
+import type { Metadata } from "next";
 import Link from "next/link";
 import { loadAuditRecord } from "@/app/api/runs/[id]/audit/load";
 import type { AuditRecord, LineupAnswer, SourceStatus } from "@/domain/audit";
@@ -30,6 +31,8 @@ import { STEP_LABEL } from "../source-labels";
 import { GAP_LABEL, PLATFORM_LABEL } from "../state";
 
 export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = { title: "Audit record" };
 
 const H2 = "mb-3 font-serif text-2xl";
 const VIA_LABEL: Record<AuditRecord["run"]["started_via"], string> = {

@@ -7,7 +7,7 @@
  * Tested:  n/a
  *
  * Key responsibilities:
- * - Logged out: landing anchors (The brief, How it works, Trust, FAQ; md and up), Log in, Create account, always on one row beside the mark. Logged in: Positions, Roles, My briefs, organization name, Log out, New brief (primary)
+ * - Logged out: landing anchors (The brief, How it works, Trust, FAQ; md and up), Log in, Create account, always on one row beside the mark. Logged in: Positions and Roles (sm and up), My briefs, organization name (md and up), Log out (md and up), New brief (secondary, always visible, "New" under sm); one row at 390px
  *
  * Design constraints:
  * - Server component; rendered inside the layout's header next to the Radar mark
@@ -24,7 +24,7 @@ const ANCHOR = BTN_QUIET.replace("inline-flex", "hidden md:inline-flex");
 
 export function SiteNav({ user }: { user: SessionUser | null }): React.JSX.Element {
   return (
-    <nav aria-label="Main" className={user === null ? "flex items-center gap-1" : "flex w-full flex-wrap items-center gap-1 sm:w-auto sm:justify-end"}>
+    <nav aria-label="Main" className="flex items-center gap-1">
       {user === null ? (
         <>
           <Link href="/#product" className={ANCHOR}>The brief</Link>
@@ -36,12 +36,19 @@ export function SiteNav({ user }: { user: SessionUser | null }): React.JSX.Eleme
         </>
       ) : (
         <>
-          <NavLink href="/positions">Positions</NavLink>
-          <NavLink href="/roles">Roles</NavLink>
+          <span className="hidden sm:contents">
+            <NavLink href="/positions">Positions</NavLink>
+            <NavLink href="/roles">Roles</NavLink>
+          </span>
           <NavLink href="/briefs">My briefs</NavLink>
           <span className="hidden px-2 text-sm text-muted md:inline">{user.organizationName}</span>
-          <LogoutButton />
-          <Link href="/briefs/new" className={`${BTN_SECONDARY} hidden sm:inline-flex`}>New brief</Link>
+          <span className="hidden md:contents">
+            <LogoutButton />
+          </span>
+          <Link href="/briefs/new" className={BTN_SECONDARY}>
+            <span className="sm:hidden">New</span>
+            <span className="hidden sm:inline">New brief</span>
+          </Link>
         </>
       )}
     </nav>

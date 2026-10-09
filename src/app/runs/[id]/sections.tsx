@@ -8,6 +8,8 @@
  *
  * Key responsibilities:
  * - SectionList: sections in the order given (BriefView passes them confidence descending)
+ * - SectionRows: the same sections as compact disclosures in one card (title, one-line summary, confidence pill, claim
+ *   count); inside, claims show a short quote inline instead of the "Show evidence" toggle (finished brief, Evidence tab)
  * - ClaimList: one claim per row (grid: kind tag cell, text cell, so wrapped text hangs beside the tag) with its kind tag, a "Conflicts with another claim" pill when claim.contradicts is
  *   non-empty, and source links that open the page at the quote (quoteLink; tooltip = "Confirmed: <identity_reason>"
  *   and the retrieval date); also used for the per-question fallback
@@ -27,8 +29,8 @@
  */
 import type { BriefSection, Claim } from "@/domain/claim";
 import type { CvOutcome } from "@/domain/cv-check";
-import { CARD, Pill, SourceLink, type Tone } from "../../ui";
-import { ClaimEvidence } from "./claim-evidence";
+import { CARD, CARD_FLUSH, Chevron, Pill, SourceLink, type Tone } from "../../ui";
+import { ClaimEvidence, originalLang } from "./claim-evidence";
 import { CV_OUTCOME, cvRows, isCvSection } from "./cv-check";
 import { type Evidence, quoteLink } from "./evidence";
 import type { Report } from "./i18n";
@@ -44,8 +46,16 @@ function linkTitle(report: Report, sid: string, reason: string | null | undefine
   return [why, report.t.retrieved(fetchedAt)].filter((t) => t !== null).join(" · ");
 }
 
-/** `outcomeOf`: the CV check outcome per claim id; only the "CV vs public record" section passes it. */
-export function ClaimList({ claims, evidence, outcomeOf }: { claims: Claim[]; evidence: Evidence; outcomeOf?: ReadonlyMap<string, CvOutcome> }): React.JSX.Element | null {
+/** Quotes up to this length show inline in the compact rows, without a "Show evidence" toggle. */
+export const INLINE_QUOTE_MAX = 200;
+
+const inlineQuote = (c: Claim): boolean => c.quote !== null && c.quote.length <= INLINE_QUOTE_MAX;
+
+/**
+ * `outcomeOf`: the CV check outcome per claim id; only the "CV vs public record" section passes it.
+ * `inline`: a short quote shows in the row and replaces the claim's "Show evidence" disclosure (compact section rows).
+ */
+export function ClaimList({ claims, evidence, outcomeOf, inline = false }: { claims: Claim[]; evidence: Evidence; outcomeOf?: ReadonlyMap<string, CvOutcome>; inline?: boolean }): React.JSX.Element | null {
   const report = useReport();
   if (claims.length === 0) return null;
   return (
@@ -64,6 +74,11 @@ export function ClaimList({ claims, evidence, outcomeOf }: { claims: Claim[]; ev
               </Pill>
             )}
             <ChallengeNote claim={c} evidence={evidence} />
+            {inline && inlineQuote(c) && (
+              <span className="mt-1 block text-xs text-muted">
+                <q lang={originalLang(report.lang)} className="italic">{c.quote}</q>
+              </span>
+            )}
             {c.supports.map((sid) => {
               const info = evidence.sourceOf.get(sid);
               return info !== undefined ? (
@@ -77,7 +92,7 @@ export function ClaimList({ claims, evidence, outcomeOf }: { claims: Claim[]; ev
               );
             })}
           </span>
-          <ClaimEvidence claim={c} evidence={evidence} className="col-start-2" />
+          {!(inline && inlineQuote(c)) && <ClaimEvidence claim={c} evidence={evidence} className="col-start-2" />}
         </li>
       ))}
     </ul>
@@ -103,13 +118,13 @@ function CvOutcomePill({ outcome }: { outcome: CvOutcome | undefined }): React.J
 }
 
 /** The CV check's claims in outcome order with their pills, under the explainer line. */
-function CvClaims({ claims, evidence }: { claims: Claim[]; evidence: Evidence }): React.JSX.Element {
+function CvClaims({ claims, evidence, inline = false }: { claims: Claim[]; evidence: Evidence; inline?: boolean }): React.JSX.Element {
   const { t } = useReport();
   const rows = cvRows(claims, [...evidence.sourceOf].map(([id, info]) => ({ id, url: info.url })));
   return (
     <>
       <p className="mt-2 text-xs text-muted">{t.cvExplainer}</p>
-      <ClaimList claims={rows.map((r) => r.claim)} evidence={evidence} outcomeOf={new Map(rows.map((r) => [r.claim.id, r.outcome]))} />
+      <ClaimList claims={rows.map((r) => r.claim)} evidence={evidence} outcomeOf={new Map(rows.map((r) => [r.claim.id, r.outcome]))} inline={inline} />
     </>
   );
 }
@@ -126,8 +141,8 @@ function SectionCard({ section, claims, evidence }: { section: BriefSection; cla
   const links = [...new Set(listed.flatMap((sid) => evidence.sourceOf.get(sid)?.url ?? []))];
   return (
     <section className={CARD}>
-      <div className="flex items-start justify-between gap-3">
-        <h3 className="text-base font-semibold">{report.text(tid.sectionTitle(section.id), section.title)}</h3>
+      <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1">
+        <h3 className="min-w-0 text-base font-semibold [overflow-wrap:anywhere]">{report.text(tid.sectionTitle(section.id), section.title)}</h3>
         <Pill tone={BAND_TONE[band]}>{report.t.band[band]}</Pill>
       </div>
       <p className="mt-1 text-xs text-muted">{report.text(tid.sectionReason(section.id), section.confidence_reason)}</p>
@@ -136,7 +151,7 @@ function SectionCard({ section, claims, evidence }: { section: BriefSection; cla
       <ClaimList claims={facts} evidence={evidence} />
       <ClaimList claims={inferences} evidence={evidence} />
       {links.length > 0 && (
-        <ul className="mt-3 flex flex-col gap-1 text-sm">
+        <ul className="mt-3 flex flex-col gap-1 text-sm [overflow-wrap:anywhere]">
           {links.map((url) => (
             <li key={url}>
               <SourceLink url={url} label={url.replace(/^https?:\/\/(www\.)?/, "")} />
@@ -144,6 +159,75 @@ function SectionCard({ section, claims, evidence }: { section: BriefSection; cla
           ))}
         </ul>
       )}
+    </section>
+  );
+}
+
+/** The claims and links of one section (shared by the card and the compact row). */
+function sectionParts(section: BriefSection, claims: Claim[], evidence: Evidence): { cv: boolean; facts: Claim[]; inferences: Claim[]; links: string[] } {
+  const cv = isCvSection(section.id) && claims.length > 0;
+  const cited = new Set(claims.flatMap((c) => c.supports));
+  const listed = claims.length === 0 ? section.source_ids : section.id === "social-presence" ? section.source_ids.filter((sid) => !cited.has(sid)) : [];
+  return {
+    cv,
+    facts: cv ? [] : claims.filter((c) => c.kind !== "INFERENCE"),
+    inferences: cv ? [] : claims.filter((c) => c.kind === "INFERENCE"),
+    links: [...new Set(listed.flatMap((sid) => evidence.sourceOf.get(sid)?.url ?? []))],
+  };
+}
+
+/** One section as a compact disclosure: title, one-line summary, confidence pill and claim count; claims with inline quotes inside. */
+function SectionRow({ section, claims, evidence }: { section: BriefSection; claims: Claim[]; evidence: Evidence }): React.JSX.Element {
+  const report = useReport();
+  const band = confidenceBand(section.confidence);
+  const { cv, facts, inferences, links } = sectionParts(section, claims, evidence);
+  const summary = section.summary !== "" ? report.text(tid.sectionSummary(section.id), section.summary) : report.text(tid.sectionReason(section.id), section.confidence_reason);
+  return (
+    <details className="group px-5 md:px-6">
+      <summary className="flex min-h-11 cursor-pointer list-none items-start gap-3 py-3 [&::-webkit-details-marker]:hidden">
+        <span className="pt-1">
+          <Chevron />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-semibold text-ink [overflow-wrap:anywhere]">{report.text(tid.sectionTitle(section.id), section.title)}</span>
+          <span className="block text-xs text-muted group-open:hidden md:truncate">{summary}</span>
+        </span>
+        <span className="flex shrink-0 flex-col items-end gap-1 sm:flex-row sm:items-center sm:gap-2">
+          <Pill tone={BAND_TONE[band]}>{report.t.band[band]}</Pill>
+          <span className="text-xs text-muted tabular-nums">{report.t.ui.claimsCount(claims.length)}</span>
+        </span>
+      </summary>
+      <div className="pb-4 pl-5">
+        <p className="text-xs text-muted">{report.text(tid.sectionReason(section.id), section.confidence_reason)}</p>
+        {section.summary !== "" && <p className="mt-2 text-sm text-ink">{report.text(tid.sectionSummary(section.id), section.summary)}</p>}
+        {cv && <CvClaims claims={claims} evidence={evidence} inline />}
+        <ClaimList claims={facts} evidence={evidence} inline />
+        <ClaimList claims={inferences} evidence={evidence} inline />
+        {links.length > 0 && (
+          <ul className="mt-3 flex flex-col gap-1 text-sm [overflow-wrap:anywhere]">
+            {links.map((url) => (
+              <li key={url}>
+                <SourceLink url={url} label={url.replace(/^https?:\/\/(www\.)?/, "")} />
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </details>
+  );
+}
+
+/** Sections as compact rows in one flush card (Evidence tab of the finished brief). */
+export function SectionRows({ sections, claims, evidence }: { sections: BriefSection[]; claims: Claim[]; evidence: Evidence }): React.JSX.Element | null {
+  const { t } = useReport();
+  const shown = sections.filter(isShown);
+  if (shown.length === 0) return null;
+  return (
+    <section className={`${CARD_FLUSH} divide-y divide-divider`} aria-labelledby="findings-h">
+      <h2 id="findings-h" className="px-5 pt-5 pb-3 font-serif text-xl md:px-6">{t.ui.findings}</h2>
+      {shown.map((s) => (
+        <SectionRow key={s.id} section={s} claims={claims.filter((c) => s.claim_ids.includes(c.id))} evidence={evidence} />
+      ))}
     </section>
   );
 }

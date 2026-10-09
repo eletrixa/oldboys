@@ -10,7 +10,9 @@
  * - GET /api/runs/:id/calls for the proposal, the call limit and earlier calls
  * - Place: POST /api/runs/:id/calls {language: "en", questions} → POST /api/calls/:id/approve; a draft whose
  *   approve is rejected (400/409) is skipped so it never counts; 401 asks the operator to log in again
- * - Track: GET /api/calls/:id every 3 s until callPhase settles (cap 35 min), then reload the run's calls
+ * - Track: GET /api/calls/:id every 3 s until callPhase settles (cap 35 min), then reload the run's calls and tell the page (onChanged)
+ * - After a finished call: results first, the setup form folded under "Call again · N of M calls left"
+ * - useRunCalls: the same GET for the brief layout (30-second numbers, plan rows, header pill)
  *
  * Design constraints:
  * - Client only; shown only for a done run with a brief; same-origin fetches carry the session cookie, no token
@@ -21,7 +23,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { loginHref } from "@/app/login/next-path";
-import { CARD, LINK, SimulatedPill } from "@/app/ui";
+import { CARD, Chevron, LINK, SUMMARY, SimulatedPill } from "@/app/ui";
 import { type CallForm, type CallView, type RunCalls, callPhase, isSettled, placedCalls, toHrQuestions, usageLine } from "./call-panel";
 import { CallResult, EarlierCalls } from "./call-results";
 import { CallSetup } from "./call-setup";
@@ -30,7 +32,7 @@ import type { RunState } from "./state";
 const POLL_MS = 3000;
 const POLL_CAP_MS = 35 * 60 * 1000;
 
-type Load = { kind: "loading" } | { kind: "error" } | { kind: "ready"; data: RunCalls };
+export type Load = { kind: "loading" } | { kind: "error" } | { kind: "ready"; data: RunCalls };
 
 type Action =
   | { kind: "idle" }
@@ -82,13 +84,33 @@ async function placeCall(runId: string, form: CallForm): Promise<Placed> {
   return { kind: "error", message: APPROVE_ERROR[approve.status] ?? `The call failed (HTTP ${String(approve.status)}).`, index: null };
 }
 
-async function fetchRunCalls(runId: string): Promise<Load> {
+export async function fetchRunCalls(runId: string): Promise<Load> {
   try {
     const res = await fetch(`/api/runs/${runId}/calls`, { cache: "no-store" });
     return res.ok ? { kind: "ready", data: await res.json<RunCalls>() } : { kind: "error" };
   } catch {
     return { kind: "error" };
   }
+}
+
+/** The run's calls for the brief layout (numbers, plan rows, header pill); `reload` after the phone panel placed a call. */
+export function useRunCalls(runId: string, enabled: boolean): { data: RunCalls | null; reload: () => void } {
+  const [load, setLoad] = useState<Load>({ kind: "loading" });
+  const [seq, setSeq] = useState(0);
+  useEffect(() => {
+    if (!enabled) return;
+    let live = true;
+    void fetchRunCalls(runId).then((next) => {
+      if (live) setLoad(next);
+    });
+    return () => {
+      live = false;
+    };
+  }, [enabled, runId, seq]);
+  const reload = useCallback(() => {
+    setSeq((n) => n + 1);
+  }, []);
+  return { data: load.kind === "ready" ? load.data : null, reload };
 }
 
 /** Polls one call until it settles; `onUpdate` gets every view, `onDone` fires once at the end. */
@@ -129,7 +151,7 @@ function useCallTracking(callId: string | null, onUpdate: (call: CallView) => vo
   }, [callId, onUpdate, onDone]);
 }
 
-export function CallPanel({ state }: { state: RunState }): React.JSX.Element | null {
+export function CallPanel({ state, onChanged }: { state: RunState; onChanged?: () => void }): React.JSX.Element | null {
   const show = state.status === "done" && state.brief !== null;
   const [load, setLoad] = useState<Load>({ kind: "loading" });
   const [action, setAction] = useState<Action>({ kind: "idle" });
@@ -151,13 +173,13 @@ export function CallPanel({ state }: { state: RunState }): React.JSX.Element | n
       placeCall(state.id, form)
         .then((placed) => {
           setAction(placed.kind === "placed" ? { kind: "tracking", callId: placed.callId, call: null } : placed);
-          if (placed.kind === "error") void fetchRunCalls(state.id).then(setLoad);
+          if (placed.kind === "error") void fetchRunCalls(state.id).then(setLoad).then(onChanged);
         })
         .catch(() => {
           setAction({ kind: "error", message: "We could not reach the service. Please try again.", index: null });
         });
     },
-    [state.id],
+    [state.id, onChanged],
   );
 
   const onUpdate = useCallback((call: CallView) => {
@@ -168,9 +190,10 @@ export function CallPanel({ state }: { state: RunState }): React.JSX.Element | n
       void fetchRunCalls(state.id).then((next) => {
         setLoad(next);
         setAction(timedOut ? { kind: "error", message: "No result after 35 minutes. Reload the page later.", index: null } : { kind: "idle" });
+        onChanged?.();
       });
     },
-    [state.id],
+    [state.id, onChanged],
   );
   useCallTracking(action.kind === "tracking" ? action.callId : null, onUpdate, onDone);
 
@@ -179,6 +202,11 @@ export function CallPanel({ state }: { state: RunState }): React.JSX.Element | n
   const placed = data === null ? [] : placedCalls(data.calls);
   const current = action.kind === "tracking" ? action.call : (placed[0] ?? null);
   const earlier = action.kind === "tracking" ? placed : placed.slice(1);
+  // After a finished call the results lead and the form for another call folds away.
+  const finished = current?.status === "done";
+  const setup = (d: RunCalls): React.JSX.Element => (
+    <CallSetup proposal={d.proposal} used={d.used} max={d.max} busy={action.kind === "placing"} errorIndex={action.kind === "error" ? action.index : null} onPlace={place} />
+  );
 
   return (
     <section className={`${CARD} flex flex-col gap-4 text-ink`} aria-labelledby="phone-verify">
@@ -198,16 +226,17 @@ export function CallPanel({ state }: { state: RunState }): React.JSX.Element | n
           <Link href={loginHref(`/runs/${state.id}`)} className={LINK}>Log in again.</Link>
         </p>
       )}
-      {data !== null && action.kind !== "tracking" && (
-        <CallSetup
-          proposal={data.proposal}
-          used={data.used}
-          max={data.max}
-          busy={action.kind === "placing"}
-          errorIndex={action.kind === "error" ? action.index : null}
-          onPlace={place}
-        />
-      )}
+      {data !== null && action.kind !== "tracking" && (finished ? (
+        <details className="group border-t border-divider pt-2">
+          <summary className={SUMMARY}>
+            <Chevron />
+            Call again · {String(Math.max(0, data.max - data.used))} of {String(data.max)} calls left
+          </summary>
+          <div className="mt-3">{setup(data)}</div>
+        </details>
+      ) : (
+        setup(data)
+      ))}
       {data !== null && <p className="text-xs text-muted">{usageLine(data.used, data.max)}</p>}
       <EarlierCalls calls={earlier} />
     </section>

@@ -7,13 +7,13 @@
  * Tested:  n/a (this is the test)
  *
  * Key responsibilities:
- * - Groups in newest-run order with "No position" last; rows keep their order; status labels
+ * - Groups in newest-run order with "No position" last; rows keep their order; status labels; relative dates
  *
  * Design constraints:
  * - No D1: only the pure helpers
  */
 import { describe, expect, it } from "vitest";
-import { type BriefRow, groupByPosition, statusOf } from "../load";
+import { type BriefRow, groupByPosition, relativeTime, statusOf } from "../load";
 
 const row = (id: string, position_id: string | null, over: Partial<BriefRow> = {}): BriefRow => ({
   id, subject: id, role: null, status: "done", created_at: "2026-10-09T10:00:00.000Z", started_by: null,
@@ -44,5 +44,20 @@ describe("statusOf", () => {
     expect(statusOf("running", "2026-10-09T10:00:00.000Z", "2026-10-09T10:29:00.000Z").label).toBe("Researching");
     expect(statusOf("running", "2026-10-09T10:00:00.000Z", "2026-10-09T10:31:00.000Z").label).toBe("Stalled, start again");
     expect(statusOf("done", "2026-10-09T10:00:00.000Z", "2026-10-09T12:00:00.000Z").label).toBe("Done");
+  });
+});
+
+describe("relativeTime", () => {
+  const now = "2026-10-09T12:00:00.000Z";
+  it("labels minutes, hours, yesterday and older dates", () => {
+    expect(relativeTime("2026-10-09T11:59:40.000Z", now)).toBe("just now");
+    expect(relativeTime("2026-10-09T11:58:00.000Z", now)).toBe("2 min ago");
+    expect(relativeTime("2026-10-09T09:00:00.000Z", now)).toBe("3 h ago");
+    expect(relativeTime("2026-10-08T09:00:00.000Z", now)).toBe("yesterday");
+    expect(relativeTime("2026-10-07T09:00:00.000Z", now)).toBe("7 Oct 2026");
+    expect(relativeTime("2025-01-02T09:00:00.000Z", now)).toBe("2 Jan 2025");
+  });
+  it("is empty for an invalid date", () => {
+    expect(relativeTime("nope", now)).toBe("");
   });
 });

@@ -22,6 +22,7 @@
  *   `ref.challenge` (readChallenge, challengeState), challenges only for the kept claims; [] / null for runs before it
  * - position = LEFT JOIN positions on investigations.position_id ({id, title}); null without one or once purged (migration 0009)
  * - organization_name = LEFT JOIN organizations (null for bearer/extension runs)
+ * - last_at = newest ledger ts (created_at without rows); the page shows a stalled notice from it (isStalled)
  * - cost = runCost over the ledger rows (seq order) from investigations.created_at
  * - intake = the applications row LEFT JOINed into the head query on investigations.application_id ({source, tag, receivedAt}), null for runs started by hand; never cv_text or cover_letter
  * - code_profile = readCodeProfile over the same ledger rows (the github_deep step's `ref.digest`); null for runs before it or non-technical roles
@@ -150,6 +151,7 @@ export async function loadRunState(db: D1Database, id: string): Promise<RunState
     position: head.position_id !== null && head.position_title !== null ? { id: head.position_id, title: head.position_title } : null,
     organization_name: head.organization_name,
     created_at: head.created_at,
+    last_at: ledger.results.reduce((max, row) => (row.ts > max ? row.ts : max), head.created_at),
     status: head.status,
     step: last?.step ?? null,
     mentions: sources.results.length,

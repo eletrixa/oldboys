@@ -32,14 +32,20 @@ type Load =
   | { kind: "ready"; groups: RoleGroup[] };
 
 function RoleList({ groups }: { groups: RoleGroup[] }): React.JSX.Element {
-  if (groups.length === 0) return <p className="text-muted">No briefs with a role yet.</p>;
+  if (groups.length === 0) {
+    return (
+      <p className="text-muted">
+        No briefs with a role yet. <Link href="/briefs/new" className={LINK}>Start a brief</Link> and name the role.
+      </p>
+    );
+  }
   return (
     <ul className="divide-y divide-divider border-b border-divider">
       {groups.map((g) => (
         <li key={g.key}>
-          <Link href={`/roles/${encodeURIComponent(g.key)}`} className="group -mx-3 flex min-h-11 items-center gap-4 rounded-lg px-3 py-4 hover:bg-surface">
+          <Link href={`/roles/${encodeURIComponent(g.key)}`} className="group -mx-3 flex min-h-11 items-center gap-4 rounded-lg px-3 py-4 hover:bg-surface focus-visible:bg-surface">
             <span className="font-serif text-xl group-hover:text-action">{g.role}</span>
-            <span className="ml-auto min-w-[5.5rem] shrink-0 text-right text-sm text-muted tabular-nums">
+            <span className="ml-auto shrink-0 text-right text-sm text-muted tabular-nums">
               {g.run_count} {g.run_count === 1 ? "brief" : "briefs"}
             </span>
             <span aria-hidden="true" className="text-muted group-hover:text-action">›</span>
@@ -78,14 +84,21 @@ export function RolesView({ roleKey }: { roleKey?: string }): React.JSX.Element 
 
   const group = load.kind === "ready" && roleKey !== undefined ? load.groups.find((g) => g.key === roleKey) : undefined;
 
+  const briefCount = load.kind === "ready" ? load.groups.reduce((n, g) => n + g.run_count, 0) : 0;
+
   return (
     <main className="mx-auto flex max-w-5xl flex-col gap-8 px-4 py-10 md:py-14">
       <header className="flex flex-col items-start gap-3 border-b border-divider pb-8">
         <Eyebrow>Roles</Eyebrow>
         <h1 className="font-serif text-4xl leading-[1.05] md:text-5xl">Candidates by role</h1>
         <p className="max-w-[62ch] text-muted">Compare the briefs made for the same role.</p>
+        {load.kind === "ready" && (
+          <p className="text-sm text-muted tabular-nums">
+            {load.groups.length} {load.groups.length === 1 ? "role" : "roles"} · {briefCount} {briefCount === 1 ? "brief" : "briefs"}
+          </p>
+        )}
         {roleKey !== undefined && load.kind === "ready" && (
-          <Link href="/roles" className={`${LINK} text-sm`}>All roles</Link>
+          <Link href="/roles" className={`${LINK} inline-flex min-h-11 items-center text-sm`}>Back to all roles</Link>
         )}
       </header>
       {load.kind === "loading" && (
@@ -97,9 +110,9 @@ export function RolesView({ roleKey }: { roleKey?: string }): React.JSX.Element 
       {load.kind === "unauthorized" && (
         <LoginCard title="Log in to see your team's roles" body="Roles and their briefs are visible only to your organization." />
       )}
-      {load.kind === "error" && <p className="text-conflict">{load.message}</p>}
+      {load.kind === "error" && <p role="alert" className="text-conflict">{load.message}</p>}
       {load.kind === "ready" && roleKey === undefined && <RoleList groups={load.groups} />}
-      {load.kind === "ready" && roleKey !== undefined && (group === undefined ? <p className="text-muted">No briefs for this role.</p> : <RoleTable group={group} />)}
+      {load.kind === "ready" && roleKey !== undefined && (group === undefined ? <p className="text-muted">No briefs for this role. <Link href="/roles" className={LINK}>See all roles</Link>.</p> : <RoleTable group={group} />)}
     </main>
   );
 }

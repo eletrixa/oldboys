@@ -11,7 +11,10 @@
  * - PERSONALITY_PROMPT: the shared instruction block (profile.ts call 2 and the rebuild route use the same words)
  * - gatePersonality: keeps only lines whose quote sits in a source the subject wrote (own profile, CV, own posts) or a
  *   first-person quote elsewhere; under MIN_PERSONALITY_LINES the types and Big Five are null and the read says so
- * - readPersonality: one `primary` call over the ranked sources for a run that already has its brief (rebuild route)
+ * - ModelPersonality: the loose model-side schema (strings, no defaults) so the compiled output grammar stays small;
+ *   normalisePersonality clamps it into PersonalityReading
+ * - personalityCall: one `primary` call over a prompt head (profile seam call 3 and the rebuild route); readPersonality
+ *   builds the head from a run's ranked sources (rebuild route)
  *
  * Design constraints:
  * - Big Five: a lean (low / balanced / high) per dimension plus a 0..100 marker for the chart; the UI never prints the
@@ -19,7 +22,7 @@
  * - No Art. 9 inference; the model is told so and the quotes are the only carrier of any claim
  */
 import { z } from "zod";
-import { BigFive, type Candidate, type Profile, ProfileEvidence, ProfileItem, type Source } from "@/domain/claim";
+import { BIG_FIVE, BigFive, type BigFiveDimension, type Candidate, type Profile, ProfileEvidence, ProfileItem, type Source } from "@/domain/claim";
 import type { LlmCall } from "@/domain/ports";
 import { FIRST_PERSON } from "@/recipe/seams/evidence-strength";
 import { OWN_WRITING, rankSources, sourceBlock, validEvidence } from "@/recipe/seams/profile-gate";
@@ -27,7 +30,27 @@ import { OWN_WRITING, rankSources, sourceBlock, validEvidence } from "@/recipe/s
 export const MIN_PERSONALITY_LINES = 3;
 export const TOO_LITTLE_WRITING = "Too little of the person's own writing to estimate a type.";
 
-const Type = z.object({ type: z.string().min(1), confidence: z.enum(["low", "medium", "high"]) }).nullable();
+const Confidence = z.enum(["low", "medium", "high"]);
+const Type = z.object({ type: z.string().min(1), confidence: Confidence }).nullable();
+/** Model-side evidence line: no enums and no defaults, so the compiled output grammar stays small (Anthropic rejects a large one). */
+const Line = z.object({ quote: z.string(), source_id: z.string(), kind: z.string(), supports: z.boolean(), direction: z.string().nullable(), note: z.string().nullable() });
+const Row = z.object({ text: z.string(), detail: z.string().nullable(), evidence: z.array(Line) });
+/** What the model returns; `PersonalityReading` (below) is the normalised form every caller gates. */
+export const ModelPersonality = z.object({
+  disc: Type,
+  mbti: Type,
+  big5: z
+    .object({
+      traits: z.array(z.object({ dimension: z.string(), lean: z.string(), position: z.number(), confidence: z.string(), summary: z.string(), evidence: z.array(Line) })),
+      recommendations: z.array(z.object({ text: z.string(), dimension: z.string().nullable() })),
+    })
+    .nullable(),
+  read: z.string(),
+  traits: z.array(Row),
+  evidence: z.array(Line),
+});
+export type ModelPersonality = z.infer<typeof ModelPersonality>;
+
 export const PersonalityReading = z.object({
   disc: Type,
   mbti: Type,
@@ -38,6 +61,46 @@ export const PersonalityReading = z.object({
 });
 export type PersonalityReading = z.infer<typeof PersonalityReading>;
 
+const DIM = new Set<string>(BIG_FIVE);
+const level = (v: string): "low" | "medium" | "high" => (v === "high" || v === "medium" ? v : "low");
+const line = (e: z.infer<typeof Line>): ProfileEvidence => ({
+  quote: e.quote,
+  source_id: e.source_id,
+  kind: e.kind === "FACT" ? "FACT" : "INFERENCE",
+  supports: e.supports,
+  direction: e.direction === "contradicts" || e.direction === "context" ? e.direction : "supports",
+  note: e.note ?? "",
+  strength: "weak",
+});
+const row = (r: z.infer<typeof Row>): ProfileItem => ({ text: r.text, detail: r.detail ?? "", evidence: r.evidence.map(line) });
+
+/** The model's loose shapes into the typed reading: unknown dimensions dropped, leans and confidences clamped, positions clamped to 0..100. */
+export function normalisePersonality(m: ModelPersonality): PersonalityReading {
+  const big5 =
+    m.big5 === null
+      ? null
+      : {
+          traits: m.big5.traits.flatMap((t) =>
+            DIM.has(t.dimension)
+              ? [
+                  {
+                    dimension: t.dimension as BigFiveDimension,
+                    lean: t.lean === "high" ? ("high" as const) : t.lean === "low" ? ("low" as const) : ("balanced" as const),
+                    position: Math.min(100, Math.max(0, Math.round(t.position))),
+                    confidence: level(t.confidence),
+                    summary: t.summary,
+                    evidence: t.evidence.map(line),
+                  },
+                ]
+              : [],
+          ),
+          recommendations: m.big5.recommendations.map((r) => ({ text: r.text, dimension: r.dimension !== null && DIM.has(r.dimension) ? (r.dimension as BigFiveDimension) : null })),
+        };
+  return { disc: m.disc, mbti: m.mbti, big5, read: m.read, traits: m.traits.map(row), evidence: m.evidence.map(line) };
+}
+
+/** First line of the personality call's system prompt; test fakes route on it. */
+export const PERSONALITY_SYSTEM = "Read the candidate's working style for a hiring manager.";
 export const PERSONALITY_PROMPT = [
   "`personality`: a working-style inference from the person's own public writing only: their LinkedIn profile text, their own posts, their CV, or a first-person quote of theirs in an interview or talk. Never from what others write about them and never from reposts.",
   "Give a DISC type and an MBTI type, each with confidence low/medium/high; `read`: their working style in two or three sentences; `traits`: working-style rows each with 2-3 of their own quotes as evidence; `evidence`: the quotes behind the types.",
@@ -85,18 +148,28 @@ export type PersonalityInput = {
   merged: readonly Candidate[];
 };
 
-/** One `primary` call for a finished run; throws on model or parse failure so the caller can answer 502. */
-export async function readPersonality(input: PersonalityInput, llm: LlmCall): Promise<{ personality: Profile["personality"]; cost_usd: number }> {
-  const sources = rankSources(input.sources);
-  const head = `Subject: ${input.subject}\nAnchor: ${input.anchor}\nRole: ${input.role ?? "(none)"}\n\n${sourceBlock(sources, [])}`;
+/** One `primary` call over an already built prompt head (profile seam call 3 and the rebuild route); throws on model or parse failure. */
+export async function personalityCall(
+  head: string,
+  sources: readonly Pick<Source, "id" | "excerpt" | "actor" | "url" | "identity">[],
+  merged: readonly Pick<Candidate, "profile_urls" | "handle" | "platform" | "name">[],
+  llm: LlmCall,
+): Promise<{ personality: Profile["personality"]; cost_usd: number }> {
   const r = await llm({
     model: "primary",
-    system: ["Read the candidate for a hiring manager.", PERSONALITY_PROMPT, PERSONALITY_RULES].join("\n"),
+    system: [PERSONALITY_SYSTEM, PERSONALITY_PROMPT, PERSONALITY_RULES].join("\n"),
     prompt: head,
-    schema: z.object({ personality: PersonalityReading }),
+    schema: z.object({ personality: ModelPersonality }),
   });
-  const reading = PersonalityReading.parse(r.value.personality);
-  return { personality: gatePersonality(reading, sources, input.merged), cost_usd: r.cost_usd };
+  const reading = normalisePersonality(ModelPersonality.parse(r.value.personality));
+  return { personality: gatePersonality(reading, sources, merged), cost_usd: r.cost_usd };
+}
+
+/** The rebuild route: rank the run's sources, build the head, one call. */
+export function readPersonality(input: PersonalityInput, llm: LlmCall): Promise<{ personality: Profile["personality"]; cost_usd: number }> {
+  const sources = rankSources(input.sources);
+  const head = `Subject: ${input.subject}\nAnchor: ${input.anchor}\nRole: ${input.role ?? "(none)"}\n\n${sourceBlock(sources, [])}`;
+  return personalityCall(head, sources, input.merged, llm);
 }
 
 export const PERSONALITY_RULES = [

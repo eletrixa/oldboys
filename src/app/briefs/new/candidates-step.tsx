@@ -7,7 +7,7 @@
  * Tested:  helpers in src/app/briefs/new/__tests__/brief-rows.test.ts; view by e2e/brief-flow.spec.ts
  *
  * Key responsibilities:
- * - Rows: source switch, the matching field, Remove (when more than one row), Add another candidate
+ * - Rows: visible Candidate N label, source switch, the matching field, Remove (when more than one row), Add another candidate
  * - Pool: only rows that can start (pooled, with a profile or CV) get a checkbox; order = arrival
  *
  * Design constraints:
@@ -20,7 +20,7 @@ import { useCallback } from "react";
 import { ProfilePicker } from "@/app/profile-picker";
 import type { PoolRow } from "@/app/api/positions/handler";
 import { shapePool } from "@/app/positions/pool-rows";
-import { BTN_QUIET, BTN_SECONDARY, CARD_MUTED, FIELD, Pill } from "@/app/ui";
+import { BTN_QUIET, BTN_SECONDARY, CARD_MUTED, FIELD, KEY, Pill } from "@/app/ui";
 import type { DraftRow, RowSource } from "./brief-rows";
 
 const SOURCES: readonly (readonly [RowSource, string])[] = [
@@ -38,6 +38,7 @@ function Row({ row, n, onPatch, onRemove }: { row: DraftRow; n: number; onPatch:
   const onUrl = useCallback((url: string) => { onPatch(row.key, { linkedinUrl: url }); }, [onPatch, row.key]);
   return (
     <li className={`${CARD_MUTED} flex flex-col gap-3`} aria-label={`Candidate ${String(n)}`}>
+      <span className={KEY}>Candidate {n}</span>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div role="tablist" aria-label={`How to add candidate ${String(n)}`} className="flex gap-1 rounded-full border border-line bg-surface p-1">
           {SOURCES.map(([source, label]) => (

@@ -7,7 +7,7 @@
  * Tested:  n/a
  *
  * Key responsibilities:
- * - Metadata (title, description, Open Graph image public/marketing/og.jpg) and the <html>/<body> wrapper for every page
+ * - Metadata (title with a "%s · Radar" template, description, Open Graph image public/marketing/og.jpg) and the <html>/<body> wrapper for every page
  * - Radar brand header (Echo r mark + wordmark, SiteNav: Positions, Roles, Applications, New brief as a secondary button so each page keeps one rust action)
  *   and a short honesty footer via SiteHeader/SiteFooter, both hidden on the candidate-facing /apply routes
  * - RunTray: the docked "Briefs in progress" panel that follows runs started in this tab across page changes
@@ -26,7 +26,7 @@ const DESCRIPTION = "Radar reads a candidate's public professional work and hand
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://oldboys.asajj.cz"),
-  title: "Radar — walk into every interview knowing what to ask",
+  title: { default: "Radar — walk into every interview knowing what to ask", template: "%s · Radar" },
   description: DESCRIPTION,
   openGraph: { title: "Radar", description: DESCRIPTION, images: [{ url: "/marketing/og.jpg", width: 1200, height: 630 }] },
 };

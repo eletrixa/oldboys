@@ -11,12 +11,13 @@
  * - Question columns are the union of mh- questions matched by text; base questions ignored
  * - Coverage labels; "not checked" for missing, degraded or malformed briefs and questions a run did not have
  * - Runs newest first regardless of coverage; no score field anywhere
+ * - A run without a name yet shows NO_NAME_YET, never a blank person cell
  *
  * Design constraints:
  * - Fixtures stay inline
  */
 import { describe, expect, it } from "vitest";
-import { roleKey, roleOverview, type RoleRunRow } from "@/domain/role-overview";
+import { NO_NAME_YET, roleKey, roleOverview, type RoleRunRow } from "@/domain/role-overview";
 
 const Q_TS = { id: "mh-ts", text: "Has shipped TypeScript in production" };
 const Q_LEAD = { id: "mh-lead", text: "Has led a team" };
@@ -70,6 +71,11 @@ describe("roleOverview", () => {
     expect(group?.questions).toEqual([Q_TS.text, Q_LEAD.text]);
     expect(group?.runs[0]?.cells).toEqual(["documented", "partial"]);
     expect(group?.runs[0]?.sources_confirmed).toBe(3);
+  });
+
+  it("names a run whose profile has not been read yet instead of leaving the person blank", () => {
+    const [group] = roleOverview([row({ id: "a", subject: "", status: "running" }), row({ id: "b", subject: "  " })]);
+    expect(group?.runs.map((r) => r.subject)).toEqual([NO_NAME_YET, NO_NAME_YET]);
   });
 
   it("labels none as no evidence and unknown ids as not checked", () => {

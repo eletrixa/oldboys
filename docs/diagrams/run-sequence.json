@@ -2,18 +2,18 @@
   "schema_version": 1,
   "diagram_type": "sequence",
   "meta": {
-    "title": "Oldboys: jeden běh",
-    "subtitle": "ResearchRun Workflow · stav k 8. 10. 23:30",
+    "title": "Oldboys: one research run",
+    "locale": "en",
     "viewBox": [
-      1080,
-      980
+      1380,
+      739
     ],
     "column_fit": "spread",
     "quality_profile": "showcase",
     "views": [
       {
         "id": "resolve",
-        "label": "Profil a jmenovci",
+        "label": "Profile and namesakes",
         "focus": [
           "ui",
           "api",
@@ -21,28 +21,28 @@
           "llm",
           "src"
         ],
-        "note": "Zadaný LinkedIn profil (nebo CV) je potvrzená identita; lineup se ptá jen, jestli další profily stejného jména patří témuž člověku."
+        "note": "The given LinkedIn profile or CV is the confirmed person. The lineup only asks whether other profiles with the same name are theirs."
       },
       {
         "id": "collect",
-        "label": "Sběr",
+        "label": "Collection",
         "focus": [
           "wf",
           "src",
           "d1"
         ],
-        "note": "Kolektory běží paralelně v rozpočtu; prázdný zdroj nebo jen jmenovci = Gap s důvodem, nikdy ticho."
+        "note": "Collectors run in parallel within the budget. An empty source or namesakes only become a gap with a reason, never silence."
       },
       {
         "id": "verify",
-        "label": "Ověření a brief",
+        "label": "Verify and brief",
         "focus": [
           "wf",
           "llm",
           "d1",
           "ui"
         ],
-        "note": "Do modelu jdou jen potvrzené zdroje, FACT potřebuje citaci ve výňatku, bez AI vznikne degradovaný brief z evidence."
+        "note": "Only confirmed sources reach the model, a FACT needs a quote in the excerpt, without AI the brief is built from evidence only."
       }
     ]
   },
@@ -50,222 +50,214 @@
     {
       "id": "ui",
       "type": "frontend",
-      "label": "UI",
-      "sublabel": "Next.js · rozšíření"
+      "label": "Recruiter UI"
     },
     {
       "id": "api",
       "type": "backend",
-      "label": "API",
-      "sublabel": "routes"
+      "label": "API routes"
     },
     {
       "id": "wf",
       "type": "backend",
-      "label": "Workflow",
-      "sublabel": "ResearchRun"
+      "label": "ResearchRun Workflow"
     },
     {
       "id": "src",
       "type": "external",
-      "label": "Zdroje",
-      "sublabel": "Apify · REST"
+      "label": "Sources: Apify, REST"
     },
     {
       "id": "llm",
       "type": "external",
-      "label": "LLM",
-      "sublabel": "Anthropic"
+      "label": "LLM: Anthropic"
     },
     {
       "id": "d1",
       "type": "database",
-      "label": "D1",
-      "sublabel": "ledger · stav"
+      "label": "D1 ledger"
     }
   ],
   "segments": [
     {
-      "from": 150,
-      "to": 532,
-      "label": "Profil a jmenovci"
+      "from": 156,
+      "to": 276,
+      "label": "Start and seed"
     },
     {
-      "from": 542,
-      "to": 684,
-      "label": "Sběr"
+      "from": 280,
+      "to": 444,
+      "label": "Search and identity"
     },
     {
-      "from": 694,
-      "to": 886,
-      "label": "Ověření a brief"
+      "from": 448,
+      "to": 528,
+      "label": "Collection"
+    },
+    {
+      "from": 532,
+      "to": 668,
+      "label": "Verify and brief"
     }
   ],
   "messages": [
     {
       "from": "ui",
       "to": "api",
-      "y": 176,
-      "label": "POST /api/start {LinkedIn URL nebo CV, role}",
+      "y": 180,
+      "label": "start run: LinkedIn URL or CV + role",
       "variant": "emphasis"
     },
     {
       "from": "api",
       "to": "wf",
-      "y": 214,
+      "y": 208,
       "label": "RESEARCH_RUN.create(runId)"
     },
     {
       "from": "wf",
       "to": "src",
-      "label": "seed_profile: LinkedIn = potvrzený profil",
-      "y": 252
+      "y": 236,
+      "label": "seed_profile: given profile = confirmed person"
     },
     {
       "from": "wf",
       "to": "llm",
-      "y": 290,
-      "label": "role_questions: must-have otázky"
+      "y": 264,
+      "label": "role_questions: must-haves (skipped for a catalog role)"
     },
     {
       "from": "wf",
       "to": "src",
-      "y": 328,
-      "label": "SERP: další profily stejného jména"
+      "y": 292,
+      "label": "search pool: SERP, social SERP, Instagram and Facebook search"
     },
     {
       "from": "wf",
       "to": "llm",
-      "y": 366,
-      "label": "resolve: je i tohle on/ona?"
+      "y": 320,
+      "label": "resolve: is this profile the same person?"
     },
     {
       "from": "wf",
       "to": "d1",
-      "y": 404,
-      "label": "kandidáti, status paused",
+      "y": 348,
+      "label": "candidates; pause only if nobody is confirmed",
       "variant": "dashed"
     },
     {
       "from": "api",
       "to": "ui",
-      "y": 442,
-      "label": "GET /state (polling): lineup",
+      "y": 376,
+      "label": "GET /state: lineup question (max 3)",
       "variant": "return"
     },
     {
       "from": "ui",
       "to": "api",
-      "y": 480,
-      "label": "POST /answer {ano · ne · nevím}",
+      "y": 404,
+      "label": "POST /answer {yes · no · not sure}",
       "variant": "emphasis"
     },
     {
       "from": "api",
       "to": "wf",
-      "y": 518,
+      "y": 432,
       "label": "sendEvent lineup-answer"
     },
     {
       "from": "wf",
       "to": "src",
-      "y": 556,
-      "label": "13 kolektorů, dávky po 5, v rozpočtu"
+      "y": 460,
+      "label": "collect pool: 21 collectors, 6 at a time, $0.50 / 18 paid calls"
     },
     {
       "from": "src",
       "to": "wf",
-      "y": 594,
-      "label": "[] prázdné nebo jen jmenovci",
+      "y": 488,
+      "label": "empty or namesakes only",
       "variant": "return"
     },
     {
       "from": "wf",
       "to": "d1",
-      "y": 632,
-      "label": "Gap s důvodem · nepotvrzeno",
-      "variant": "dashed"
-    },
-    {
-      "from": "wf",
-      "to": "d1",
-      "y": 670,
-      "label": "identita: potvrzené jen merged zdroje",
+      "y": 516,
+      "label": "gap with a reason, never silence",
       "variant": "dashed"
     },
     {
       "from": "wf",
       "to": "llm",
-      "y": 708,
-      "label": "extract: tvrzení s citací"
+      "y": 544,
+      "label": "extract: claims with quotes, confirmed sources only"
     },
     {
       "from": "wf",
       "to": "llm",
-      "y": 746,
-      "label": "verify: citace ve výňatku, pak Sonnet"
+      "y": 572,
+      "label": "verify: quote in excerpt, Sonnet, devil’s advocate"
     },
     {
       "from": "wf",
       "to": "llm",
-      "y": 784,
-      "label": "synthesize: brief k otázkám"
+      "y": 600,
+      "label": "synthesize: brief, Art. 9 filter, enriched profile"
     },
     {
       "from": "wf",
       "to": "d1",
-      "y": 822,
-      "label": "brief · claims · gaps · done",
+      "y": 628,
+      "label": "brief · claims · gaps · status done",
       "variant": "emphasis"
     },
     {
       "from": "api",
       "to": "ui",
-      "y": 860,
-      "label": "GET /state: brief, kit, audit",
+      "y": 656,
+      "label": "GET /state: brief, interview kit, audit",
       "variant": "return"
     }
   ],
   "activations": [
     {
       "participant": "wf",
-      "from": 208,
-      "to": 828,
+      "from": 202,
+      "to": 634,
       "type": "backend"
     },
     {
       "participant": "src",
-      "from": 550,
-      "to": 600,
+      "from": 454,
+      "to": 494,
       "type": "external"
     }
   ],
   "cards": [
     {
       "dot": "cyan",
-      "title": "Pauza na lineup",
+      "title": "Lineup pause",
       "items": [
-        "Zadaný profil je potvrzená identita",
-        "Další profil se sloučí jen po ano",
-        "Max 3 otázky, jedna na platformu"
+        "The given profile or CV is the confirmed person",
+        "Another profile merges only after a yes",
+        "Max 3 questions, a given profile never pauses"
       ]
     },
     {
       "dot": "orange",
-      "title": "Pravdivé mezery",
+      "title": "Honest gaps",
       "items": [
-        "Každý zdroj skončí řádkem nebo Gapem",
-        "„nehledáno: proč“ u rozpočtu",
-        "„nalezeno, nic nepotvrzeno“ u jmenovců"
+        "Every source ends in a row or a gap",
+        "\"not searched: why\" when budget or role skips it",
+        "\"searched, nothing confirmed\" for namesakes"
       ]
     },
     {
       "dot": "emerald",
-      "title": "Ověření",
+      "title": "Verify",
       "items": [
-        "Do modelu jen potvrzené zdroje",
-        "Citace musí ležet ve výňatku",
-        "Selhání modelu = degradovaný brief"
+        "Only confirmed sources reach the model",
+        "A FACT needs a quote inside the excerpt",
+        "Model failure = evidence-only brief, NO AI"
       ]
     }
   ]

@@ -15,8 +15,8 @@
  *   through the same per-request path (budget, calls, error note, dedup), then `collector.digest` into StepOutcome.digest;
  *   both receive the performed request/payload pairs (`Fetched`), recorded right after the request succeeds
  * - Budget: refuse a paid (actor) request once calls or USD are exhausted (note + empty); free REST fetches are not gated
- * - A wave performs consecutive fetch requests up to 6 at a time and applies results (parse, dedup, store, `Fetched`) in request order;
- *   actor requests run one by one
+ * - A wave performs consecutive fetch requests up to 6 at a time and applies results (parse, dedup, `Fetched`) in request order;
+ *   stores of a request's hits run up to 6 at a time with parsed order preserved; actor requests run one by one
  * - One source per page: a hit whose canonical URL (no locale / trailing slash) is already in the run is not stored again;
  *   deduped hits add the note "N hits already in the run" and do not make the step empty (no onEmpty gap)
  * - A parsed source with `replaces: true` whose canonical URL is already in ctx.sources is stored under the existing
@@ -129,6 +129,7 @@ export async function collectWith(collector: Collector, step: Step, ctx: StepCon
       return;
     }
     parsedHits += parsed.length;
+    const fresh: { source: Omit<Source, "r2_key">; raw: unknown }[] = [];
     for (const p of parsed) {
       const key = canonicalUrl(p.url);
       const prior = p.replaces === true ? existing.get(key) : undefined;
@@ -155,8 +156,20 @@ export async function collectWith(collector: Collector, step: Step, ctx: StepCon
         expires_at: new Date(Date.parse(at) + SOURCE_TTL_MS).toISOString(),
         identity: p.identity ?? "unverified",
       };
-      out.sources.push(await ports.storeSource(source, p.raw));
+      fresh.push({ source, raw: p.raw });
     }
+    // Stores run up to FETCH_CONCURRENCY at a time; results land in parsed order. A rejection fails apply (Promise.all), as before.
+    const stored = new Array<Source>(fresh.length);
+    let next = 0;
+    const worker = async (): Promise<void> => {
+      while (next < fresh.length) {
+        const i = next++;
+        const f = fresh[i];
+        if (f) stored[i] = await ports.storeSource(f.source, f.raw);
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(FETCH_CONCURRENCY, fresh.length) }, worker));
+    out.sources.push(...stored);
   };
   // Fetches run up to FETCH_CONCURRENCY at a time; actor runs stay sequential because the budget check reads what earlier ones spent.
   const wave = async (reqs: readonly CollectorRequest[]): Promise<void> => {

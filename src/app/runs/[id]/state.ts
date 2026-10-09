@@ -22,6 +22,7 @@
  * - GAP_LABEL, gapText, gapLine, searchedEmpty: human gap lines (raw request errors turned into plain words), shared by BriefView and the interview kit
  * - briefSections (confidence descending, null for briefs stored before sections), isShown (sections worth a card), confidenceBand, host
  * - headerText / firstName: the run page title; "the candidate" until the seed step derived a name (plans/006)
+ * - retryHref / stalledNotice / startedAgo: where "start again" goes, whether to show the stalled notice, the elapsed line
  * - seedHeadline: the headline the seed_profile ledger row recorded
  *
  * Design constraints:
@@ -36,6 +37,7 @@ import type { Brief, BriefSection, Candidate, Claim } from "@/domain/claim";
 import type { ClaimQuoteContext } from "@/domain/quote";
 import type { RunCost } from "@/domain/run-cost";
 import type { RunIntake } from "@/app/intake/intake-rows";
+import { isStalled } from "@/domain/run-status";
 import { platformOf } from "@/recipe/sources/types";
 
 export type RunStatus = "queued" | "running" | "paused" | "done" | "failed";
@@ -54,6 +56,8 @@ export type RunState = {
   organization_name: string | null;
   /** ISO timestamp the run was created; drives the CACHED label. */
   created_at: string;
+  /** ISO time of the newest ledger row (created_at when none); optional for older payloads. */
+  last_at?: string;
   status: RunStatus;
   step: string | null;
   mentions: number;
@@ -234,6 +238,10 @@ export const GAP_LABEL: Record<string, string> = {
   press_serp: "Press and awards search",
   facebook_profile: "Facebook",
   facebook_page: "Facebook page",
+  role_sites_serp: "Role evidence sites",
+  github_deep: "GitHub contributions",
+  github_apify: "GitHub profile page",
+  cz_registries: "Czech public registries",
 };
 
 type Gap = Brief["not_searched"][number];
@@ -283,4 +291,25 @@ export function host(url: string): string {
   } catch {
     return url;
   }
+}
+
+/** Where "Try again" and "start again" go: the position's brief form when the run has a position, else the plain one. */
+export function retryHref(position: RunState["position"]): string {
+  return position ? `/briefs/new?positionId=${encodeURIComponent(position.id)}` : "/briefs/new";
+}
+
+/** The notice for a run with no ledger activity for 30 minutes (same rule as My briefs), else null. */
+export function stalledNotice(state: Pick<RunState, "status" | "created_at" | "last_at" | "position">, nowIso: string): { href: string } | null {
+  return isStalled(state.status, state.last_at ?? state.created_at, nowIso) ? { href: retryHref(state.position) } : null;
+}
+
+/** "Started 1 min ago", from the creation time; null when the time is unreadable. */
+export function startedAgo(createdAt: string, nowMs: number): string | null {
+  const ms = nowMs - Date.parse(createdAt);
+  if (!Number.isFinite(ms)) return null;
+  const min = Math.max(0, Math.floor(ms / 60_000));
+  if (min < 1) return "Started just now";
+  if (min < 60) return `Started ${String(min)} min ago`;
+  const h = Math.floor(min / 60);
+  return `Started ${String(h)} h ${String(min % 60)} min ago`;
 }

@@ -12,7 +12,7 @@
  * - Notes: fallback must-haves (AI was off), "edited by hand"
  * - Registry checks section (which Czech public registries every candidate of this position is checked against, from the title)
  * - Candidates (pool) and Intake channels sections; reload re-GETs the detail after an add, bind or enrichment start
- * - Coverage table via RoleTable with its disclaimer, or "No candidates researched yet."
+ * - In-page nav (On this page) to the section ids; Results section: coverage table via RoleTable with its disclaimer, or "No candidates researched yet."
  *
  * Design constraints:
  * - Client component; the table never ranks or scores people
@@ -34,6 +34,7 @@ import { MustHaveEditor } from "./must-have-editor";
 import { PositionBasics } from "./position-basics";
 import { RegistryChecks } from "./registry-checks";
 
+const SECTIONS = [["must-haves", "Must-haves"], ["registry-checks", "Registry checks"], ["candidates", "Candidates"], ["intake-channels", "Intake channels"], ["results", "Results"]] as const;
 const HINT = "Positions are shared by the team, so they need the team token. Kept only in this tab.";
 
 function Body({ detail, onChange }: { detail: PositionDetail; onChange: (d: PositionDetail) => void }): React.JSX.Element {
@@ -58,13 +59,16 @@ function Body({ detail, onChange }: { detail: PositionDetail; onChange: (d: Posi
         </div>
         {position.extraction === "edited" && <p className="text-sm text-muted">edited by hand</p>}
         <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
-          <Link href={`/?positionId=${encodeURIComponent(position.id)}`} className={BTN_PRIMARY}>Research a candidate</Link>
+          <Link href={`/briefs/new?positionId=${encodeURIComponent(position.id)}`} className={BTN_PRIMARY}>Research a candidate</Link>
           <a href={`https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(search)}`} target="_blank" rel="noopener noreferrer" className={LINK}>Search people on LinkedIn</a>
           {position.posting_url !== undefined && (
             <a href={position.posting_url} target="_blank" rel="noopener noreferrer" className={LINK}>Open posting</a>
           )}
         </div>
       </header>
+      <nav aria-label="On this page" className="flex flex-wrap gap-x-5 gap-y-2 text-sm">
+        {SECTIONS.map(([id, label]) => <a key={id} href={`#${id}`} className={LINK}>{label}</a>)}
+      </nav>
       <PositionBasics position={position} onSaved={saved} />
       {position.extraction === "fallback" && (
         <p className={`${CARD_PEACH} text-sm`}>
@@ -77,7 +81,10 @@ function Body({ detail, onChange }: { detail: PositionDetail; onChange: (d: Posi
       <RegistryChecks title={position.title} />
       <CandidatePool positionId={position.id} rows={detail.candidates} onReload={reload} />
       <IntakeChannels positionId={position.id} title={position.title} tags={detail.tags} onReload={reload} />
-      {group === null ? <p className="text-muted">No candidates researched yet.</p> : <RoleTable group={group} />}
+      <section id="results" aria-labelledby="results-heading" className="flex scroll-mt-6 flex-col gap-4">
+        <h2 id="results-heading" className="font-serif text-2xl">Results</h2>
+        {group === null ? <p className="text-muted">No candidates researched yet.</p> : <RoleTable group={group} />}
+      </section>
     </>
   );
 }

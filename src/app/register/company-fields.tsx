@@ -120,6 +120,7 @@ export function CompanyFields({ value, onChange }: Props): React.JSX.Element {
           <div className="flex gap-2">
             <input
               id="ico"
+              autoFocus
               value={icoText}
               onChange={(e) => { typeIco(e.target.value); }}
               inputMode="numeric"
@@ -133,17 +134,15 @@ export function CompanyFields({ value, onChange }: Props): React.JSX.Element {
               onClick={() => void look()}
               className={`${BTN_SECONDARY} shrink-0 disabled:opacity-60`}
             >
-              {lookup.kind === "looking" ? "Looking..." : "Look up in ARES"}
+              {lookup.kind === "looking" ? "Looking…" : "Look up in ARES"}
             </button>
           </div>
-          <a
-            href="https://ares.gov.cz/ekonomicke-subjekty"
-            target="_blank"
-            rel="noreferrer"
-            className={`${LINK} text-xs`}
-          >
-            Find your IČO
-          </a>
+          <p className="text-xs text-muted">
+            Do not know it?{" "}
+            <a href="https://ares.gov.cz/ekonomicke-subjekty" target="_blank" rel="noreferrer" className={LINK}>
+              Find your IČO in ARES
+            </a>
+          </p>
           {icoInvalid && lookup.kind === "idle" && (
             <p className="text-sm text-unsure">An IČO has 8 digits with a valid check digit; leave it empty if you do not know it.</p>
           )}

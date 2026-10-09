@@ -14,6 +14,7 @@
  * - Client check: one of profile URL or CV; the server normalises and validates the URL
  * - initialRole / autoFocusRole prefill and focus the role field; 401 shows a log-in link
  * - Role field is the RolePicker over `roleOptions` (catalog titles, families, aliases from the server page); free text still allowed
+ * - Role picker sits above the candidate; the form is a CARD with one short privacy note and a skip link to /briefs
  * - Inline humane error on 4xx/5xx or network failure
  *
  * Design constraints:
@@ -34,7 +35,7 @@ import { ProfilePicker } from "./profile-picker";
 import { PositionBanner, usePositionSummary } from "./start-position";
 import { RolePicker } from "./role-picker";
 import type { RoleOption } from "@/domain/role-catalog";
-import { BTN_PRIMARY, CARD_PEACH, CARD_SAGE, Chevron, FIELD, LINK, SUMMARY } from "./ui";
+import { BTN_PRIMARY, CARD, CARD_PEACH, CARD_SAGE, Chevron, FIELD, LINK, SUMMARY } from "./ui";
 
 const CV_MAX = 20_000;
 
@@ -96,7 +97,7 @@ function StartFormInner({ initialRole, autoFocusRole = false, roleOptions = [] }
 
   return (
     <form
-      className="flex flex-col gap-5"
+      className={`${CARD} flex flex-col gap-5`}
       aria-label="Create a candidate brief"
       onSubmit={(e) => {
         e.preventDefault();
@@ -109,6 +110,9 @@ function StartFormInner({ initialRole, autoFocusRole = false, roleOptions = [] }
           We could not load that position, so you can name the role yourself.
         </p>
       )}
+      {positionId === null && position.status !== "loading" && (
+        <RolePicker options={roleOptions} defaultValue={initialRole} autoFocus={autoFocusRole} />
+      )}
       <ProfilePicker invalid={error?.includes("LinkedIn") === true} />
       <details className="group border-t border-divider pt-2">
         <summary className={SUMMARY}><Chevron />Or paste their CV instead</summary>
@@ -120,12 +124,9 @@ function StartFormInner({ initialRole, autoFocusRole = false, roleOptions = [] }
           className={`${FIELD} mt-3`}
         />
       </details>
-      {positionId === null && position.status !== "loading" && (
-        <RolePicker options={roleOptions} defaultValue={initialRole} autoFocus={autoFocusRole} />
-      )}
       <p className={`${CARD_SAGE} text-sm text-ink`}>
-        <strong>Privacy:</strong> Public information only. We never look at private accounts, and we do not judge
-        personality, health, religion or politics. Everything we collect is deleted after 7 days.
+        We use public sources only, every point links to its source so you can check it, and everything we collect is
+        deleted after 7 days.
       </p>
       {error !== null && (
         <p role="alert" className="text-sm text-conflict">
@@ -149,8 +150,15 @@ function StartFormInner({ initialRole, autoFocusRole = false, roleOptions = [] }
         >
           {busy ? "Creating..." : "Create brief"}
         </button>
-        <span className="text-sm text-muted">Usually takes 5 to 10 minutes</span>
+        <span className="text-sm text-muted">
+          Usually 5 to 10 minutes; you can leave this page, the brief waits in My briefs.
+        </span>
       </div>
+      <p className="text-sm">
+        <Link href="/briefs" className={LINK}>
+          Skip for now, see all briefs
+        </Link>
+      </p>
     </form>
   );
 }

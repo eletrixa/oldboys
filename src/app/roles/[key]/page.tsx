@@ -12,7 +12,10 @@
  * Design constraints:
  * - Server component; the key is the normalized role text from roleKey (src/domain/role-overview.ts)
  */
+import type { Metadata } from "next";
 import { RolesView } from "../roles-view";
+
+export const metadata: Metadata = { title: "Role" };
 
 export default async function RolePage({
   params,

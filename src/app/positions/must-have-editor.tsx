@@ -45,16 +45,16 @@ export function MustHaveEditor({ position, onSaved }: MustHaveEditorProps): Reac
   }
 
   return (
-    <section aria-labelledby="mh-heading" className="flex flex-col gap-3">
+    <section id="must-haves" aria-labelledby="mh-heading" className="flex scroll-mt-6 flex-col gap-3">
       <h2 id="mh-heading" className="font-serif text-2xl">Must-haves</h2>
       <ul aria-label="Must-haves" className="flex flex-col divide-y divide-divider">
         {items.map((m, i) => (
           <li key={m.id} className="flex flex-col gap-2 py-4">
-            <label className="flex flex-col gap-1 text-xs text-muted">
+            <label className="flex flex-col gap-1.5 text-sm font-semibold text-ink">
               Title {String(i + 1)}
               <input className={`${FIELD} px-3 py-2`} value={m.title ?? ""} maxLength={48} onChange={(e) => { edit(m.id, { title: e.target.value }); }} />
             </label>
-            <label className="flex flex-col gap-1 text-xs text-muted">
+            <label className="flex flex-col gap-1.5 text-sm font-semibold text-ink">
               Must-have {String(i + 1)}
               <textarea className={`${FIELD} px-3 py-2`} rows={2} value={m.text} onChange={(e) => { edit(m.id, { text: e.target.value }); }} />
             </label>

@@ -3,16 +3,17 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/recipe/sources/cz-registries/justice.ts
- * Deps:    ./shared
+ * Deps:    src/domain/cz-registry (townOf), ./shared
  * Tested:  src/recipe/__tests__/cz-registries.test.ts
  *
  * Key responsibilities:
  * - One GET `rejstrik-$osoba` (given name + surname, starts-with, 50 rows); no cookie needed
- * - Each `li.result` -> hit: name, birth date, address, role (Angažmá), company and IČO, file number, entry date
+ * - Each `li.result` -> hit: name, birth date, town of the address (never street or postcode), role (Angažmá), company and IČO, file number, entry date
  *
  * Design constraints:
  * - Page is Wicket HTML; parsing is by the result block's "Label:" rows, so a layout change yields no hits plus a note
  */
+import { townOf } from "@/domain/cz-registry";
 import type { RegistrySource } from "./shared";
 import { blocks, cells, HTML, labelled, namesMatch, tidyName, unavailable } from "./shared";
 
@@ -33,7 +34,7 @@ export const justicePersons: RegistrySource = {
       const who = tidyName(f.get("Jméno") ?? "");
       if (!namesMatch(who, name)) return [];
       return [{
-        label: `${who}, ${f.get("Adresa") ?? "?"} — ${f.get("Angažmá") ?? "role unknown"} at ${f.get("Název subjektu") ?? "?"} (IČO ${ico || "?"}), file ${f.get("Spisová značka") ?? "?"}, entered ${f.get("Den zápisu") ?? "?"}`,
+        label: `${who}, ${townOf(f.get("Adresa")) ?? "town not listed"} — ${f.get("Angažmá") ?? "role unknown"} at ${f.get("Název subjektu") ?? "?"} (IČO ${ico || "?"}), file ${f.get("Spisová značka") ?? "?"}, entered ${f.get("Den zápisu") ?? "?"}`,
         url: ico === "" ? BASE : `https://or.justice.cz/ias/ui/rejstrik-$firma?ico=${ico}`,
         status: f.get("Angažmá") ?? null,
         born: f.get("Datum narození") ?? null,

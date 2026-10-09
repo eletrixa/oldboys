@@ -16,7 +16,7 @@
 
 import { useState } from "react";
 import { FAMILIES, type Family, type Position } from "@/domain/position";
-import { BTN_PRIMARY, FIELD } from "@/app/ui";
+import { BTN_PRIMARY, Chevron, FIELD, SUMMARY } from "@/app/ui";
 import { savePosition } from "./save-position";
 
 type PositionBasicsProps = { position: Position; onSaved: (p: Position) => void };
@@ -38,14 +38,14 @@ export function PositionBasics({ position, onSaved }: PositionBasicsProps): Reac
   }
 
   return (
-    <details className="border-y border-divider py-3">
-      <summary className="cursor-pointer text-sm font-medium text-muted">Edit title and family</summary>
+    <details className="group border-y border-divider py-1">
+      <summary className={SUMMARY}><Chevron />Edit title and family</summary>
       <div className="mt-3 flex flex-col gap-3">
-        <label className="flex flex-col gap-1 text-xs text-muted">
+        <label className="flex flex-col gap-1.5 text-sm font-semibold text-ink">
           Title
           <input className={FIELD} value={title} onChange={(e) => { setDraft({ title: e.target.value, family }); setMessage(null); }} />
         </label>
-        <label className="flex flex-col gap-1 text-xs text-muted">
+        <label className="flex flex-col gap-1.5 text-sm font-semibold text-ink">
           Family
           <select className={FIELD} value={family} onChange={(e) => { setDraft({ title, family: e.target.value as Family }); setMessage(null); }}>
             {FAMILIES.map((f) => <option key={f} value={f}>{f}</option>)}

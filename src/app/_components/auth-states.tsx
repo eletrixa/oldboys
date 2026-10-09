@@ -52,6 +52,7 @@ export function AuthStates({ state, onToken, hint, submitLabel, back }: AuthStat
     case "loading":
       return (
         <div role="status" aria-label="Loading" className="flex animate-pulse flex-col gap-3">
+          <div className="h-3 w-24 rounded bg-divider" />
           <div className="h-8 w-1/3 rounded bg-divider" />
           <div className="h-4 w-1/2 rounded bg-divider" />
         </div>

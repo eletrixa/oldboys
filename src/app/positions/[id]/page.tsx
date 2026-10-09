@@ -12,7 +12,10 @@
  * Design constraints:
  * - Server component; the id is used as given, the API answers 404 for unknown ids
  */
+import type { Metadata } from "next";
 import { PositionDetailView } from "../position-detail";
+
+export const metadata: Metadata = { title: "Position" };
 
 export default async function PositionPage({ params }: { params: Promise<{ id: string }> }): Promise<React.JSX.Element> {
   const { id } = await params;

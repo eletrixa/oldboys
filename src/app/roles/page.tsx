@@ -12,7 +12,10 @@
  * Design constraints:
  * - Server component; fetching and the log-in prompt live in roles-view.tsx
  */
+import type { Metadata } from "next";
 import { RolesView } from "./roles-view";
+
+export const metadata: Metadata = { title: "Roles" };
 
 export default function RolesPage(): React.JSX.Element {
   return <RolesView />;

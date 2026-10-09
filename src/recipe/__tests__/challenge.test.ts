@@ -1,5 +1,5 @@
 /**
- * Devil's advocate in verify (idea #8): one extra model call after the verify model, downgrade only.
+ * Devil's advocate in verify (idea #8): one extra model call alongside the verify model, downgrade only.
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/recipe/__tests__/challenge.test.ts
@@ -106,14 +106,16 @@ describe("devil's advocate", () => {
     expect(out.cost_usd).toBeCloseTo(0.003);
   });
 
-  it("never challenges a claim the verify model already downgraded", async () => {
+  it("issues both calls on the same deterministic result; a claim rejected by either path ends as INFERENCE", async () => {
     const calls: Call[] = [];
     const llm = ((input: Call) => {
       calls.push(input);
-      return Promise.resolve({ value: input.system === CHALLENGE_SYSTEM ? [] : [{ id: "a", supported: false }], cost_usd: 0 });
+      if (input.system === CHALLENGE_SYSTEM) return Promise.resolve({ value: [{ id: "b", holds: false, ground: "outdated", why: "x" }, { id: "a", holds: true, ground: null, why: "" }], cost_usd: 0.002 });
+      return Promise.resolve({ value: [{ id: "a", supported: false }, { id: "b", supported: true }, { id: "c", supported: true }], cost_usd: 0.001 });
     }) as Ports["llm"];
-    const out = await run([fact("a")], llm);
-    expect(calls).toHaveLength(1);
-    expect(out.challenge?.checked).toBe(0);
+    const out = await run([fact("a"), fact("b"), fact("c")], llm);
+    expect(calls.map((c) => c.system === CHALLENGE_SYSTEM).sort()).toEqual([false, true]);
+    expect(Object.fromEntries(out.claims.map((c) => [c.id, c.kind]))).toEqual({ a: "INFERENCE", b: "INFERENCE", c: "FACT" });
+    expect(out.calls).toBe(2);
   });
 });

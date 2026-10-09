@@ -15,6 +15,8 @@
  * - Instagram and Facebook are always searched by name on the platform itself (`instagram_search`, `facebook_search`,
  *   before the lineup, so the accounts found are scored against the anchor and the confirmed employers like any other
  *   hit); the profile steps after the lineup then scrape the confirmed and possibly-same-as accounts
+ * - For a technical role GitHub is searched by name the same way (`github_search`, free REST) and the lineup pauses for
+ *   the manager when the account found is only possibly-same-as, so the deep steps get a confirmed handle
  * - `github_deep` (technical roles only: engineering, data; src/domain/code-profile TECHNICAL_FAMILIES) scrapes every confirmed GitHub account in depth;
  *   `github_apify` then adds the profile page's own numbers (saswave/github-profile-scraper)
  * - `role_sites_serp`: the matched role template's evidence sites (src/domain/role-catalog) as one `site:` search
@@ -64,6 +66,7 @@ export const hiringRecipe: Recipe = {
     },
     { id: "instagram_search", kind: "actor", actor: "apify/instagram-scraper", onEmpty: { gap: "Instagram profile search found no account under the candidate's name" } },
     { id: "facebook_search", kind: "actor", actor: "apify/facebook-search-scraper", onEmpty: { gap: "Facebook people search found no profile under the candidate's name" } },
+    { id: "github_search", kind: "actor", actor: "rest/github-search", onEmpty: { gap: "GitHub user search found no account under the candidate's name (technical roles only)" } },
     { id: "resolve_lineup", kind: "resolve" },
     { id: "linkedin_profile", kind: "actor", actor: "harvestapi/linkedin-profile-scraper", onEmpty: { gap: "no LinkedIn profile URL known or profile not scrapable" } },
     { id: "sec_edgar", kind: "actor", actor: "rest/sec-edgar", onEmpty: { gap: "no SEC EDGAR filing names them" } },
