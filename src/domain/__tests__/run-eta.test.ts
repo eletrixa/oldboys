@@ -18,7 +18,7 @@
  * - Fixtures stay inline; the hiring recipe is the real one so a renamed step shows up here
  */
 import { describe, expect, it } from "vitest";
-import { PHASES, phaseOf, progressView, remainingText, runProgress, TYPICAL_MS, typicalMs } from "@/domain/run-eta";
+import { PHASES, phaseOf, progressView, remainingText, runPace, runProgress, TYPICAL_MS, typicalMs } from "@/domain/run-eta";
 import { hiringRecipe } from "@/recipe/goals/hiring";
 import type { Step } from "@/recipe/step";
 
@@ -156,10 +156,11 @@ describe("progressView", () => {
   });
 
   it("withdraws the estimate once the phase ran past 2.5x its typical time", () => {
-    const v = progressView(runProgress(steps, done, T0), "running", ms(45 + 18));
+    // The searches took 45 s against 35 s typical, so the pace is sqrt(45/35) = 1.13 and the lineup is expected in 7.9 s
+    const v = progressView(runProgress(steps, done, T0), "running", ms(45 + 21));
     expect(v.longer).toBe(true);
     expect(v.remaining).toBeNull();
-    expect(progressView(runProgress(steps, done, T0), "running", ms(45 + 17)).longer).toBe(false);
+    expect(progressView(runProgress(steps, done, T0), "running", ms(45 + 19)).longer).toBe(false);
   });
 
   it("done: share 1, nothing active", () => {
@@ -170,6 +171,17 @@ describe("progressView", () => {
     const v = progressView(runProgress(steps, done, T0), "failed", ms(60));
     expect(v.remaining).toBeNull();
     expect(v.share).toBeGreaterThan(0.17);
+  });
+});
+
+describe("runPace", () => {
+  it("is 1 before any phase ended, the damped actual-over-typical ratio after, clamped to 0.6x to 2x", () => {
+    expect(runPace([])).toBe(1);
+    const phase = (tookS: number, typicalS: number) => ({ started_at: T0, ended_at: at(tookS), typical_ms: typicalS * 1000, steps: 1 });
+    expect(runPace([phase(140, 35)])).toBe(2);
+    expect(runPace([phase(10, 40)])).toBe(0.6);
+    expect(runPace([phase(70, 35), phase(7, 7)])).toBeCloseTo(Math.sqrt(77 / 42), 5);
+    expect(runPace([{ started_at: T0, ended_at: T0, typical_ms: 0, steps: 0 }])).toBe(1);
   });
 });
 

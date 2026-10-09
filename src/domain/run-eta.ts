@@ -12,7 +12,8 @@
  *   max(longest step, sum / window), serial phases count the sum), the step ids without a ledger row yet, the earliest
  *   known start (ledger ts - ms of its finished rows, else the previous phase's end) and the end once every step has a row
  * - `progressView(progress, status, nowMs)`: the client-side view between polls: time-weighted share (0..1), the active
- *   phase, the remaining-time range (0.6x to 2x of the estimate; a wider band reads as "no idea"), the `longer` flag once the phase ran past 2.5x its typical time, the elapsed time in the phase, the ids still to read
+ *   phase, the run's pace so far (`runPace`: finished phases' actual over typical time, damped, 0.6x to 2x) applied to
+ *   what is left, the remaining-time range (0.6x to 2x of the estimate; a wider band reads as "no idea"), the `longer` flag once the phase ran past 2.5x its typical time, the elapsed time in the phase, the ids still to read
  * - `remainingText(view)`: "about 2 to 4 min left" / "under a minute left" / null while paused or longer than usual
  * - TYPICAL_MS: per-step typical durations, the production baseline (plans/013-run-latency/01-BASELINE.md) blended with
  *   the local QA ledger of 2026-10-09 (newer recipe: Instagram / Facebook name searches, longer synthesis); unknown steps
@@ -89,6 +90,15 @@ export const TYPICAL_MS: Readonly<Record<string, number>> = {
   cz_registries: 2_000,
   talks_serp: 35_000,
   press_serp: 35_000,
+  // Depth steps (plans/013): free registries and SERP packs, then the page reader; local QA ledger of 2026-10-09
+  sec_edgar: 3_000,
+  wikipedia: 1_000,
+  podcast_episodes: 1_000,
+  regulatory_serp: 60_000,
+  legal_serp: 45_000,
+  business_press_serp: 15_000,
+  boards_serp: 20_000,
+  read_pages: 25_000,
   extract_claims: 40_000,
   verify_claims: 14_000,
   synthesize_report: 100_000,
@@ -180,6 +190,20 @@ export function runProgress(steps: readonly Step[], rows: readonly StepRow[], cr
   return { phases, typical_total_ms: phases.reduce((a, p) => a + p.typical_ms, 0) };
 }
 
+/** Actual over typical time of the finished phases, square-rooted (damped) and kept within 0.6x to 2x; 1 before any phase ended. */
+export function runPace(ended: readonly Pick<PhaseProgress, "started_at" | "ended_at" | "typical_ms" | "steps">[]): number {
+  let actual = 0;
+  let typical = 0;
+  for (const p of ended) {
+    const took = parse(p.ended_at) - parse(p.started_at);
+    if (p.steps === 0 || !Number.isFinite(took) || took < 0) continue;
+    actual += took;
+    typical += p.typical_ms;
+  }
+  if (typical === 0) return 1;
+  return Math.min(2, Math.max(0.6, Math.sqrt(actual / typical)));
+}
+
 export type ProgressView = {
   /** 0..1, time-weighted; 1 only when every phase ended. */
   share: number;
@@ -205,14 +229,19 @@ export function progressView(progress: RunProgress, status: ViewStatus, nowMs: n
   const active = phases[index];
   if (active === undefined) return { share: 1, active: null, remaining: null, longer: false, phase_elapsed_ms: 0, reading: [] };
 
-  const doneMs = phases.slice(0, index).reduce((a, p) => a + p.typical_ms, 0);
+  const ended = phases.slice(0, index);
+  const doneMs = ended.reduce((a, p) => a + p.typical_ms, 0);
+  // Pace of this run so far: how long its finished phases took against their typical times, damped and clamped, so a
+  // run that is slow (or fast) from the start says so in its remaining time instead of trusting the table alone
+  const pace = runPace(ended);
   const startedAt = parse(active.started_at);
   const elapsed = Number.isNaN(startedAt) ? 0 : Math.max(0, nowMs - startedAt);
-  const longer = status === "running" && elapsed > active.typical_ms * LONGER;
-  // What is left of the active phase: never more than its unfinished steps need, never more than its typical time minus what already passed
-  const activeLeft = Math.max(0, Math.min(active.left_ms, active.typical_ms - elapsed));
-  const laterMs = phases.slice(index + 1).reduce((a, p) => a + p.typical_ms, 0);
-  const activeDone = active.typical_ms > 0 ? Math.min(0.95, 1 - activeLeft / active.typical_ms) : 0;
+  const expected = active.typical_ms * pace;
+  const longer = status === "running" && elapsed > expected * LONGER;
+  // What is left of the active phase: never more than its unfinished steps need, never more than its expected time minus what already passed
+  const activeLeft = Math.max(0, Math.min(active.left_ms * pace, expected - elapsed));
+  const laterMs = phases.slice(index + 1).reduce((a, p) => a + p.typical_ms, 0) * pace;
+  const activeDone = expected > 0 ? Math.min(0.95, 1 - activeLeft / expected) : 0;
   const share = total > 0 ? Math.min(0.99, Math.max(0, (doneMs + activeDone * active.typical_ms) / total)) : 0;
   const counting = status === "running" || status === "queued";
   const estimate = activeLeft + laterMs;
