@@ -21,4 +21,4 @@ The app serves four of them on the public `/architecture` page:
 cp docs/diagrams/data-flow.html public/diagrams/
 ```
 
-`architecture.*` and `run-sequence.*` are older Czech diagrams. They are not served, and `run-sequence` describes the run as of 8 Oct 23:30.
+`run-sequence.*` is a sequence diagram of one research run (as of 9 Oct): seed, search pool, lineup, collect pool, extract, verify, synthesize. It is not served.
