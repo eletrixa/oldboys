@@ -98,6 +98,12 @@ describe("makeFetchJson", () => {
     expect(fn).toHaveBeenCalledTimes(2);
   });
 
+  it("does not re-send a POST on 202", async () => {
+    const fn = stub(Response.json({ accepted: true }, { status: 202 }), Response.json({ nope: 1 }));
+    await expect(makeFetchJson({ retryDelayMs: 0 })("https://ares.gov.cz/x", { method: "POST", body: "{}" })).resolves.toEqual({ accepted: true });
+    expect(fn).toHaveBeenCalledTimes(1);
+  });
+
   it("does not retry twice", async () => {
     const fn = stub(new Response("a", { status: 429 }), new Response("b", { status: 429 }));
     await expect(makeFetchJson({ retryDelayMs: 0 })("https://api.openalex.org/authors")).rejects.toThrow("HTTP 429 b");

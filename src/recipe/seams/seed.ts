@@ -12,6 +12,7 @@
  * - CV: one `primary` LLM call extracts name, headline, location, employer and links; the CV itself is stored as a
  *   merged Source (actor "cv", url "cv:<runId>", excerpt up to CV_EXCERPT_MAX so the career history reaches the
  *   cv-consistency check); linkedin/github/x/instagram links that literally appear in the CV become merged Candidates
+ * - `facts`: ProfileFacts of the given LinkedIn profile (harvestFacts), written to the ledger ref as `digest`
  * - Derive subject (profile name, CV name, given subject, name from the URL handle) and anchor (profile location,
  *   CV location, the profile URL, given anchor)
  *
@@ -24,13 +25,14 @@
  */
 import { z } from "zod";
 import type { Candidate } from "@/domain/claim";
+import type { ProfileFacts } from "@/domain/profile-facts";
 import { CV_ACTOR } from "@/domain/cv-check";
 import { nameFromHandle, normalizeLinkedinProfile } from "@/domain/profile-url";
 import type { Ports } from "@/domain/ports";
 import { stableId } from "@/domain/stable-id";
 import { emptyOutcome, SOURCE_TTL_MS } from "@/recipe/runner";
 import { canonicalProfile, profileKey } from "@/recipe/seams/resolve";
-import { HARVEST_ACTOR, harvestProfiles, harvestRequest } from "@/recipe/sources/linkedin";
+import { HARVEST_ACTOR, harvestFacts, harvestProfiles, harvestRequest } from "@/recipe/sources/linkedin";
 import { clip, platformOf, type StepOutcome } from "@/recipe/sources/types";
 
 export { CV_ACTOR };
@@ -54,6 +56,8 @@ export type SeedResult = {
   location: string | null;
   actor: { calls: number; cost_usd: number };
   llm: { calls: number; cost_usd: number };
+  /** ProfileFacts of the manager's LinkedIn profile (empty for a CV-only seed or a failed scrape). */
+  facts: ProfileFacts[];
 };
 
 type Found = { name: string; headline: string; location: string; employer: string };
@@ -106,6 +110,7 @@ async function fromProfile(url: string, input: SeedInput, ports: Ports, r: SeedR
   }
   const sourceUrl = z.url().safeParse(p.url).success ? p.url : url;
   r.out.sources.push(await store(input, ports, sourceUrl, HARVEST_ACTOR, p.excerpt, p.raw));
+  r.facts.push(harvestFacts(p.raw));
   return { name: p.name, headline: p.headline, location: p.location, employer: p.employer };
 }
 
@@ -160,6 +165,7 @@ export async function seedProfile(input: SeedInput, ports: Ports): Promise<SeedR
     location: null,
     actor: { calls: 0, cost_usd: 0 },
     llm: { calls: 0, cost_usd: 0 },
+    facts: [],
   };
   const profileUrl = input.profileUrl;
   const profile = profileUrl === null ? null : await fromProfile(profileUrl, input, ports, r);

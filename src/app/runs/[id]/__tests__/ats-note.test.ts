@@ -10,6 +10,8 @@
  * - atsNote: null without a brief; summary lines equal summary30s; brief URL; deletion date in the footer
  * - Merged candidates only (never possibly-same-as, rejected or also_found), deduplicated, capped, http(s) only
  * - No Markdown and no verdict words; degraded wording passes through
+ * - Czech Report (idea #24): Czech fixed strings and date, translated summary bodies (English fallback), role untranslated;
+ *   the default and the English Report give the same English note
  *
  * Design constraints:
  * - Pure: no React, no fetch; synthetic people only
@@ -18,6 +20,8 @@ import { describe, expect, it } from "vitest";
 import type { Brief, Candidate } from "@/domain/claim";
 import type { RunState } from "../state";
 import { atsNote } from "../ats-note";
+import { ENGLISH_REPORT, makeReport } from "../i18n";
+import { tid } from "../report-text";
 import { summary30s } from "../summary";
 
 const BRIEF_URL = "https://oldboys.example/runs/0123456789abcdef";
@@ -153,5 +157,70 @@ describe("atsNote", () => {
     const note = atsNote(state, BRIEF_URL) ?? "";
     expect(note).toContain("role criteria were not checked because AI was off");
     expect(lines(note)[1]).toBe(summary30s(state)?.documented);
+  });
+
+  it("English unchanged: the default and the English Report give the same note", () => {
+    for (const state of [run(), run({ role: null }), run({ brief: brief({ degraded: "AI unavailable" }) })]) {
+      expect(atsNote(state, BRIEF_URL, ENGLISH_REPORT)).toBe(atsNote(state, BRIEF_URL));
+      expect(atsNote(state, BRIEF_URL, makeReport("en", { [tid.summary("ask")]: "Ignored" }))).toBe(atsNote(state, BRIEF_URL));
+    }
+  });
+});
+
+describe("atsNote in Czech", () => {
+  const texts = {
+    [tid.summary("documented")]: "LinkedIn a GitHub profily; doklady má 1 ze 2 kritérií pozice.",
+    [tid.summary("missing")]: "žádný doklad pro „Vedl tým aspoň tří inženýrů“; X nebylo prohledáno.",
+    [tid.summary("ask")]: "Můžete popsat pipeline, kterou jste v Acme postavili?",
+  };
+  const cs = makeReport("cs", texts);
+
+  it("full note: Czech header with the role as typed, translated summary bodies with Czech leads, Czech footer and date", () => {
+    expect(lines(atsNote(run(), BRIEF_URL, cs))).toEqual([
+      "Podklady z průzkumu: Jan Novak, pozice Senior Data Engineer",
+      "Potvrzeno: LinkedIn a GitHub profily; doklady má 1 ze 2 kritérií pozice.",
+      "Chybí: žádný doklad pro „Vedl tým aspoň tří inženýrů“; X nebylo prohledáno.",
+      "Zeptejte se: Můžete popsat pipeline, kterou jste v Acme postavili?",
+      "Potvrzené profily: https://www.linkedin.com/in/jnovak, https://github.com/jnovak",
+      `Celý brief se zdroji: ${BRIEF_URL}`,
+      "Tato poznámka hodnotí průzkum, ne kandidáta. Data z průzkumu smažeme po 15. 10. 2026.",
+    ]);
+  });
+
+  it("no role: header without the position; no subject: a Czech placeholder", () => {
+    expect(lines(atsNote(run({ role: null }), BRIEF_URL, cs))[0]).toBe("Podklady z průzkumu: Jan Novak");
+    expect(lines(atsNote(run({ role: "  " }), BRIEF_URL, cs))[0]).toBe("Podklady z průzkumu: Jan Novak");
+    expect(lines(atsNote(run({ subject: " ", role: null }), BRIEF_URL, cs))[0]).toBe("Podklady z průzkumu: jméno neuvedeno");
+  });
+
+  it("missing translations: the English body stays after the Czech lead word", () => {
+    const state = run();
+    const s = summary30s(state);
+    const out = lines(atsNote(state, BRIEF_URL, makeReport("cs", {})));
+    expect(out[1]).toBe(`Potvrzeno: ${s?.documented.replace(/^Confirmed: /, "") ?? ""}`);
+    expect(out[2]).toBe(`Chybí: ${s?.missing.replace(/^Missing: /, "") ?? ""}`);
+    expect(out[3]).toBe(`Zeptejte se: ${s?.ask.replace(/^Ask: /, "") ?? ""}`);
+    expect(lines(atsNote(state, BRIEF_URL, makeReport("cs", null)))).toEqual(out);
+  });
+
+  it("a sentence without a lead word is translated whole", () => {
+    const state = run({ candidates: [], brief: brief({ evidence: [] }) });
+    expect(summary30s(state)?.documented.startsWith("No profile confirmed yet")).toBe(true);
+    const out = lines(atsNote(state, BRIEF_URL, makeReport("cs", { [tid.summary("documented")]: "Zatím žádný potvrzený profil." })));
+    expect(out[1]).toBe("Zatím žádný potvrzený profil.");
+  });
+
+  it("no English fixed string, plain text, unreadable date dropped, namesakes never in", () => {
+    const note = atsNote(run(), BRIEF_URL, cs) ?? "";
+    for (const en of ["Research brief", "Confirmed profiles", "Full brief with sources", "rates the research", "deleted after", "no role entered"]) {
+      expect(note).not.toContain(en);
+    }
+    for (const l of lines(note)) expect(/^\s*[#\-*>]/.test(l)).toBe(false);
+    expect(note).not.toContain("](");
+    expect(note).not.toContain("instagram.com/someone");
+    expect(note).not.toContain("tiktok.com");
+    const undated = atsNote(run({ created_at: "garbage" }), BRIEF_URL, cs) ?? "";
+    expect(lines(undated).at(-1)).toBe("Tato poznámka hodnotí průzkum, ne kandidáta.");
+    expect(undated).not.toContain("NaN");
   });
 });

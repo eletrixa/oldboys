@@ -72,6 +72,13 @@ describe("executeStep collection", () => {
     expect(out.notes).toEqual(["no confirmed handle or id to look up"]);
   });
 
+  it("lets the collector name why it made no request (skipReason)", async () => {
+    const collector: Collector = { id: "fake/skip", requests: () => [], parse: () => [], skipReason: () => "role family \"sales\" is not technical" };
+    const out = await collectWith(collector, { id: "gh", kind: "actor", actor: "fake/skip" }, baseContext(), fakePorts());
+    expect(out.calls).toBe(0);
+    expect(out.notes).toEqual(["role family \"sales\" is not technical"]);
+  });
+
   it("turns a thrown request into a note, not a crash", async () => {
     const ports = fakePorts({ callActor: () => Promise.reject(new Error("HTTP 402")) });
     const out = await executeStep(serp, baseContext(), ports);
@@ -117,14 +124,14 @@ describe("collectWith waves and digest", () => {
   it("runs followUp requests after the first wave and passes the first-wave payloads", async () => {
     const seen: (readonly unknown[])[] = [];
     const collector = fake({
-      followUp: (_ctx, _step, payloads) => {
-        seen.push(payloads);
+      followUp: (_ctx, _step, fetched) => {
+        seen.push(fetched);
         return [{ via: "fetch", url: "https://api.example.com/stats" }];
       },
     });
     const ports = echoPorts();
     const out = await collectWith(collector, step, baseContext(), ports);
-    expect(seen).toEqual([[{ url: "https://api.example.com/list" }]]);
+    expect(seen).toEqual([[{ req: { via: "fetch", url: "https://api.example.com/list" }, payload: { url: "https://api.example.com/list" } }]]);
     expect(out.sources).toHaveLength(2);
     expect(out.empty).toBe(false);
   });
@@ -133,14 +140,39 @@ describe("collectWith waves and digest", () => {
     let got: readonly unknown[] = [];
     const collector = fake({
       followUp: () => [{ via: "fetch", url: "https://api.example.com/stats" }],
-      digest: (payloads) => {
-        got = payloads;
-        return { n: payloads.length };
+      digest: (fetched) => {
+        got = fetched;
+        return { n: fetched.length };
       },
     });
     const out = await collectWith(collector, step, baseContext(), echoPorts());
     expect(out.digest).toEqual({ n: 2 });
     expect(got).toHaveLength(2);
     expect((await collectWith(fake({ digest: () => null }), step, baseContext(), echoPorts())).digest).toBeUndefined();
+  });
+
+  it("fetch requests of a wave are performed concurrently and applied in request order", async () => {
+    const delays: Record<string, number> = { a: 30, b: 20, c: 10, d: 0 };
+    let inFlight = 0;
+    let peak = 0;
+    const collector = fake({
+      requests: () => Object.keys(delays).map((k) => ({ via: "fetch", url: `https://api.example.com/${k}` })),
+      parse: (payload) => [{ url: `https://example.com/${(payload as { k: string }).k}`, excerpt: "e", raw: payload }],
+      digest: (fetched) => fetched.map((f) => (f.payload as { k: string }).k),
+    });
+    const ports = fakePorts({
+      fetchJson: async (url) => {
+        const k = url.split("/").pop() ?? "";
+        inFlight += 1;
+        peak = Math.max(peak, inFlight);
+        await new Promise((r) => setTimeout(r, delays[k] ?? 0));
+        inFlight -= 1;
+        return { k };
+      },
+    });
+    const out = await collectWith(collector, step, baseContext(), ports);
+    expect(peak).toBe(4);
+    expect(out.sources.map((s) => s.url)).toEqual(["a", "b", "c", "d"].map((k) => `https://example.com/${k}`));
+    expect(out.digest).toEqual(["a", "b", "c", "d"]);
   });
 });

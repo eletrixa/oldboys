@@ -8,6 +8,7 @@
  *
  * Key responsibilities:
  * - Request profiles only for candidates with platform instagram and a handle (merge or possibly-same-as); one Source per profile
+ * - `digest`: merged profiles' ProfileFacts (followers, following, posts, verified, bio, photo)
  *
  * Design constraints:
  * - Pure: no fetch; the runner performs I/O. Empty `requests()` triggers the step's onEmpty branch
@@ -15,7 +16,9 @@
  */
 import { z } from "zod";
 import type { Candidate } from "@/domain/claim";
-import type { Collector } from "@/recipe/sources/types";
+import { clipBio, emptyFacts, type ProfileFacts } from "@/domain/profile-facts";
+import { count, digestOf } from "@/recipe/sources/facts";
+import type { Collector, StepContext } from "@/recipe/sources/types";
 import { clip, identityFor } from "@/recipe/sources/types";
 
 const Profile = z.object({
@@ -27,6 +30,7 @@ const Profile = z.object({
   postsCount: z.number().nullish(),
   verified: z.boolean().nullish(),
   externalUrl: z.string().nullish(),
+  profilePicUrl: z.string().nullish(),
   latestPosts: z.array(z.object({ caption: z.string().nullish() })).nullish(),
 });
 
@@ -70,4 +74,27 @@ export const instagram: Collector = {
       return { url, excerpt: clip(lines.join("\n")), raw: p, identity: identityFor(ctx, url) };
     });
   },
+  digest: (fetched, ctx) => factsOf(fetched.map((f) => f.payload), ctx),
 };
+
+export function factsOf(payloads: readonly unknown[], ctx: StepContext): ProfileFacts[] | null {
+  return digestOf(
+      payloads.flatMap((pl) => {
+        const items = z.array(Profile).safeParse(pl);
+        return items.success ? items.data : [];
+      }).flatMap((p) => {
+        const url = `https://www.instagram.com/${p.username}/`;
+        if (identityFor(ctx, url) !== "merged") return [];
+        const f = emptyFacts("instagram", url, url);
+        f.handle = p.username;
+        f.display_name = p.fullName ?? null;
+        f.bio = clipBio(p.biography);
+        f.followers = count(p.followersCount);
+        f.following = count(p.followsCount);
+        f.posts = count(p.postsCount);
+        f.verified = p.verified ?? null;
+        f.photo_url = p.profilePicUrl ?? null;
+        return [f];
+      }),
+    );
+}

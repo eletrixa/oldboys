@@ -1,5 +1,6 @@
 /**
- * Identity after the lineup, rule 2 (name + employer corroboration), plus the resolve merge cap and reasons hygiene.
+ * Identity after the lineup, rule 2 (name + employer corroboration), plus the resolve merge cap (name + city alone
+ * never merges, eval p2) and reasons hygiene.
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/recipe/__tests__/identity-corroboration.test.ts
@@ -100,13 +101,14 @@ describe("resolve merge cap and reasons hygiene", () => {
     })),
   );
 
-  it("caps a handle-only model merge at possibly-same-as; location or employer keeps the merge", async () => {
+  it("caps a handle-only or name + city model merge at possibly-same-as; employer keeps the merge", async () => {
     const out = await resolveCandidates(ctx, fakePorts({ llm: scoreAll }));
     const by = new Map(out.candidates.map((c) => [c.platform, c]));
     expect(by.get("instagram")?.decision).toBe("possibly-same-as");
     expect(by.get("instagram")?.score).toBe(UNCORROBORATED_CAP);
     expect(UNCORROBORATED_CAP).toBeLessThan(MERGE_FLOOR);
-    expect(by.get("x")?.decision).toBe("merge");
+    expect(by.get("x")?.decision).toBe("possibly-same-as");
+    expect(by.get("x")?.reasons).toEqual(["Location matches", "name and city only: no employer or link to a confirmed profile"]);
     expect(by.get("facebook")?.decision).toBe("merge");
   });
 
@@ -132,7 +134,48 @@ describe("resolve merge cap and reasons hygiene", () => {
       return Promise.resolve({ value: [], cost_usd: 0 });
     }) as Ports["llm"];
     await resolveCandidates(ctx, fakePorts({ llm }));
-    expect(system).toContain("A name or handle match alone is at most 0.7");
+    expect(system).toContain("A name or handle match alone, or name + city, is at most 0.7");
+    expect(system).not.toMatch(/hit shows the location/);
     expect(system).toMatch(/Never mention personal-life details/);
+  });
+});
+
+describe("name + city is not identity (eval p2)", () => {
+  const score = (value: number, reasons: string[]) =>
+    fakeLlm((prompt) => [...prompt.matchAll(/id=(id-\d+) platform=/g)].map((m) => ({ id: m[1] ?? "", score: value, reasons })));
+  const run = async (hit: Source, over: Parameters<typeof baseContext>[0] = {}) => {
+    const c = baseContext({ subject: "Josef Buryan", anchor: "Prague, Czechia", sources: [profile, hit], candidates: [cand(LI, "merge")], ...over });
+    const out = await resolveCandidates(c, fakePorts({ llm: score(0.85, ["Name matches", "Location Prague matches"]) }));
+    return out.candidates[0];
+  };
+  const gh = (excerpt: string) => src("gh", "https://github.com/jburyan", `jburyan (Josef Buryan) · GitHub\n${excerpt}`);
+
+  it("name + city only is possibly-same-as with a plain reason, anchor_match still set", async () => {
+    const c = await run(gh("Embedded C, firmware for heating controllers. Prague."));
+    expect(c?.decision).toBe("possibly-same-as");
+    expect(c?.score).toBe(UNCORROBORATED_CAP);
+    expect(c?.reasons).toContain("name and city only: no employer or link to a confirmed profile");
+    expect(c?.anchor_match).toBe("Prague, Czechia");
+  });
+  it("the full city anchor in the text is still only the city", async () => {
+    expect((await run(gh("Firmware. Prague, Czechia")))?.decision).toBe("possibly-same-as");
+  });
+  it("name + city + a confirmed employer merges", async () => {
+    const c = await run(gh("Marketing tools at Groupon. Prague."));
+    expect(c?.decision).toBe("merge");
+    expect(c?.reasons.join(" ")).not.toMatch(/city only/);
+  });
+  it("name + city + a cross-link to or from a confirmed profile merges", async () => {
+    expect((await run(gh(`Prague. ${LI}`)))?.decision).toBe("merge");
+    const linkedFrom = { ...profile, excerpt: `${profile.excerpt}\nhttps://github.com/jburyan` };
+    expect((await run(gh("Prague."), { sources: [linkedFrom, gh("Prague.")] }))?.decision).toBe("merge");
+  });
+  it("the anchor link (a website anchor) still merges", async () => {
+    const site = src("site", "https://www.buryan.dev/", "Josef Buryan – personal site");
+    expect((await run(site, { anchor: "buryan.dev" }))?.decision).toBe("merge");
+  });
+  it("a city inside a confirmed employer's name never counts as the employer", async () => {
+    const li = { ...profile, excerpt: "Josef Buryan\nDeveloper @ Kódovna Prague (2019–present)" };
+    expect((await run(gh("Firmware. Prague."), { sources: [li, gh("Firmware. Prague.")] }))?.decision).toBe("possibly-same-as");
   });
 });

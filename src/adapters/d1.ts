@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/adapters/d1.ts
- * Deps:    D1Database, R2Bucket (bindings), zod, src/domain/cv-check, src/domain/role-catalog (role_templates rows), src/domain/position (FAMILIES), src/recipe/seams/position-extract (familyOf)
+ * Deps:    D1Database, R2Bucket (bindings), zod, src/domain/cv-check, src/domain/role-catalog (role_templates rows), src/domain/position (roleFamilyOf)
  * Tested:  n/a (Workers bindings; exercised by `pnpm preview` runs)
  *
  * Key responsibilities:
@@ -11,7 +11,8 @@
  *   base + questions_json, plus `cv-consistency` once the run has a CV source (withCvQuestion), so extract, verify and
  *   synthesize see the CV question only on CV runs
  * - `persistOutcome` writes sources/candidates/claims/gaps/brief; claims_mode=replace rewrites the run's claims
- * - Raw payloads go to R2 under `<run>/<source>.json`; D1 keeps only the excerpt
+ * - Raw payloads go to R2 under `<run>/<source>.json`; D1 keeps only the excerpt; `makeSourceStore` skips a url another
+ *   step of the run already stored (collectors after the lineup run in parallel, the runner's dedup sees only earlier steps)
  * - `applySourceIdentity` re-marks sources after the lineup (merged / unverified by profile key, then name + employer
  *   corroboration with identity_reason; subject from investigations, employer/headline from the seed_profile ledger rows)
  *
@@ -22,8 +23,7 @@
  */
 import { type RoleTemplate, type RoleTemplateRow, templateFromRow } from "@/domain/role-catalog";
 import { Brief, Candidate, CandidateDecision, Claim, Gap, LedgerEntry, Source } from "@/domain/claim";
-import { FAMILIES, type Family } from "@/domain/position";
-import { familyOf } from "@/recipe/seams/position-extract";
+import { roleFamilyOf } from "@/domain/position";
 import type { LedgerAppend, SourceStore } from "@/domain/ports";
 import { headlineOrgs } from "@/domain/corroborate";
 import { withCvQuestion } from "@/domain/cv-check";
@@ -70,9 +70,12 @@ export function makeSourceStore(db: D1Database, bucket: R2Bucket): SourceStore {
     const full = Source.parse({ ...source, r2_key });
     await db
       .prepare(
-        `INSERT OR REPLACE INTO sources (id, run_id, url, actor, fetched_at, excerpt, r2_key, expires_at, identity) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        // Steps after the lineup run in parallel and each dedups only against the sources persisted before it started:
+        // the same page stored by another step of this run wins, a retry of the same row (same id) still upserts.
+        `INSERT OR REPLACE INTO sources (id, run_id, url, actor, fetched_at, excerpt, r2_key, expires_at, identity)
+         SELECT ?, ?, ?, ?, ?, ?, ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM sources WHERE run_id = ? AND url = ? AND id <> ?)`,
       )
-      .bind(full.id, full.run_id, full.url, full.actor, full.fetched_at, full.excerpt, full.r2_key, full.expires_at, full.identity)
+      .bind(full.id, full.run_id, full.url, full.actor, full.fetched_at, full.excerpt, full.r2_key, full.expires_at, full.identity, full.run_id, full.url, full.id)
       .run();
     return full;
   };
@@ -105,13 +108,6 @@ export async function loadRoleTemplates(db: D1Database): Promise<RoleTemplate[]>
   return results.flatMap((r) => templateFromRow(r) ?? []);
 }
 
-/** The matched template's family when valid, else the role title's family, else null. */
-function roleFamilyOf(templateFamily: unknown, role: unknown): Family | null {
-  const known = FAMILIES.find((f) => f === templateFamily);
-  if (known !== undefined) return known;
-  return typeof role === "string" && role !== "" ? familyOf(role) : null;
-}
-
 export async function loadContext(db: D1Database, runId: string, baseQuestions: readonly Question[]): Promise<StepContext> {
   const inv = await db
     .prepare(
@@ -130,13 +126,14 @@ export async function loadContext(db: D1Database, runId: string, baseQuestions: 
   ]);
   const extra = json<Question[]>(inv.questions_json, []);
   const sources = srcs.results.map((r) => Source.parse(r));
+  const role = typeof inv.role === "string" ? inv.role : null;
   return {
     runId,
     subject: String(inv.subject),
     anchor: String(inv.anchor),
     goal: inv.goal as StepContext["goal"],
-    role: typeof inv.role === "string" ? inv.role : null,
-    roleFamily: roleFamilyOf(inv.family, inv.role),
+    role,
+    roleFamily: roleFamilyOf(inv.family, role),
     roleSites: stringList(json<{ sites?: unknown }>(inv.sources_json, {}).sites),
     questions: withCvQuestion(String(inv.goal), [...baseQuestions, ...extra], sources),
     candidates: cands.results.map((r) =>

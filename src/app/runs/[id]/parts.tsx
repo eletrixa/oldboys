@@ -25,7 +25,7 @@
  * - Report language (idea #24): "EN | CZ" switch on top of the brief (LangSwitch); in Czech the brief area renders
  *   labels from the dictionary and the brief's own texts by id (tid), English per text when a translation is missing;
  *   the container gets lang="cs", quotes and excerpts keep their original language (lang=""), the call panel and the
- *   exports stay English (lang="en")
+ *   export buttons stay English (lang="en"); the exported texts follow the chosen language (language.exports)
  * - Accessibility: labelled progressbar with status text, QuestionCard focuses its heading on mount, 44px summary and link targets
  *
  * Design constraints:
@@ -507,7 +507,7 @@ function BriefBody({ state, brief }: { state: RunState; brief: Brief }): React.J
         <List title={t.notSearched} items={brief.not_searched.map((g, i) => gapItem(report, tid.notSearched(i), g))} />
         <div className="flex flex-col gap-3">
           <div lang={english}>
-            <KitActions state={state} />
+            <KitActions state={state} language={language.exports} />
           </div>
           <AlsoFound items={brief.also_found} />
           {brief.removed_protected > 0 ? <p className="text-xs text-muted">{t.removedProtected(brief.removed_protected)}</p> : null}

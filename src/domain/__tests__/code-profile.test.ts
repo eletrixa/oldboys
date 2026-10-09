@@ -15,17 +15,13 @@
  * - Pure, no I/O
  */
 import { describe, expect, it } from "vitest";
-import { APIFY_PROFILE_STEP, CODE_PROFILE_CAVEATS, CODE_PROFILE_STEP, isTechnicalFamily, readCodeProfile, type CodeProfile } from "@/domain/code-profile";
+import { APIFY_PROFILE_STEP, CODE_PROFILE_CAVEATS, CODE_PROFILE_STEP, codeTotals, isTechnicalFamily, isTechnicalRole, readCodeProfile, technicalSkipReason, type CodeProfile } from "@/domain/code-profile";
 
 const digest = (handle: string): CodeProfile => ({
   handle,
   profile_url: `https://github.com/${handle}`,
-  repos_sampled: 1,
   repos_owned: 2,
   forks_excluded: 1,
-  commits: 10,
-  additions: 100,
-  deletions: 20,
   stats_pending: [],
   repos: [],
   languages: [{ name: "TypeScript", repos: 1 }],
@@ -36,7 +32,7 @@ const digest = (handle: string): CodeProfile => ({
   orgs: [],
   apify: null,
   account_created: null,
-  source_urls: [`https://api.github.com/users/${handle}`],
+  sources: { user: `https://api.github.com/users/${handle}`, repos: `https://api.github.com/users/${handle}/repos`, search: "https://api.github.com/search/issues", events: `https://api.github.com/users/${handle}/events/public`, orgs: `https://api.github.com/users/${handle}/orgs` },
 });
 const apifyDigest = (handle: string) => ({ handle, last_year_contributions: 412, first_commit_year: 2015, pinned_repos: [], achievements: ["Arctic Code Vault Contributor"], source_url: "https://api.apify.com/v2/datasets/d1" });
 const row = (ref: unknown, step: string = CODE_PROFILE_STEP) => ({ step, ref_json: typeof ref === "string" ? ref : JSON.stringify(ref) });
@@ -47,6 +43,17 @@ describe("isTechnicalFamily", () => {
     expect(isTechnicalFamily("data")).toBe(true);
     expect(isTechnicalFamily("marketing")).toBe(false);
     expect(isTechnicalFamily(null)).toBe(false);
+  });
+  it("names the skip reason for the others", () => {
+    expect(technicalSkipReason({ roleFamily: "engineering", role: null })).toBeNull();
+    expect(technicalSkipReason({ roleFamily: "sales", role: "Account Manager" })).toBe('role family "sales" is not technical');
+    expect(technicalSkipReason({ roleFamily: null, role: null })).toContain("no role given");
+  });
+  it("isTechnicalRole accepts a technical title in a non-technical family", () => {
+    expect(isTechnicalRole({ roleFamily: "product", role: "Product Engineer" })).toBe(true);
+    expect(isTechnicalRole({ roleFamily: "operations", role: "Support Engineer" })).toBe(true);
+    expect(isTechnicalRole({ roleFamily: "marketing", role: "Growth Lead" })).toBe(false);
+    expect(technicalSkipReason({ roleFamily: "product", role: "Product Engineer" })).toBeNull();
   });
 });
 
@@ -84,5 +91,14 @@ describe("CODE_PROFILE_CAVEATS", () => {
   it("has five lines and names no person", () => {
     expect(CODE_PROFILE_CAVEATS).toHaveLength(5);
     for (const line of CODE_PROFILE_CAVEATS) expect(line).not.toMatch(/\b(he|she|his|her|candidate|\{subject\})\b/i);
+  });
+});
+
+describe("codeTotals", () => {
+  it("sums the sampled repos", () => {
+    const repo = { full_name: "a/b", url: "https://github.com/a/b", first_week: null, last_week: null, language: null, stars: 0, share: null, source_url: "https://api.github.com/repos/a/b/stats/contributors" };
+    const p: CodeProfile = { ...digest("jd"), repos: [{ ...repo, commits: 10, additions: 100, deletions: 20 }, { ...repo, commits: 5, additions: 1, deletions: 2 }] };
+    expect(codeTotals(p)).toEqual({ repos_sampled: 2, commits: 15, additions: 101, deletions: 22 });
+    expect(codeTotals(digest("jd"))).toEqual({ repos_sampled: 0, commits: 0, additions: 0, deletions: 0 });
   });
 });

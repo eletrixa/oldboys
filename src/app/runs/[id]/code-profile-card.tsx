@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/runs/[id]/code-profile-card.tsx
- * Deps:    src/domain/code-profile (types, caveats), ./code-profile-text, ../../ui (CARD, Eyebrow, LINK, Pill)
+ * Deps:    src/domain/code-profile (types, caveats), src/domain/url (httpUrl), ./code-profile-text, ../../ui (CARD, Eyebrow, LINK, Pill)
  * Tested:  n/a (the numbers and lines are tested in __tests__/code-profile-card.test.ts)
  *
  * Key responsibilities:
@@ -15,8 +15,9 @@
  * - No hooks, English only; numbers and links, never a score or an adjective about the person
  */
 import { CODE_PROFILE_CAVEATS, type CodeProfile } from "@/domain/code-profile";
+import { httpUrl } from "@/domain/url";
 import { CARD, Eyebrow, LINK, Pill } from "../../ui";
-import { fmtInt, PENDING_PREFIX, repoNumbers, safeHref, sharePct, statGroups, weeks } from "./code-profile-text";
+import { fmtInt, PENDING_PREFIX, repoNumbers, sharePct, statGroups, weeks } from "./code-profile-text";
 
 function Src({ url }: { url: string | null }): React.JSX.Element | null {
   if (url === null) return null;
@@ -28,7 +29,7 @@ function Src({ url }: { url: string | null }): React.JSX.Element | null {
 }
 
 function Ext({ url, children }: { url: string; children: React.ReactNode }): React.JSX.Element {
-  const href = safeHref(url);
+  const href = httpUrl(url);
   if (href === null) return <span>{children}</span>;
   return (
     <a href={href} target="_blank" rel="noreferrer" className={LINK}>
@@ -104,7 +105,7 @@ export function CodeProfileCard({ profile }: { profile: CodeProfile | null | und
                     <td className="py-1.5 pr-3 whitespace-nowrap">{r.language ?? "n/a"}</td>
                     <td className="py-1.5 pr-3 whitespace-nowrap">{fmtInt(r.stars)}</td>
                     <td className="py-1.5">
-                      <Src url={safeHref(r.source_url)} />
+                      <Src url={httpUrl(r.source_url)} />
                     </td>
                   </tr>
                 );
@@ -134,7 +135,7 @@ export function CodeProfileCard({ profile }: { profile: CodeProfile | null | und
         <div className="mt-4 text-sm">
           <h3 className="text-xs font-semibold text-muted">
             From the GitHub profile page (via Apify)
-            <Src url={safeHref(apify.source_url)} />
+            <Src url={httpUrl(apify.source_url)} />
           </h3>
           <p className="mt-1 text-ink">
             {[

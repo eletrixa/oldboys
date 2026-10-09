@@ -9,6 +9,8 @@
  * Key responsibilities:
  * - referenceQuestions: null without a brief; header with and without role; gaps to questions in order
  * - Never also_found, interview questions or claims; Art. 9 topics dropped; fallback line when nothing is open
+ * - Czech Report (idea #24): Czech fixed strings, translated criteria and to-verify items (English fallback), role
+ *   untranslated, exclusions and Art. 9 filter intact; the default and the English Report give the same English list
  *
  * Design constraints:
  * - Pure: no React, no fetch; synthetic people only
@@ -16,7 +18,9 @@
 import { describe, expect, it } from "vitest";
 import type { Brief, Claim } from "@/domain/claim";
 import type { RunState } from "../state";
+import { ENGLISH_REPORT, makeReport } from "../i18n";
 import { referenceQuestions } from "../reference-check";
+import { tid } from "../report-text";
 
 const brief = (over: Partial<Brief> = {}): Brief => ({
   profile: null,
@@ -164,6 +168,118 @@ describe("referenceQuestions", () => {
     expect(text).not.toContain("instagram");
     expect(text).not.toContain("Walk me through");
     expect(text).not.toContain("SQL linter");
+    for (const l of lines(text)) expect(/^[#\-*>]/.test(l)).toBe(false);
+  });
+
+  it("English unchanged: the default and the English Report give the same list", () => {
+    for (const state of [run(), run({ role: null }), run({ brief: brief({ degraded: "no AI key" }) }), run({ subject: "", brief: brief({ per_question: [], to_verify: [] }) })]) {
+      expect(referenceQuestions(state, ENGLISH_REPORT)).toBe(referenceQuestions(state));
+      expect(referenceQuestions(state, makeReport("en", { [tid.toVerify(0)]: "Ignored" }))).toBe(referenceQuestions(state));
+    }
+  });
+});
+
+describe("referenceQuestions in Czech", () => {
+  const cs = makeReport("cs", {
+    [tid.question("mh-lead")]: "Vedení týmu aspoň tří inženýrů po dobu alespoň jednoho roku",
+    [tid.question("mh-cloud")]: "Provozuje aplikace ve veřejném cloudu",
+    [tid.toVerify(0)]: "Data působení v Acme",
+  });
+
+  it("full list: Czech header with the role as typed, intro, translated criteria and to-verify items, Czech footer", () => {
+    expect(lines(referenceQuestions(run(), cs))).toEqual([
+      "Reference: Jan Novak, pozice Senior Data Engineer",
+      "Otázky pro bývalé vedení nebo kolegy a kolegyně z předchozí práce. Ptejte se jen na práci, kterou znají z první ruky.",
+      "",
+      "1. Pro „Vedení týmu aspoň tří inženýrů po dobu alespoň jednoho roku“ jsme ve veřejných zdrojích nenašli žádný doklad. " +
+        "Máte z práce přímou zkušenost, která to ukazuje? Můžete uvést příklad?",
+      "2. Pro „Provozuje aplikace ve veřejném cloudu“ jsme ve veřejných zdrojích našli jen částečné doklady. " +
+        "Máte z práce přímou zkušenost, která to ukazuje? Můžete uvést příklad?",
+      "3. Můžete potvrdit: Data působení v Acme?",
+      "Reference kontaktujte jen se souhlasem kandidující osoby. Nikdy se neptejte na zdraví, rodinu, přesvědčení, " +
+        "politické názory, členství v odborech ani jiná soukromá témata. Zapište si, co reference zná z první ruky, ne co si " +
+        "o daném člověku myslí.",
+    ]);
+  });
+
+  it("no role: header without the position; no subject: a Czech placeholder", () => {
+    expect(lines(referenceQuestions(run({ role: null }), cs))[0]).toBe("Reference: Jan Novak");
+    expect(lines(referenceQuestions(run({ role: " " }), cs))[0]).toBe("Reference: Jan Novak");
+    expect(lines(referenceQuestions(run({ subject: "", role: null }), cs))[0]).toBe("Reference: jméno neuvedeno");
+  });
+
+  it("missing translations: the English title or text stays inside the Czech wording", () => {
+    expect(numbered(referenceQuestions(run(), makeReport("cs", {})))).toEqual([
+      "1. Pro „Team leadership“ jsme ve veřejných zdrojích nenašli žádný doklad. Máte z práce přímou zkušenost, která to ukazuje? Můžete uvést příklad?",
+      "2. Pro „Runs workloads on a public cloud“ jsme ve veřejných zdrojích našli jen částečné doklady. Máte z práce přímou zkušenost, která to ukazuje? Můžete uvést příklad?",
+      "3. Můžete potvrdit: Dates at Acme?",
+    ]);
+  });
+
+  it("AI off: every criterion as not checked, in Czech", () => {
+    expect(numbered(referenceQuestions(run({ brief: brief({ degraded: "no AI key" }) }), cs))).toEqual([
+      "1. Kritérium „Writes production SQL“ průzkum neověřoval. Máte z práce přímou zkušenost, která to ukazuje? Můžete uvést příklad?",
+      "2. Kritérium „Vedení týmu aspoň tří inženýrů po dobu alespoň jednoho roku“ průzkum neověřoval. Máte z práce přímou zkušenost, která to ukazuje? Můžete uvést příklad?",
+      "3. Kritérium „Provozuje aplikace ve veřejném cloudu“ průzkum neověřoval. Máte z práce přímou zkušenost, která to ukazuje? Můžete uvést příklad?",
+      "4. Můžete potvrdit: Data působení v Acme?",
+    ]);
+  });
+
+  it("to-verify translations follow the original index, blanks skipped", () => {
+    const report = makeReport("cs", { [tid.toVerify(2)]: "Pracovní pozice v Beta s.r.o." });
+    const out = numbered(referenceQuestions(run({ questions: [], brief: brief({ to_verify: ["Was the Acme role full-time?", "  ", "Title at Beta s.r.o."] }) }), report));
+    expect(out).toEqual(["1. Můžete potvrdit: Was the Acme role full-time?", "2. Můžete potvrdit: Pracovní pozice v Beta s.r.o?"]);
+  });
+
+  it("drops Art. 9 topics, whether the English or the Czech text names them", () => {
+    const report = makeReport("cs", {
+      [tid.question("mh-health")]: "Pracovní nasazení",
+      [tid.question("mh-lead")]: "Vede tým",
+      [tid.toVerify(0)]: "Náboženské vyznání",
+      [tid.toVerify(1)]: "Členství v odborové organizaci",
+      [tid.toVerify(2)]: "Data působení v Acme",
+    });
+    const text = referenceQuestions(
+      run({
+        questions: [
+          { id: "mh-health", text: "Health of the candidate" },
+          { id: "mh-lead", text: "Leads a team" },
+        ],
+        brief: brief({
+          per_question: [
+            { question_id: "mh-health", coverage: "none", claim_ids: [], summary: "No evidence." },
+            { question_id: "mh-lead", coverage: "none", claim_ids: [], summary: "No evidence." },
+          ],
+          to_verify: ["Faith", "Union", "Dates at Acme"],
+        }),
+      }),
+      report,
+    );
+    expect(numbered(text)).toEqual([
+      "1. Pro „Vede tým“ jsme ve veřejných zdrojích nenašli žádný doklad. Máte z práce přímou zkušenost, která to ukazuje? Můžete uvést příklad?",
+      "2. Můžete potvrdit: Data působení v Acme?",
+    ]);
+  });
+
+  it("fallback line in Czech when nothing is open", () => {
+    const out = lines(referenceQuestions(run({ subject: "", brief: brief({ per_question: [], to_verify: [] }) }), cs));
+    expect(out[3]).toBe(
+      "Průzkum nenechal žádné otevřené body. Zeptejte se: Můžete popsat jeden projekt, za který tato osoba odpovídala, a jaká v něm byla Vaše role?",
+    );
+    expect(out).toHaveLength(5);
+  });
+
+  it("no English fixed string; never also_found, interview questions or claims; plain text", () => {
+    const claim: Claim = {
+      id: "c1", run_id: "r", question_id: "mh-lead", candidate_id: null, text: "Maintains a widely used SQL linter",
+      kind: "FACT", confidence: 0.9, quote: "SQL linter", supports: ["https://github.com/jnovak"], contradicts: [], rank: 0,
+    };
+    const report = makeReport("cs", { [tid.claim("c1")]: "Udržuje SQL linter", [tid.interviewQuestion(0)]: "Provedete mě pipeline?" });
+    const text = referenceQuestions(run({ claims: [claim] }), report) ?? "";
+    for (const en of ["Reference check", "Questions for", "We found", "Did you see", "Can you", "Contact references", "the candidate", " for Senior"]) {
+      expect(text).not.toContain(en);
+    }
+    for (const banned of ["namesake", "instagram", "Walk me through", "Provedete", "SQL linter"]) expect(text).not.toContain(banned);
     for (const l of lines(text)) expect(/^[#\-*>]/.test(l)).toBe(false);
   });
 });
