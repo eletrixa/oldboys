@@ -104,12 +104,23 @@ export function clipBio(text: string | null | undefined): string | null {
   return t.length <= BIO_MAX ? t : `${t.slice(0, BIO_MAX - 1)}…`;
 }
 
-/** Earliest four-digit year (1950..2099) among start dates; null when none parses. */
+/** A harvestapi date as text: a string, a number, or an object with `text` / `year` (the actor's date shape). */
+function dateText(v: unknown): string {
+  if (typeof v === "string") return v;
+  if (typeof v === "number") return String(v);
+  if (typeof v === "object" && v !== null) {
+    const o = v as Record<string, unknown>;
+    return [o.text, o.year, o.linkedinText].map(dateText).find((t) => t !== "") ?? "";
+  }
+  return "";
+}
+
+/** Earliest four-digit year (1950..2099) among start dates (strings, numbers or harvestapi `{ text }` objects); null when none parses. */
 export function experienceYear(starts: readonly unknown[]): number | null {
   let min: number | null = null;
   for (const s of starts) {
-    const text = typeof s === "string" ? s : typeof s === "number" ? String(s) : "";
-    const m = /(?:19[5-9]\d|20\d\d)/.exec(text);
+    const m = /(?:19[5-9]\d|20\d\d)/.exec(dateText(s));
+
     if (m === null) continue;
     const y = Number(m[0]);
     if (min === null || y < min) min = y;
