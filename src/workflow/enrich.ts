@@ -8,7 +8,8 @@
  *
  * Key responsibilities:
  * - `startEnrichment`: pooled applications of one position → `startRun` (goal hiring, the position's questions) → application 'run-started'
- * - Per-id skips with a plain reason (over limit, not in this pool, already started, not ready, nothing to research)
+ * - Per-id skips with a plain reason (over limit, not in this pool, already started, not ready, nothing to research); a skipped row
+ *   that already has a run carries its `runId`
  * - The shared hourly cap (and the per-organization cap for a recruiter session) is checked once, before any run starts
  *
  * Design constraints:
@@ -25,12 +26,15 @@ export type EnrichOrigin = { via: "api" } | { via: "start"; accountId: string; o
 
 export type EnrichResult =
   | { ok: false; status: 404 | 429; error: string }
-  | { ok: true; started: { applicationId: string; runId: string }[]; skipped: { applicationId: string; reason: string }[] };
+  | { ok: true; started: { applicationId: string; runId: string }[]; skipped: EnrichSkip[] };
+
+/** `runId`: the run an "already started" row already has, so the page can link it. */
+export type EnrichSkip = { applicationId: string; reason: string; runId?: string };
 
 /** Most candidates one request can start. */
 export const ENRICH_MAX = 20;
 
-type PoolApplication = { id: string; status: string; linkedin_url: string | null; cv_text: string | null };
+type PoolApplication = { id: string; status: string; linkedin_url: string | null; cv_text: string | null; run_id?: string | null };
 
 export async function startEnrichment(
   env: StartRunEnv,
@@ -40,7 +44,7 @@ export async function startEnrichment(
   const position = await loadPositionQuestions(env.DB, args.positionId);
   if (position === null) return { ok: false, status: 404, error: "unknown position" };
 
-  const skipped: { applicationId: string; reason: string }[] = [];
+  const skipped: EnrichSkip[] = [];
   const unique = [...new Set(args.applicationIds)];
   const ids = unique.slice(0, ENRICH_MAX);
   for (const applicationId of unique.slice(ENRICH_MAX)) skipped.push({ applicationId, reason: "over limit" });
@@ -50,7 +54,7 @@ export async function startEnrichment(
     ? []
     : (
         await env.DB.prepare(
-          `SELECT id, status, linkedin_url, cv_text FROM applications WHERE position_id = ? AND id IN (${marks})`,
+          `SELECT id, status, linkedin_url, cv_text, run_id FROM applications WHERE position_id = ? AND id IN (${marks})`,
         )
           .bind(args.positionId, ...ids)
           .all<PoolApplication>()
@@ -62,7 +66,7 @@ export async function startEnrichment(
     const row = byId.get(applicationId);
     const reason = skipReason(row);
     if (row !== undefined && reason === null) eligible.push(row);
-    else skipped.push({ applicationId, reason: reason ?? NOT_IN_POOL });
+    else skipped.push({ applicationId, reason: reason ?? NOT_IN_POOL, ...(typeof row?.run_id === "string" ? { runId: row.run_id } : {}) });
   }
 
   const session = args.origin.via === "start" ? args.origin : null;

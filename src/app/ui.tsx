@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/ui.tsx
- * Deps:    react
+ * Deps:    react, next/link
  * Tested:  n/a (visual; docs/design/radar-ui.md is the spec)
  *
  * Key responsibilities:
@@ -17,6 +17,7 @@
  * - Semantic tokens only (canvas, surface, paper, ink, muted, action, sage, peach, divider, ok, unsure, conflict, inference)
  * - Server-safe: no hooks, no browser APIs
  */
+import Link from "next/link";
 import { CV_SOURCE_TEXT, host, isCvSource } from "./runs/[id]/state";
 
 const SHADOW = "shadow-[0_8px_30px_rgba(40,45,43,0.06)]";
@@ -54,13 +55,24 @@ export const LINK = "font-medium whitespace-nowrap text-action underline decorat
 export const LINK_TARGET = `${LINK} inline-flex min-h-11 items-center`;
 
 /** A status line under a form: an error (announced at once) or plain information (announced politely). */
-export type Notice = { kind: "error" | "info"; text: string };
+/** `runs`: existing runs to link after the text ("Open the existing brief"). */
+export type Notice = { kind: "error" | "info"; text: string; runs?: readonly string[] };
 
 export function NoticeLine({ notice, className = "" }: { notice: Notice | null; className?: string }): React.JSX.Element | null {
   if (notice === null) return null;
-  return notice.kind === "error"
-    ? <p role="alert" className={`text-sm text-conflict ${className}`.trim()}>{notice.text}</p>
-    : <p role="status" className={`text-sm text-muted ${className}`.trim()}>{notice.text}</p>;
+  if (notice.kind === "error") return <p role="alert" className={`text-sm text-conflict ${className}`.trim()}>{notice.text}</p>;
+  const runs = notice.runs ?? [];
+  return (
+    <p role="status" className={`text-sm text-muted ${className}`.trim()}>
+      {notice.text}
+      {runs.map((id, i) => (
+        <span key={id}>
+          {" · "}
+          <Link href={`/runs/${encodeURIComponent(id)}`} className={LINK}>{runs.length === 1 ? "Open the existing brief" : `Open existing brief ${String(i + 1)}`}</Link>
+        </span>
+      ))}
+    </p>
+  );
 }
 
 /** `<details className="group">` + `<summary className={SUMMARY}><Chevron />…</summary>`: 44px target, native marker hidden; rounded so the global focus ring reads as a control. */

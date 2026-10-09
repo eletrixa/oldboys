@@ -30,6 +30,7 @@ import { linkedinCompany } from "@/recipe/sources/linkedin-company";
 import { linkedinPosts } from "@/recipe/sources/linkedin-posts";
 import { openalex } from "@/recipe/sources/openalex";
 import { orcid } from "@/recipe/sources/orcid";
+import { personalSite } from "@/recipe/sources/personal-site";
 import { stackexchange } from "@/recipe/sources/stackexchange";
 import { tiktok } from "@/recipe/sources/tiktok";
 import type { Collector } from "@/recipe/sources/types";
@@ -57,6 +58,7 @@ const all: readonly Collector[] = [
   instagramSearch,
   tiktok,
   websiteCrawler,
+  personalSite,
   linkedinProfile,
   linkedinProfileDetail,
   linkedinCompany,

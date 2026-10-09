@@ -43,10 +43,17 @@ export const CallQuestion = z.object({
   expected: z.string(),
   /** Why this question is asked, shown to the operator before the call ("No public evidence: Go backend"). */
   why: z.string().optional(),
+  /** What a useful answer contains (concrete example, own part, scale); for HR and the agent, never a score, never read aloud. */
+  listen_for: z.string().optional(),
+  /** The one follow-up the agent may ask when the answer is vague. */
+  follow_up: z.string().optional(),
 });
 export type CallQuestion = z.infer<typeof CallQuestion>;
 
-/** Deterministic script handed to the voice agent; built by call-brief.ts, never by an LLM. */
+/**
+ * Script handed to the voice agent, composed by call-brief.ts. Its structure, first message, agent prompt and safety
+ * filters are deterministic; only the question texts may be drafted by an LLM (call-questions-llm.ts), and HR edits them.
+ */
 export const CallBrief = z.object({
   language: z.string().min(2).max(5),
   identity_question: z.string().min(1),

@@ -3,19 +3,21 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/domain/run-cost.ts
- * Deps:    src/domain/report-translation (TRANSLATE_STEP)
+ * Deps:    src/domain/report-translation (TRANSLATE_STEP), src/domain/call-questions-llm (CALL_QUESTIONS_STEP)
  * Tested:  src/domain/__tests__/run-cost.test.ts
  *
  * Key responsibilities:
  * - runCost: sum cost_usd (2 decimals), count source calls and model calls (llm rows' ref.calls, 0 when absent), measure research time
  * - Duration = created_at → latest ledger ts, minus pauses (a 'pause' row until the next non-pause row); a report
- *   translation row (step TRANSLATE_STEP, idea #24) adds its cost and model call but not its time, since it runs later on demand
+ *   translation row (step TRANSLATE_STEP, idea #24) and an AI call-question draft (CALL_QUESTIONS_STEP) add their cost and
+ *   model call but not their time, since they run later on demand
  * - formatDuration: "Xs", "M min S s" or "H h M min"
  *
  * Design constraints:
  * - Pure: no I/O; rows arrive in seq order from the caller
  * - Invalid dates and negative values clamp to 0, never throw
  */
+import { CALL_QUESTIONS_STEP } from "./call-questions-llm";
 import { TRANSLATE_STEP } from "./report-translation";
 
 export type RunCost = { usd: number; source_calls: number; llm_calls: number; duration_ms: number };
@@ -50,7 +52,7 @@ export function runCost(rows: readonly CostRow[], createdAt: string): RunCost {
     usd += positive(row.cost_usd);
     if (row.kind === "call") source_calls += 1;
     if (row.kind === "llm") llm_calls += modelCalls(row.ref_json);
-    if (row.step === TRANSLATE_STEP) continue;
+    if (row.step === TRANSLATE_STEP || row.step === CALL_QUESTIONS_STEP) continue;
 
     const t = Date.parse(row.ts);
     if (Number.isNaN(t)) continue;

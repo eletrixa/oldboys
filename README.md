@@ -4,7 +4,7 @@
 
 Built in one night at From Dusk Till Dawn Hackathon #01 in Prague for Case 01, "Social media deep research" (Apify). Live at https://oldboys.asajj.cz on Cloudflare Workers.
 
-> **On the jury?** Start with [JURY.md](JURY.md): what Radar does, how to try it in three minutes, and how it maps to the judging criteria.
+> **On the jury?** Start with [JURY.md](JURY.md): what Radar does, how to try it, and how it maps to the judging criteria.
 
 ## Why we built it
 
@@ -19,7 +19,7 @@ Radar does the reading and keeps the receipts:
 
 ## What it does
 
-Give it a position and a candidate (a LinkedIn link or a CV). In two to four minutes you get a brief:
+Give it a position and a candidate (a LinkedIn link or a CV). In six to twelve minutes you get a brief:
 
 - what the candidate has done,
 - what backs each must-have of the role,

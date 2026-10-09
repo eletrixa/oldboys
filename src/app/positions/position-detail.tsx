@@ -9,7 +9,7 @@
  * Key responsibilities:
  * - GET /api/positions/:id; show title, company, location, family chip, ingest label
  * - Actions: Research a candidate (primary), Search people on LinkedIn, Open posting
- * - Notes: fallback must-haves (AI was off), "edited by hand"
+ * - Notes: fallback must-haves (AI was off), "From the role catalog" for a catalog title, "edited by hand" only after a real edit
  * - Registry checks section (which Czech public registries every candidate of this position is checked against, from the title)
  * - Candidates (pool) and Intake channels sections; reload re-GETs the detail after an add, bind or enrichment start
  * - In-page nav (On this page) to the section ids; Results section: coverage table via RoleTable with its disclaimer, or "No candidates researched yet."
@@ -27,7 +27,7 @@ import { RoleTable } from "@/app/_components/role-table";
 import { useAuthedJson } from "@/app/_components/use-authed-json";
 import type { PositionDetail } from "@/app/api/positions/handler";
 import { BTN_PRIMARY, CARD_PEACH, Eyebrow, LINK, LINK_TARGET, Pill } from "@/app/ui";
-import { ingestLabel } from "@/domain/position-links";
+import { positionOrigin } from "@/domain/position-links";
 import { CandidatePool } from "./candidate-pool";
 import { IntakeChannels } from "./intake-channels";
 import { MustHaveEditor } from "./must-have-editor";
@@ -39,7 +39,8 @@ const HINT = "Positions are shared by the team, so they need the team token. Kep
 
 function Body({ detail, onChange }: { detail: PositionDetail; onChange: (d: PositionDetail) => void }): React.JSX.Element {
   const { position, group } = detail;
-  const meta = [position.company, position.location, ingestLabel(position.ingest_method)].filter(Boolean).join(" · ");
+  const origin = positionOrigin(position, detail.catalog_must_haves);
+  const meta = [position.company, position.location, origin.label].filter(Boolean).join(" · ");
   const search = `${position.title} ${position.location ?? ""}`.trim();
   function saved(p: PositionDetail["position"]): void {
     onChange({ ...detail, position: p });
@@ -57,7 +58,7 @@ function Body({ detail, onChange }: { detail: PositionDetail; onChange: (d: Posi
           <Pill tone="neutral">{position.family}</Pill>
           <span className="text-sm text-muted">{meta}</span>
         </div>
-        {position.extraction === "edited" && <p className="text-sm text-muted">edited by hand</p>}
+        {origin.edited && <p className="text-sm text-muted">edited by hand</p>}
         <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
           <Link href={`/briefs/new?positionId=${encodeURIComponent(position.id)}`} className={BTN_PRIMARY}>Research a candidate</Link>
           <a href={`https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(search)}`} target="_blank" rel="noopener noreferrer" className={LINK}>Search people on LinkedIn</a>

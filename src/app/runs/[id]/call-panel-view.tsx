@@ -7,7 +7,9 @@
  * Tested:  n/a (pure parts in __tests__/call-panel.test.ts)
  *
  * Key responsibilities:
- * - GET /api/runs/:id/calls for the proposal, the call limit and earlier calls
+ * - GET /api/runs/:id/calls for the proposal, the call limit and earlier calls; without a cached AI draft
+ *   (`ai_proposal`) one POST /api/runs/:id/calls/proposal asks for it when the setup opens (cap 75 s); any failure
+ *   keeps the rule-based proposal with a small note
  * - Place: POST /api/runs/:id/calls {language: "en", questions} → POST /api/calls/:id/approve; a draft whose
  *   approve is rejected (400/409) is skipped so it never counts; 401 asks the operator to log in again
  * - Track: GET /api/calls/:id every 3 s until callPhase settles (cap 35 min), then reload the run's calls and tell the page (onChanged)
@@ -21,16 +23,17 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { loginHref } from "@/app/login/next-path";
 import { CARD, Chevron, LINK, SUMMARY, SimulatedPill } from "@/app/ui";
-import { type CallForm, type CallView, type RunCalls, callPhase, isSettled, placedCalls, toHrQuestions, usageLine } from "./call-panel";
+import { type AiDraft, type CallForm, type CallProposal, type CallView, type RunCalls, callPhase, isSettled, placedCalls, toHrQuestions, usageLine } from "./call-panel";
 import { CallResult, EarlierCalls } from "./call-results";
 import { CallSetup } from "./call-setup";
 import type { RunState } from "./state";
 
 const POLL_MS = 3000;
 const POLL_CAP_MS = 35 * 60 * 1000;
+const DRAFT_CAP_MS = 75 * 1000;
 
 export type Load = { kind: "loading" } | { kind: "error" } | { kind: "ready"; data: RunCalls };
 
@@ -40,6 +43,23 @@ type Action =
   | { kind: "placing" }
   | { kind: "error"; message: string; index: number | null }
   | { kind: "tracking"; callId: string; call: CallView | null };
+
+async function fetchAiDraft(runId: string): Promise<AiDraft> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => {
+    controller.abort();
+  }, DRAFT_CAP_MS);
+  try {
+    const res = await fetch(`/api/runs/${runId}/calls/proposal`, { method: "POST", cache: "no-store", signal: controller.signal });
+    if (!res.ok) return { kind: "rules", note: null };
+    const body = await res.json<CallProposal>();
+    return body.source === "ai" ? { kind: "ai", proposal: body.proposal } : { kind: "rules", note: body.note };
+  } catch {
+    return { kind: "rules", note: null };
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 type Placed = { kind: "placed"; callId: string } | { kind: "unauthorized" } | { kind: "error"; message: string; index: number | null };
 
@@ -155,6 +175,8 @@ export function CallPanel({ state, onChanged }: { state: RunState; onChanged?: (
   const show = state.status === "done" && state.brief !== null;
   const [load, setLoad] = useState<Load>({ kind: "loading" });
   const [action, setAction] = useState<Action>({ kind: "idle" });
+  const [aiDraft, setAiDraft] = useState<AiDraft>({ kind: "drafting" });
+  const draftAsked = useRef(false);
 
   useEffect(() => {
     if (!show) return;
@@ -166,6 +188,14 @@ export function CallPanel({ state, onChanged }: { state: RunState; onChanged?: (
       live = false;
     };
   }, [show, state.id]);
+
+  // One AI draft per page view, only when no cached one came with the GET; the route caches it per research state.
+  const needsDraft = load.kind === "ready" && load.data.ai_proposal === null;
+  useEffect(() => {
+    if (!needsDraft || draftAsked.current) return;
+    draftAsked.current = true;
+    void fetchAiDraft(state.id).then(setAiDraft);
+  }, [needsDraft, state.id]);
 
   const place = useCallback(
     (form: CallForm) => {
@@ -202,10 +232,19 @@ export function CallPanel({ state, onChanged }: { state: RunState; onChanged?: (
   const placed = data === null ? [] : placedCalls(data.calls);
   const current = action.kind === "tracking" ? action.call : (placed[0] ?? null);
   const earlier = action.kind === "tracking" ? placed : placed.slice(1);
+  const draft: AiDraft = data?.ai_proposal ? { kind: "ai", proposal: data.ai_proposal } : aiDraft;
   // After a finished call the results lead and the form for another call folds away.
   const finished = current?.status === "done";
   const setup = (d: RunCalls): React.JSX.Element => (
-    <CallSetup proposal={d.proposal} used={d.used} max={d.max} busy={action.kind === "placing"} errorIndex={action.kind === "error" ? action.index : null} onPlace={place} />
+    <CallSetup
+      proposal={draft.kind === "ai" ? draft.proposal : d.proposal}
+      draft={draft}
+      used={d.used}
+      max={d.max}
+      busy={action.kind === "placing"}
+      errorIndex={action.kind === "error" ? action.index : null}
+      onPlace={place}
+    />
   );
 
   return (

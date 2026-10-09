@@ -416,3 +416,65 @@ describe("briefFromHrQuestions", () => {
     expect(out.brief?.questions.map((q) => q.question_id)).toEqual(["mh-1", "hr-1", "hr-2"]);
   });
 });
+
+describe("follow-up and listen-for notes", () => {
+  const drafted = {
+    question_id: "mh-airflow",
+    text: "Your public repo has Airflow DAGs from 2023 - which part did you build yourself?",
+    expected: "",
+    why: "Partial evidence: Airflow",
+    listen_for: "A concrete DAG, their own part and its scale.",
+    follow_up: "Which operators did you write yourself?",
+  };
+
+  it("lists them under the question in the agent prompt, never in the first message or the script", () => {
+    const b = composeCallBrief({ goal: "hiring", subject: "Jane Doe", role: "Data Engineer", questions: [drafted, { question_id: "x", text: "Plain question?", expected: "" }] });
+    const prompt = b.agent_prompt ?? "";
+    const lines = prompt.split("\n");
+    const at = lines.indexOf(`1. ${drafted.text}`);
+    expect(at).toBeGreaterThan(-1);
+    expect(lines[at + 1]).toBe(`   If the answer is vague, ask: "${drafted.follow_up}"`);
+    expect(lines[at + 2]).toBe(`   Listen for (do not read aloud): ${drafted.listen_for}`);
+    expect(lines[at + 3]).toBe("2. Plain question?");
+    expect(prompt).toContain("never read them aloud");
+    expect(prompt).toContain("at most one short follow-up per question");
+    expect(prompt).toContain("Never evaluate");
+    for (const text of [b.first_message ?? "", b.script]) {
+      expect(text).not.toContain(drafted.follow_up);
+      expect(text).not.toContain(drafted.listen_for);
+      expect(text).not.toContain(drafted.why);
+    }
+    expect((b.first_message ?? "").length).toBeLessThanOrEqual(FIRST_MESSAGE_MAX);
+    expect(b.questions[0]).toEqual(drafted);
+  });
+
+  it("still parses a stored brief without the new fields", () => {
+    const old = composeCallBrief({ goal: "hiring", subject: "Jane Doe", role: null, questions: [{ question_id: "a", text: "What is a?", expected: "" }] });
+    const parsed = CallBrief.parse(JSON.parse(JSON.stringify(old)));
+    expect(parsed.questions[0]).toEqual({ question_id: "a", text: "What is a?", expected: "" });
+  });
+
+  it("keeps an operator's follow-up and listen-for, one line and capped", () => {
+    const r = briefFromHrQuestions({
+      goal: "hiring",
+      subject: "Jane Doe",
+      role: null,
+      questions: [{ question_id: "mh-airflow", text: "Edited question about Airflow?", why: "w", follow_up: "Which\n  operators?", listen_for: "x".repeat(400) }],
+    });
+    expect(r.error).toBeNull();
+    expect(r.brief?.questions[0]).toMatchObject({ question_id: "mh-airflow", text: "Edited question about Airflow?", follow_up: "Which operators?" });
+    expect(r.brief?.questions[0]?.listen_for).toHaveLength(200);
+    expect(r.brief?.agent_prompt).toContain('If the answer is vague, ask: "Which operators?"');
+  });
+
+  it("rejects an Art. 9 follow-up or listen-for note with its index", () => {
+    const base = { goal: "hiring", subject: "Jane Doe", role: null } as const;
+    const ok = { text: "What did you build at Acme?" };
+    const follow = briefFromHrQuestions({ ...base, questions: [ok, { ...ok, follow_up: "Is that because of your health?" }] });
+    expect(follow).toMatchObject({ brief: null, index: 1 });
+    expect(follow.error).toContain("follow-up");
+    const listen = briefFromHrQuestions({ ...base, questions: [{ ...ok, listen_for: "Their religion" }] });
+    expect(listen).toMatchObject({ brief: null, index: 0 });
+    expect(listen.error).toContain("listen-for");
+  });
+});
