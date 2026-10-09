@@ -13,18 +13,27 @@
  * - failedCallCost: reads `cost_usd` off a failed call's error, 0 otherwise
  * - mergeTranslation: missing, unknown, duplicate and empty ids fall back; a new Art. 9 topic falls back; an Art. 9
  *   topic already in the English source is kept
+ * - Kind markers: FACT / INFERENCE / STATEMENT round trip to FAKT: / ODVOZENÍ: / VÝROK:, a missing or changed
+ *   placeholder falls back to English; a translated job title falls back to English
+ * - translatePrompt: one identical system prompt for every batch with the glossary, date style and examples;
+ *   PROMPT_VERSION is part of the hash
  *
  * Design constraints:
  * - Fixtures stay inline
  */
 import { describe, expect, it } from "vitest";
 import {
+  KIND_MARKERS_CS,
+  PROMPT_VERSION,
   TRANSLATE_BATCH_CHARS,
   TRANSLATE_BATCH_TEXTS,
   TRANSLATE_BUDGET_USD,
   estimateTranslateUsd,
   failedCallCost,
+  jobTitleNouns,
   mergeTranslation,
+  protectMarkers,
+  restoreMarkers,
   textsHash,
   translatePrompt,
   translationBatches,
@@ -38,6 +47,12 @@ const TEXTS = [
 ];
 
 describe("textsHash", () => {
+  it("includes the prompt version, so an older prompt's cache is redone", async () => {
+    expect(PROMPT_VERSION).not.toBe("");
+    expect(await textsHash(TEXTS)).toBe(await textsHash(TEXTS, PROMPT_VERSION));
+    expect(await textsHash(TEXTS, "cs-1")).not.toBe(await textsHash(TEXTS));
+  });
+
   it("is stable for the same texts and changes with a text or an id", async () => {
     const a = await textsHash(TEXTS);
     expect(await textsHash(TEXTS.map((t) => ({ ...t })))).toBe(a);
@@ -111,6 +126,93 @@ describe("translatePrompt", () => {
     expect(system).toContain("gender-neutral");
     expect(prompt).toContain('"id":"c:1"');
     expect(prompt).toContain("acme-ui");
+  });
+
+  it("gives every batch the identical system prompt with the glossary, date style and examples", () => {
+    const texts = Array.from({ length: 50 }, (_, i) => ({ id: `c:${String(i)}`, text: `Claim number ${String(i)} `.repeat(10) }));
+    const batches = translationBatches(texts);
+    expect(batches.length).toBeGreaterThan(1);
+    const systems = new Set(batches.map((b) => translatePrompt(b).system));
+    expect(systems.size).toBe(1);
+    const system = translatePrompt(batches[batches.length - 1] ?? []).system;
+    expect(system).toBe(translatePrompt(batches[0] ?? []).system);
+    for (const term of [
+      "evidence → doklad",
+      "claim → tvrzení",
+      "source → zdroj",
+      "role criteria → kritéria pozice",
+      "interview → pohovor",
+      "to verify → k ověření",
+      "self-reported → uvedeno samotnou osobou",
+      "mirror site → zrcadlová stránka",
+      "říjen 2022 – květen 2026",
+      "od října 2022 do května 2026",
+      "never \"Vlastnictví X\"",
+      "⟦FACT⟧",
+      "kandidát či kandidátka",
+    ]) {
+      expect(system).toContain(term);
+    }
+    expect(system.match(/^EN: /gm)?.length).toBeGreaterThanOrEqual(3);
+    expect(system).toContain("CS: Board Advisor ve společnosti snuggs");
+  });
+});
+
+describe("kind markers", () => {
+  const SUMMARY = { id: "s:work:summary", text: "FACT: Owns acme-ui. INFERENCE: Leads its frontend. STATEMENT: Says 10 years." };
+
+  it("sends placeholders instead of the English markers, only where synthesize writes them", () => {
+    expect(protectMarkers(SUMMARY.text)).toBe("⟦FACT⟧ Owns acme-ui. ⟦INFERENCE⟧ Leads its frontend. ⟦STATEMENT⟧ Says 10 years.");
+    expect(protectMarkers("Line one\nFACT: two")).toBe("Line one\n⟦FACT⟧ two");
+    expect(protectMarkers("The FACT: sheet is mid-sentence")).toBe("The FACT: sheet is mid-sentence");
+    const { prompt } = translatePrompt([SUMMARY]);
+    expect(prompt).toContain("⟦INFERENCE⟧ Leads");
+    expect(prompt).not.toContain("INFERENCE:");
+  });
+
+  it("round trips FACT / INFERENCE / STATEMENT to the pill words", () => {
+    const merged = mergeTranslation([SUMMARY], {
+      texts: [{ id: SUMMARY.id, text: "⟦FACT⟧ Spravuje acme-ui. ⟦INFERENCE⟧: Vede frontend. ⟦STATEMENT⟧ Uvádí 10 let." }],
+    });
+    expect(merged[SUMMARY.id]).toBe("FAKT: Spravuje acme-ui. ODVOZENÍ: Vede frontend. VÝROK: Uvádí 10 let.");
+    expect(restoreMarkers("⟦FACT⟧ a")).toBe("FAKT: a");
+  });
+
+  it("falls back to English when a placeholder is missing, changed, added or reordered", () => {
+    for (const text of [
+      "⟦FACT⟧ Spravuje acme-ui. ÚSUDEK: Vede frontend. ⟦STATEMENT⟧ Uvádí 10 let.",
+      "⟦FAKT⟧ Spravuje acme-ui. ⟦INFERENCE⟧ Vede frontend. ⟦STATEMENT⟧ Uvádí 10 let.",
+      "⟦STATEMENT⟧ Uvádí 10 let. ⟦FACT⟧ Spravuje acme-ui. ⟦INFERENCE⟧ Vede frontend.",
+      "⟦FACT⟧ Spravuje acme-ui. ⟦INFERENCE⟧ Vede frontend. ⟦STATEMENT⟧ Uvádí 10 let. ⟦FACT⟧ Navíc.",
+    ]) {
+      expect(mergeTranslation([SUMMARY], { texts: [{ id: SUMMARY.id, text }] })).toEqual({});
+    }
+    expect(mergeTranslation(TEXTS, { texts: [{ id: "c:1", text: "⟦FACT⟧ Spravuje acme-ui." }] })).toEqual({});
+  });
+
+  it("uses the same words as the kind pills", () => {
+    expect(KIND_MARKERS_CS).toEqual({ FACT: "FAKT", INFERENCE: "ODVOZENÍ", STATEMENT: "VÝROK" });
+  });
+});
+
+describe("job titles", () => {
+  const ROLE = { id: "c:7", text: "Board Advisor at snuggs; Owner of Naveky.cz from Mar 2021 to Nov 2025." };
+
+  it("finds the title nouns before at / @ / of, not plain words", () => {
+    expect(jobTitleNouns(ROLE.text)).toEqual(["Advisor", "Owner"]);
+    expect(jobTitleNouns("Co-founder & CEO @ Acme")).toEqual(["CEO"]);
+    expect(jobTitleNouns("Graduated at CTU. University of Prague. Teamlead at X. the owner of a dog")).toEqual([]);
+  });
+
+  it("keeps a translation with the titles in English and drops one that translated them", () => {
+    const kept = "Board Advisor ve společnosti snuggs; Owner ve společnosti Naveky.cz od března 2021 do listopadu 2025.";
+    expect(mergeTranslation([ROLE], { texts: [{ id: ROLE.id, text: kept }] })).toEqual({ [ROLE.id]: kept });
+    for (const text of [
+      "Poradce představenstva ve společnosti snuggs; Owner ve společnosti Naveky.cz od března 2021 do listopadu 2025.",
+      "Board Advisor ve snuggs; Vlastnictví Naveky.cz od března 2021 do listopadu 2025.",
+    ]) {
+      expect(mergeTranslation([ROLE], { texts: [{ id: ROLE.id, text }] })).toEqual({});
+    }
   });
 });
 

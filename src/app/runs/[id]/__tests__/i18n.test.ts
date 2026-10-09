@@ -10,14 +10,22 @@
  * - Every key exists in both languages with a non-empty value (quotesNote may be empty in English only)
  * - English labels match the page's existing words; Czech ones are the agreed terms
  * - makeReport: translated text by id, English per missing id, English everywhere for "en"
+ * - The kind markers the translation writes into section summaries (KIND_MARKERS_CS) are the cs kind pills, uppercase
  *
  * Design constraints:
  * - The type (ReportDict) already makes a missing key a compile error; this guards empty strings and drift
  */
 import { describe, expect, it } from "vitest";
+import { KIND_MARKERS_CS } from "@/domain/report-translation";
 import { REPORT_DICT, makeReport } from "../i18n";
 
 describe("REPORT_DICT", () => {
+  it("writes the same kind words in translated summaries as on the pills", () => {
+    for (const [kind, pill] of Object.entries(REPORT_DICT.cs.kind)) {
+      expect(KIND_MARKERS_CS[kind as keyof typeof KIND_MARKERS_CS], kind).toBe(pill.toLocaleUpperCase("cs"));
+    }
+  });
+
   it("has the same keys in English and Czech, all filled", () => {
     expect(Object.keys(REPORT_DICT.cs).sort()).toEqual(Object.keys(REPORT_DICT.en).sort());
     for (const [key, value] of Object.entries(REPORT_DICT.cs)) {
