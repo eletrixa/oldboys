@@ -3,24 +3,25 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/runs/[id]/summary-card.tsx
- * Deps:    react, src/domain/call (type), ./summary, ./summary-cs (summaryLines), ./brief-layout, ./brief-tabs (useNav), ./report-lang (useReport), ./report-text (tid), ../../ui (Radar primitives)
+ * Deps:    react, src/domain/call (type), ./summary, ./summary-cs (summaryLines), ./brief-layout, ./brief-tabs (useNav), ./report-lang (useReport), ./report-text (tid), ../../ui (Radar primitives), POST /api/runs/:id/speech
  * Tested:  n/a (the sentences are tested in __tests__/summary.test.ts and __tests__/summary-cs.test.ts)
  *
  * Key responsibilities:
  * - SummaryCard: three numbers (role criteria with public evidence + the criteria with a coverage dot; phone screen
  *   answered of asked + open answers; facts / inferences / gaps found), each with a link that opens its tab; the three
  *   sentences from summary30s (documented, missing, ask) stay as the read-aloud text and under "In sentences"
- * - ReadAloud: browser SpeechSynthesis only (no external service); hidden when the browser has none; toggles Stop;
- *   reads in the report's language (cs-CZ for the Czech brief)
+ * - ReadAloud: the call agent's ElevenLabs voice via POST /api/runs/:id/speech (MP3, signed-in users); on any error
+ *   browser SpeechSynthesis with a natural voice (macOS novelty voices skipped); toggles Stop; reads in the report's
+ *   language (Czech for the Czech brief)
  * - Czech brief (idea #24): lines from summaryLines (built from counts and translated criteria, never a translated
  *   sentence), lead words and headings from the dictionary
  *
  * Design constraints:
- * - Client only; support is read with useSyncExternalStore so the server render (no button) hydrates cleanly
+ * - Client only; the button always renders (audio works everywhere), the browser voice is only the fallback
  */
 "use client";
 
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { CallAnswer } from "@/domain/call";
 import { BTN_QUIET, CARD, Chevron, Eyebrow, KEY, LINK, SUMMARY } from "../../ui";
 import { backgroundCounts, phoneNumbers } from "./brief-layout";
@@ -31,37 +32,96 @@ import type { RunState } from "./state";
 import { type Summary30s, aiOff, criteriaCounts, criteriaRows } from "./summary";
 import { lineText, summaryLines } from "./summary-cs";
 
-const noop = (): void => undefined;
-const subscribe = (): (() => void) => noop;
+/** macOS novelty voices that Chrome may pick first for a bare `lang`; never used for the fallback. */
+const NOVELTY =
+  /^(Albert|Bad News|Bahh|Bells|Boing|Bubbles|Cellos|Wobble|Good News|Jester|Organ|Superstar|Trinoids|Whisper|Zarvox|Fred|Junior|Ralph|Kathy|Eddy|Flo|Grandma|Grandpa|Reed|Rocko|Sandy|Shelley)\b/;
+const PREFERRED = /Google|Samantha|Microsoft|Zuzana|Daniel|Karen|Moira|Ava|Allison|Tom/;
+
+/** A natural voice for the language: a known good one, then any non-novelty one; undefined = browser default. */
+function pickVoice(speechLang: string): SpeechSynthesisVoice | undefined {
+  const prefix = speechLang.slice(0, 2).toLowerCase();
+  const voices = window.speechSynthesis.getVoices().filter((v) => v.lang.toLowerCase().startsWith(prefix) && !NOVELTY.test(v.name));
+  return voices.find((v) => PREFERRED.test(v.name)) ?? voices[0];
+}
+
 const hasSpeech = (): boolean => "speechSynthesis" in window && "SpeechSynthesisUtterance" in window;
-const noSpeechOnServer = (): boolean => false;
 
-function ReadAloud({ text }: { text: string }): React.JSX.Element | null {
-  const { t } = useReport();
-  const supported = useSyncExternalStore(subscribe, hasSpeech, noSpeechOnServer);
+/**
+ * Reads the sentences in the call agent's ElevenLabs voice (POST /api/runs/:id/speech, signed-in users); when that
+ * answers an error (logged out, no key, quota) it falls back to the browser voice with a natural voice picked.
+ */
+function ReadAloud({ runId, text }: { runId: string; text: string }): React.JSX.Element {
+  const { t, lang } = useReport();
   const [speaking, setSpeaking] = useState(false);
-  // Stop speaking when the card unmounts (navigation, brief replaced).
-  useEffect(() => () => {
-    if (hasSpeech()) window.speechSynthesis.cancel();
-  }, []);
-  if (!supported) return null;
+  const audio = useRef<HTMLAudioElement | null>(null);
+  const abort = useRef<AbortController | null>(null);
 
-  const toggle = (): void => {
-    window.speechSynthesis.cancel();
-    if (speaking) {
+  const release = (): void => {
+    abort.current?.abort();
+    abort.current = null;
+    if (audio.current !== null) {
+      audio.current.pause();
+      URL.revokeObjectURL(audio.current.src);
+      audio.current = null;
+    }
+    if (hasSpeech()) window.speechSynthesis.cancel();
+  };
+  // Stop speaking when the card unmounts (navigation, brief replaced).
+  useEffect(() => release, []);
+
+  const browserVoice = (): void => {
+    if (!hasSpeech()) {
       setSpeaking(false);
       return;
     }
     const u = new SpeechSynthesisUtterance(text);
     u.lang = t.speechLang;
+    const voice = pickVoice(t.speechLang);
+    if (voice !== undefined) u.voice = voice;
     u.onend = () => {
       setSpeaking(false);
     };
     u.onerror = () => {
       setSpeaking(false);
     };
-    setSpeaking(true);
     window.speechSynthesis.speak(u);
+  };
+
+  const play = async (): Promise<void> => {
+    const controller = new AbortController();
+    abort.current = controller;
+    try {
+      const res = await fetch(`/api/runs/${encodeURIComponent(runId)}/speech`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text, lang }),
+        signal: controller.signal,
+      });
+      if (!res.ok) throw new Error(`speech ${String(res.status)}`);
+      const el = new Audio(URL.createObjectURL(await res.blob()));
+      audio.current = el;
+      const done = (): void => {
+        release();
+        setSpeaking(false);
+      };
+      el.onended = done;
+      el.onerror = done;
+      await el.play();
+    } catch (err) {
+      if (controller.signal.aborted) return;
+      console.warn("read aloud: ElevenLabs voice unavailable, using the browser voice", err);
+      browserVoice();
+    }
+  };
+
+  const toggle = (): void => {
+    release();
+    if (speaking) {
+      setSpeaking(false);
+      return;
+    }
+    setSpeaking(true);
+    void play();
   };
 
   return (
@@ -128,7 +188,7 @@ export function SummaryCard({ state, answers, callDay }: { state: RunState; answ
             {report.t.summaryTitle}
           </h2>
         </div>
-        <ReadAloud text={rows.map(lineText).join(" ")} />
+        <ReadAloud runId={state.id} text={rows.map(lineText).join(" ")} />
       </div>
       <div className="grid gap-6 md:grid-cols-3 md:gap-0 md:divide-x md:divide-divider">
         <div className={COL}>
