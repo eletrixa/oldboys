@@ -9,7 +9,7 @@
  * Key responsibilities:
  * - STATUS_LABEL / STATUS_TONE cover every ApplicationStatus; SOURCE_LABEL every ApplicationSource
  * - formatReceived: UTC "YYYY-MM-DD HH:MM", the raw string when unparseable
- * - intakeLine: "From <source> · <tag> · <date>", tag omitted when absent
+ * - intakeLine: "From <source> · <tag> · <date>", tag omitted when absent; a manual add reads "Added by hand · <date>"
  *
  * Design constraints:
  * - Pure: no React, no fetch, no clock
@@ -58,5 +58,8 @@ describe("intakeLine", () => {
   });
   it("drops the tag when the application had none", () => {
     expect(intakeLine({ source: "email", tag: null, receivedAt: "2026-10-09T14:05:33.000Z" })).toBe("From Email · 2026-10-09");
+  });
+  it("says Added by hand without From for a candidate added on the position page", () => {
+    expect(intakeLine({ source: "manual", tag: null, receivedAt: "2026-10-09T14:05:33.000Z" })).toBe("Added by hand · 2026-10-09");
   });
 });
