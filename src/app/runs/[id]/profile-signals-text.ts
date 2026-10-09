@@ -16,15 +16,13 @@
 import { PROFILE_SIGNAL_CAVEATS, type ProfileSignals } from "@/domain/profile-signals";
 import { httpUrl } from "@/domain/url";
 
-export function signalLines(ps: ProfileSignals | null): string[] {
+/** Plain lines for the kit: `{ text, href }` so the kit escapes the sentence and autolinks the source separately. */
+export function signalLines(ps: ProfileSignals | null): { text: string; href: string | null }[] {
   if (ps === null) return [];
   return [
-    ...ps.signals.map((s) => {
-      const href = httpUrl(s.source_url);
-      return href === null ? s.text : `${s.text} (source: ${href})`;
-    }),
-    ...ps.not_checked.map((n) => `Not checked: ${n}`),
-    ...PROFILE_SIGNAL_CAVEATS,
+    ...ps.signals.map((s) => ({ text: s.text, href: httpUrl(s.source_url) })),
+    ...ps.not_checked.map((n) => ({ text: `Not checked: ${n}`, href: null })),
+    ...PROFILE_SIGNAL_CAVEATS.map((c) => ({ text: c, href: null })),
   ];
 }
 

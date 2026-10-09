@@ -74,10 +74,10 @@ describe("ProfileSignalsCard", () => {
 describe("signalLines / askLines", () => {
   it("lists sentences with sources, then not-checked, then caveats", () => {
     const lines = signalLines(ps);
-    expect(lines[0]).toBe("The GitHub account was created on 2 Mar 2026. (source: https://api.github.com/users/jnovak)");
-    expect(lines[2]).toBe("All public repositories are forks.");
-    expect(lines[3]).toBe("Not checked: LinkedIn does not publish the account creation date without login.");
-    expect(lines.slice(4)).toEqual([...PROFILE_SIGNAL_CAVEATS]);
+    expect(lines[0]).toEqual({ text: "The GitHub account was created on 2 Mar 2026.", href: "https://api.github.com/users/jnovak" });
+    expect(lines[2]?.text).toBe("All public repositories are forks.");
+    expect(lines[3]).toEqual({ text: "Not checked: LinkedIn does not publish the account creation date without login.", href: null });
+    expect(lines.slice(4).map((l) => l.text)).toEqual([...PROFILE_SIGNAL_CAVEATS]);
   });
 
   it("returns the distinct asks only", () => {

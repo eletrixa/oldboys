@@ -9,7 +9,8 @@
  * Key responsibilities:
  * - Plans/010: a tag bound to a position and a manual add land as 'pooled' with position_id and start no run;
  *   a duplicate manual add returns the first row; a manual add for an unknown position is unmatched
- * - Cover specs/intake/funnel.md: happy path, CV-only PDF, duplicate and insert race, unknown tag, sender not
+ * - Cover specs/intake/funnel.md: happy path, CV-only PDF, duplicate (a resend with other details noted) and insert
+ *   race, a connector's cvNote (no second parse), unknown tag, sender not
  *   allowed (no CV file stored for either), incomplete, capped (the capped retry and the cron's queue pass), a
  *   failure leaving the row at 'received' marked failed and its immediate resume by the next delivery (one winner
  *   when two race, CV stored, an already inserted run linked and its Workflow instance created), an unmarked
@@ -20,7 +21,7 @@
  */
 import { describe, expect, it } from "vitest";
 import { tinyPdf } from "@/domain/__tests__/fixtures/tiny-pdf";
-import { DELIVERY_FAILED_NOTE, ingestApplication, retryCappedApplications, STALE_RECEIVED_MS } from "../intake";
+import { DELIVERY_FAILED_NOTE, ingestApplication, RESENT_PREFIX, retryCappedApplications, STALE_RECEIVED_MS } from "../intake";
 import { makeIntakeFakes as makeEnv } from "./fixtures/intake-fakes";
 
 const NOW = new Date("2026-10-08T12:00:00.000Z");
@@ -80,6 +81,31 @@ describe("ingestApplication", () => {
     expect(again).toEqual({ ...first, duplicate: true });
     expect(create).toHaveBeenCalledOnce();
     expect(apps.size).toBe(1);
+  });
+
+  it("a repeat with the same details writes nothing; one with other details leaves only the latest resend note", async () => {
+    const { env, apps, create, writes } = makeEnv();
+    const first = await ingestApplication({ ...base, linkedinUrl: PROFILE, cvText: "Ten years of Go." }, env, NOW);
+    const before = writes.length;
+    await ingestApplication({ ...base, linkedinUrl: "linkedin.com/in/josef-buryan", cvText: "Ten years of Go." }, env, NOW);
+    expect(writes).toHaveLength(before);
+
+    await ingestApplication({ ...base, linkedinUrl: PROFILE, cvText: "Someone else entirely." }, env, NOW);
+    const later = new Date(NOW.getTime() + 60_000);
+    const last = await ingestApplication({ ...base, cvText: "Third try." }, env, later);
+    expect(last).toMatchObject({ applicationId: first.applicationId, status: "run-started", duplicate: true });
+    expect(apps.get(first.applicationId)?.note).toBe(`${RESENT_PREFIX}2026-10-08T12:01Z with other details (LinkedIn none, CV pasted text), the first send is kept`);
+    expect(apps.get(first.applicationId)).toMatchObject({ linkedin_url: PROFILE, cv_text: "Ten years of Go." });
+    expect(create).toHaveBeenCalledOnce();
+  });
+
+  it("does not parse a CV the connector already read (cvNote): the note is stored, no text", async () => {
+    const { env, apps, puts } = makeEnv();
+    const cv = { bytes: tinyPdf("Readable text"), filename: "cv.pdf", contentType: "application/pdf" };
+    const res = await ingestApplication({ ...base, linkedinUrl: PROFILE, cv, cvNote: "PDF has no extractable text (scanned?)" }, env, NOW);
+    expect(res.note).toBe("PDF has no extractable text (scanned?)");
+    expect(apps.get(res.applicationId)).toMatchObject({ cv_text: null, status: "run-started" });
+    expect(puts).toHaveLength(1);
   });
 
   it("an insert race returns the winner's row as a duplicate", async () => {
@@ -142,11 +168,13 @@ describe("ingestApplication", () => {
 
     opts.intakeRunsLastHour = 0;
     const retried = await ingestApplication({ ...base, linkedinUrl: "https://linkedin.com/in/someone-else" }, env, NOW);
-    expect(retried).toMatchObject({ applicationId: first.applicationId, status: "run-started", duplicate: true, note: null });
+    expect(retried).toMatchObject({ applicationId: first.applicationId, status: "run-started", duplicate: true });
     expect(retried.runId).not.toBeNull();
     expect(create).toHaveBeenCalledTimes(1);
+    // The first send's profile starts the run; the other one is only named in the resend note for the operator.
     expect(investigations[0]).toMatchObject({ profile_url: PROFILE, via: "intake", application_id: first.applicationId });
-    expect(apps.get(first.applicationId)).toMatchObject({ status: "run-started", run_id: retried.runId, note: null });
+    expect(retried.note).toBe(`${RESENT_PREFIX}2026-10-08T12:00Z with other details (LinkedIn https://www.linkedin.com/in/someone-else, CV none), the first send is kept`);
+    expect(apps.get(first.applicationId)).toMatchObject({ status: "run-started", run_id: retried.runId, note: retried.note });
   });
 
   it("a capped application pools on the next delivery once its tag is bound to a position", async () => {
@@ -169,7 +197,7 @@ describe("ingestApplication", () => {
     expect(first.note).toBe("intake run cap reached for this hour; subject: Hi; there");
 
     opts.intakeRunsLastHour = 0;
-    const retried = await ingestApplication(base, env, NOW);
+    const retried = await ingestApplication({ ...base, linkedinUrl: PROFILE }, env, NOW);
     expect(retried).toMatchObject({ status: "run-started", note: "subject: Hi; there" });
     expect(apps.get(first.applicationId)).toMatchObject({ status: "run-started", note: "subject: Hi; there" });
   });

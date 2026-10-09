@@ -84,7 +84,7 @@ describe("interviewKit", () => {
     };
     const md = kit({ profile_signals });
     expect(md).toContain("## Profile signals (public accounts)");
-    expect(md).toContain("- The GitHub account was created on 2 Mar 2026. (source: https://api.github.com/users/jnovak)");
+    expect(md).toContain("- The GitHub account was created on 2 Mar 2026. <https://api.github.com/users/jnovak>");
     expect(md).toContain("- Not checked: LinkedIn does not publish");
     expect(md).toContain("- [ ] Walk me through your last pipeline.\n  Notes:\n- [ ] Did you have an earlier GitHub account?\n  Notes:");
     expect(kit()).not.toContain("Profile signals");

@@ -74,9 +74,10 @@ describe("profileSignals", () => {
     expect(r.signals[0]?.text).toBe("The Instagram account was created on 2026-08-14.");
   });
 
-  it("says 'in {year}' when created_at only has a year", () => {
-    const r = run({ facts: [facts("github", { created_at: "2026" })] });
-    expect(r.signals[0]?.text).toBe("The GitHub account was created in 2026.");
+  it("says 'in {year}' when created_at only has a year, counted from 1 January (never younger than it can be)", () => {
+    expect(run({ facts: [facts("github", { created_at: "2026" })] }).signals).toEqual([]);
+    const r = run({ facts: [facts("github", { created_at: "2026" }), facts("linkedin", { earliest_experience_year: 2012 })] });
+    expect(r.signals[0]?.text).toBe("The GitHub account dates from 2026; the confirmed LinkedIn profile lists roles since 2012.");
     expect(r.signals[0]?.ask).toBe("Your GitHub account was created in 2026. Is it your only account there?");
   });
 

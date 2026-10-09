@@ -10,18 +10,32 @@
  * - checkApply: required fields, LinkedIn URL shape, CV formats (PDF / DOCX / TXT by media type or name, .doc only beside
  *   LinkedIn) and the 10 MiB size, pasted CV length, the "LinkedIn or CV" rule (pasted text counts), length caps, and
  *   which field each problem belongs to; checkApplyAll: every problem in one pass, in form order; Czech sentences
- * - cvFileProblem / cvRefusal (a refused pick worded around the file that stays), isCvFile, formatSize, attachedLine
- *   (the done card) and replyOutcome (status code to what the candidate sees, never a rate-limit sentence)
- * - apply-copy: both languages carry the same keys, toLang
+ * - cvFileProblem / cvRefusal (a refused pick names the picked file, and the one that stays; an empty file too),
+ *   pickDropped (several files dropped at once), isCvFile, formatSize, attachedLine (the done card) and replyOutcome
+ *   (status code to what the candidate sees: only 201 is received, never a rate-limit sentence; a CV 400 keeps its field)
+ * - apply-copy: both languages carry the same keys, toLang, the privacy line says whose copy is deleted
  *
  * Design constraints:
  * - Pure Node tests: File objects only, no DOM
  */
 import { describe, expect, it } from "vitest";
 import { CV_MAX, CV_MAX_BYTES } from "@/domain/application";
+import { RETENTION_DAYS } from "@/domain/audit";
 import { CV_MEDIA_TYPE } from "@/domain/cv-kind";
 import { COPY, toLang } from "../apply-copy";
-import { attachedLine, checkApply, checkApplyAll, cvFileProblem, cvRefusal, formatSize, isCvFile, MESSAGES, replyOutcome, type ApplyDraft } from "../apply-fields";
+import {
+  attachedLine,
+  checkApply,
+  checkApplyAll,
+  cvFileProblem,
+  cvRefusal,
+  formatSize,
+  isCvFile,
+  MESSAGES,
+  pickDropped,
+  replyOutcome,
+  type ApplyDraft,
+} from "../apply-fields";
 
 const file = (size = 1000, name = "cv.pdf", type = "application/pdf"): File => new File([new Uint8Array(size)], name, { type });
 const ok: ApplyDraft = { name: "Josef Buryan", email: "josef@mail.test", linkedinUrl: "linkedin.com/in/josef-buryan", cv: null, cvText: "", message: "" };
@@ -110,11 +124,28 @@ describe("cvFileProblem and cvRefusal", () => {
     expect(cvFileProblem(file(10, "photo.png", "image/png"))).toBe("type");
     expect(cvFileProblem(file(CV_MAX_BYTES + 1))).toBe("size");
     expect(cvFileProblem(file(10, "cv.doc", "application/msword"))).toBeNull();
+    expect(cvFileProblem(file(0))).toBe("empty");
   });
 
-  it("words a refusal plainly when nothing is attached and names both files when a good one stays", () => {
-    expect(cvRefusal("type", "photo.png", null)).toBe(MESSAGES.cvType);
-    expect(cvRefusal("size", "big.pdf", null)).toBe(MESSAGES.cvSize);
+  it("refuses an empty file in the form check too, with a sentence", () => {
+    expect(checkApply({ ...ok, cv: file(0) })).toEqual({ field: "cv", message: MESSAGES.cvEmpty });
+    expect(cvRefusal("empty", "cv.pdf", "old.pdf")).toBe("cv.pdf was not added: the file is empty. old.pdf is still attached.");
+  });
+
+  it("of several dropped files takes the first usable one, else the first", () => {
+    const photo = file(10, "photo.png", "image/png");
+    const cv = file(10, "cv.pdf");
+    const letter = file(10, "letter.docx", CV_MEDIA_TYPE.docx);
+    expect(pickDropped([photo, cv, letter])).toBe(cv);
+    expect(pickDropped([photo])).toBe(photo);
+    expect(pickDropped<File>([])).toBeUndefined();
+  });
+
+  it("names the refused file when nothing is attached, and both files when a good one stays", () => {
+    expect(cvRefusal("type", "photo.png")).toBe("photo.png was not added: please use a PDF, Word or text file.");
+    expect(cvRefusal("size", "big.pdf", null)).toBe("big.pdf was not added: it is larger than 10 MB.");
+    expect(cvRefusal("empty", "x.txt")).toBe("x.txt was not added: the file is empty.");
+    expect(cvRefusal("type", "foto.png", null, "cs")).toBe("Soubor foto.png jsme nepřidali: použijte prosím PDF, Word nebo textový soubor.");
     expect(cvRefusal("type", "photo.png", "scan.PDF")).toBe("photo.png was not added: please use a PDF, Word or text file. scan.PDF is still attached.");
     expect(cvRefusal("size", "big.pdf", "scan.PDF")).toBe("big.pdf was not added: it is larger than 10 MB. scan.PDF is still attached.");
     expect(cvRefusal("type", "photo.png", "cv.pdf", "cs")).toContain("cv.pdf zůstává přiložený");
@@ -125,6 +156,15 @@ describe("apply-copy", () => {
   it("has the same keys in English and Czech", () => {
     const keys = (o: object): string[] => Object.entries(o).flatMap(([k, v]) => (typeof v === "object" && v !== null ? keys(v as object).map((s) => `${k}.${s}`) : [k])).sort();
     expect(keys(COPY.cs)).toEqual(keys(COPY.en));
+  });
+
+  it("the privacy line says this service deletes its copy and the employer keeps the application", () => {
+    for (const company of ["Acme s.r.o.", null]) {
+      expect(COPY.en.privacy.line(company)).toContain(`keeps it in its own records; this service deletes its copy after ${String(RETENTION_DAYS)} days.`);
+      expect(COPY.cs.privacy.line(company)).toContain(`uchová si je ve svých záznamech; tato služba svou kopii smaže po ${String(RETENTION_DAYS)} dnech.`);
+    }
+    expect(COPY.en.privacy.line(null)).toMatch(/^The hiring company uses/);
+    expect(COPY.cs.privacy.line(null)).toMatch(/^Firma, která na pozici hledá, použije/);
   });
 
   it("toLang takes cs and falls back to English for anything else", () => {
@@ -173,15 +213,22 @@ describe("attachedLine", () => {
 });
 
 describe("replyOutcome", () => {
-  it("treats 200 and 201 as received", () => {
+  it("treats only 201 as received: the 200 a trapped send gets asks to try again", () => {
     expect(replyOutcome(201, { received: true })).toEqual({ kind: "done" });
-    expect(replyOutcome(200, { received: true })).toEqual({ kind: "done" });
+    expect(replyOutcome(200, { received: true })).toEqual({ kind: "error", message: MESSAGES.server, retry: true });
   });
 
   it("shows the handler's own sentence on 400, a generic one when there is none, and no retry button", () => {
     expect(replyOutcome(400, { error: MESSAGES.cvType })).toEqual({ kind: "error", message: MESSAGES.cvType, retry: false });
     expect(replyOutcome(400, null)).toEqual({ kind: "error", message: "Please check your details and try again.", retry: false });
     expect(replyOutcome(400, { error: 42 })).toEqual({ kind: "error", message: "Please check your details and try again.", retry: false });
+  });
+
+  it("keeps the CV field of a 400 so the sentence shows under the file, and ignores any other field", () => {
+    const scan = MESSAGES.cvUnreadable.pdf;
+    expect(replyOutcome(400, { error: scan, field: "cv" })).toEqual({ kind: "error", message: scan, retry: false, field: "cv" });
+    expect(replyOutcome(400, { error: MESSAGES.name, field: "name" })).toEqual({ kind: "error", message: MESSAGES.name, retry: false });
+    expect(replyOutcome(500, { error: scan, field: "cv" })).toEqual({ kind: "error", message: MESSAGES.server, retry: true });
   });
 
   it("offers Try again on a server error and on any other status (a 429 too), never leaking the body or a limit", () => {

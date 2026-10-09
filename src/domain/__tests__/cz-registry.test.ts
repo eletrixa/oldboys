@@ -46,6 +46,8 @@ describe("registriesFor", () => {
     expect(ids("Software Architect")).not.toContain("cka");
     expect(ids("Senior Solutions Architect")).not.toContain("cka");
     expect(ids("Architekt")).toContain("cka");
+    expect(ids("Správní ředitel")).not.toContain("cak");
+    expect(ids("Právník")).toContain("cak");
     expect(ids("Building architect")).toContain("cka");
   });
 

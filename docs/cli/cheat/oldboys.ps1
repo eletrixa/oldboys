@@ -143,7 +143,9 @@ function global:cheatoldboys {
     Write-Host "    POST /api/intake/form                  " -NoNewline -ForegroundColor Green
     Write-Host "Google Forms via Apps Script (Bearer INTAKE_TOKEN)" -ForegroundColor White
     Write-Host "    POST /api/apply                        " -NoNewline -ForegroundColor Green
-    Write-Host "Hosted page /apply/<tag> (same-origin, honeypot)" -ForegroundColor White
+    Write-Host "Hosted page /apply/<tag> (same-origin, honeypot, fill time)" -ForegroundColor White
+    Write-Host "    APPLY_RATE_LIMIT                       " -NoNewline -ForegroundColor Green
+    Write-Host "wrangler.jsonc ratelimits binding: 5 apply sends per IP a minute" -ForegroundColor White
     Write-Host "    POST /api/intake/startupjobs/<token>   " -NoNewline -ForegroundColor Green
     Write-Host "StartupJobs webhook (test button sends test:true)" -ForegroundColor White
     Write-Host "    GET /api/intake/applications           " -NoNewline -ForegroundColor Green

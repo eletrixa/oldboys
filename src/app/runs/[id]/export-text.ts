@@ -154,7 +154,7 @@ const CS: ExportDict = {
     questions: CS_REPORT.interviewQuestions,
     notes: "Poznámky:",
     codeProfile: "Příspěvky do kódu (veřejný GitHub)",
-    profileSignals: "Signály z profilů (veřejné účty)",
+    profileSignals: "Signály z profilů (veřejné účty, věty anglicky)",
     phone: "Ověřovací hovor (řečeno v hovoru, nejde o veřejný doklad)",
     answer: { answered: "Zodpovězeno", unclear: "Nejasné", declined: "Odmítnuto", no_answer: "Bez odpovědi", not_asked: "Nepoloženo" },
     at: (time) => `v čase ${time}`,

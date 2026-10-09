@@ -37,7 +37,7 @@ export const police: RegistrySource = {
       if (id === undefined || !namesMatch(who, name)) return [];
       const word = lines.find((l) => Object.hasOwn(STATUS, l));
       const status = word === undefined ? null : (STATUS[word] ?? word);
-      return [{ label: `${tidyName(who)}, born ${born ?? "?"} — ${status ?? "on the list"}`, url: `${PAGE}/?id=${id}`, status, born }];
+      return [{ label: `${tidyName(who)}, born ${born ?? "?"} — ${status ?? "on the list"}`, url: `${PAGE}?id=${id}`, status, born }];
     });
     return { hits, total: hits.length, note: null };
   },

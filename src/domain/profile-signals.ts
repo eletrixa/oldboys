@@ -96,7 +96,7 @@ function inUtc(text: string): string {
 }
 
 /** Lenient creation date: a parseable date, else a four-digit year with an optional month. A bare year counts as its last day, never later than now. */
-function parseCreated(raw: string | null, nowMs: number): Created | null {
+function parseCreated(raw: string | null): Created | null {
   if (raw === null) return null;
   const trimmed = raw.trim();
   const bareYear = /^(?:19|20)\d\d$/.test(trimmed);
@@ -105,7 +105,7 @@ function parseCreated(raw: string | null, nowMs: number): Created | null {
   const y = /\b((?:19|20)\d\d)\b/.exec(trimmed);
   if (y?.[1] === undefined) return null;
   const year = Number(y[1]);
-  return { ms: Math.min(Date.UTC(year, 11, 31), nowMs), shown: String(year), text: `in ${String(year)}` };
+  return { ms: Date.UTC(year, 0, 1), shown: String(year), text: `in ${String(year)}` };
 }
 
 const ageDays = (c: Created, nowMs: number): number => (nowMs - c.ms) / DAY_MS;
@@ -128,7 +128,7 @@ export function profileSignals(input: ProfileSignalsInput): ProfileSignals {
 
   for (const f of facts) {
     const name = label(f.platform);
-    const created = parseCreated(f.created_at, nowMs);
+    const created = parseCreated(f.created_at);
     if (created !== null && !Number.isNaN(nowMs)) {
       const age = ageDays(created, nowMs);
       const ask = `Your ${name} account was created ${created.text}. Is it your only account there?`;
@@ -142,7 +142,7 @@ export function profileSignals(input: ProfileSignalsInput): ProfileSignals {
       push("follow-asymmetry", f, `${name}: ${fmtInt(f.followers ?? 0)} followers, follows ${fmtInt(f.following)}.`, null);
     }
     if (f.platform === "linkedin" && f.verified === true) push("linkedin-verified", f, "LinkedIn shows the verified badge on this profile.", null);
-    if (f.platform === "linkedin" && f.connections !== null && f.connections < FEW_CONNECTIONS && longCareer !== null && f.earliest_experience_year !== null) {
+    if (f.platform === "linkedin" && f.connections !== null && f.connections < FEW_CONNECTIONS && f.earliest_experience_year !== null && f.earliest_experience_year <= nowYear - CAREER_YEARS) {
       push("few-connections", f, `LinkedIn: ${fmtInt(f.connections)} connections; roles listed since ${String(f.earliest_experience_year)}.`, null);
     }
   }

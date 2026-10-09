@@ -9,6 +9,7 @@
  * Key responsibilities:
  * - The notice the apply page's privacy line links to, in English or Czech (`?lang=cs`), naming the employer when the tag has one
  * - Honest about the public professional information read for the interview, and about what is never looked for
+ * - Retention says whose copy goes: this service deletes its own after RETENTION_DAYS, the employer keeps its records
  *
  * Design constraints:
  * - Candidate-facing: plain words, no product name, no emoji; retention from RETENTION_DAYS (src/domain/audit.ts)
@@ -59,7 +60,10 @@ const NOTICE: Record<Lang, Notice> = {
         heading: "Why",
         body: "Only to assess your application for this role. The legal basis is the steps you asked for before a possible employment contract (GDPR Art. 6(1)(b)) and our legitimate interest in checking the public professional record you point us to (Art. 6(1)(f)).",
       },
-      { heading: "How long", body: `Everything is deleted from this service ${DAYS} days after we receive it. You can ask for earlier deletion at any time.` },
+      {
+        heading: "How long",
+        body: `This service deletes its copy of everything ${DAYS} days after we receive it. ${company ?? "The company hiring for this role"} keeps your application in its own records. You can ask for earlier deletion at any time.`,
+      },
       {
         heading: "Your rights",
         body: "You can ask to see, correct or delete your data, or object to its use, by replying to any email we send you about this application. You can also complain to the Czech data protection authority, ÚOOÚ (uoou.gov.cz).",
@@ -88,7 +92,10 @@ const NOTICE: Record<Lang, Notice> = {
         heading: "Proč",
         body: "Jen abychom posoudili vaši přihlášku na tuto pozici. Právním základem jsou kroky před případným uzavřením pracovní smlouvy, o které jste požádali (čl. 6 odst. 1 písm. b) GDPR), a náš oprávněný zájem ověřit veřejné profesní údaje, na které nás odkazujete (čl. 6 odst. 1 písm. f)).",
       },
-      { heading: "Jak dlouho", body: `Vše z této služby smažeme ${DAYS} dní poté, co přihlášku přijmeme. O dřívější smazání můžete kdykoli požádat.` },
+      {
+        heading: "Jak dlouho",
+        body: `Tato služba svou kopii všeho smaže ${DAYS} dní poté, co přihlášku přijmeme. ${company ?? "Firma, která na tuto pozici hledá,"} si přihlášku ponechá ve vlastních záznamech. O dřívější smazání můžete kdykoli požádat.`,
+      },
       {
         heading: "Vaše práva",
         body: "Můžete požádat o přístup ke svým údajům, jejich opravu nebo smazání, nebo vznést námitku, a to odpovědí na kterýkoli e-mail, který vám k této přihlášce pošleme. Stížnost můžete podat také u Úřadu pro ochranu osobních údajů (uoou.gov.cz).",

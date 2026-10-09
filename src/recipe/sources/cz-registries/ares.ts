@@ -46,6 +46,7 @@ export const aresPerson: RegistrySource = {
           born: null,
         };
       });
-    return { hits, total: r.data.pocetCelkem ?? hits.length, note: null };
+    // pocetCelkem counts ARES's full-text matches (namesakes, "Jana Nováková" for "Jan Novák"); only the filtered rows are records under the name
+    return { hits, total: hits.length, note: null };
   },
 };

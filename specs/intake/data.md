@@ -61,6 +61,7 @@ export const IntakeInput = z.object({
   cvText: z.string().trim().min(1).max(CV_MAX).optional(),   // CV_MAX = 20000 moves here from run-body.ts (run-body imports it)
   cv: CvFile.optional(),
   coverLetter: z.string().trim().min(1).max(10_000).optional(),
+  cvNote: z.string().max(1000).optional(),                   // the connector read `cv` and found no text: why (the funnel does not parse again)
   note: z.string().max(1000).optional(),
 });
 export type Application = { id, source, externalId, tag: string|null, name.., status, runId: string|null, note: string|null, receivedAt: string };  // row shape, camelCase
@@ -82,5 +83,5 @@ export function cvR2Key(applicationId: string, filename: string): string  // `in
 - IntakeInput rejects an unknown source and a cvText over CV_MAX; lowercases the tag.
 - candidateInput normalises `cz.linkedin.com/in/Josef-Buryan?x=1`, drops `linkedin.com/company/x` with a note, passes cvText through.
 - decideStatus covers all five branches in the stated order (unknown tag wins over incomplete, incomplete wins over capped).
-- safeFilename strips paths and odd characters, caps length, defaults.
+- safeFilename strips paths and odd characters, folds diacritics ("Životopis" -> "Zivotopis"), keeps the extension when the name part is empty (`资料.pdf` -> `cv.pdf`), caps length, defaults.
 - `run-body.ts` still exports `CV_MAX` (re-export) and its existing test passes unchanged.
