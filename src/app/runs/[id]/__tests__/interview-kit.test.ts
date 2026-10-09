@@ -21,6 +21,7 @@ import { describe, expect, it } from "vitest";
 import type { Brief, Claim } from "@/domain/claim";
 import type { CallView } from "../call-panel";
 import { interviewKit, kitFileName } from "../interview-kit";
+import type { ProfileSignals } from "@/domain/profile-signals";
 import type { RunState } from "../state";
 
 const AT = "2026-10-08T21:30:00.000Z";
@@ -74,6 +75,20 @@ const run = (over: Partial<RunState> = {}): RunState => ({
 const kit = (over: Partial<RunState> = {}): string => interviewKit(run(over), AT) ?? "";
 
 describe("interviewKit", () => {
+  it("adds the profile signals section and their asks to the checklist", () => {
+    const profile_signals: ProfileSignals = {
+      signals: [{ id: "young-account", platform: "github", profile_url: "https://github.com/jnovak", text: "The GitHub account was created on 2 Mar 2026.", source_url: "https://api.github.com/users/jnovak", ask: "Did you have an earlier GitHub account?" }],
+      not_checked: ["LinkedIn does not publish the account creation date without login."],
+      checked: ["github"],
+    };
+    const md = kit({ profile_signals });
+    expect(md).toContain("## Profile signals (public accounts)");
+    expect(md).toContain("- The GitHub account was created on 2 Mar 2026. (source: https://api.github.com/users/jnovak)");
+    expect(md).toContain("- Not checked: LinkedIn does not publish");
+    expect(md).toContain("- [ ] Walk me through your last pipeline.\n  Notes:\n- [ ] Did you have an earlier GitHub account?\n  Notes:");
+    expect(kit()).not.toContain("Profile signals");
+  });
+
   it("returns null while there is no brief", () => {
     expect(interviewKit(run({ brief: null }), AT)).toBeNull();
   });

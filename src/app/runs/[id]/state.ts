@@ -3,13 +3,14 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/runs/[id]/state.ts
- * Deps:    src/domain/claim, src/domain/challenge, src/domain/code-profile (type), src/domain/run-cost, src/domain/quote, src/app/intake/intake-rows (types only)
+ * Deps:    src/domain/claim, src/domain/challenge, src/domain/code-profile (type), src/domain/profile-signals (type), src/domain/run-cost, src/domain/quote, src/app/intake/intake-rows (types only)
  * Tested:  src/app/runs/[id]/__tests__/state.test.ts
  *
  * Key responsibilities:
  * - RunState: the GET /api/runs/:id/state contract (incl. position {id, title} | null, organization_name, and intake = the application that started the run, or null;
  *   sources carry fetched_at / expires_at and quote_contexts the saved text around each claim's quote, never whole excerpts;
- *   challenges / challenge_summary = the devil's advocate record, optional for older runs; code_profile = the GitHub deep scrape digest, null or absent without one)
+ *   challenges / challenge_summary = the devil's advocate record, optional for older runs; code_profile = the GitHub deep scrape digest, null or absent without one;
+ *   profile_signals = deterministic sentences about the confirmed public accounts, null or absent for older payloads)
  * - stepRows: map the ledger step + status to the five human progress rows
  * - sortLineup: confirmed first, social platforms before web hits
  * - questionsToAsk: one open profile per platform; roleCriteria: role must-haves (mh-) only
@@ -28,6 +29,7 @@
  */
 import type { Challenge } from "@/domain/challenge";
 import type { CodeProfile } from "@/domain/code-profile";
+import type { ProfileSignals } from "@/domain/profile-signals";
 import type { Brief, BriefSection, Candidate, Claim } from "@/domain/claim";
 import type { ClaimQuoteContext } from "@/domain/quote";
 import type { RunCost } from "@/domain/run-cost";
@@ -68,6 +70,8 @@ export type RunState = {
   challenge_summary?: { checked: number; held: number; moved: number } | null;
   /** GitHub deep scrape digest (technical roles); null or absent otherwise. */
   code_profile?: CodeProfile | null;
+  /** Profile signals (plans/012): sentences about the confirmed public accounts, each with a source; null or absent when the route did not compute them. */
+  profile_signals?: ProfileSignals | null;
   questions: { id: string; text: string; title?: string }[];
   brief: Brief | null;
   /** Reason recorded by the Workflow when status is failed; null otherwise. */

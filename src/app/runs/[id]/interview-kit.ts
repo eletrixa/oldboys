@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/runs/[id]/interview-kit.ts
- * Deps:    src/domain/challenge (type), ./call-panel (CallView, formatAt), ./code-profile-text, ./challenge, ./cv-check, ./export-text (EXPORT_DICT, exportText, toVerifyTexts), ./i18n (Report), ./report-text (tid), ./state (RunState, gap helpers, briefSections, confidenceBand, host)
+ * Deps:    src/domain/challenge (type), ./call-panel (CallView, formatAt), ./code-profile-text, ./profile-signals-text, ./challenge, ./cv-check, ./export-text (EXPORT_DICT, exportText, toVerifyTexts), ./i18n (Report), ./report-text (tid), ./state (RunState, gap helpers, briefSections, confidenceBand, host)
  * Tested:  src/app/runs/[id]/__tests__/interview-kit.test.ts, src/app/runs/[id]/__tests__/export-text.test.ts (Czech kit), src/app/runs/[id]/__tests__/cv-check.test.ts (CV check)
  *
  * Key responsibilities:
@@ -22,6 +22,7 @@
  * - Czech kit (idea #24 follow-up): the same structure with the Czech fixed lines (EXPORT_DICT.cs) and the brief's
  *   translated texts by id (English per missing text); quotes, URLs, names and the headline stay original, one
  *   "(citace v originále)" header line when the kit shows a quote; kit-review.ts parses both languages
+ * - Profile signals (public accounts): the plans/012 sentences with their sources, then the not-checked lines and caveats; their interview questions join the checklist
  * - kitFileName: interview-kit-<run id prefix>.md (-cs.md in Czech), never the candidate's name
  *
  * Design constraints:
@@ -35,6 +36,7 @@ import type { Challenge } from "@/domain/challenge";
 import { type CallView, formatAt, placedCalls } from "./call-panel";
 import { challengeReason, challengesById } from "./challenge";
 import { codeProfileLines } from "./code-profile-text";
+import { askLines, signalLines } from "./profile-signals-text";
 import { cvRows, isCvSection } from "./cv-check";
 import { type ExportText, exportFileName, exportText, toVerifyTexts } from "./export-text";
 import { ENGLISH_REPORT, type Report, type ReportLang } from "./i18n";
@@ -233,12 +235,13 @@ export function interviewKit(state: RunState, generatedAt: string, calls: readon
     ...(sections !== null ? findings(state, sections, kit) : brief.degraded === null ? coverage(state, brief, kit) : []),
     ...section(
       d.kit.questions,
-      brief.interview_questions.flatMap((q, i) => [`- [ ] ${escapeMd(text(tid.interviewQuestion(i), q))}`, `  ${d.kit.notes}`]),
+      [...brief.interview_questions.map((q, i) => text(tid.interviewQuestion(i), q)), ...askLines(state.profile_signals ?? null)].flatMap((q) => [`- [ ] ${escapeMd(q)}`, `  ${d.kit.notes}`]),
     ),
     ...section(t.toVerify, toVerifyLines(state, brief, kit)),
     ...section(t.searched(namesakeOnly(empty)), empty.map((g, i) => gapItem(g, tid.searchedEmpty(i), kit))),
     ...section(t.notSearched, brief.not_searched.map((g, i) => gapItem(g, tid.notSearched(i), kit))),
     ...section(d.kit.codeProfile, codeProfileLines(state.code_profile ?? null).map((l) => (l.startsWith("- ") ? l : `- ${escapeMd(l)}`))),
+    ...section(d.kit.profileSignals, signalLines(state.profile_signals ?? null).map((l) => `- ${escapeMd(l)}`)),
     ...section(d.kit.phone, phoneLines(calls, kit)),
   ];
   const lines = [...header(state, brief, generatedAt, kit), ...body, "---", "", footer.join("  \n")];

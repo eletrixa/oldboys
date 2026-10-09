@@ -8,13 +8,16 @@
  *
  * Key responsibilities:
  * - Request latest tweets for a candidate with platform x and a handle; one Source per tweet plus one author profile Source
+ * - `digest`: merged authors' ProfileFacts (followers, following, created_at, bio, verified, photo), one per handle
  *
  * Design constraints:
  * - Pure: no fetch; the runner performs I/O. Empty `requests()` triggers the step's onEmpty branch
  * - Excerpts go through clip(); malformed payloads parse to []
  */
 import { z } from "zod";
-import type { Collector } from "@/recipe/sources/types";
+import { clipBio, emptyFacts, type ProfileFacts } from "@/domain/profile-facts";
+import { count, digestOf } from "@/recipe/sources/facts";
+import type { Collector, StepContext } from "@/recipe/sources/types";
 import { clip, identityFor } from "@/recipe/sources/types";
 
 const Author = z.object({
@@ -23,6 +26,10 @@ const Author = z.object({
   description: z.string().nullish(),
   followers: z.number().nullish(),
   createdAt: z.string().nullish(),
+  following: z.number().nullish(),
+  profilePicture: z.string().nullish(),
+  isVerified: z.boolean().nullish(),
+  isBlueVerified: z.boolean().nullish(),
 });
 const Tweet = z.object({
   url: z.string(),
@@ -69,4 +76,29 @@ export const x: Collector = {
     };
     return [profile, ...tweets];
   },
+  digest: (payloads, ctx) => factsOf(payloads, ctx),
 };
+
+export function factsOf(payloads: readonly unknown[], ctx: StepContext): ProfileFacts[] | null {
+  const facts = new Map<string, ProfileFacts>();
+  for (const pl of payloads) {
+    const items = z.array(Tweet).safeParse(pl);
+    if (!items.success) continue;
+    for (const a of items.data.flatMap((t) => (t.author ? [t.author] : []))) {
+      const handle = a.userName ?? "";
+      const url = `https://x.com/${handle}`;
+      if (handle === "" || facts.has(handle.toLowerCase()) || identityFor(ctx, url) !== "merged") continue;
+      const f = emptyFacts("x", url, url);
+      f.handle = handle;
+      f.display_name = a.name ?? null;
+      f.bio = clipBio(a.description);
+      f.created_at = a.createdAt ?? null;
+      f.followers = count(a.followers);
+      f.following = count(a.following);
+      f.verified = a.isBlueVerified ?? a.isVerified ?? null;
+      f.photo_url = a.profilePicture ?? null;
+      facts.set(handle.toLowerCase(), f);
+    }
+  }
+  return digestOf([...facts.values()]);
+}

@@ -9,13 +9,16 @@
  * Key responsibilities:
  * - `rest/github`: accepted github candidate -> user + repos; otherwise user search by name
  * - A forked repo's excerpt carries FORK_MARK ("forked repository") so verify can challenge it without a model
+ * - `digest`: the merged user's ProfileFacts (created_at, followers, following, bio, avatar)
  *
  * Design constraints:
  * - Pure: no fetch here; unknown payload shapes parse to []
  * - Unauthenticated API (60 req/h); one to two requests per step
  */
 import { z } from "zod";
-import type { Collector } from "@/recipe/sources/types";
+import { clipBio, emptyFacts, type ProfileFacts } from "@/domain/profile-facts";
+import { count, digestOf } from "@/recipe/sources/facts";
+import type { Collector, StepContext } from "@/recipe/sources/types";
 import { acceptedCandidates, clip, identityFor } from "@/recipe/sources/types";
 
 const User = z.object({
@@ -27,6 +30,8 @@ const User = z.object({
   location: z.string().nullish(),
   public_repos: z.number().optional(),
   followers: z.number().optional(),
+  following: z.number().optional(),
+  avatar_url: z.string().optional(),
   created_at: z.string().optional(),
 });
 const Repo = z.object({
@@ -94,4 +99,23 @@ export const github: Collector = {
     }
     return [];
   },
+  digest: (payloads, ctx) => factsOf(payloads, ctx),
 };
+
+export function factsOf(payloads: readonly unknown[], ctx: StepContext): ProfileFacts[] | null {
+  return digestOf(
+      payloads.flatMap((pl) => {
+        const u = User.safeParse(pl);
+        if (!u.success || identityFor(ctx, u.data.html_url) !== "merged") return [];
+        const f = emptyFacts("github", u.data.html_url, u.data.html_url);
+        f.handle = u.data.login;
+        f.display_name = u.data.name ?? null;
+        f.bio = clipBio(u.data.bio);
+        f.created_at = u.data.created_at ?? null;
+        f.followers = count(u.data.followers);
+        f.following = count(u.data.following);
+        f.photo_url = u.data.avatar_url ?? null;
+        return [f];
+      }),
+    );
+}

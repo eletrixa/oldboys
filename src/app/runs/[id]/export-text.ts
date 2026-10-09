@@ -60,6 +60,7 @@ export type ExportDict = {
     questions: string;
     notes: string;
     codeProfile: string;
+    profileSignals: string;
     phone: string;
     answer: Record<CallAnswerStatus, string>;
     at: (time: string) => string;
@@ -102,6 +103,7 @@ const EN: ExportDict = {
     questions: "Questions for the interview",
     notes: "Notes:",
     codeProfile: "Code contributions (public GitHub)",
+    profileSignals: "Profile signals (public accounts)",
     phone: "Phone verification (said by the candidate, not public evidence)",
     answer: {
       answered: ANSWER_BADGE.answered.label,
@@ -152,6 +154,7 @@ const CS: ExportDict = {
     questions: CS_REPORT.interviewQuestions,
     notes: "Poznámky:",
     codeProfile: "Příspěvky do kódu (veřejný GitHub)",
+    profileSignals: "Signály z profilů (veřejné účty)",
     phone: "Ověřovací hovor (řečeno v hovoru, nejde o veřejný doklad)",
     answer: { answered: "Zodpovězeno", unclear: "Nejasné", declined: "Odmítnuto", no_answer: "Bez odpovědi", not_asked: "Nepoloženo" },
     at: (time) => `v čase ${time}`,
