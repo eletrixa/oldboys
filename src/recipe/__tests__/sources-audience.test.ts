@@ -85,7 +85,7 @@ describe("x", () => {
     expect(x.requests(baseContext(), step)).toEqual([]);
     const r = x.requests(baseContext({ candidates: [cand({ platform: "x", handle: "@jana" })] }), step);
     expect(r).toEqual([
-      { via: "actor", actor: "apidojo/tweet-scraper", input: { twitterHandles: ["jana"], maxItems: 20, sort: "Latest" }, maxTotalChargeUsd: 0.03, timeoutSecs: 90 },
+      { via: "actor", actor: "apidojo/tweet-scraper", input: { twitterHandles: ["jana"], maxItems: 40, sort: "Latest" }, maxTotalChargeUsd: 0.03, timeoutSecs: 90 },
     ]);
   });
   it("parses an author profile plus tweets", () => {

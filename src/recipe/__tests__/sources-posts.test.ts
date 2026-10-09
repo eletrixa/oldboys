@@ -100,6 +100,12 @@ describe("hiring employer company page", () => {
     return baseContext({ candidates: [cand({})], sources: [s] });
   };
 
+  it("puts the About text last in the profile excerpt, nothing when it is missing", () => {
+    const withAbout = linkedinProfile.parse([{ ...harvest[0], about: "  I build data platforms and write about them.  " }], baseContext({ candidates: [cand({})] }), step)[0];
+    expect(withAbout?.excerpt.endsWith("Skills: 0\nI build data platforms and write about them.")).toBe(true);
+    expect(ctxWith("merged").sources[0]?.excerpt.endsWith("Skills: 0")).toBe(true);
+  });
+
   it("writes the current employer's page into the profile excerpt and reads it back from merged profiles only", () => {
     expect(ctxWith("merged").sources[0]?.excerpt).toContain("Employer page: https://www.linkedin.com/company/kiwi-com/");
     expect(employerPages(ctxWith("merged").sources)).toEqual(["https://www.linkedin.com/company/kiwi-com/"]);

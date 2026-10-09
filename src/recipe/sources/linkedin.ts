@@ -10,6 +10,8 @@
  * - Request all candidate LinkedIn URLs in one actor run; parse each profile into one Source
  * - `harvestRequest` / `harvestProfiles`: shared with the seed seam (plans/006), which scrapes the manager's profile URL first
  * - Never scrape a URL twice: profiles already fetched at seed are skipped and reported via `alreadyFetched`
+ * - harvestapi excerpt: name, headline, location, current role, employer page, 5 experience and 3 education lines, skills count,
+ *   then the About text last (the person's own words; the personality read quotes it; clipped with the rest at EXCERPT_MAX)
  * - `experienceCompanies`: company names back out of a profile excerpt's experience lines (employer corroboration)
  * - `employerPages`: the current employer's LinkedIn company URL, written as an "Employer page:" excerpt line by the
  *   harvest parse and read back by the hiring `employer_company` step
@@ -152,9 +154,10 @@ export function harvestProfiles(payload: unknown): HarvestParsed[] {
     const exp = p.experience.slice(0, 5).map((x) => expLine(x.position ?? x.title, x.companyName, x.startDate, x.endDate));
     const edu = p.education.slice(0, 3).map((x) => eduLine(x.schoolName ?? x.school, x.degree, x.fieldOfStudy ?? x.field));
     const location = txt(p.location);
+    const about = (p.about ?? "").trim();
     return {
       url: p.linkedinUrl,
-      excerpt: clip(lines([name, p.headline ?? "", location, current, employerPage, ...exp, ...edu, `Skills: ${String(p.skills.length)}`])),
+      excerpt: clip(lines([name, p.headline ?? "", location, current, employerPage, ...exp, ...edu, `Skills: ${String(p.skills.length)}`, about])),
       raw: p,
       name,
       headline: p.headline?.trim() ?? "",

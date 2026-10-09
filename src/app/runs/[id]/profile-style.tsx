@@ -8,9 +8,9 @@
  *
  * Key responsibilities:
  * - One deck sentence under the heading says it is read only from their own writing, never an assessment of the person
- * - Our read first (3 sentences visible, the rest behind "Show N more"), then the Big Five block with own-words evidence
+ * - Type labels first, right under the deck: the dt names DISC / MBTI, the dd prints only the type and its confidence
+ * - Then our read (3 sentences visible, the rest behind "Show N more"), then the Big Five block with own-words evidence
  * - Trait notes: 4 visible when there is no Big Five read, otherwise all behind "Other trait notes (n)"
- * - Type labels last: the dt names DISC / MBTI, the dd prints only the type and its confidence
  */
 import type { Profile } from "@/domain/claim";
 import { CARD_MUTED, Chevron, KEY, SUMMARY_COMPACT } from "../../ui";
@@ -38,6 +38,24 @@ export function WorkingStyle({ p, ctx }: { p: Profile["personality"]; ctx: Ctx }
         Read only from their own posts, articles and interview answers, never an assessment of the person. No health, political, religious, ethnic or
         sexual-orientation data is used.
       </p>
+      <dl className="mt-4 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 border-b border-divider pb-3 text-sm">
+        {types.length === 0 ? (
+          <>
+            <dt className={NOTE}>Type</dt>
+            <dd className="text-muted">Not enough of their own writing to suggest a type</dd>
+          </>
+        ) : (
+          types.map((v) => (
+            <div key={v.label} className="contents">
+              <dt className={`${NOTE} pt-px`}>{v.label}</dt>
+              <dd className="text-muted">
+                <span className="font-medium text-ink">{v.type}</span>
+                {` · ${v.confidence} confidence`}
+              </dd>
+            </div>
+          ))
+        )}
+      </dl>
       {read.length > 0 && (
         <div className="mt-4">
           <h3 className={KEY}>Our read</h3>
@@ -68,24 +86,6 @@ export function WorkingStyle({ p, ctx }: { p: Profile["personality"]; ctx: Ctx }
             </More>
           </div>
         ))}
-      <dl className="mt-4 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 border-t border-divider pt-3 text-sm">
-        {types.length === 0 ? (
-          <>
-            <dt className={NOTE}>Type</dt>
-            <dd className="text-muted">Not enough of their own writing to suggest a type</dd>
-          </>
-        ) : (
-          types.map((v) => (
-            <div key={v.label} className="contents">
-              <dt className={`${NOTE} pt-px`}>{v.label}</dt>
-              <dd className="text-muted">
-                <span className="text-ink">{v.type}</span>
-                {` · ${v.confidence} confidence`}
-              </dd>
-            </div>
-          ))
-        )}
-      </dl>
       <Dropped n={p.evidence_dropped} />
     </section>
   );

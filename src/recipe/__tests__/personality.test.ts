@@ -69,6 +69,20 @@ describe("gatePersonality", () => {
     expect(p.evidence_dropped).toBe(1);
   });
 
+  it("never counts a retweet as the person's own writing, even from the X collector", () => {
+    const rt: Source = { ...base, id: "s9", actor: "apidojo/tweet-scraper", url: "https://x.com/jd/status/9", excerpt: "RT @someone: Shipping beats planning. Small PRs, every day.\n2024 · 3 likes" };
+    const line = { quote: "Shipping beats planning. Small PRs, every day.", source_id: "s9", kind: "INFERENCE" as const, supports: true, direction: "supports" as const, note: "", strength: "weak" as const };
+    const p = gatePersonality(reading({ evidence: [line, line, line] }), [post, press, rt], merged);
+    expect(p.evidence).toEqual([]);
+    expect([p.disc, p.mbti]).toEqual([null, null]);
+    expect(p.evidence_dropped).toBe(3);
+  });
+
+  it("asks the model for both types whenever own writing is listed; the floor is the gate's", () => {
+    expect(PERSONALITY_PROMPT).toContain("Always give both types when at least three lines of their own writing are listed");
+    expect(PERSONALITY_PROMPT).toContain("confidence low when the writing is thin");
+  });
+
   it("counts evidence_dropped across evidence, traits and big5", () => {
     const traits = [{ text: "Ships in small steps", evidence: [own1, notInExcerpt] }, { text: "Calm", evidence: [thirdPerson] }];
     const big5 = { traits: [big5Trait([own2, own3, thirdPerson])], recommendations: [] };

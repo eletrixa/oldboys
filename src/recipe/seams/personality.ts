@@ -9,8 +9,10 @@
  *
  * Key responsibilities:
  * - PERSONALITY_PROMPT: the shared instruction block (profile.ts call 2 and the rebuild route use the same words)
- * - gatePersonality: keeps only lines whose quote sits in a source the subject wrote (own profile, CV, own posts) or a
- *   first-person quote elsewhere; under MIN_PERSONALITY_LINES the types and Big Five are null and the read says so
+ * - gatePersonality: keeps only lines whose quote sits in a source the subject wrote (own profile, CV, own posts; a
+ *   retweet never counts) or a first-person quote elsewhere; under MIN_PERSONALITY_LINES the types and Big Five are
+ *   null and the read says so. The floor lives here, not in the model: the prompt asks for both types whenever the
+ *   person's own writing is there at all (low confidence when thin), so the gate is the only thing that withholds them
  * - ModelPersonality: the loose model-side schema (strings, no defaults) so the compiled output grammar stays small;
  *   normalisePersonality clamps it into PersonalityReading
  * - personalityCall: one `primary` call over a prompt head (profile seam call 3 and the rebuild route); readPersonality
@@ -25,7 +27,7 @@ import { z } from "zod";
 import { BIG_FIVE, BigFive, type BigFiveDimension, type Candidate, type Profile, ProfileEvidence, ProfileItem, type Source } from "@/domain/claim";
 import type { LlmCall } from "@/domain/ports";
 import { FIRST_PERSON } from "@/recipe/seams/evidence-strength";
-import { OWN_WRITING, rankSources, sourceBlock, validEvidence } from "@/recipe/seams/profile-gate";
+import { isRepost, OWN_WRITING, rankSources, sourceBlock, validEvidence } from "@/recipe/seams/profile-gate";
 
 export const MIN_PERSONALITY_LINES = 3;
 export const TOO_LITTLE_WRITING = "Too little of the person's own writing to estimate a type.";
@@ -105,7 +107,7 @@ export const PERSONALITY_PROMPT = [
   "`personality`: a working-style inference from the person's own public writing only: their LinkedIn profile text, their own posts, their CV, or a first-person quote of theirs in an interview or talk. Never from what others write about them and never from reposts.",
   "Give a DISC type and an MBTI type, each with confidence low/medium/high; `read`: their working style in two or three sentences; `traits`: working-style rows each with 2-3 of their own quotes as evidence; `evidence`: the quotes behind the types.",
   "`big5`: the Big Five as a lean per dimension (openness, conscientiousness, extraversion, agreeableness, neuroticism): `lean` low/balanced/high, `position` 0-100 along the dimension (50 = balanced), `confidence`, `summary` (one or two sentences on what their writing shows) and 2-4 of their own quotes as evidence, kind INFERENCE unless the quote states the point. Then `recommendations`: 3-5 lines on how to work with and interview them given the read, each naming the dimension it follows from.",
-  "Use null types and null big5 when their own writing is too thin.",
+  "Always give both types when at least three lines of their own writing are listed, even from a profile headline, an About text, a CV or a couple of posts: say confidence low when the writing is thin and let the quotes carry the doubt. Leave the types and big5 null only when nothing they wrote themselves is listed, or only reposts (\"RT @\") of other people's words.",
 ].join(" ");
 
 /** Lines from the subject's own writing (own sources or first-person quotes), quote-checked. */
@@ -117,7 +119,7 @@ export function gatePersonality(
   const byId = new Map(sources.map((s) => [s.id, s]));
   const own = (e: ProfileEvidence): boolean => {
     const s = byId.get(e.source_id);
-    return s !== undefined && (OWN_WRITING.has(s.actor) || FIRST_PERSON.test(e.quote));
+    return s !== undefined && !isRepost(s.excerpt) && (OWN_WRITING.has(s.actor) || FIRST_PERSON.test(e.quote));
   };
   const ownLines = (e: readonly ProfileEvidence[]): ProfileEvidence[] => validEvidence(e, sources, merged).filter(own);
   const count = (rows: readonly { evidence: readonly ProfileEvidence[] }[]): number => rows.reduce((n, r) => n + r.evidence.length, 0);

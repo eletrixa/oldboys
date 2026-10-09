@@ -25,8 +25,10 @@ import { PERSONAL_SITE_ACTOR } from "@/recipe/sources/personal-site";
 export const PROMPT_CHARS = 60_000;
 const POST_ACTORS = new Set(["harvestapi/linkedin-profile-posts", "apidojo/tweet-scraper", "rest/bluesky", PERSONAL_SITE_ACTOR]);
 const PRESS_ACTORS = new Set(["apify/google-search-scraper", "apify/website-content-crawler"]);
-/** Sources the subject wrote: own LinkedIn profile, CV, own posts, own website (reposts are unverified, so never confirmed). */
+/** Sources the subject wrote: own LinkedIn profile, CV, own posts, own website (LinkedIn reposts are unverified, so never confirmed). */
 export const OWN_WRITING = new Set([...LINKEDIN_PROFILE_ACTORS, CV_ACTOR, ...POST_ACTORS]);
+/** A retweet as the X collector stores it: someone else's words, never the subject's own writing. */
+export const isRepost = (excerpt: string): boolean => excerpt.startsWith("RT @");
 
 /** Keeps evidence whose quote is inside the excerpt of the source it names (unknown ids fail); sets `strength` in code, never from the model. */
 export function validEvidence(
