@@ -14,6 +14,7 @@ All notable changes to oldboys are documented here. The format follows [Keep a C
 - Czech public registries put the right person first: a record is attributed to the candidate when its city (the LinkedIn location, Czech declensions and the English city name included) or company (a confirmed employer from the LinkedIn experience) matches, shown with the reason ("city: Brno", "company: Snuggs"); records under the same name elsewhere are counted as namesakes and left out of the list and the brief (status "no record at the candidate's city or employers" with the count and the link to repeat the search); without a known city every record stays listed as "namesake possible" as before; the Police wanted list and chambers without a town column never drop a hit
 
 ### Fixed
+- Mobile: the position page and My briefs no longer scroll sideways at 375 px; the hidden table labels (`sr-only`) escaped the tables' scroll boxes, which now are `relative` (candidate pool, results table, My briefs, code profile)
 - Site icon: the Radar mark as `/icon.svg`; every page requested a missing `/favicon.ico` (404 in the console)
 - Candidate pool status: steps without a data source read in plain words ("Reading the profile", "Checking it is the right person", "Reading the sources", "Double-checking facts", "Writing the brief") instead of recipe ids like "seed profile" or "resolve lineup"
 - Position results table: a run whose profile is not read yet shows "Name not read yet" instead of an empty person cell with only the status pill

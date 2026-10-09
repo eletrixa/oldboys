@@ -34,7 +34,7 @@ export function RoleTable({ group }: { group: RoleGroup }): React.JSX.Element {
       <p className={`${CARD_SAGE} text-sm text-muted`}>{DISCLAIMER}</p>
       <div className={CARD_FLUSH}>
         <p className="px-4 pt-3 text-xs text-muted md:hidden">Swipe sideways to see every must-have.</p>
-        <div role="region" aria-label="Evidence per must-have" tabIndex={0} className="overflow-x-auto">
+        <div role="region" aria-label="Evidence per must-have" tabIndex={0} className="relative overflow-x-auto">
           <table className="w-full min-w-[44rem] text-left text-sm">
             <caption className="sr-only">Evidence found per must-have for {group.role}, newest brief first</caption>
             <thead className="bg-canvas text-xs font-semibold tracking-[0.08em] text-muted uppercase">
