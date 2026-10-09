@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/api/runs/[id]/delete/handler.ts
- * Deps:    src/app/api/_lib/{same-origin,session,session-or-bearer,body}, src/domain/deletion, src/workflow/{purge,stop-run}, bindings DB + SOURCES + RESEARCH_RUN + VERIFY_CALL
+ * Deps:    src/app/api/_lib/{run-access,body}, src/domain/deletion, src/workflow/{purge,stop-run}, bindings DB + SOURCES + RESEARCH_RUN + VERIFY_CALL
  * Tested:  src/app/api/runs/[id]/delete/__tests__/handler.test.ts
  *
  * Key responsibilities:
@@ -20,11 +20,8 @@
  * - Never calls ElevenLabs or Twilio; provider-side copies follow the provider's retention (PROVIDER_RETENTION)
  */
 import { parseJsonBody } from "@/app/api/_lib/body";
-import { rejectCrossOrigin } from "@/app/api/_lib/same-origin";
-import { sessionFromRequest } from "@/app/api/_lib/session";
-import { requireSessionOrBearer } from "@/app/api/_lib/session-or-bearer";
+import { authorizeRunAction, findRunOwner, otherOrganization } from "@/app/api/_lib/run-access";
 import { callInProgress, callsWithWorkflow, DeleteBody, type CallRow, type DeletionReceipt } from "@/domain/deletion";
-import type { SessionUser } from "@/domain/session";
 import { deleteRunData } from "@/workflow/purge";
 import { stopRunWork, type RunWorkflows } from "@/workflow/stop-run";
 
@@ -35,13 +32,6 @@ const DEFAULT_DEPS: DeleteRunDeps = { now: () => new Date(), deleteRun: deleteRu
 
 const json = (body: unknown, status = 200): Response => Response.json(body, { status });
 
-/** The session user (same-origin checked) or null for a bearer caller; `denied` when neither may delete. */
-async function authorize(request: Request, env: DeleteRunEnv): Promise<{ user: SessionUser | null; denied: Response | null }> {
-  const user = await sessionFromRequest(request, env.DB);
-  if (user !== null) return { user, denied: rejectCrossOrigin(request) };
-  return { user: null, denied: await requireSessionOrBearer(request, env) };
-}
-
 export async function deleteRunRoute(request: Request, env: DeleteRunEnv, runId: string, deps: DeleteRunDeps = DEFAULT_DEPS): Promise<Response> {
   const res = await handle(request, env, runId, deps);
   res.headers.set("Cache-Control", "no-store");
@@ -49,18 +39,14 @@ export async function deleteRunRoute(request: Request, env: DeleteRunEnv, runId:
 }
 
 async function handle(request: Request, env: DeleteRunEnv, runId: string, deps: DeleteRunDeps): Promise<Response> {
-  const { user, denied } = await authorize(request, env);
+  const { user, denied } = await authorizeRunAction(request, env);
   if (denied !== null) return denied;
   const body = await parseJsonBody(request, DeleteBody);
   if (body.error) return body.error;
 
-  const run = await env.DB.prepare("SELECT id, organization_id FROM investigations WHERE id = ?")
-    .bind(runId)
-    .first<{ id: string; organization_id: string | null }>();
+  const run = await findRunOwner(env.DB, runId);
   if (!run) return json({ error: "run not found" }, 404);
-  if (user !== null && run.organization_id !== null && run.organization_id !== user.organizationId) {
-    return json({ error: "this run belongs to another organization" }, 403);
-  }
+  if (otherOrganization(user, run)) return json({ error: "this run belongs to another organization" }, 403);
 
   const now = deps.now();
   const { results: calls } = await env.DB.prepare("SELECT id, status, provider, approved_at FROM calls WHERE run_id = ?").bind(runId).all<CallRow>();

@@ -8,7 +8,7 @@
  *
  * Key responsibilities:
  * - GET: all intake_tags rows newest first -> { tags }
- * - POST {tag, role? (or positionId, then the position's title), goal?, startupjobsOfferId?}: 201 with the stored tag, 400 invalid body, 404 unknown positionId, 409 when the tag or the StartupJobs offer id exists
+ * - POST {tag, role? (or positionId, then the position's title), goal?, company?, startupjobsOfferId?}: 201 with the stored tag, 400 invalid body, 404 unknown positionId, 409 when the tag or the StartupJobs offer id exists
  * - Login session or bearer RUN_TOKEN on both methods (a recruiter binds tags from the position page without the team token)
  *
  * Design constraints:
@@ -22,7 +22,7 @@ import { parseJsonBody } from "@/app/api/_lib/body";
 import type { TagRow } from "@/app/intake/intake-rows";
 import { duplicateField, TagBody } from "./tag-body";
 
-const COLUMNS = "tag, role, goal, startupjobs_offer_id, position_id, created_at";
+const COLUMNS = "tag, role, goal, company, startupjobs_offer_id, position_id, created_at";
 
 export async function GET(request: Request): Promise<Response> {
   const { env } = getCloudflareContext();
@@ -40,7 +40,7 @@ export async function POST(request: Request): Promise<Response> {
 
   const body = await parseJsonBody(request, TagBody);
   if (body.error) return body.error;
-  const { tag, goal, startupjobsOfferId, positionId } = body.data;
+  const { tag, goal, company, startupjobsOfferId, positionId } = body.data;
 
   let role = body.data.role;
   if (positionId !== undefined) {
@@ -54,13 +54,14 @@ export async function POST(request: Request): Promise<Response> {
     tag,
     role,
     goal,
+    company: company ?? null,
     startupjobs_offer_id: startupjobsOfferId ?? null,
     position_id: positionId ?? null,
     created_at: new Date().toISOString(),
   };
   try {
-    await env.DB.prepare(`INSERT INTO intake_tags (${COLUMNS}) VALUES (?, ?, ?, ?, ?, ?)`)
-      .bind(created.tag, created.role, created.goal, created.startupjobs_offer_id, created.position_id, created.created_at)
+    await env.DB.prepare(`INSERT INTO intake_tags (${COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?)`)
+      .bind(created.tag, created.role, created.goal, created.company, created.startupjobs_offer_id, created.position_id, created.created_at)
       .run();
   } catch (err) {
     const field = duplicateField(err);

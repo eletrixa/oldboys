@@ -7,7 +7,8 @@
  * Tested:  n/a (this is the test)
  */
 import { describe, expect, it } from "vitest";
-import { executeStep } from "@/recipe/runner";
+import { collectWith, executeStep } from "@/recipe/runner";
+import type { Collector } from "@/recipe/sources/types";
 import type { Step } from "@/recipe/step";
 import { baseContext, fakePorts, serpFixture } from "@/recipe/__tests__/fakes";
 
@@ -100,5 +101,46 @@ describe("executeStep collection", () => {
     });
     const out = await executeStep(vr, ctx, ports);
     expect(out.sources[0]?.excerpt).toContain("jednatel od 2019-03-12 (current)");
+  });
+});
+
+describe("collectWith waves and digest", () => {
+  const step: Step = { id: "gh", kind: "actor", actor: "fake/wave" };
+  const fake = (over: Partial<Collector> = {}): Collector => ({
+    id: "fake/wave",
+    requests: () => [{ via: "fetch", url: "https://api.example.com/list" }],
+    parse: (payload) => [{ url: `https://example.com/${JSON.stringify(payload)}`, excerpt: "e", raw: payload }],
+    ...over,
+  });
+  const echoPorts = () => fakePorts({ fetchJson: (url) => Promise.resolve({ url }) });
+
+  it("runs followUp requests after the first wave and passes the first-wave payloads", async () => {
+    const seen: (readonly unknown[])[] = [];
+    const collector = fake({
+      followUp: (_ctx, _step, payloads) => {
+        seen.push(payloads);
+        return [{ via: "fetch", url: "https://api.example.com/stats" }];
+      },
+    });
+    const ports = echoPorts();
+    const out = await collectWith(collector, step, baseContext(), ports);
+    expect(seen).toEqual([[{ url: "https://api.example.com/list" }]]);
+    expect(out.sources).toHaveLength(2);
+    expect(out.empty).toBe(false);
+  });
+
+  it("stores the collector digest in the outcome", async () => {
+    let got: readonly unknown[] = [];
+    const collector = fake({
+      followUp: () => [{ via: "fetch", url: "https://api.example.com/stats" }],
+      digest: (payloads) => {
+        got = payloads;
+        return { n: payloads.length };
+      },
+    });
+    const out = await collectWith(collector, step, baseContext(), echoPorts());
+    expect(out.digest).toEqual({ n: 2 });
+    expect(got).toHaveLength(2);
+    expect((await collectWith(fake({ digest: () => null }), step, baseContext(), echoPorts())).digest).toBeUndefined();
   });
 });

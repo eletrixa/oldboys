@@ -30,8 +30,9 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { intakeLine } from "@/app/intake/intake-rows";
 import type { Candidate, CandidateDecision } from "@/domain/claim";
-import { BTN_SECONDARY, CARD_CONFLICT, Chevron, Eyebrow, LINK, Pill, SUMMARY } from "../../ui";
+import { BTN_SECONDARY, CARD_CONFLICT, Chevron, Eyebrow, LINK, SimulatedPill, SUMMARY } from "../../ui";
 import type { DeletionReceipt } from "@/domain/deletion";
+import { CodeProfileCard } from "./code-profile-card";
 import { DeleteCard, DeletedView } from "./delete-card";
 import { IdentityMapCard } from "./identity-map-card";
 import { type Answer, BriefView, CostLine, ProfileList, ProgressSteps, QuestionCard } from "./parts";
@@ -227,15 +228,14 @@ export function RunView({ id }: { id: string }): React.JSX.Element {
           <p className="text-sm text-muted">This usually takes 2 to 4 minutes. Keep this tab open.</p>
         )}
         {cached && (
-          <Pill tone="neutral" className="w-fit">
-            CACHED · run from {state.created_at.slice(0, 16).replace("T", " ")} UTC
-          </Pill>
+          <SimulatedPill kind="cached" detail={`run from ${state.created_at.slice(0, 16).replace("T", " ")} UTC`} className="w-fit" />
         )}
         <CostLine cost={state.cost} />
       </header>
       {briefFirst ? (
         <>
           <BriefView state={state} />
+          <CodeProfileCard profile={state.code_profile} />
           <details className="group border-t border-divider pt-4">
             <summary className={`${SUMMARY} text-base text-ink`}>
               <Chevron />

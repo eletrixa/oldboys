@@ -8,7 +8,7 @@
  *
  * Key responsibilities:
  * - SiteHeader: Echo r mark + wordmark and the nav the layout passes in (SiteNav, a server component)
- * - SiteFooter: the short honesty line
+ * - SiteFooter: the short honesty line and a link to /validation (what is real, simulated, incomplete)
  * - Both render nothing under /apply/<tag> (plans/008: the candidate sees "received", never the research product)
  *
  * Design constraints:
@@ -53,7 +53,8 @@ export function SiteFooter(): React.JSX.Element | null {
   return (
     <footer className="border-t border-divider">
       <p className="mx-auto max-w-5xl px-4 py-6 text-xs text-muted">
-        Radar prepares evidence and never scores people. A person makes every decision.
+        Radar prepares evidence and never scores people. A person makes every decision.{" "}
+        <Link href="/validation" className="underline decoration-muted/40 underline-offset-4 hover:text-ink">What is real, simulated or unfinished</Link>
       </p>
     </footer>
   );

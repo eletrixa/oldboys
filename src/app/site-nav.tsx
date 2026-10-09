@@ -41,7 +41,7 @@ export function SiteNav({ user }: { user: SessionUser | null }): React.JSX.Eleme
           <NavLink href="/briefs">My briefs</NavLink>
           <span className="hidden px-2 text-sm text-muted md:inline">{user.organizationName}</span>
           <LogoutButton />
-          <Link href="/" className={`${BTN_SECONDARY} hidden sm:inline-flex`}>New brief</Link>
+          <Link href="/briefs/new" className={`${BTN_SECONDARY} hidden sm:inline-flex`}>New brief</Link>
         </>
       )}
     </nav>

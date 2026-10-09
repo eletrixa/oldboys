@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/runs/[id]/interview-kit.ts
- * Deps:    src/domain/run-cost (formatDuration), src/domain/challenge (type), ./call-panel (CallView, formatAt), ./challenge, ./cv-check, ./evidence (retrievedLabel), ./state (RunState, gap helpers, roleCriteria, briefSections, confidenceBand, host)
+ * Deps:    src/domain/run-cost (formatDuration), src/domain/challenge (type), ./call-panel (CallView, formatAt), ./code-profile-text, ./challenge, ./cv-check, ./evidence (retrievedLabel), ./state (RunState, gap helpers, roleCriteria, briefSections, confidenceBand, host)
  * Tested:  src/app/runs/[id]/__tests__/interview-kit.test.ts, src/app/runs/[id]/__tests__/cv-check.test.ts (CV check)
  *
  * Key responsibilities:
@@ -18,6 +18,7 @@
  * - Degraded brief: the "AI summary unavailable" note, role criteria and confirmed evidence links, then the sections
  * - Phone verification: the latest call with answers, one line per question, labelled as said by the candidate
  *   (never public evidence); without calls the kit is unchanged
+ * - Code contributions (public GitHub): the github_deep numbers as a list (codeProfileLines), only when the run has them
  * - kitFileName: interview-kit-<run id prefix>.md, never the candidate's name
  *
  * Design constraints:
@@ -31,6 +32,7 @@ import type { Brief, BriefSection, Claim } from "@/domain/claim";
 import type { Challenge } from "@/domain/challenge";
 import { ANSWER_BADGE, type CallView, formatAt, placedCalls } from "./call-panel";
 import { challengeLine, challengeReason, challengesById, toVerifyItems } from "./challenge";
+import { codeProfileLines } from "./code-profile-text";
 import { CV_EXPLAINER, CV_OUTCOME, cvRows, isCvSection } from "./cv-check";
 import { retrievedLabel } from "./evidence";
 import { type RunState, briefSections, confidenceBand, gapLine, hiringFor, host, roleCriteria, searchedEmpty, searchedTitle } from "./state";
@@ -212,6 +214,7 @@ export function interviewKit(state: RunState, generatedAt: string, calls: readon
     ...section("To verify", toVerifyLines(state, brief)),
     ...section(searchedTitle(empty), empty.map((g) => `- ${escapeMd(gapLine(g))}`)),
     ...section("Not searched, and why", brief.not_searched.map((g) => `- ${escapeMd(gapLine(g))}`)),
+    ...section("Code contributions (public GitHub)", codeProfileLines(state.code_profile ?? null).map((l) => (l.startsWith("- ") ? l : `- ${escapeMd(l)}`))),
     ...section("Phone verification (said by the candidate, not public evidence)", phoneLines(calls)),
     "---",
     "",

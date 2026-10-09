@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/recipe/seams/resolve.ts
- * Deps:    zod, src/domain/corroborate, src/recipe/sources/linkedin (experienceCompanies)
+ * Deps:    zod, src/domain/corroborate, src/domain/cv-check (isCvSource), src/recipe/sources/linkedin (experienceCompanies)
  * Tested:  src/recipe/__tests__/seams.test.ts, src/recipe/__tests__/identity-corroboration.test.ts
  *
  * Key responsibilities:
@@ -14,6 +14,7 @@
  *   "N profiles" titles) and election pages, so one "Yes" can never confirm a page that lists
  *   several people; ranks profile platforms before web and dedupes by profile key BEFORE the 12-draft cap (web hits
  *   capped at 6, each profile platform at 4), so a LinkedIn hit deep in the SERP still becomes a candidate
+ * - The pasted CV (actor "cv", url "cv:<runId>") is the seed's own input, never a lineup hit: pickDrafts skips it
  * - A draft must carry the subject's first name as well as the surname (diacritic-folded, one edit allowed, or a
  *   leading initial "L. Pokorný") in its title line or URL handle, so surname-only namesakes never fill the lineup
  * - Handles come only from known profile URL shapes; Instagram posts/reels and unknown paths on profile platforms
@@ -37,6 +38,7 @@ import { z } from "zod";
 import type { Candidate, Source, SourceIdentity } from "@/domain/claim";
 import type { Ports } from "@/domain/ports";
 import { emptyOutcome } from "@/recipe/runner";
+import { isCvSource } from "@/domain/cv-check";
 import { corroborationReason, employerHit, fold, mentionsPlace, orgTokens, professionalReasons, professionalSnippet, type OrgToken } from "@/domain/corroborate";
 import { experienceCompanies, LINKEDIN_PROFILE_ACTORS } from "@/recipe/sources/linkedin";
 import { clip, platformOf, type StepContext, type StepOutcome } from "@/recipe/sources/types";
@@ -297,7 +299,7 @@ const rankOf = (url: string): number => {
 };
 
 /**
- * Rank (profile platforms first, stable within a platform), drop surname-only namesakes, dedupe by profile key,
+ * Rank (profile platforms first, stable within a platform), drop the pasted CV and surname-only namesakes, dedupe by profile key,
  * cap each platform (web 6, profile platforms 4), THEN cap the total.
  * Duplicate hits for one profile pool their excerpts so the scorer sees every mention of the anchor.
  */
@@ -305,7 +307,7 @@ export function pickDrafts(ctx: Pick<StepContext, "candidates" | "sources" | "su
   const known = new Set(ctx.candidates.flatMap((c) => c.profile_urls.map(profileKey)));
   const name = surname(ctx.subject);
   const eligible = ctx.sources
-    .filter((s) => !isNoise(s.url, s.excerpt) && !known.has(profileKey(s.url)))
+    .filter((s) => !isCvSource(s) && !isNoise(s.url, s.excerpt) && !known.has(profileKey(s.url)))
     .filter((s) => PROFILE_PLATFORMS.has(platformOf(s.url)) || s.excerpt.toLowerCase().includes(name))
     .filter((s) => namesSubject(ctx.subject, s.url, s.excerpt))
     .sort((a, b) => rankOf(a.url) - rankOf(b.url));

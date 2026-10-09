@@ -88,7 +88,8 @@ function makeEnv(opts: { positions?: Pos[]; applications?: App[]; runIds?: strin
       return Promise.all(s.map((x) => x.run()));
     },
   } as unknown as D1Database;
-  const bucket = { delete: (keys: string[]) => (deleted.push(keys), Promise.resolve()) } as unknown as R2Bucket;
+  // head: no cached report translation exists for these runs (idea #24).
+  const bucket = { head: () => Promise.resolve(null), delete: (keys: string[]) => (deleted.push(keys), Promise.resolve()) } as unknown as R2Bucket;
   return { db, bucket, positions, applications, log, selects, deleted, batches };
 }
 

@@ -7,46 +7,84 @@
  * Tested:  n/a (this is the test)
  *
  * Key responsibilities:
- * - Selectable only for pooled rows with a profile or CV; labels; channels; tag suggestion; summary line
+ * - Selectable only for pooled rows with a profile or CV; added order; name/source/status labels; fit and independent count
+ *   only when done; channels; tag suggestion; summary line
  *
  * Design constraints:
  * - No score or rank field exists on a shaped row
  */
 import { describe, expect, it } from "vitest";
 import type { PoolRow } from "@/app/api/positions/handler";
-import { channelsFor, defaultTag, enrichSummary, shapePool } from "../pool-rows";
+import { candidateName, candidateSource, candidateStatus, channelsFor, defaultTag, enrichSummary, shapePool } from "../pool-rows";
 
 const base: PoolRow = {
   id: "a1", source: "manual", name: "Ada", email: null, status: "pooled", run_id: null, note: null,
-  received_at: "2026-10-09T14:05:00.000Z", has_profile: 1, has_cv: 0,
+  received_at: "2026-10-09T14:05:00.000Z", has_profile: 1, has_cv: 0, handle: null, run: null,
 };
+const run = (over: Partial<NonNullable<PoolRow["run"]>> = {}): NonNullable<PoolRow["run"]> => ({
+  status: "running", subject: "", step: "LinkedIn", pct: 25, fit_pct: null, independent: 0, ...over,
+});
 
 describe("shapePool", () => {
-  it("labels a pooled row with a profile as selectable", () => {
+  it("labels a pooled LinkedIn row as selectable with no fit yet", () => {
     const [v] = shapePool([base]);
-    expect(v).toMatchObject({ name: "Ada", source: "Added by hand", status: "In pool", presence: "LinkedIn", selectable: true, runHref: null });
+    expect(v).toMatchObject({ name: "Ada", source: "LinkedIn", status: "Pooled", fit: "—", independent: "—", selectable: true, researching: false, runHref: null });
   });
 
-  it("shows both artefacts and an Unnamed fallback", () => {
-    const [v] = shapePool([{ ...base, name: null, has_cv: 1 }]);
-    expect(v?.name).toBe("Unnamed");
-    expect(v?.presence).toBe("LinkedIn · CV");
+  it("keeps added order (the API sends newest first)", () => {
+    expect(shapePool([{ ...base, id: "new" }, { ...base, id: "old" }]).map((v) => v.id)).toEqual(["old", "new"]);
   });
 
   it("is not selectable without a profile or CV, or once started", () => {
     const rows = shapePool([
-      { ...base, id: "b", has_profile: 0 },
-      { ...base, id: "c", status: "run-started", run_id: "r1" },
       { ...base, id: "d", has_cv: 1 },
+      { ...base, id: "c", status: "run-started", run_id: "r1" },
+      { ...base, id: "b", has_profile: 0 },
     ]);
     expect(rows.map((r) => r.selectable)).toEqual([false, false, true]);
     expect(rows[1]?.runHref).toBe("/runs/r1");
-    expect(rows[0]?.presence).toBe("—");
+  });
+
+  it("shows fit and the independent count only for a done run", () => {
+    const [running, done] = shapePool([
+      { ...base, id: "b", status: "run-started", run_id: "r2", run: run({ status: "done", pct: 100, fit_pct: 67, independent: 4 }) },
+      { ...base, id: "a", status: "run-started", run_id: "r1", run: run({ fit_pct: 50, independent: 3 }) },
+    ]);
+    expect(running).toMatchObject({ fit: "—", independent: "—", researching: true });
+    expect(done).toMatchObject({ fit: "67%", independent: "4", status: "Done", tone: "ok", researching: false });
+  });
+});
+
+describe("candidateName", () => {
+  it("falls back from the application name to the run subject, the LinkedIn handle, then CV candidate", () => {
+    expect(candidateName(base)).toBe("Ada");
+    expect(candidateName({ ...base, name: null, handle: "Ada Lovelace", run: run({ subject: "Ada King" }) })).toBe("Ada King");
+    expect(candidateName({ ...base, name: null, handle: "Ada Lovelace", run: run() })).toBe("Ada Lovelace");
+    expect(candidateName({ ...base, name: null })).toBe("CV candidate");
+  });
+});
+
+describe("candidateSource", () => {
+  it("says Intake for channel rows, else LinkedIn, CV or Pool", () => {
+    expect(candidateSource({ ...base, source: "email" })).toBe("Intake");
+    expect(candidateSource(base)).toBe("LinkedIn");
+    expect(candidateSource({ ...base, has_profile: 0, has_cv: 1 })).toBe("CV");
+    expect(candidateSource({ ...base, has_profile: 0 })).toBe("Pool");
+  });
+});
+
+describe("candidateStatus", () => {
+  it("shows step and progress while researching, and the end states", () => {
+    expect(candidateStatus({ ...base, run: run() })).toEqual({ label: "Researching · LinkedIn · 25%", tone: "unsure", researching: true });
+    expect(candidateStatus({ ...base, run: run({ status: "queued", step: null, pct: 0 }) }).label).toBe("Researching · 0%");
+    expect(candidateStatus({ ...base, run: run({ status: "failed" }) })).toEqual({ label: "Failed", tone: "conflict", researching: false });
+    expect(candidateStatus({ ...base, run: run({ status: "paused" }) }).researching).toBe(true);
+    expect(candidateStatus({ ...base, status: "incomplete" }).label).toBe("Incomplete");
   });
 });
 
 describe("channelsFor", () => {
-  const tag = { tag: "cmo", role: "CMO", goal: "hiring" as const, startupjobs_offer_id: null, created_at: "x", position_id: "p1" };
+  const tag = { tag: "cmo", role: "CMO", goal: "hiring" as const, company: null, startupjobs_offer_id: null, created_at: "x", position_id: "p1" };
   it("lists the four channels", () => {
     expect(channelsFor(tag, "https://oldboys.asajj.cz")).toEqual([
       { label: "Email", value: "jobs+cmo@asajj.cz" },

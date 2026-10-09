@@ -10,15 +10,17 @@
  * - Plans/010: a tag bound to a position and a manual add land as 'pooled' with position_id and start no run;
  *   a duplicate manual add returns the first row; a manual add for an unknown position is unmatched
  * - Cover specs/intake/funnel.md: happy path, CV-only PDF, duplicate and insert race, unknown tag, sender not
- *   allowed (no CV file stored for either), incomplete, capped (and the capped retry), R2 failure leaving the row
- *   at 'received' and its resume on the next delivery after the stale window (linking an already started run)
+ *   allowed (no CV file stored for either), incomplete, capped (the capped retry and the cron's queue pass), a
+ *   failure leaving the row at 'received' marked failed and its immediate resume by the next delivery (one winner
+ *   when two race, CV stored, an already inserted run linked and its Workflow instance created), an unmarked
+ *   'received' row resumed only after the stale window
  *
  * Design constraints:
  * - No module mocks; the fakes match on SQL prefixes and keep state in plain maps
  */
 import { describe, expect, it } from "vitest";
 import { tinyPdf } from "@/domain/__tests__/fixtures/tiny-pdf";
-import { ingestApplication, STALE_RECEIVED_MS } from "../intake";
+import { DELIVERY_FAILED_NOTE, ingestApplication, retryCappedApplications, STALE_RECEIVED_MS } from "../intake";
 import { makeIntakeFakes as makeEnv } from "./fixtures/intake-fakes";
 
 const NOW = new Date("2026-10-08T12:00:00.000Z");
@@ -119,12 +121,12 @@ describe("ingestApplication", () => {
     expect(create).not.toHaveBeenCalled();
   });
 
-  it("an unsupported CV file is stored, noted and leaves the application incomplete", async () => {
+  it("an unreadable CV file is stored, noted and leaves the application incomplete", async () => {
     const { env, puts } = makeEnv();
-    const cv = { bytes: new ArrayBuffer(8), filename: "cv.docx", contentType: "application/vnd.openxmlformats" };
+    const cv = { bytes: new ArrayBuffer(8), filename: "cv.doc", contentType: "application/msword" };
     const res = await ingestApplication({ ...base, cv }, env, NOW);
     expect(res.status).toBe("incomplete");
-    expect(res.note).toContain("unsupported CV format application/vnd.openxmlformats");
+    expect(res.note).toContain("old Word (.doc) file stored, not read");
     expect(puts).toHaveLength(1);
   });
 
@@ -184,16 +186,15 @@ describe("ingestApplication", () => {
     expect((await ingestApplication({ ...base, linkedinUrl: PROFILE }, makeEnv({ intakeRunsLastHour: 10 }).env, NOW)).status).toBe("capped");
   });
 
-  it("an R2 failure propagates and leaves the row at received", async () => {
+  it("an R2 failure propagates and leaves the row at received, marked as a failed delivery", async () => {
     const { env, apps, create } = makeEnv({ r2Error: new Error("R2 down") });
     const cv = { bytes: tinyPdf("Kubernetes"), filename: "cv.pdf", contentType: "application/pdf" };
     await expect(ingestApplication({ ...base, cv }, env, NOW)).rejects.toThrow("R2 down");
-    expect([...apps.values()][0]).toMatchObject({ status: "received" });
-    expect([...apps.values()][0]?.note).toBeUndefined();
+    expect([...apps.values()][0]).toMatchObject({ status: "received", note: DELIVERY_FAILED_NOTE });
     expect(create).not.toHaveBeenCalled();
   });
 
-  it("a row left at received is resumed from the next delivery once it is older than the stale window", async () => {
+  it("a failed delivery is resumed by the very next delivery, seconds later, with the CV stored", async () => {
     const opts: { r2Error?: Error } = { r2Error: new Error("R2 down") };
     const { env, apps, puts, create } = makeEnv(opts);
     const cv = { bytes: tinyPdf("Kubernetes"), filename: "cv.pdf", contentType: "application/pdf" };
@@ -201,32 +202,107 @@ describe("ingestApplication", () => {
     const id = [...apps.keys()][0] ?? "";
     delete opts.r2Error;
 
-    // Seconds later it may still be in flight: nothing happens.
-    const inFlight = await ingestApplication({ ...base, cv }, env, new Date(NOW.getTime() + STALE_RECEIVED_MS - 1));
-    expect(inFlight).toMatchObject({ applicationId: id, status: "received", duplicate: true });
-    expect(create).not.toHaveBeenCalled();
-
-    const resumed = await ingestApplication({ ...base, cv }, env, new Date(NOW.getTime() + STALE_RECEIVED_MS));
+    const resumed = await ingestApplication({ ...base, cv }, env, new Date(NOW.getTime() + 2_000));
     expect(resumed).toMatchObject({ applicationId: id, status: "run-started", duplicate: true, note: null });
     expect(create).toHaveBeenCalledOnce();
     expect(puts.map((p) => p.key)).toEqual([`intake/${id}/cv.pdf`]);
-    expect(apps.get(id)).toMatchObject({ status: "run-started", run_id: resumed.runId, cv_key: `intake/${id}/cv.pdf`, cv_text: "Kubernetes" });
+    expect(apps.get(id)).toMatchObject({ status: "run-started", run_id: resumed.runId, cv_key: `intake/${id}/cv.pdf`, cv_text: "Kubernetes", note: null });
     expect(apps.size).toBe(1);
   });
 
-  it("a resumed row links the run its failed delivery had started instead of starting a second one", async () => {
-    const { env, apps, investigations, create } = makeEnv();
-    create.mockRejectedValueOnce(new Error("workflow create down"));
-    await expect(ingestApplication({ ...base, linkedinUrl: PROFILE }, env, NOW)).rejects.toThrow("workflow create down");
+  it("a resume that fails again is marked again, so the delivery after it still resumes", async () => {
+    const opts: { r2Error?: Error } = { r2Error: new Error("R2 down") };
+    const { env, apps } = makeEnv(opts);
+    const cv = { bytes: tinyPdf("Kubernetes"), filename: "cv.pdf", contentType: "application/pdf" };
+    await expect(ingestApplication({ ...base, cv }, env, NOW)).rejects.toThrow("R2 down");
+    await expect(ingestApplication({ ...base, cv }, env, NOW)).rejects.toThrow("R2 down");
     const id = [...apps.keys()][0] ?? "";
-    expect(investigations).toHaveLength(1);
-    expect(apps.get(id)).toMatchObject({ status: "received" });
+    expect(apps.get(id)).toMatchObject({ status: "received", note: DELIVERY_FAILED_NOTE });
+    delete opts.r2Error;
+    expect((await ingestApplication({ ...base, cv }, env, NOW)).status).toBe("run-started");
+  });
+
+  it("two retries racing on a failed row: one resumes, the other answers like an in-flight duplicate", async () => {
+    const opts: { r2Error?: Error } = { r2Error: new Error("R2 down") };
+    const { env, create } = makeEnv(opts);
+    await expect(ingestApplication({ ...base, linkedinUrl: PROFILE, cv: { bytes: tinyPdf("x"), filename: "cv.pdf", contentType: "application/pdf" } }, env, NOW)).rejects.toThrow();
+    delete opts.r2Error;
+    const [a, b] = await Promise.all([ingestApplication({ ...base, linkedinUrl: PROFILE }, env, NOW), ingestApplication({ ...base, linkedinUrl: PROFILE }, env, NOW)]);
+    expect([a.status, b.status].sort()).toEqual(["received", "run-started"]);
+    expect(create).toHaveBeenCalledOnce();
+  });
+
+  it("an unmarked received row may still be in flight: resumed only once older than the stale window", async () => {
+    const { env, apps, create } = makeEnv();
+    apps.set("in-flight", { id: "in-flight", source: base.source, external_id: base.externalId, tag: "senior-be", status: "received", note: null, run_id: null, linkedin_url: null, received_at: NOW.toISOString() });
+
+    const inFlight = await ingestApplication({ ...base, linkedinUrl: PROFILE }, env, new Date(NOW.getTime() + STALE_RECEIVED_MS - 1));
+    expect(inFlight).toMatchObject({ applicationId: "in-flight", status: "received", duplicate: true });
+    expect(create).not.toHaveBeenCalled();
 
     const resumed = await ingestApplication({ ...base, linkedinUrl: PROFILE }, env, new Date(NOW.getTime() + STALE_RECEIVED_MS));
-    expect(resumed).toMatchObject({ applicationId: id, status: "run-started", runId: investigations[0]?.id, duplicate: true });
+    expect(resumed).toMatchObject({ applicationId: "in-flight", status: "run-started", duplicate: true });
+    expect(create).toHaveBeenCalledOnce();
+  });
+
+  it("a resumed row links the run its failed delivery had inserted, creates its missing Workflow instance and stores the CV", async () => {
+    const { env, apps, investigations, create, puts } = makeEnv();
+    create.mockRejectedValueOnce(new Error("workflow create down"));
+    const cv = { bytes: tinyPdf("Kubernetes"), filename: "cv.pdf", contentType: "application/pdf" };
+    await expect(ingestApplication({ ...base, cv }, env, NOW)).rejects.toThrow("workflow create down");
+    const id = [...apps.keys()][0] ?? "";
+    expect(investigations).toHaveLength(1);
+    expect(apps.get(id)).toMatchObject({ status: "received", note: DELIVERY_FAILED_NOTE });
+
+    const resumed = await ingestApplication({ ...base, cv }, env, NOW);
+    const runId = investigations[0]?.id;
+    expect(resumed).toMatchObject({ applicationId: id, status: "run-started", runId, duplicate: true });
+    expect(investigations).toHaveLength(1);
+    expect(create).toHaveBeenCalledTimes(2);
+    expect(create).toHaveBeenLastCalledWith({ id: runId, params: { runId } });
+    expect(apps.get(id)).toMatchObject({ status: "run-started", run_id: runId, cv_text: "Kubernetes", cv_key: `intake/${id}/cv.pdf` });
+    expect(puts).toHaveLength(2);
+  });
+
+  it("a linked run whose Workflow instance exists is not created twice", async () => {
+    const { env, apps, investigations, create } = makeEnv();
+    const first = await ingestApplication({ ...base, linkedinUrl: PROFILE }, env, NOW);
+    // The row write after startRun was lost: the row is back at received and marked failed.
+    apps.set(first.applicationId, { ...apps.get(first.applicationId), status: "received", run_id: null, note: DELIVERY_FAILED_NOTE });
+
+    const resumed = await ingestApplication({ ...base, linkedinUrl: PROFILE }, env, NOW);
+    expect(resumed).toMatchObject({ status: "run-started", runId: first.runId });
     expect(investigations).toHaveLength(1);
     expect(create).toHaveBeenCalledOnce();
-    expect(apps.get(id)).toMatchObject({ status: "run-started", run_id: investigations[0]?.id });
+  });
+
+  it("the cron's queue pass starts capped applications oldest first while the hour has room, without a new delivery", async () => {
+    const opts = { intakeRunsLastHour: 10 };
+    const { env, apps, investigations } = makeEnv(opts);
+    const older = await ingestApplication({ ...base, externalId: "a", linkedinUrl: PROFILE }, env, NOW);
+    const newer = await ingestApplication({ ...base, externalId: "b", linkedinUrl: "https://www.linkedin.com/in/jana" }, env, new Date(NOW.getTime() + 1_000));
+    expect([older.status, newer.status]).toEqual(["capped", "capped"]);
+
+    expect(await retryCappedApplications(env, NOW)).toBe(0);
+    expect(apps.get(older.applicationId)?.status).toBe("capped");
+
+    opts.intakeRunsLastHour = 0;
+    expect(await retryCappedApplications(env, NOW)).toBe(2);
+    expect(investigations.map((i) => i.application_id)).toEqual([older.applicationId, newer.applicationId]);
+    expect(apps.get(newer.applicationId)).toMatchObject({ status: "run-started", note: null });
+  });
+
+  it("the queue pass skips a capped row whose tag is gone instead of stopping there", async () => {
+    const opts = { intakeRunsLastHour: 10 };
+    const { env, apps } = makeEnv(opts);
+    const orphan = await ingestApplication({ ...base, externalId: "a", linkedinUrl: PROFILE }, env, NOW);
+    const next = await ingestApplication({ ...base, externalId: "b", linkedinUrl: PROFILE }, env, new Date(NOW.getTime() + 1_000));
+    const orphanRow = apps.get(orphan.applicationId);
+    if (orphanRow) orphanRow.tag = "closed-role";
+
+    opts.intakeRunsLastHour = 0;
+    expect(await retryCappedApplications(env, NOW)).toBe(1);
+    expect(apps.get(next.applicationId)?.status).toBe("run-started");
   });
 
   it("an unknown tag or a disallowed sender stores no CV file", async () => {

@@ -3,13 +3,13 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/runs/[id]/state.ts
- * Deps:    src/domain/claim, src/domain/challenge, src/domain/run-cost, src/domain/quote, src/app/intake/intake-rows (types only)
+ * Deps:    src/domain/claim, src/domain/challenge, src/domain/code-profile (type), src/domain/run-cost, src/domain/quote, src/app/intake/intake-rows (types only)
  * Tested:  src/app/runs/[id]/__tests__/state.test.ts
  *
  * Key responsibilities:
  * - RunState: the GET /api/runs/:id/state contract (incl. position {id, title} | null, organization_name, and intake = the application that started the run, or null;
  *   sources carry fetched_at / expires_at and quote_contexts the saved text around each claim's quote, never whole excerpts;
- *   challenges / challenge_summary = the devil's advocate record, optional for older runs)
+ *   challenges / challenge_summary = the devil's advocate record, optional for older runs; code_profile = the GitHub deep scrape digest, null or absent without one)
  * - stepRows: map the ledger step + status to the five human progress rows
  * - sortLineup: confirmed first, social platforms before web hits
  * - questionsToAsk: one open profile per platform; roleCriteria: role must-haves (mh-) only
@@ -19,7 +19,7 @@
  *   interview kit, the ATS note and the reference questions
  * - searchedTitle: "Searched, nothing confirmed" when a gap is namesake-only, else "nothing found"
  * - GAP_LABEL, gapText, gapLine, searchedEmpty: human gap lines (raw request errors turned into plain words), shared by BriefView and the interview kit
- * - briefSections (confidence descending, null for briefs stored before sections), confidenceBand, host
+ * - briefSections (confidence descending, null for briefs stored before sections), isShown (sections worth a card), confidenceBand, host
  * - headerText / firstName: the run page title; "the candidate" until the seed step derived a name (plans/006)
  * - seedHeadline: the headline the seed_profile ledger row recorded
  *
@@ -27,6 +27,7 @@
  * - Pure (types plus the pure platformOf), so both the route handler and client code can use it
  */
 import type { Challenge } from "@/domain/challenge";
+import type { CodeProfile } from "@/domain/code-profile";
 import type { Brief, BriefSection, Candidate, Claim } from "@/domain/claim";
 import type { ClaimQuoteContext } from "@/domain/quote";
 import type { RunCost } from "@/domain/run-cost";
@@ -59,12 +60,14 @@ export type RunState = {
    * fetched_at: when we read the source; expires_at: when the saved excerpt is purged (both ISO; absent in older code paths).
    */
   sources: { id: string; url: string; identity_reason?: string | null; fetched_at?: string | null; expires_at?: string | null }[];
-  /** Saved text around each claim's quote, one per (claim with a quote, source it cites); Art. 9 surroundings are emptied. */
+  /** Saved text around each claim's quote, one per (shown claim with a quote, confirmed source it cites); none touching an Art. 9 topic. */
   quote_contexts?: ClaimQuoteContext[];
   /** Devil's advocate (idea #8): claims that did not hold, with ground and a source-level reason; empty or absent for older runs. */
   challenges?: Challenge[];
   /** How many findings the devil's advocate checked, how many held, how many moved to the interview; null or absent for older runs. */
   challenge_summary?: { checked: number; held: number; moved: number } | null;
+  /** GitHub deep scrape digest (technical roles); null or absent otherwise. */
+  code_profile?: CodeProfile | null;
   questions: { id: string; text: string; title?: string }[];
   brief: Brief | null;
   /** Reason recorded by the Workflow when status is failed; null otherwise. */
@@ -197,7 +200,12 @@ export function seedHeadline(rows: readonly { step: string; ref_json: string | n
 
 /** Gap list heading: "nothing confirmed" once any searched source returned only namesakes, else "nothing found". */
 export function searchedTitle(gaps: readonly { reason: string }[]): string {
-  return gaps.some((g) => g.reason.includes("none confirmed")) ? "Searched, nothing confirmed" : "Searched, nothing found";
+  return namesakeOnly(gaps) ? "Searched, nothing confirmed" : "Searched, nothing found";
+}
+
+/** True once any searched source returned only namesakes (the gap heading then says "nothing confirmed"). */
+export function namesakeOnly(gaps: readonly { reason: string }[]): boolean {
+  return gaps.some((g) => g.reason.includes("none confirmed"));
 }
 
 /** Human labels for recipe step ids that appear in the gap lists. */
@@ -249,6 +257,11 @@ export function briefSections(brief: Brief): BriefSection[] | null {
   const b: unknown = brief;
   if (typeof b !== "object" || b === null || !("sections" in b) || !Array.isArray(b.sections) || b.sections.length === 0) return null;
   return (b.sections as BriefSection[]).toSorted((x, y) => y.confidence - x.confidence);
+}
+
+/** A section with no claims and no sources has nothing to show; a claimless social-presence section lists the profiles. */
+export function isShown(s: BriefSection): boolean {
+  return s.claim_ids.length > 0 || s.source_ids.length > 0;
 }
 
 export type ConfidenceBand = "strong" | "fair" | "weak";

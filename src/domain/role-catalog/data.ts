@@ -8,6 +8,8 @@
  *
  * Key responsibilities:
  * - `DATA`: preselected roles of family "data", aliases in English and Czech
+ * - Code-heavy roles (data engineer, analytics engineer, data scientist, ML/MLOps/AI/NLP/CV engineer, research scientist)
+ *   list `github_deep` right after `github_profile`; the 6-step cap drops the last entry of ML engineer, AI engineer and research scientist
  *
  * Design constraints:
  * - Relative imports only; must-haves are observable from public web evidence, never Art. 9 or personality traits
@@ -27,7 +29,7 @@ export const DATA: RoleTemplate[] = [
       { id: "mh-sql-python", title: "SQL and Python", text: "Shows SQL and Python or Scala code in public repositories or answers", accepted_evidence: ["repo", "Stack Overflow answer", "blog post"] },
       { id: "mh-scale", title: "Scale and reliability", text: "Describes data volumes, SLAs or incident work on a production platform", accepted_evidence: ["talk", "blog post", "job history"] },
     ],
-    sources: { steps: ["github_profile", "linkedin_profile", "stackexchange_profile", "talks_serp", "personal_site_crawl"], sites: ["github.com", "medium.com", "dev.to", "stackoverflow.com"] },
+    sources: { steps: ["github_profile", "github_deep", "linkedin_profile", "stackexchange_profile", "talks_serp", "personal_site_crawl"], sites: ["github.com", "medium.com", "dev.to", "stackoverflow.com"] },
   },
   {
     key: "data-analyst",
@@ -69,7 +71,7 @@ export const DATA: RoleTemplate[] = [
       { id: "mh-quality", title: "Data testing practice", text: "Shows data tests, CI or documentation practice in public code", accepted_evidence: ["repo", "blog post"] },
       { id: "mh-warehouse", title: "Cloud warehouse", text: "Has worked on Snowflake, BigQuery or Redshift in production", accepted_evidence: ["job history", "certification listing"] },
     ],
-    sources: { steps: ["github_profile", "linkedin_profile", "talks_serp", "stackexchange_profile", "personal_site_crawl"], sites: ["github.com", "getdbt.com", "medium.com", "substack.com"] },
+    sources: { steps: ["github_profile", "github_deep", "linkedin_profile", "talks_serp", "stackexchange_profile", "personal_site_crawl"], sites: ["github.com", "getdbt.com", "medium.com", "substack.com"] },
   },
   {
     key: "data-scientist",
@@ -83,7 +85,7 @@ export const DATA: RoleTemplate[] = [
       { id: "mh-production", title: "Models in production", text: "Has shipped a model that a product or business process uses", accepted_evidence: ["job history", "talk", "case study"] },
       { id: "mh-community", title: "Competitions and open work", text: "Has ranked in competitions or published open datasets and code", accepted_evidence: ["competition ranking", "repo", "dataset listing"] },
     ],
-    sources: { steps: ["github_profile", "openalex_author", "huggingface_profile", "linkedin_profile", "talks_serp"], sites: ["kaggle.com", "github.com", "scholar.google.com", "medium.com"] },
+    sources: { steps: ["github_profile", "github_deep", "openalex_author", "huggingface_profile", "linkedin_profile", "talks_serp"], sites: ["kaggle.com", "github.com", "scholar.google.com", "medium.com"] },
   },
   {
     key: "machine-learning-engineer",
@@ -97,7 +99,7 @@ export const DATA: RoleTemplate[] = [
       { id: "mh-opensource", title: "Open-source ML work", text: "Contributes to open-source ML libraries or released models", accepted_evidence: ["repo", "pull request", "model card"] },
       { id: "mh-eval", title: "Evaluation rigor", text: "Documents evaluation, benchmarks or ablations for models built", accepted_evidence: ["paper", "blog post", "model card"] },
     ],
-    sources: { steps: ["github_profile", "huggingface_profile", "openalex_author", "linkedin_profile", "talks_serp", "stackexchange_profile"], sites: ["github.com", "huggingface.co", "kaggle.com", "paperswithcode.com", "arxiv.org"] },
+    sources: { steps: ["github_profile", "github_deep", "huggingface_profile", "openalex_author", "linkedin_profile", "talks_serp"], sites: ["github.com", "huggingface.co", "kaggle.com", "paperswithcode.com", "arxiv.org"] },
   },
   {
     key: "mlops-engineer",
@@ -111,7 +113,7 @@ export const DATA: RoleTemplate[] = [
       { id: "mh-monitoring", title: "Model monitoring", text: "Describes monitoring, drift detection or model registry practice", accepted_evidence: ["talk", "blog post", "repo"] },
       { id: "mh-ci", title: "CI/CD for models", text: "Has automated testing and release of models in CI/CD", accepted_evidence: ["repo", "talk", "job history"] },
     ],
-    sources: { steps: ["github_profile", "linkedin_profile", "talks_serp", "stackexchange_profile", "personal_site_crawl"], sites: ["github.com", "mlops.community", "medium.com", "huggingface.co"] },
+    sources: { steps: ["github_profile", "github_deep", "linkedin_profile", "talks_serp", "stackexchange_profile", "personal_site_crawl"], sites: ["github.com", "mlops.community", "medium.com", "huggingface.co"] },
   },
   {
     key: "ai-engineer",
@@ -125,7 +127,7 @@ export const DATA: RoleTemplate[] = [
       { id: "mh-evals", title: "Evals and guardrails", text: "Documents evaluation, testing or guardrails for LLM output", accepted_evidence: ["repo", "blog post", "talk"] },
       { id: "mh-opensource", title: "Open-source AI work", text: "Contributes to open-source AI tooling or published models", accepted_evidence: ["repo", "pull request", "model card"] },
     ],
-    sources: { steps: ["github_profile", "huggingface_profile", "x_profile", "linkedin_profile", "talks_serp", "personal_site_crawl"], sites: ["github.com", "huggingface.co", "arxiv.org", "substack.com", "producthunt.com"] },
+    sources: { steps: ["github_profile", "github_deep", "huggingface_profile", "x_profile", "linkedin_profile", "talks_serp"], sites: ["github.com", "huggingface.co", "arxiv.org", "substack.com", "producthunt.com"] },
   },
   {
     key: "research-scientist-ml",
@@ -139,7 +141,7 @@ export const DATA: RoleTemplate[] = [
       { id: "mh-code", title: "Reproducible code", text: "Releases code, models or datasets alongside papers", accepted_evidence: ["repo", "model card", "dataset listing"] },
       { id: "mh-affiliation", title: "Research affiliation", text: "Has a documented lab, university or industry research affiliation", accepted_evidence: ["institution page", "orcid record", "paper"] },
     ],
-    sources: { steps: ["openalex_author", "orcid_search", "github_profile", "huggingface_profile", "talks_serp", "linkedin_profile"], sites: ["arxiv.org", "scholar.google.com", "openreview.net", "paperswithcode.com", "github.com"] },
+    sources: { steps: ["openalex_author", "orcid_search", "github_profile", "github_deep", "huggingface_profile", "talks_serp"], sites: ["arxiv.org", "scholar.google.com", "openreview.net", "paperswithcode.com", "github.com"] },
   },
   {
     key: "nlp-engineer",
@@ -153,7 +155,7 @@ export const DATA: RoleTemplate[] = [
       { id: "mh-languages", title: "Multilingual or Czech work", text: "Has worked with non-English or low-resource language data", accepted_evidence: ["paper", "dataset listing", "repo"] },
       { id: "mh-publications", title: "Research output", text: "Has papers or shared-task results in NLP venues", accepted_evidence: ["paper", "competition ranking", "conference listing"] },
     ],
-    sources: { steps: ["huggingface_profile", "github_profile", "openalex_author", "linkedin_profile", "talks_serp"], sites: ["huggingface.co", "github.com", "aclanthology.org", "arxiv.org", "paperswithcode.com"] },
+    sources: { steps: ["huggingface_profile", "github_profile", "github_deep", "openalex_author", "linkedin_profile", "talks_serp"], sites: ["huggingface.co", "github.com", "aclanthology.org", "arxiv.org", "paperswithcode.com"] },
   },
   {
     key: "computer-vision-engineer",
@@ -167,7 +169,7 @@ export const DATA: RoleTemplate[] = [
       { id: "mh-datasets", title: "Data and annotation", text: "Has built or released datasets, or ranked in vision benchmarks", accepted_evidence: ["dataset listing", "competition ranking", "paper"] },
       { id: "mh-frameworks", title: "Vision frameworks", text: "Uses OpenCV, PyTorch or similar in public projects", accepted_evidence: ["repo", "notebook", "pull request"] },
     ],
-    sources: { steps: ["github_profile", "huggingface_profile", "openalex_author", "linkedin_profile", "talks_serp"], sites: ["github.com", "paperswithcode.com", "kaggle.com", "arxiv.org", "huggingface.co"] },
+    sources: { steps: ["github_profile", "github_deep", "huggingface_profile", "openalex_author", "linkedin_profile", "talks_serp"], sites: ["github.com", "paperswithcode.com", "kaggle.com", "arxiv.org", "huggingface.co"] },
   },
   {
     key: "data-architect",

@@ -15,7 +15,7 @@ POST /api/intake/startupjobs/<token>  (StartupJobs webhook)                     
 - Idempotent per `(source, external_id)`: sending the same application twice returns the first row and starts no second run.
 - Spend brakes: known tag required, `INTAKE_PER_HOUR_CAP` (default 10) intake runs per hour, on top of the global `RUNS_PER_HOUR_CAP` (20) and the per-run budget of $0.50.
 - The candidate never learns a run exists. The apply page and the webhook answer "received"; run ids appear only on `/intake` and in operator routes.
-- Statuses: `received` (inserted, not decided; stays here only when something threw, and the next delivery of the same source after 5 minutes picks it up) -> `run-started` | `unmatched` (unknown or missing tag, sender not allowed) | `incomplete` (no LinkedIn URL and no readable CV text) | `capped`. The `note` column says why.
+- Statuses: `received` (inserted, not decided; stays here only when something threw: the row's note then says "delivery failed after it was stored; the next delivery resumes it", and the next delivery of the same source resumes it at once; an unmarked one after 5 minutes) -> `run-started` | `unmatched` (unknown or missing tag, sender not allowed) | `incomplete` (no LinkedIn URL and no readable CV text) | `capped`. The `note` column says why.
 - Raw mail is not kept. Only the CV file (R2 `intake/<applicationId>/<filename>`, written only for a known tag and an allowed sender, purged with the other raw data) and the extracted text are stored.
 - Public data only, outreach drafted never sent, no Art. 9 inference: the brief's hard rules apply to intake runs unchanged.
 
@@ -25,7 +25,7 @@ POST /api/intake/startupjobs/<token>  (StartupJobs webhook)                     
 
 | Var | Default | Meaning |
 |---|---|---|
-| `INTAKE_PER_HOUR_CAP` | `"10"` | Max runs started from applications per rolling hour |
+| `INTAKE_PER_HOUR_CAP` | `"10"` | Max runs started from applications per rolling hour; over it the application is stored `capped` and the quarter-hour cron starts it later |
 | `INTAKE_FORWARD_TO` | `"robert@soulfire.cz"` | Verified Email Routing destination that gets a copy of every inbound mail, including Gmail's forwarding confirmation. Empty = no copy. |
 | `INTAKE_FROM_ALLOW` | `""` | Comma list of sender domains or addresses allowed to start runs by email. Empty = any sender. Leave empty until real Gmail/Seznam/Jobs.cz mails have shown which envelope sender they carry; the tag is the main brake. |
 
@@ -214,7 +214,7 @@ The endpoint answers 201 `{applicationId, status}` or, for a repeated response i
 
 ## Door 3: hosted apply page
 
-`https://oldboys.asajj.cz/apply/<tag>` (404 for an unknown tag). Public, candidate-facing, no mention of research. Fields: full name, email, LinkedIn URL or CV PDF (up to 10 MB, one of the two), optional message, a hidden honeypot. One application per email per position: a resubmit is a duplicate. The page says "Received" in every case except the hourly cap, where it asks to try again in an hour. This is the URL for LinkedIn "external website", the Jobs.cz ad text and StartupJobs ad text.
+`https://oldboys.asajj.cz/apply/<tag>` (404 for an unknown tag). Public, candidate-facing, no mention of research. Fields: full name, email, LinkedIn URL and/or CV (one is enough), optional message, a hidden honeypot. Title and link preview say "Apply: <role> at <company>" (company from the tag's optional `company`, set in the `/intake` tag form); `?lang=cs` gives the Czech page for the Jobs.cz ad. Under the button: who uses the data, the 7-day deletion and a link to `/apply/<tag>/privacy`. The CV is a PDF, Word `.docx` or `.txt` file up to 10 MB, picked or dropped on one zone; an older `.doc` is kept but not read, so it needs LinkedIn beside it; images are refused on the spot with "Please attach your CV as a PDF, Word or text file.". Fallback: "No file at hand? Paste your CV text" swaps the zone for a textarea (up to 20,000 characters) that is sent as `cvText`; a file wins if both arrive. Text is read from PDF (`unpdf`), DOCX (`mammoth`) and TXT; a file without readable text (a phone scan) is answered on the spot with "We could not read any text in that PDF. Please add your LinkedIn profile or paste the text of your CV." unless a LinkedIn URL came with it (then it is stored and noted). The upload shows progress, a network error or 5xx offers "Try again" with the form still filled, and the done card says "Received. We'll reply to <email>." with what was attached. One application per email per position: a resubmit is a duplicate. The page says "Received" only once the application is stored (a capped one too: the cron starts it later); a send that failed after storing marks the row, and Try again resumes it at once; while an earlier send is still being stored it asks to try again. All invalid fields are marked at once, and a double tap sends once. This is the URL for LinkedIn "external website", the Jobs.cz ad text and StartupJobs ad text.
 
 ## Door 4: StartupJobs webhook
 
@@ -312,7 +312,8 @@ Still manual, per section: Gmail filter and Seznam rule on the mailbox that rece
 | Apps Script execution failed | Any non-200/201 answer throws | Fix the cause, run `resendAll` (duplicates are ignored) |
 | Apply endpoint 403 | Request lacks same-origin `Origin` / `Sec-Fetch-Site`, or comes from another site | Use the hosted page, or add the two headers for curl |
 | Apply endpoint 200 `{received:true}` but no row | Honeypot `website` was filled (bot) | Expected; a real browser leaves it empty |
-| Apply endpoint 429 | `INTAKE_PER_HOUR_CAP` reached | Wait an hour or raise the var and deploy; see `capped` below |
+| Apply endpoint 503 | An earlier send of the same application is still being stored, or a racing retry won the resume | Nothing: the candidate's Try again gets 201 once it is stored |
+| Apply page 500 under `next dev` | `next dev` has no Workflow binding (`env.RESEARCH_RUN.create` is undefined), so every run start throws | Expected locally; to reach `run-started` run `pnpm exec opennextjs-cloudflare build` then `pnpm exec wrangler dev --port <port>` (no hot reload). Repeated local QA hits the hourly cap: `UPDATE investigations SET created_at='2026-01-01T00:00:00.000Z' WHERE via='intake'` on the local D1 |
 | `/apply/<tag>` 404 | Tag not in `intake_tags` or invalid | Create the tag |
 | StartupJobs webhook deleted by StartupJobs | The URL once answered something other than 200/201/202/204/422 (wrong token gives 404) | Re-enter the correct URL in the offer; check the token |
 | Webhook 503 | `STARTUPJOBS_WEBHOOK_TOKEN` not set | `wrangler secret put STARTUPJOBS_WEBHOOK_TOKEN` |
@@ -325,7 +326,7 @@ Still manual, per section: Gmail filter and Seznam rule on the mailbox that rece
 | `incomplete`, note "unsupported CV format" | DOCX or other format (stored in R2, not parsed) | Same as above |
 | `incomplete`, note "cv download failed <status>" | StartupJobs file URL needs auth or expired | Set `STARTUPJOBS_TOKEN`; or fetch the file from the application's admin page |
 | `incomplete` for Jobs.cz mails | The notification links the CV instead of attaching it | Put the apply page link in the ad; capture a real mail into the fixture |
-| `capped` | `INTAKE_PER_HOUR_CAP` reached when the application arrived | Wait for the hour to pass and deliver the same application again (candidate resubmits the apply page, Apps Script re-POSTs the response, the mail is forwarded again): a `capped` row is the one duplicate that is re-decided and starts its run when there is room. Or raise the cap |
+| `capped` | `INTAKE_PER_HOUR_CAP` reached when the application arrived | Nothing: the `*/15 * * * *` cron re-decides capped rows oldest first and starts their runs once the hour has room (a re-delivery does the same at once). Raise the cap if the queue grows |
 | `received` that never moves | R2, D1 or Workflow create threw after the insert | `wrangler tail oldboys`, fix the cause, then re-send the source (forward the mail again, `resendAll` in Apps Script, resubmit the apply page, re-POST the StartupJobs dead letter): a `received` row older than 5 minutes is processed again from the new delivery, and a run the failed attempt had already started is linked, not started twice |
 | No row for a sent mail | Mail never reached the Worker: wrong address, recipient rejected, destination or rule disabled, over 10 MiB | Email Routing Activity log; rule `jobs@` and catch-all point to Worker `oldboys`; recipient must be `jobs@` or `jobs+<tag>@` |
 | Gmail "forwarding address" confirmation never arrives | `INTAKE_FORWARD_TO` was emptied, or the destination was removed in Email Routing | Restore the var and deploy, check Destination addresses shows `robert@soulfire.cz` verified, resend the confirmation |

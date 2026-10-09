@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/adapters/d1.ts
- * Deps:    D1Database, R2Bucket (bindings), zod, src/domain/cv-check, src/domain/role-catalog (role_templates rows)
+ * Deps:    D1Database, R2Bucket (bindings), zod, src/domain/cv-check, src/domain/role-catalog (role_templates rows), src/domain/position (FAMILIES), src/recipe/seams/position-extract (familyOf)
  * Tested:  n/a (Workers bindings; exercised by `pnpm preview` runs)
  *
  * Key responsibilities:
@@ -22,6 +22,8 @@
  */
 import { type RoleTemplate, type RoleTemplateRow, templateFromRow } from "@/domain/role-catalog";
 import { Brief, Candidate, CandidateDecision, Claim, Gap, LedgerEntry, Source } from "@/domain/claim";
+import { FAMILIES, type Family } from "@/domain/position";
+import { familyOf } from "@/recipe/seams/position-extract";
 import type { LedgerAppend, SourceStore } from "@/domain/ports";
 import { headlineOrgs } from "@/domain/corroborate";
 import { withCvQuestion } from "@/domain/cv-check";
@@ -103,10 +105,17 @@ export async function loadRoleTemplates(db: D1Database): Promise<RoleTemplate[]>
   return results.flatMap((r) => templateFromRow(r) ?? []);
 }
 
+/** The matched template's family when valid, else the role title's family, else null. */
+function roleFamilyOf(templateFamily: unknown, role: unknown): Family | null {
+  const known = FAMILIES.find((f) => f === templateFamily);
+  if (known !== undefined) return known;
+  return typeof role === "string" && role !== "" ? familyOf(role) : null;
+}
+
 export async function loadContext(db: D1Database, runId: string, baseQuestions: readonly Question[]): Promise<StepContext> {
   const inv = await db
     .prepare(
-      "SELECT i.subject, i.anchor, i.goal, i.role, i.questions_json, i.budget_usd, i.budget_calls, t.sources_json FROM investigations i LEFT JOIN role_templates t ON t.key = i.role_template WHERE i.id = ?",
+      "SELECT i.subject, i.anchor, i.goal, i.role, i.questions_json, i.budget_usd, i.budget_calls, t.sources_json, t.family FROM investigations i LEFT JOIN role_templates t ON t.key = i.role_template WHERE i.id = ?",
     )
     .bind(runId)
     .first<Row>();
@@ -127,6 +136,7 @@ export async function loadContext(db: D1Database, runId: string, baseQuestions: 
     anchor: String(inv.anchor),
     goal: inv.goal as StepContext["goal"],
     role: typeof inv.role === "string" ? inv.role : null,
+    roleFamily: roleFamilyOf(inv.family, inv.role),
     roleSites: stringList(json<{ sites?: unknown }>(inv.sources_json, {}).sites),
     questions: withCvQuestion(String(inv.goal), [...baseQuestions, ...extra], sources),
     candidates: cands.results.map((r) =>

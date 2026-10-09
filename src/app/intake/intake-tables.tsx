@@ -9,7 +9,7 @@
  * Key responsibilities:
  * - ApplicationsTable: received, tag, source, name (email under it), status badge, run link, truncated note (full text in the title);
  *   the empty state names /apply/<tag> and jobs+<tag>@asajj.cz
- * - TagsTable: tag, role, goal, StartupJobs offer id, created date
+ * - TagsTable: tag, role, company, goal, StartupJobs offer id, created date
  *
  * Design constraints:
  * - Presentational: rows arrive shaped, nothing is fetched here
@@ -85,6 +85,7 @@ export function TagsTable({ tags }: { tags: TagRow[] }): React.JSX.Element {
           <tr>
             <th scope="col" className={TH}>Tag</th>
             <th scope="col" className={TH}>Role</th>
+            <th scope="col" className={TH}>Company</th>
             <th scope="col" className={TH}>Goal</th>
             <th scope="col" className={TH}>StartupJobs offer</th>
             <th scope="col" className={TH}>Created</th>
@@ -95,6 +96,7 @@ export function TagsTable({ tags }: { tags: TagRow[] }): React.JSX.Element {
             <tr key={t.tag}>
               <th scope="row" className="px-3 py-2 font-medium">{t.tag}</th>
               <td className="px-3 py-2">{t.role}</td>
+              <td className="px-3 py-2 text-muted">{t.company ?? "—"}</td>
               <td className="px-3 py-2 text-muted">{t.goal}</td>
               <td className="px-3 py-2 text-muted">{t.startupjobs_offer_id ?? "—"}</td>
               <td className="whitespace-nowrap px-3 py-2 text-muted">{formatReceived(t.created_at).slice(0, 10)}</td>

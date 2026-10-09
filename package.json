@@ -17,6 +17,7 @@
     "db:migrate:local": "wrangler d1 migrations apply oldboys --local",
     "db:migrate:remote": "wrangler d1 migrations apply oldboys --remote",
     "roles:sql": "node scripts/role-catalog-sql.mjs",
+    "eval": "node scripts/eval.mjs",
     "check": "pnpm typecheck && pnpm lint && pnpm test && pnpm --filter oldboys-extension check",
     "hooks:install": "git config core.hooksPath .githooks",
     "ext:build": "pnpm --filter oldboys-extension build && pnpm --filter oldboys-extension build:firefox"
@@ -26,6 +27,7 @@
     "@opennextjs/cloudflare": "^1.20.9",
     "ai": "^7.0.130",
     "apify-client": "^2.25.0",
+    "mammoth": "^1.13.0",
     "next": "16.4.0",
     "postal-mime": "^4.0.5",
     "react": "^19.3.0",

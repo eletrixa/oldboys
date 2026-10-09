@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/workflow/ingest-position.ts
- * Deps:    D1Database, R2Bucket (passed in), src/recipe/seams/{posting-plan,posting-parse,posting-jobscz-widget,posting-strip,position-extract}, src/domain/audit (RETENTION_DAYS), src/domain/position (errorMessage, fallbackMustHaves), src/adapters/fetch (UA, TIMEOUT_MS)
+ * Deps:    D1Database, R2Bucket (passed in), src/recipe/seams/{posting-plan,posting-parse,posting-jobscz-widget,posting-strip,position-extract}, src/domain/audit (RETENTION_DAYS), src/domain/position (errorMessage, fallbackMustHaves), src/domain/role-catalog (ROLE_CATALOG), src/adapters/fetch (UA, TIMEOUT_MS)
  * Tested:  src/workflow/__tests__/ingest-position.test.ts
  *
  * Key responsibilities:
@@ -25,7 +25,7 @@ import { RETENTION_DAYS } from "@/domain/audit";
 import type { Ports } from "@/domain/ports";
 import { errorMessage, fallbackMustHaves } from "@/domain/position";
 import { ROLE_CATALOG } from "@/domain/role-catalog";
-import { extractPosition, familyOf } from "@/recipe/seams/position-extract";
+import { type ExtractedPosition, extractPosition, familyOf } from "@/recipe/seams/position-extract";
 import { fetchJobsCzWidget } from "@/recipe/seams/posting-jobscz-widget";
 import { parsePosting, type ParsedPosting } from "@/recipe/seams/posting-parse";
 import { type PostingMethod, postingFetchPlan } from "@/recipe/seams/posting-plan";
@@ -106,7 +106,7 @@ async function resolveText(fetchFn: typeof fetch, plan: ReturnType<typeof postin
 type Hint = { title?: string; company?: string; location?: string };
 
 /** One capped LLM extract; manual entries and texts over the cap get the generic must-haves without a call. */
-async function extractOrGeneric(deps: IngestDeps, method: PostingMethod, text: string, hint: Hint, notes: string[]): ReturnType<typeof extractPosition> {
+async function extractOrGeneric(deps: IngestDeps, method: PostingMethod, text: string, hint: Hint, notes: string[]): Promise<Omit<ExtractedPosition, "extraction"> & { extraction: ExtractedPosition["extraction"] | "edited" }> {
   if (method === "manual") {
     const title = hint.title ?? "";
     // A role-catalog title (the New brief picker) brings its curated must-haves; those count as hand-made, not generic.

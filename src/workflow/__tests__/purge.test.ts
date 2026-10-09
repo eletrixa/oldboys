@@ -7,7 +7,8 @@
  * Tested:  n/a (this is the test file)
  *
  * Key responsibilities:
- * - deleteRunData removes every R2 object and row of one run (other runs untouched) and counts what it removed
+ * - deleteRunData removes every R2 object and row of one run (other runs untouched) and counts what it removed,
+ *   including the cached Czech translation of the brief (idea #24) when one exists
  * - Expired runs lose their R2 objects (sources, call results, intake CVs) and child rows, applications before the
  *   run row; applications without a run expire from received_at; newer data is untouched; empty purge terminates
  *
@@ -36,6 +37,8 @@ type Seed = {
   applications?: Application[];
   children?: Child[];
   webhookEvents?: { conversation_id: string }[];
+  /** Other R2 objects that exist (head finds them), e.g. a cached report translation. */
+  r2Objects?: string[];
 };
 type Executed = { sql: string; args: unknown[] };
 
@@ -121,6 +124,7 @@ function makeEnv(seed: Seed = {}) {
     batch: (stmts: Stmt[]) => Promise.resolve().then(() => stmts.map((s) => ({ meta: { changes: s.exec().length } }))),
   };
   const fakeBucket = {
+    head: (key: string) => Promise.resolve((seed.r2Objects ?? []).includes(key) ? { key } : null),
     delete: (keys: string | string[]) => {
       r2Deletes.push(typeof keys === "string" ? [keys] : keys);
       return Promise.resolve();
@@ -279,6 +283,16 @@ describe("deleteRunData", () => {
     expect(env.state.applications()).toEqual([]);
     expect(env.state.children()).toEqual([{ table: "claims", run_id: "run-other" }]);
     expect(env.state.webhookEvents()).toEqual([{ conversation_id: "conv-other" }]);
+  });
+
+  it("deletes the cached Czech translation of the brief with the run, and counts it", async () => {
+    const env = makeEnv({ ...seed(), r2Objects: ["translations/run-1/brief-cs.json", "translations/run-other/brief-cs.json"] });
+
+    const counts = await deleteRunData(env.db, env.bucket, "run-1");
+
+    expect(env.r2Deletes.flat()).toContain("translations/run-1/brief-cs.json");
+    expect(env.r2Deletes.flat()).not.toContain("translations/run-other/brief-cs.json");
+    expect(counts.r2_objects).toBe(5);
   });
 
   it("deletes in the order the purge relies on: R2 first, child tables, applications, then the run row", async () => {

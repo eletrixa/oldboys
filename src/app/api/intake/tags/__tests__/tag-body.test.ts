@@ -41,6 +41,12 @@ describe("TagBody", () => {
     expect(TagBody.safeParse({ tag: "ok-tag", role: "x", goal: "dating" }).success).toBe(false);
     expect(TagBody.safeParse({ tag: "ok-tag", role: "x", startupjobsOfferId: "9".repeat(41) }).success).toBe(false);
   });
+  it("takes an optional company, trimmed, up to 200 characters", () => {
+    expect(TagBody.parse({ tag: "ok-tag", role: "x", company: "  Acme s.r.o. " }).company).toBe("Acme s.r.o.");
+    expect(TagBody.parse({ tag: "ok-tag", role: "x" }).company).toBeUndefined();
+    expect(TagBody.safeParse({ tag: "ok-tag", role: "x", company: "  " }).success).toBe(false);
+    expect(TagBody.safeParse({ tag: "ok-tag", role: "x", company: "x".repeat(201) }).success).toBe(false);
+  });
   it("accepts due-diligence and an offer id", () => {
     expect(TagBody.safeParse({ tag: "ok-tag", role: "x", goal: "due-diligence" }).success).toBe(false);
     expect(TagBody.parse({ tag: "ok-tag", role: "x".repeat(300), goal: "hiring", startupjobsOfferId: "8123" })).toMatchObject({

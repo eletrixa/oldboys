@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/runs/[id]/kit-actions.tsx
- * Deps:    react, ../../ui (Radar tokens), ./call-panel (types), ./interview-kit, ./candidate-copy, ./ats-note, ./reference-check, ./kit-review-card, ./invite-form
+ * Deps:    react, ../../ui (Radar tokens), ./call-panel (types), ./interview-kit, ./candidate-copy, ./ats-note, ./reference-check, ./kit-review-card, ./invite-form, ./report-lang (LANG_BTN)
  * Tested:  n/a (the texts are tested in __tests__/{interview-kit,candidate-copy,ats-note,reference-check}.test.ts)
  *
  * Key responsibilities:
@@ -15,7 +15,8 @@
  * - InviteForm below it: download the interview as a calendar invite (.ics) with the brief inside (idea #22, client only)
  * - One top-aligned row: primary copy button + "More exports" disclosure (group/chevron from ui.tsx); opening it never moves the button
  * - One sr-only role="status" span reports "Copied" / "Copy failed" for the last copy that ran; that button's label shows it too for 2 s
- * - EN/CZ buttons are 44px targets (BTN_QUIET, aria-pressed = font-semibold text-ink); the row carries the brief tail's divider
+ * - EN/CZ buttons are 44px targets (LANG_BTN, shared with the report language switch); the row carries the brief tail's divider
+ * - The exports stay English when the brief is shown in Czech (idea #24 covers the page only)
  * - The kit fetches GET /api/runs/:id/calls at click time for the phone verification section; on any error
  *   the kit is built without it
  *
@@ -35,8 +36,8 @@ import { atsNote } from "./ats-note";
 import { referenceQuestions } from "./reference-check";
 import { KitReviewCard } from "./kit-review-card";
 import { InviteForm } from "./invite-form";
+import { LANG_BTN } from "./report-lang";
 
-const LANG_BTN = `${BTN_QUIET} min-h-11 px-3 aria-pressed:font-semibold aria-pressed:text-ink`;
 const LANGS: readonly { lang: NoticeLang; label: string; title: string }[] = [
   { lang: "en", label: "EN", title: "Candidate notice in English" },
   { lang: "cs", label: "CZ", title: "Candidate notice in Czech" },

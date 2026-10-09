@@ -7,7 +7,8 @@
  * Tested:  src/app/positions/__tests__/pool-rows.test.ts
  *
  * Key responsibilities:
- * - shapePool: PoolRow to display row (labels, tone, selectable flag, presence text)
+ * - shapePool: PoolRow to results-table row in added order (candidateName, candidateSource, candidateStatus with run
+ *   progress, fit % and independent-evidence count once done, selectable flag)
  * - channelsFor: the four ways a candidate reaches a bound intake tag
  * - defaultTag: tag suggestion from a position title
  * - enrichSummary: one line for the result of Start enrichment
@@ -17,7 +18,7 @@
  * - Arrival order only: no score, rank or verdict on a person
  */
 import type { PoolRow } from "@/app/api/positions/handler";
-import { formatReceived, SOURCE_LABEL, STATUS_LABEL, STATUS_TONE, type StatusTone, type TagRow } from "@/app/intake/intake-rows";
+import { STATUS_LABEL, STATUS_TONE, type StatusTone, type TagRow } from "@/app/intake/intake-rows";
 import { kebab } from "@/domain/position";
 
 export type PoolView = {
@@ -25,29 +26,61 @@ export type PoolView = {
   name: string;
   email: string | null;
   source: string;
-  received: string;
   status: string;
   tone: StatusTone;
-  presence: string;
+  /** True while the run can still change (queued, running, paused): the page polls. */
+  researching: boolean;
+  fit: string;
+  independent: string;
   selectable: boolean;
   runHref: string | null;
   note: string | null;
 };
 
-/** A pooled row can start a run only when it carries a LinkedIn URL or CV text. */
+const INTAKE_SOURCES: ReadonlySet<PoolRow["source"]> = new Set(["email", "form", "apply-page", "startupjobs"]);
+
+/** Application name, else the run's derived subject, else the LinkedIn handle, else "CV candidate". */
+export function candidateName(r: PoolRow): string {
+  const subject = r.run?.subject.trim() ?? "";
+  return r.name ?? (subject !== "" ? subject : (r.handle ?? "CV candidate"));
+}
+
+/** Intake when a channel brought the person in; otherwise what was added by hand. */
+export function candidateSource(r: PoolRow): string {
+  if (INTAKE_SOURCES.has(r.source)) return "Intake";
+  if (r.has_profile === 1) return "LinkedIn";
+  return r.has_cv === 1 ? "CV" : "Pool";
+}
+
+export function candidateStatus(r: PoolRow): { label: string; tone: StatusTone; researching: boolean } {
+  const run = r.run;
+  if (run === null) return { label: r.status === "pooled" ? "Pooled" : STATUS_LABEL[r.status], tone: STATUS_TONE[r.status], researching: false };
+  if (run.status === "done") return { label: "Done", tone: "ok", researching: false };
+  if (run.status === "failed") return { label: "Failed", tone: "conflict", researching: false };
+  if (run.status === "paused") return { label: "Paused, open the profile to answer", tone: "unsure", researching: true };
+  const label = ["Researching", run.step, `${String(run.pct)}%`].filter((p) => p !== null).join(" · ");
+  return { label, tone: "unsure", researching: true };
+}
+
+/**
+ * Rows in added order (the API sends newest first). Fit % and the independent count show only for a done run.
+ * A pooled row can start a run only when it carries a LinkedIn URL or CV text.
+ */
 export function shapePool(rows: readonly PoolRow[]): PoolView[] {
-  return rows.map((r) => {
-    const parts = [r.has_profile === 1 ? "LinkedIn" : null, r.has_cv === 1 ? "CV" : null].filter((p) => p !== null);
+  return [...rows].reverse().map((r) => {
+    const { label, tone, researching } = candidateStatus(r);
+    const done = r.run?.status === "done";
     return {
       id: r.id,
-      name: r.name ?? "Unnamed",
+      name: candidateName(r),
       email: r.email,
-      source: SOURCE_LABEL[r.source],
-      received: formatReceived(r.received_at),
-      status: STATUS_LABEL[r.status],
-      tone: STATUS_TONE[r.status],
-      presence: parts.length === 0 ? "—" : parts.join(" · "),
-      selectable: r.status === "pooled" && parts.length > 0,
+      source: candidateSource(r),
+      status: label,
+      tone,
+      researching,
+      fit: done && r.run !== null && r.run.fit_pct !== null ? `${String(r.run.fit_pct)}%` : "—",
+      independent: done ? String(r.run?.independent ?? 0) : "—",
+      selectable: r.status === "pooled" && (r.has_profile === 1 || r.has_cv === 1),
       runHref: r.run_id === null ? null : `/runs/${encodeURIComponent(r.run_id)}`,
       note: r.note,
     };

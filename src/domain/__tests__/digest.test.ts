@@ -14,7 +14,7 @@
  */
 import { describe, expect, it } from "vitest";
 import { CV_MAX_BYTES, joinNotes, NOTE_MAX, toCvFile } from "../application";
-import { isPdf } from "../cv-text";
+import { isPdf } from "../cv-kind";
 import { sha256Hex, toHex } from "../digest";
 import { errorText } from "../error-text";
 

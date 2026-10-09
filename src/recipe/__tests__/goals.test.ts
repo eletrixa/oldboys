@@ -9,6 +9,7 @@
  * Key responsibilities:
  * - Shared step ids are fewer than 50% of either recipe's steps
  * - Only hiring calls github; only due-diligence calls ares_vr
+ * - `github_deep` (and the code-contributions question) is hiring-only and directly follows `github_profile`
  * - Each recipe has exactly one resolve step and unique step ids
  * - Hiring asks one question per brief section, each with a fixed title, within the paid actor run cap
  *
@@ -39,6 +40,21 @@ describe("goal recipes diverge", () => {
     expect(ids(dueDiligenceRecipe.steps)).toContain("ares_vr");
     expect(ids(hiringRecipe.steps)).not.toContain("ares_vr");
     expect(hiringRecipe.steps.some((s) => s.kind === "ares")).toBe(false);
+  });
+
+  it("github_deep and code-contributions are hiring-only; github_deep directly follows github_profile", () => {
+    const h = ids(hiringRecipe.steps);
+    expect(h).toContain("github_deep");
+    expect(h.indexOf("github_deep")).toBe(h.indexOf("github_profile") + 1);
+    expect(ids(dueDiligenceRecipe.steps)).not.toContain("github_deep");
+    expect(ids(hiringRecipe.questions)).toContain("code-contributions");
+    expect(ids(dueDiligenceRecipe.questions)).not.toContain("code-contributions");
+  });
+
+  it("github_apify directly follows github_deep and is absent from due-diligence", () => {
+    const h = ids(hiringRecipe.steps);
+    expect(h.indexOf("github_apify")).toBe(h.indexOf("github_deep") + 1);
+    expect(ids(dueDiligenceRecipe.steps)).not.toContain("github_apify");
   });
 
   it("each recipe has unique step ids and exactly one resolve step", () => {
@@ -75,7 +91,7 @@ describe("goal recipes diverge", () => {
   });
 
   it("hiring asks one question per brief section, each with a short fixed title", () => {
-    const want = ["current-role", "employer-context", "career-history", "education", "public-code", "public-talks", "writing", "press", "social-presence", "community", "location-match", "contradictions"];
+    const want = ["current-role", "employer-context", "career-history", "education", "public-code", "code-contributions", "public-talks", "writing", "press", "social-presence", "community", "location-match", "contradictions"];
     expect(hiringRecipe.questions.map((q) => q.id)).toEqual(want);
     const titles = hiringRecipe.questions.map((q) => sectionTitle({ id: q.id, text: "x" }));
     expect(titles.every((t) => t !== "x")).toBe(true);

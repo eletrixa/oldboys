@@ -8,14 +8,17 @@
  *
  * Key responsibilities:
  * - `makeIntakeFakes(opts)`: an IntakeEnv whose DB serves the funnel's statements from plain maps, whose SOURCES
- *   records every put, and whose RESEARCH_RUN.create is a spy; returns the maps and recorders beside it
+ *   records every put, and whose RESEARCH_RUN.create is a spy (`get` finds only instances a create made); returns the
+ *   maps and recorders beside it
  * - Connector tests spread `env` and add their own secrets: `{ ...fakes.env, INTAKE_TOKEN } as FormIntakeEnv`
  *
  * Design constraints:
  * - No module mocks; an unknown statement throws, so a new funnel query fails loudly instead of returning nothing
  * - The applications INSERT enforces the (source, external_id) unique index like D1 does; `raceInsert` fakes a lost race
  * - The duplicate SELECT is matched on its column prefix and the capped re-read on `FROM applications WHERE id`,
- *   so a trimmed column list in the funnel does not break the connector tests
+ *   so a trimmed column list in the funnel does not break the connector tests; the cron's capped queue on
+ *   `WHERE status = 'capped'` (oldest first, LIMIT honoured); `UPDATE ... WHERE id = ? AND note = ?` is a conditional
+ *   claim that changes nothing when the note differs
  * - `opts` is read on every call, so a test can clear `r2Error` or change `intakeRunsLastHour` between deliveries
  */
 import { vi, type Mock } from "vitest";
@@ -52,7 +55,7 @@ export type IntakeFakes = {
   writes: string[];
   /** Bind arguments of every hourly-cap COUNT query. */
   countArgs: unknown[][];
-  create: Mock<(params: unknown) => Promise<{ id: string }>>;
+  create: Mock<(params: { id: string }) => Promise<{ id: string }>>;
 };
 
 export function makeIntakeFakes(opts: IntakeFakeOpts = {}): IntakeFakes {
@@ -67,7 +70,12 @@ export function makeIntakeFakes(opts: IntakeFakeOpts = {}): IntakeFakes {
   /** Every INSERT and UPDATE on applications, to prove a rejected request wrote nothing. */
   const writes: string[] = [];
   const countArgs: unknown[][] = [];
-  const create = vi.fn((_: unknown) => Promise.resolve({ id: "wf" }));
+  const instances = new Set<string>();
+  const create = vi.fn((params: { id: string }) => {
+    instances.add(params.id);
+    return Promise.resolve({ id: params.id });
+  });
+  const get = (id: string): Promise<{ id: string }> => (instances.has(id) ? Promise.resolve({ id }) : Promise.reject(new Error("instance.not_found")));
 
   const exec = (sql: string, args: unknown[]): { rows: Row[]; changes: number } => {
     if (opts.dbError) throw opts.dbError;
@@ -78,6 +86,11 @@ export function makeIntakeFakes(opts: IntakeFakeOpts = {}): IntakeFakes {
     if (sql.startsWith("SELECT id, status, run_id, note, tag, linkedin_url") && sql.includes("FROM applications WHERE source = ?")) {
       const hit = [...apps.values()].find((a) => a.source === args[0] && a.external_id === args[1]);
       return { rows: hit ? [hit] : [], changes: 0 };
+    }
+    if (sql.startsWith("SELECT ") && sql.includes("FROM applications WHERE status = 'capped'")) {
+      const capped = [...apps.values()].filter((a) => a.status === "capped");
+      capped.sort((a, b) => String(a.received_at).localeCompare(String(b.received_at)));
+      return { rows: capped.slice(0, args[0] as number), changes: 0 };
     }
     if (sql.startsWith("SELECT ") && sql.includes("FROM applications WHERE id = ?")) {
       const hit = apps.get(args[0] as string);
@@ -119,13 +132,15 @@ export function makeIntakeFakes(opts: IntakeFakeOpts = {}): IntakeFakes {
       investigations.push(Object.fromEntries(cols.map((c, i) => [c, values[i]])));
       return { rows: [], changes: 1 };
     }
-    const update = /^UPDATE applications SET (.*) WHERE id = \?$/.exec(sql);
+    const update = /^UPDATE applications SET (.*) WHERE id = \?( AND note = \?)?$/.exec(sql);
     if (update) {
       writes.push(sql);
-      const cols = (update[1] ?? "").split(", ").map((c) => c.split(" = ")[0] ?? "");
-      const row = apps.get(args[cols.length] as string);
-      if (!row) return { rows: [], changes: 0 };
-      cols.forEach((c, i) => (row[c] = args[i]));
+      const sets = (update[1] ?? "").split(", ").map((c) => c.split(" = "));
+      let bound = 0;
+      const values = sets.map(([, v]) => (v === "NULL" ? null : args[bound++]));
+      const row = apps.get(args[bound] as string);
+      if (!row || (update[2] !== undefined && row.note !== args[bound + 1])) return { rows: [], changes: 0 };
+      sets.forEach(([c], i) => (row[c ?? ""] = values[i]));
       return { rows: [], changes: 1 };
     }
     throw new Error(`unexpected SQL: ${sql}`);
@@ -135,11 +150,12 @@ export function makeIntakeFakes(opts: IntakeFakeOpts = {}): IntakeFakes {
     bind: (...a: unknown[]) => stmt(sql, a),
     first: () => Promise.resolve().then(() => exec(sql, args).rows[0] ?? null),
     run: () => Promise.resolve().then(() => ({ meta: { changes: exec(sql, args).changes } })),
+    all: () => Promise.resolve().then(() => ({ results: exec(sql, args).rows })),
   });
 
   const env = {
     DB: { prepare: (sql: string) => stmt(sql) },
-    RESEARCH_RUN: { create },
+    RESEARCH_RUN: { create, get },
     RUN_BUDGET_USD: "0.50",
     RUN_BUDGET_CALLS: "16",
     INTAKE_PER_HOUR_CAP: opts.cap,
