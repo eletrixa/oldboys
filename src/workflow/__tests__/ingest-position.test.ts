@@ -7,6 +7,7 @@
  * Tested:  n/a (this is the test)
  *
  * Key responsibilities:
+ * - Organization scope: a session's posting is stored with its organization and reuses only its own organization's row
  * - Cover I1-I14 of specs/positions-ingest.md: paste, LLM down, Greenhouse fetch, dedupe, 422, fallback, timeout, cap, R2 failure, race, title override, manual entry, Jobs.cz career-site widget chain, company and location overrides; I15 role-catalog title
  *
  * Design constraints:
@@ -44,9 +45,9 @@ function makeEnv(opts: { putError?: Error; insertError?: Error } = {}) {
   const byPair = (board: unknown, ext: unknown) => [...rows.values()].find((r) => r.board === board && r.external_id === ext);
   const exec = (q: string, a: unknown[]): Row[] => {
     sql.push(q);
-    if (q.startsWith("SELECT id FROM positions WHERE board")) {
+    if (q.startsWith("SELECT id, organization_id FROM positions WHERE board")) {
       const hit = byPair(a[0], a[1]);
-      return hit ? [{ id: hit.id }] : [];
+      return hit ? [{ id: hit.id, organization_id: hit.organization_id ?? null }] : [];
     }
     if (q.startsWith("INSERT INTO positions")) {
       if (opts.insertError) {
@@ -292,5 +293,17 @@ describe("cost helpers", () => {
     expect(ingestCapUsd("0")).toBe(0.05);
     expect(ingestCapUsd("0.2")).toBe(0.2);
     expect(estimatePositionUsd("x".repeat(20_000))).toBeLessThan(0.05);
+  });
+
+  it("a session's posting stores its organization and reuses only its own organization's row", async () => {
+    const env = makeEnv();
+    const first = await run(deps(env, { fetchFn: okFetch() as unknown as typeof fetch, organizationId: "org-1" }), { postingUrl: GH_URL });
+    expect(first).toMatchObject({ ok: true, id: "pos-1", reused: false });
+    expect(env.rows.get("pos-1")).toMatchObject({ organization_id: "org-1", external_id: "12345" });
+    expect(await run(deps(env, { organizationId: "org-1" }), { postingUrl: GH_URL })).toMatchObject({ ok: true, id: "pos-1", reused: true });
+    expect(await run(deps(env), { postingUrl: GH_URL })).toMatchObject({ ok: true, id: "pos-1", reused: true });
+    const other = await run(deps(env, { fetchFn: okFetch() as unknown as typeof fetch, organizationId: "org-2", newId: () => "pos-2" }), { postingUrl: GH_URL });
+    expect(other).toMatchObject({ ok: true, id: "pos-2", reused: false });
+    expect(env.rows.get("pos-2")).toMatchObject({ organization_id: "org-2", board: "greenhouse:acme", external_id: null });
   });
 });

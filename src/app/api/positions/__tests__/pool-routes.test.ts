@@ -9,6 +9,7 @@
  * Key responsibilities:
  * - addCandidateRoute: auth, 400 without profile/CV, 404 for an unmatched position, 201 new / 200 duplicate, funnel input
  * - addCandidateFileRoute: 400 without a file, 201 with the CV file handed to the funnel
+ * - addCandidateRoute with a session: only its organization's position (other ids 404 before the funnel)
  * - enrichRoute: bearer -> via api, session -> via start with its organization, error status passthrough, 400 on a bad body
  *
  * Design constraints:
@@ -25,11 +26,16 @@ import { addCandidateFileRoute, addCandidateRoute, enrichRoute, type PositionsEn
 
 const USER = { sessionId: "s1", accountId: "acc-1", email: "r@example.com", name: "R", organizationId: "org-1", organizationName: "Org" };
 
-/** Any session lookup returns USER when `withSession`; everything else is unexpected. */
+/** Any session lookup returns USER when `withSession`; the only position is p1 of org-1 (read with the session's scope). */
 function env(withSession = false): PositionsEnv {
-  const stmt = (q: string) => ({
-    bind: () => stmt(q),
-    first: () => Promise.resolve(withSession ? { session_id: "s1", account_id: "acc-1", email: USER.email, name: USER.name, organization_id: "org-1", organization_name: "Org" } : null),
+  const session = { session_id: "s1", account_id: "acc-1", email: USER.email, name: USER.name, organization_id: "org-1", organization_name: "Org" };
+  const stmt = (q: string, a: unknown[] = []) => ({
+    bind: (...b: unknown[]) => stmt(q, b),
+    first: () => {
+      if (q.startsWith("SELECT s.id AS session_id")) return Promise.resolve(withSession ? session : null);
+      const p1 = { id: "p1", title: "T", family: "data", must_haves_json: "[]", excerpt: "", ingest_method: "manual", ingest_cost_usd: 0, created_at: "", expires_at: "", extraction: "model" };
+      return Promise.resolve(a[0] === "p1" && a[1] === "org-1" ? p1 : null);
+    },
   });
   return {
     DB: { prepare: stmt } as unknown as D1Database,
@@ -77,6 +83,20 @@ describe("addCandidateRoute", () => {
     const res = await addCandidateRoute(post({ cvText: "cv" }), env(), "gone");
     expect(res.status).toBe(404);
     expect(await res.json()).toEqual({ error: "position not found" });
+  });
+});
+
+describe("addCandidateRoute with a session", () => {
+  const cookie = { Cookie: "oldboys_session=tok" };
+
+  it("adds to its own organization's position and is 404 for any other, never reaching the funnel", async () => {
+    ingest.mockResolvedValue({ applicationId: "a1", status: "pooled", runId: null, duplicate: false, note: null });
+    expect((await addCandidateRoute(post({ cvText: "cv" }, cookie), env(true), "p1")).status).toBe(201);
+    expect(ingest).toHaveBeenCalledTimes(1);
+    const res = await addCandidateRoute(post({ cvText: "cv" }, cookie), env(true), "p2");
+    expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({ error: "position not found" });
+    expect(ingest).toHaveBeenCalledTimes(1);
   });
 });
 

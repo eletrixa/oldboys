@@ -18,6 +18,8 @@
  * Design constraints:
  * - No paid actor call, no Next.js import; fetch, clock, ids and the cost estimate are injected
  * - `board` and `external_id` are stored only when the fetch path actually served the text, so a failed fetch never pins a degraded row as the dedupe hit
+ * - A session's posting reuses only its own organization's row; when another organization already holds (board, external_id),
+ *   the new row is stored without `external_id` (the unique index stays global), so it is never handed to the other one
  */
 import { TIMEOUT_MS, UA } from "@/adapters/fetch";
 import type { CreatePositionBody } from "@/app/api/_lib/position-body";
@@ -47,6 +49,8 @@ export type IngestDeps = {
   newId: () => string;
   capUsd: number;
   estimateUsd: (text: string) => number;
+  /** The creating session's organization, stored on the row; null or absent = bearer (NULL owner, reuse across all rows as before). */
+  organizationId?: string | null;
 };
 export type IngestResult = { ok: true; id: string; reused: boolean; notes: string[] } | { ok: false; status: 422; error: string };
 
@@ -130,16 +134,23 @@ async function extractOrGeneric(deps: IngestDeps, method: PostingMethod, text: s
 }
 
 const existingId = (db: D1Database, board: string, externalId: string) =>
-  db.prepare("SELECT id FROM positions WHERE board = ? AND external_id = ?").bind(board, externalId).first<{ id: string }>();
+  db.prepare("SELECT id, organization_id FROM positions WHERE board = ? AND external_id = ?").bind(board, externalId).first<{ id: string; organization_id: string | null }>();
+
+/** The bearer reuses any row; a session only its own organization's. */
+const reusable = (hit: { organization_id: string | null } | null, organizationId: string | null): boolean =>
+  hit !== null && (organizationId === null || hit.organization_id === organizationId);
 
 export async function ingestPosition(deps: IngestDeps, body: CreatePositionBody): Promise<IngestResult> {
   const { db, bucket, now } = deps;
+  const organizationId = deps.organizationId ?? null;
   const plan = postingFetchPlan(body.postingUrl ?? null);
   const pasted = body.postingText?.trim() ?? "";
 
+  let takenElsewhere = false;
   if (plan.board !== undefined && plan.externalId !== undefined) {
     const hit = await existingId(db, plan.board, plan.externalId);
-    if (hit) return { ok: true, id: hit.id, reused: true, notes: [] };
+    if (hit && reusable(hit, organizationId)) return { ok: true, id: hit.id, reused: true, notes: [] };
+    takenElsewhere = hit !== null;
   }
 
   const resolved = await resolveText(deps.fetchFn, plan, pasted, body.title !== undefined);
@@ -157,8 +168,8 @@ export async function ingestPosition(deps: IngestDeps, body: CreatePositionBody)
   const served = method === "pasted" || method === "manual" ? undefined : plan;
   const insert = db
     .prepare(
-      `INSERT INTO positions (id, title, family, company, location, board, posting_url, external_id, must_haves_json, excerpt, r2_key, ingest_method, ingest_cost_usd, created_at, expires_at, extraction)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO positions (id, title, family, company, location, board, posting_url, external_id, must_haves_json, excerpt, r2_key, ingest_method, ingest_cost_usd, created_at, expires_at, extraction, organization_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .bind(
       id,
@@ -168,7 +179,7 @@ export async function ingestPosition(deps: IngestDeps, body: CreatePositionBody)
       extracted.location ?? null,
       served?.board ?? null,
       plan.request ? (body.postingUrl ?? null) : null,
-      served?.externalId ?? null,
+      takenElsewhere ? null : (served?.externalId ?? null),
       JSON.stringify(extracted.must_haves),
       text.slice(0, EXCERPT_CHARS),
       r2Key,
@@ -177,6 +188,7 @@ export async function ingestPosition(deps: IngestDeps, body: CreatePositionBody)
       fetchedAt,
       new Date(now.getTime() + RETENTION_DAYS * DAY_MS).toISOString(),
       extracted.extraction,
+      organizationId,
     )
     .run();
   const object = JSON.stringify({ method, url: body.postingUrl ?? null, fetched_at: fetchedAt, raw: raw.slice(0, MAX_RAW_CHARS), notes });
@@ -186,7 +198,7 @@ export async function ingestPosition(deps: IngestDeps, body: CreatePositionBody)
   if (inserted.status === "rejected") {
     if (stored.status === "fulfilled") await bucket.delete(r2Key).catch(() => undefined);
     const winner = served?.board !== undefined && served.externalId !== undefined ? await existingId(db, served.board, served.externalId) : null;
-    if (winner && errorMessage(inserted.reason).includes("UNIQUE")) return { ok: true, id: winner.id, reused: true, notes: [] };
+    if (winner && reusable(winner, organizationId) && errorMessage(inserted.reason).includes("UNIQUE")) return { ok: true, id: winner.id, reused: true, notes: [] };
     throw inserted.reason;
   }
   if (stored.status === "rejected") {

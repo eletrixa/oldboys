@@ -180,7 +180,6 @@ Weights from the case brief ([`docs/brief.md`](docs/brief.md)).
    - Run, audit and export pages open by their unguessable run UUID without login.
    - A run without a company (started by the API or the extension) can be deleted by any logged-in account.
    - The call-approve route does not check the call's company.
-   - Positions are not scoped to the company: every account sees and can open every team's positions in `/positions` and `/briefs/new` (the `positions` table has no organization column; fixing it needs a D1 migration).
 7. **The budget gates paid collectors only.** Model steps after the cap still run, so recorded run totals reach $0.83 against a $0.50 budget.
 
 ## 9. How we built it

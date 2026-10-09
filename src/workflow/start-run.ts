@@ -10,7 +10,8 @@
  * - `startRun`: one INSERT into investigations (status 'queued', budget from vars) then RESEARCH_RUN.create
  * - `runsStartedSince`: run count since a time, optionally per `via`, for the hourly spend caps
  * - `runRoom`: runs left this hour under the shared cap and the per-organization cap (POST /api/runs and enrichment)
- * - `loadPositionQuestions`: a stored position's title and its must-haves as the run's questions_json (specs/positions-start)
+ * - `loadPositionQuestions`: a stored position's title and its must-haves as the run's questions_json (specs/positions-start);
+ *   a session's start passes its organization, so another organization's position reads as unknown
  *
  * Design constraints:
  * - runId == Workflow instance id == investigations.id
@@ -105,11 +106,19 @@ export async function runsStartedSince(db: D1Database, since: Date, via?: string
   return row?.n ?? 0;
 }
 
-/** Null when the position is unknown or its must-haves no longer parse (the caller answers 404, nothing is inserted). */
-export async function loadPositionQuestions(db: Pick<D1Database, "prepare">, positionId: string): Promise<PositionQuestions | null> {
-  const row = await db
-    .prepare("SELECT title, must_haves_json FROM positions WHERE id = ?")
-    .bind(positionId)
+/**
+ * Null when the position is unknown, belongs to another organization than `organizationId` (a session's start;
+ * null = bearer / API, any position) or its must-haves no longer parse (the caller answers 404, nothing is inserted).
+ */
+export async function loadPositionQuestions(
+  db: Pick<D1Database, "prepare">,
+  positionId: string,
+  organizationId: string | null = null,
+): Promise<PositionQuestions | null> {
+  const row = await (organizationId === null
+    ? db.prepare("SELECT title, must_haves_json FROM positions WHERE id = ?").bind(positionId)
+    : db.prepare("SELECT title, must_haves_json FROM positions WHERE id = ? AND organization_id = ?").bind(positionId, organizationId)
+  )
     .first<{ title: string; must_haves_json: string }>();
   const mustHaves = row ? parseMustHaves(row.must_haves_json) : null;
   if (!row || mustHaves === null) return null;

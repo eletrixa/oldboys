@@ -8,8 +8,10 @@
  *
  * Key responsibilities:
  * - `loadPosition`: the single read path for one position (also used by the public summary); never returns `r2_key`
- * - `listPositions`, `getPosition`, `patchPosition`: plain D1 reads and writes
+ * - `listPositions`, `getPosition`, `patchPosition`, `positionInScope`: plain D1 reads and writes
  * - `must_haves_json` is parsed on the way out; a malformed value becomes `[]` and never throws
+ * - Every read and write takes a `PositionScope`: a session's organization id reaches only that organization's positions
+ *   (NULL-owner rows included in none), `null` (bearer, extension, intake) reaches all of them as before
  * - `getPosition`: `runs` and the overview `group` both come from the position's hiring run rows; `candidates` (the pool, newest first, max 200,
  *   never CV text, cover letter, external id or LinkedIn URL) and the bound intake `tags` are two more reads; each pool row carries its
  *   run's status, progress (from the last ledger step), fit % and independent-evidence count (briefStats) for the results table
@@ -57,6 +59,14 @@ type PoolDbRow = Omit<PoolRow, "handle" | "run"> & { linkedin_url: string | null
 /** `catalog_must_haves`: the role-catalog template's must-haves when the position was created from that catalog title (manual entry), else null. */
 export type PositionDetail = { position: Position; runs: PositionRun[]; group: RoleGroup | null; candidates: PoolRow[]; tags: TagRow[]; catalog_must_haves: MustHave[] | null };
 
+/** A session's organization id, or null for bearer / API / extension callers, which see every position. */
+export type PositionScope = string | null;
+
+/** ` AND <col> = ?` plus its bind value when scoped; empty for the bearer. */
+function orgFilter(scope: PositionScope): { sql: string; binds: string[] } {
+  return scope === null ? { sql: "", binds: [] } : { sql: " AND organization_id = ?", binds: [scope] };
+}
+
 const MAX_LIST = 500;
 const MAX_POOL = 200;
 const COLUMNS =
@@ -85,21 +95,28 @@ function toPosition(row: PositionRow): Position {
   };
 }
 
-export async function loadPosition(db: D1Database, id: string): Promise<Position | null> {
+export async function loadPosition(db: D1Database, id: string, scope: PositionScope): Promise<Position | null> {
   const valid = POSITION_ID.safeParse(id);
   if (!valid.success) return null;
-  const row = await db.prepare(`SELECT ${COLUMNS} FROM positions WHERE id = ?`).bind(valid.data).first<PositionRow>();
+  const org = orgFilter(scope);
+  const row = await db.prepare(`SELECT ${COLUMNS} FROM positions WHERE id = ?${org.sql}`).bind(valid.data, ...org.binds).first<PositionRow>();
   return row ? toPosition(row) : null;
 }
 
-export async function listPositions(db: D1Database): Promise<PositionListItem[]> {
+/** Whether the caller may reach this position (pool add, enrich, intake tag); same rule as `loadPosition`. */
+export async function positionInScope(db: D1Database, id: string, scope: PositionScope): Promise<boolean> {
+  return (await loadPosition(db, id, scope)) !== null;
+}
+
+export async function listPositions(db: D1Database, scope: PositionScope): Promise<PositionListItem[]> {
+  const org = scope === null ? { sql: "", binds: [] } : { sql: "WHERE p.organization_id = ?", binds: [scope] };
   const { results } = await db
     .prepare(
       `SELECT p.id, p.title, p.family, p.company, p.location, p.posting_url, p.ingest_method, p.created_at, p.expires_at, COUNT(i.id) AS runs
        FROM positions p LEFT JOIN investigations i ON i.position_id = p.id
-       GROUP BY p.id ORDER BY p.created_at DESC LIMIT ?`,
+       ${org.sql} GROUP BY p.id ORDER BY p.created_at DESC LIMIT ?`,
     )
-    .bind(MAX_LIST)
+    .bind(...org.binds, MAX_LIST)
     .all<PositionListItem>();
   return results;
 }
@@ -127,10 +144,12 @@ function poolRun(row: RoleRunRow): PoolRun {
   return { status: row.status, subject: row.subject, step, pct, stalled, ...briefStats(row.brief_json) };
 }
 
-export async function getPosition(db: D1Database, id: string): Promise<PositionDetail | null> {
+export async function getPosition(db: D1Database, id: string, scope: PositionScope): Promise<PositionDetail | null> {
   if (!POSITION_ID.safeParse(id).success) return null;
-  const [position, rows, candidates, tags] = await Promise.all([
-    loadPosition(db, id),
+  // Gate first: the runs, pool and tags reads below are keyed by position id only.
+  const position = await loadPosition(db, id, scope);
+  if (!position) return null;
+  const [rows, candidates, tags] = await Promise.all([
     loadRoleRunRows(db, "i.position_id = ? AND i.goal = 'hiring'", [id]),
     db
       .prepare(
@@ -144,7 +163,6 @@ export async function getPosition(db: D1Database, id: string): Promise<PositionD
       .bind(id)
       .all<TagRow>(),
   ]);
-  if (!position) return null;
   const byRun = new Map(rows.map((r) => [r.id, r]));
   return {
     position,
@@ -159,15 +177,16 @@ export async function getPosition(db: D1Database, id: string): Promise<PositionD
   };
 }
 
-export async function patchPosition(db: D1Database, id: string, body: PatchPositionBody): Promise<Position | null> {
+export async function patchPosition(db: D1Database, id: string, body: PatchPositionBody, scope: PositionScope): Promise<Position | null> {
   if (!POSITION_ID.safeParse(id).success) return null;
   const sets: [column: string, value: string][] = [];
   if (body.title !== undefined) sets.push(["title", body.title]);
   if (body.family !== undefined) sets.push(["family", body.family]);
   if (body.must_haves !== undefined) sets.push(["must_haves_json", JSON.stringify(body.must_haves)], ["extraction", "edited"]);
+  const org = orgFilter(scope);
   const written = await db
-    .prepare(`UPDATE positions SET ${sets.map(([c]) => `${c} = ?`).join(", ")} WHERE id = ?`)
-    .bind(...sets.map(([, v]) => v), id)
+    .prepare(`UPDATE positions SET ${sets.map(([c]) => `${c} = ?`).join(", ")} WHERE id = ?${org.sql}`)
+    .bind(...sets.map(([, v]) => v), id, ...org.binds)
     .run();
-  return written.meta.changes === 0 ? null : loadPosition(db, id);
+  return written.meta.changes === 0 ? null : loadPosition(db, id, scope);
 }

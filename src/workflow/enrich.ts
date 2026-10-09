@@ -41,7 +41,8 @@ export async function startEnrichment(
   args: { positionId: string; applicationIds: string[]; origin: EnrichOrigin },
   now: Date,
 ): Promise<EnrichResult> {
-  const position = await loadPositionQuestions(env.DB, args.positionId);
+  // A session reaches only its organization's positions; the API origin keeps reaching every position.
+  const position = await loadPositionQuestions(env.DB, args.positionId, args.origin.via === "start" ? args.origin.organizationId : null);
   if (position === null) return { ok: false, status: 404, error: "unknown position" };
 
   const skipped: EnrichSkip[] = [];

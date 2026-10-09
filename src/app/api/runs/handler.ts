@@ -12,7 +12,8 @@
  * - Optional sourceUrl (browser extension): same page + goal within 24 h returns the earlier run (200), scoped to the
  *   caller's organization (start) or to organization-less runs (api); never another tenant's run id
  * - Shared cap: more than RUNS_PER_HOUR_CAP runs in the last hour → 429; START_PER_HOUR_CAP per organization for via = start (one COUNT query)
- * - Optional positionId (hiring): the position's must-haves become the run's questions; unknown id is a 404 (specs/positions-start)
+ * - Optional positionId (hiring): the position's must-haves become the run's questions; unknown id (or another organization's,
+ *   for a session start) is a 404 (specs/positions-start)
  * - Session runs (via = start) store account_id and organization_id; bearer runs keep NULL
  * - runId == Workflow instance id == investigations.id
  *
@@ -59,7 +60,7 @@ export async function createRun(
     return Response.json({ error: "run cap reached, try again later" }, { status: 429 });
   }
 
-  const position = parsed.data.positionId === undefined ? undefined : await loadPositionQuestions(env.DB, parsed.data.positionId);
+  const position = parsed.data.positionId === undefined ? undefined : await loadPositionQuestions(env.DB, parsed.data.positionId, organizationId);
   if (position === null) return Response.json({ error: "unknown position" }, { status: 404 });
 
   const { id } = await startRun(env, {

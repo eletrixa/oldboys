@@ -33,6 +33,6 @@ export default async function NewBriefPage({ searchParams }: { searchParams: Pro
     const next = initial !== null ? `/briefs/new?positionId=${encodeURIComponent(initial)}` : initialRole !== "" ? `/briefs/new?role=${encodeURIComponent(initialRole)}` : "/briefs/new";
     redirect(loginHref(next));
   }
-  const positions = await listPositions(getCloudflareContext().env.DB);
+  const positions = await listPositions(getCloudflareContext().env.DB, user.organizationId);
   return <NewBriefWizard positions={positions} roleOptions={ROLE_OPTIONS} initialPositionId={initial} initialRole={initialRole} />;
 }

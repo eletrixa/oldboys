@@ -13,7 +13,8 @@
  * - `enrichRoute`: start one research run per selected pooled candidate; a session origin counts against its organization
  *
  * Design constraints:
- * - Positions are team-shared: any logged-in account (or the bearer) sees all of them; there is no organization column
+ * - A session reaches only its organization's positions (other ids answer 404, NULL-owner rows included) and new positions
+ *   store its organization; the bearer (API, extension, scripts) reaches all of them and creates NULL-owner rows, as before
  * - Takes bindings as parameters so tests run under plain Node; no Next.js imports
  * - Every response, errors included, carries `Cache-Control: no-store`, applied once by `guarded`
  */
@@ -30,7 +31,7 @@ import { CvFile, NAME_MAX, toCvFile } from "@/domain/application";
 import { sha256Hex } from "@/domain/digest";
 import { POSITION_ID } from "@/domain/position";
 import { stableId } from "@/domain/stable-id";
-import { getPosition, listPositions, patchPosition } from "./handler";
+import { getPosition, listPositions, patchPosition, positionInScope, type PositionScope } from "./handler";
 
 export type PositionsEnv = IntakeEnv & {
   RUN_TOKEN?: string;
@@ -43,15 +44,23 @@ export type PositionsEnv = IntakeEnv & {
 const json = (body: unknown, status = 200): Response => Response.json(body, { status });
 const notFound = (): Response => json({ error: "position not found" }, 404);
 
-/** Session cookie or bearer check, then the handler; whatever it returns is marked no-store. */
-async function guarded(request: Request, env: PositionsEnv, handle: () => Promise<Response>): Promise<Response> {
-  const res = (await requireSessionOrBearer(request, env)) ?? (await handle());
+/**
+ * Session cookie or bearer check, then the handler with the caller's scope; whatever it returns is marked no-store.
+ * A valid session wins over a bearer header (as in enrich), so its organization is the scope; the bearer alone gets null.
+ */
+async function guarded(request: Request, env: PositionsEnv, handle: (scope: PositionScope) => Promise<Response>): Promise<Response> {
+  const denied = await requireSessionOrBearer(request, env);
+  const res = denied ?? (await handle((await sessionFromRequest(request, env.DB))?.organizationId ?? null));
   res.headers.set("Cache-Control", "no-store");
   return res;
 }
 
+/** Bearer: a well-formed id (the funnel answers unknown ones); session: a position of its own organization. */
+const reachable = async (db: D1Database, positionId: string, scope: PositionScope): Promise<boolean> =>
+  scope === null ? POSITION_ID.safeParse(positionId).success : positionInScope(db, positionId, scope);
+
 export function createPositionRoute(request: Request, env: PositionsEnv, over: Partial<IngestDeps> = {}): Promise<Response> {
-  return guarded(request, env, async () => {
+  return guarded(request, env, async (scope) => {
     const parsed = await parseJsonBody(request, CreatePositionBody);
     if (parsed.error) return parsed.error;
     const llm = makeLlmCall(env.ANTHROPIC_API_KEY ?? "", {
@@ -68,6 +77,7 @@ export function createPositionRoute(request: Request, env: PositionsEnv, over: P
         newId: () => crypto.randomUUID(),
         capUsd: ingestCapUsd(env.POSITION_INGEST_USD),
         estimateUsd: estimatePositionUsd,
+        organizationId: scope,
         ...over,
       },
       parsed.data,
@@ -78,28 +88,28 @@ export function createPositionRoute(request: Request, env: PositionsEnv, over: P
 }
 
 export function listPositionsRoute(request: Request, env: PositionsEnv): Promise<Response> {
-  return guarded(request, env, async () => json({ positions: await listPositions(env.DB) }));
+  return guarded(request, env, async (scope) => json({ positions: await listPositions(env.DB, scope) }));
 }
 
 export function getPositionRoute(request: Request, env: PositionsEnv, id: string): Promise<Response> {
-  return guarded(request, env, async () => {
-    const detail = await getPosition(env.DB, id);
+  return guarded(request, env, async (scope) => {
+    const detail = await getPosition(env.DB, id, scope);
     return detail ? json(detail) : notFound();
   });
 }
 
 export function patchPositionRoute(request: Request, env: PositionsEnv, id: string): Promise<Response> {
-  return guarded(request, env, async () => {
+  return guarded(request, env, async (scope) => {
     const parsed = await parseJsonBody(request, PatchPositionBody);
     if (parsed.error) return parsed.error;
-    const position = await patchPosition(env.DB, id, parsed.data);
+    const position = await patchPosition(env.DB, id, parsed.data, scope);
     return position ? json({ position }) : notFound();
   });
 }
 
 export function addCandidateRoute(request: Request, env: PositionsEnv, positionId: string): Promise<Response> {
-  return guarded(request, env, async () => {
-    if (!POSITION_ID.safeParse(positionId).success) return notFound();
+  return guarded(request, env, async (scope) => {
+    if (!(await reachable(env.DB, positionId, scope))) return notFound();
     const parsed = await parseJsonBody(request, CandidateBody);
     if (parsed.error) return parsed.error;
     const result = await ingestApplication(manualIntake(positionId, parsed.data), env, new Date());
@@ -110,8 +120,8 @@ export function addCandidateRoute(request: Request, env: PositionsEnv, positionI
 
 /** Multipart `cv` (PDF or text, at most CV_MAX_BYTES) and optional `name`: the funnel extracts the text and stores the file. */
 export function addCandidateFileRoute(request: Request, env: PositionsEnv, positionId: string): Promise<Response> {
-  return guarded(request, env, async () => {
-    if (!POSITION_ID.safeParse(positionId).success) return notFound();
+  return guarded(request, env, async (scope) => {
+    if (!(await reachable(env.DB, positionId, scope))) return notFound();
     const form = await request.formData().catch(() => null);
     const file = form?.get("cv");
     if (!(file instanceof File) || file.size === 0) return json({ error: "a CV file is required" }, 400);

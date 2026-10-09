@@ -3,12 +3,12 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/api/intake/tags/route.ts
- * Deps:    @opennextjs/cloudflare (getCloudflareContext), binding DB, secret RUN_TOKEN, ./tag-body, src/app/api/_lib/{session-or-bearer,body}, src/app/intake/intake-rows (type)
+ * Deps:    @opennextjs/cloudflare (getCloudflareContext), binding DB, secret RUN_TOKEN, ./tag-body, src/app/api/_lib/{session,session-or-bearer,body}, src/app/api/positions/handler (loadPosition), src/app/intake/intake-rows (type)
  * Tested:  schema and duplicate classifier in ./__tests__/tag-body.test.ts; route n/a (QA pass, like /api/roles)
  *
  * Key responsibilities:
  * - GET: all intake_tags rows newest first -> { tags }
- * - POST {tag, role? (or positionId, then the position's title), goal?, company?, startupjobsOfferId?}: 201 with the stored tag, 400 invalid body, 404 unknown positionId, 409 when the tag or the StartupJobs offer id exists
+ * - POST {tag, role? (or positionId, then the position's title), goal?, company?, startupjobsOfferId?}: 201 with the stored tag, 400 invalid body, 404 unknown positionId (or another organization's, for a session), 409 when the tag or the StartupJobs offer id exists
  * - Login session or bearer RUN_TOKEN on both methods (a recruiter binds tags from the position page without the team token)
  *
  * Design constraints:
@@ -17,7 +17,9 @@
  * - Database error text is logged, never returned
  */
 import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { sessionFromRequest } from "@/app/api/_lib/session";
 import { requireSessionOrBearer } from "@/app/api/_lib/session-or-bearer";
+import { loadPosition } from "@/app/api/positions/handler";
 import { parseJsonBody } from "@/app/api/_lib/body";
 import type { TagRow } from "@/app/intake/intake-rows";
 import { duplicateField, TagBody } from "./tag-body";
@@ -44,7 +46,9 @@ export async function POST(request: Request): Promise<Response> {
 
   let role = body.data.role;
   if (positionId !== undefined) {
-    const position = await env.DB.prepare("SELECT title FROM positions WHERE id = ?").bind(positionId).first<{ title: string }>();
+    // A session binds only its organization's positions; the bearer any (same rule as /api/positions).
+    const scope = (await sessionFromRequest(request, env.DB))?.organizationId ?? null;
+    const position = await loadPosition(env.DB, positionId, scope);
     if (!position) return Response.json({ error: "position not found" }, { status: 404 });
     role ??= position.title;
   }

@@ -88,6 +88,7 @@ Every change to `src/`, `migrations/`, `scripts/` or any root config must pass `
 - Every user-visible change adds a line to `CHANGELOG.md` under Unreleased in the same commit.
 
 ## Known gotchas
+- `migrations/0017_positions_organization.sql` must be applied with `pnpm db:migrate:remote` before deploying the positions scoping code (it reads and writes `positions.organization_id`).
 - `migrations/0013_role_templates.sql` (role catalog) must be applied with `pnpm db:migrate:remote` before deploying this change; `migrations/0010_accounts.sql` before the accounts PR.
 - `extension/` is a second pnpm workspace package; after pulling, run `pnpm install --frozen-lockfile` once or `pnpm check` fails with `wxt: command not found`.
 - CI deploys on push to main but cannot migrate D1 (token has no D1 scope). A PR that adds a file under `migrations/` must say so; Robert runs `pnpm db:migrate:remote` before merging.

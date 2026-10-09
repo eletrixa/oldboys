@@ -19,7 +19,7 @@ import { loadPositionQuestions, type StartRunEnv, startRun } from "@/workflow/st
 
 type Call = { sql: string; values: unknown[] };
 
-function fakeEnv(positions: Record<string, { title: string; must_haves_json: string }>) {
+function fakeEnv(positions: Record<string, { title: string; must_haves_json: string; organization_id?: string | null }>) {
   const inserts: Call[] = [];
   const lookups: Call[] = [];
   const DB = {
@@ -29,7 +29,9 @@ function fakeEnv(positions: Record<string, { title: string; must_haves_json: str
           return {
             first: () => {
               lookups.push({ sql, values });
-              return Promise.resolve(positions[values[0] as string] ?? null);
+              const row = positions[values[0] as string] ?? null;
+              const scoped = sql.includes("AND organization_id = ?");
+              return Promise.resolve(row !== null && scoped && (row.organization_id ?? null) !== values[1] ? null : row);
             },
             run: () => {
               inserts.push({ sql, values });
@@ -77,6 +79,14 @@ describe("startRun with a position", () => {
     await startFrom(env, "p1", "Something else");
     expect(inserts[0]?.values).toContain("Head of Growth");
     expect(inserts[0]?.values).not.toContain("Something else");
+  });
+
+  it("a session start reaches only its organization's position; the bearer (no organization) reaches any", async () => {
+    const { env } = fakeEnv({ own: { ...pos(), organization_id: "org-1" }, other: { ...pos(), organization_id: "org-2" }, legacy: pos() });
+    expect(await loadPositionQuestions(env.DB, "own", "org-1")).toMatchObject({ id: "own" });
+    expect(await loadPositionQuestions(env.DB, "other", "org-1")).toBeNull();
+    expect(await loadPositionQuestions(env.DB, "legacy", "org-1")).toBeNull();
+    for (const id of ["own", "other", "legacy"]) expect(await loadPositionQuestions(env.DB, id)).toMatchObject({ id });
   });
 
   it("S7: unknown position gives null and no INSERT", async () => {

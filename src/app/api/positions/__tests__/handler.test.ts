@@ -28,17 +28,26 @@ function position(id: string, over: Row = {}): Row {
   };
 }
 
-function makeDb(positions: Row[], runs: Row[] = [], applications: Row[] = [], tags: Row[] = []) {
+/** `sessionOrg`: the organization of the session any cookie resolves to (undefined = no valid session). */
+function makeDb(positions: Row[], runs: Row[] = [], applications: Row[] = [], tags: Row[] = [], sessionOrg?: string) {
   const exec = (q: string, a: unknown[]): { rows: Row[]; changes: number } => {
+    if (q.startsWith("SELECT s.id AS session_id")) {
+      const user = { session_id: "s1", account_id: "acc-1", email: "r@example.com", name: "R", organization_id: sessionOrg, organization_name: "Org" };
+      return { rows: sessionOrg === undefined ? [] : [user], changes: 0 };
+    }
+    // Scoped statements bind the organization right after the id (reads, PATCH) or first (list).
+    const owns = (p: Row, org: unknown) => (p.organization_id ?? null) === org;
     if (q.startsWith("SELECT p.id")) {
       const keep = ["id", "title", "family", "company", "location", "posting_url", "ingest_method", "created_at", "expires_at"];
+      const scoped = q.includes("WHERE p.organization_id = ?");
       const rows = [...positions]
+        .filter((p) => !scoped || owns(p, a[0]))
         .sort((x, y) => String(y.created_at).localeCompare(String(x.created_at)))
         .map((p) => ({ ...Object.fromEntries(keep.map((k) => [k, p[k]])), runs: runs.filter((r) => r.position_id === p.id).length }));
       return { rows, changes: 0 };
     }
     if (q.startsWith("SELECT id, title, family")) {
-      const hit = positions.find((p) => p.id === a[0]);
+      const hit = positions.find((p) => p.id === a[0] && (!q.includes("AND organization_id = ?") || owns(p, a[1])));
       return { rows: hit ? [Object.fromEntries(Object.entries(hit).filter(([k]) => k !== "r2_key"))] : [], changes: 0 };
     }
     const mine = () => runs.filter((r) => r.position_id === a[0]).sort((x, y) => String(y.created_at).localeCompare(String(x.created_at)));
@@ -51,19 +60,19 @@ function makeDb(positions: Row[], runs: Row[] = [], applications: Row[] = [], ta
       return { rows, changes: 0 };
     }
     if (q.startsWith("SELECT tag, role")) return { rows: tags.filter((t) => t.position_id === a[0]), changes: 0 };
-    if (q.startsWith("SELECT id FROM positions WHERE board")) {
+    if (q.startsWith("SELECT id, organization_id FROM positions WHERE board")) {
       const hit = positions.find((p) => p.board === a[0] && p.external_id === a[1]);
-      return { rows: hit ? [{ id: hit.id }] : [], changes: 0 };
+      return { rows: hit ? [{ id: hit.id, organization_id: hit.organization_id ?? null }] : [], changes: 0 };
     }
     if (q.startsWith("INSERT INTO positions")) {
       const cols = /\(([^)]*)\)\s*VALUES/.exec(q)?.[1]?.split(",").map((c) => c.trim()) ?? [];
       positions.push(Object.fromEntries(cols.map((c, i) => [c, a[i]])));
       return { rows: [], changes: 1 };
     }
-    const upd = /^UPDATE positions SET (.*) WHERE id = \?$/.exec(q);
+    const upd = /^UPDATE positions SET (.*) WHERE id = \?( AND organization_id = \?)?$/.exec(q);
     if (upd) {
       const cols = (upd[1] ?? "").split(", ").map((c) => c.split(" = ")[0] ?? "");
-      const hit = positions.find((p) => p.id === a[cols.length]);
+      const hit = positions.find((p) => p.id === a[cols.length] && (upd[2] === undefined || owns(p, a[cols.length + 1])));
       if (!hit) return { rows: [], changes: 0 };
       cols.forEach((c, i) => (hit[c] = a[i]));
       return { rows: [], changes: 1 };
@@ -84,12 +93,12 @@ describe("positions functions", () => {
     const db = makeDb([position("old", { created_at: "2026-10-01T00:00:00.000Z" }), position("new")], [
       { id: "r1", position_id: "new" }, { id: "r2", position_id: "new" },
     ]);
-    const list = await listPositions(db);
+    const list = await listPositions(db, null);
     expect(list.map((p) => [p.id, p.runs])).toEqual([["new", 2], ["old", 0]]);
   });
 
   it("B4: list items carry no must_haves, excerpt or r2_key", async () => {
-    const [item] = await listPositions(makeDb([position("p1")]));
+    const [item] = await listPositions(makeDb([position("p1")]), null);
     expect(item).toBeDefined();
     for (const key of ["must_haves", "must_haves_json", "excerpt", "r2_key"]) expect(item).not.toHaveProperty(key);
   });
@@ -99,7 +108,7 @@ describe("positions functions", () => {
       { id: "r1", position_id: "p1", subject: "A", status: "done", created_at: "2026-10-08T10:00:00.000Z" },
       { id: "r2", position_id: "p1", subject: "B", status: "done", created_at: "2026-10-09T10:00:00.000Z" },
     ]);
-    const detail = await getPosition(db, "p1");
+    const detail = await getPosition(db, "p1", null);
     expect(Array.isArray(detail?.position.must_haves)).toBe(true);
     expect(detail?.position.must_haves).toHaveLength(2);
     expect(detail?.position).not.toHaveProperty("r2_key");
@@ -108,14 +117,14 @@ describe("positions functions", () => {
   });
 
   it("B11: a position with no runs has a null group and no runs; with runs the group is titled by the position, newest first, with brief labels", async () => {
-    expect((await getPosition(makeDb([position("p1")]), "p1"))).toMatchObject({ runs: [], group: null });
+    expect((await getPosition(makeDb([position("p1")]), "p1", null))).toMatchObject({ runs: [], group: null });
     const questions_json = JSON.stringify([{ id: "mh-a", text: "Has shipped X" }]);
     const brief = (coverage: string) => JSON.stringify({ run_id: "x", per_question: [{ question_id: "mh-a", coverage, claim_ids: [], summary: "" }], degraded: null });
     const db = makeDb([position("p1", { title: "Staff Engineer" })], [
       { id: "old", position_id: "p1", subject: "A", status: "done", created_at: "2026-10-07T10:00:00.000Z", questions_json, brief_json: brief("none") },
       { id: "new", position_id: "p1", subject: "B", status: "done", created_at: "2026-10-08T10:00:00.000Z", questions_json, brief_json: brief("evidenced"), role: null },
     ]);
-    const { group } = (await getPosition(db, "p1")) ?? {};
+    const { group } = (await getPosition(db, "p1", null)) ?? {};
     expect(group).toMatchObject({ key: "p1", role: "Staff Engineer", run_count: 2, questions: ["Has shipped X"] });
     expect(group?.runs.map((r) => [r.id, r.cells])).toEqual([["new", ["documented"]], ["old", ["no evidence"]]]);
   });
@@ -123,7 +132,7 @@ describe("positions functions", () => {
   it("B12: a run without a brief is not checked in every cell", async () => {
     const questions_json = JSON.stringify([{ id: "mh-a", text: "Has shipped X" }]);
     const db = makeDb([position("p1")], [{ id: "r1", position_id: "p1", subject: "A", status: "done", created_at: "2026-10-07T10:00:00.000Z", questions_json }]);
-    expect((await getPosition(db, "p1"))?.group?.runs[0]?.cells).toEqual(["not checked"]);
+    expect((await getPosition(db, "p1", null))?.group?.runs[0]?.cells).toEqual(["not checked"]);
   });
 
   it("getPosition returns the pool newest first with presence flags only, and the bound tags", async () => {
@@ -133,11 +142,11 @@ describe("positions functions", () => {
       { id: "a3", position_id: "other", source: "email", status: "pooled", received_at: "2026-10-09T11:00:00.000Z" },
     ];
     const tags = [{ tag: "staff-eng", role: "Staff", goal: "hiring", startupjobs_offer_id: null, position_id: "p1", created_at: "2026-10-08T10:00:00.000Z" }];
-    const detail = await getPosition(makeDb([position("p1")], [], apps, tags), "p1");
+    const detail = await getPosition(makeDb([position("p1")], [], apps, tags), "p1", null);
     expect(detail?.candidates.map((c) => [c.id, c.has_profile, c.has_cv, c.handle, c.run])).toEqual([["a2", 0, 1, null, null], ["a1", 1, 0, "Ada", null]]);
     for (const c of detail?.candidates ?? []) for (const key of ["cv_text", "cover_letter", "external_id", "linkedin_url"]) expect(c).not.toHaveProperty(key);
     expect(detail?.tags.map((t) => t.tag)).toEqual(["staff-eng"]);
-    expect((await getPosition(makeDb([position("p1")]), "p1"))).toMatchObject({ candidates: [], tags: [] });
+    expect((await getPosition(makeDb([position("p1")]), "p1", null))).toMatchObject({ candidates: [], tags: [] });
   });
 
   it("getPosition attaches each pooled run's progress, fit % and independent-evidence count", async () => {
@@ -155,7 +164,7 @@ describe("positions functions", () => {
       { id: "a1", position_id: "p1", source: "manual", status: "run-started", run_id: "r1", received_at: "2026-10-08T10:00:00.000Z", linkedin_url: "https://www.linkedin.com/in/ada" },
       { id: "a2", position_id: "p1", source: "manual", status: "run-started", run_id: "r2", received_at: "2026-10-09T10:00:00.000Z", cv_text: "cv" },
     ];
-    const detail = await getPosition(makeDb([position("p1")], runs, apps), "p1");
+    const detail = await getPosition(makeDb([position("p1")], runs, apps), "p1", null);
     const [done, running] = detail?.candidates ?? [];
     expect(done?.run).toEqual({ status: "done", subject: "Bo", step: null, pct: 100, fit_pct: 67, independent: 1, stalled: false });
     expect(running?.run).toMatchObject({ status: "running", subject: "Ada King", step: "Web search", fit_pct: null, independent: 0, stalled: true });
@@ -174,26 +183,26 @@ describe("positions functions", () => {
       { id: "a2", position_id: "p1", source: "manual", status: "run-started", run_id: "r2", received_at: "2026-10-09T10:00:00.000Z", cv_text: "cv" },
       { id: "a3", position_id: "p1", source: "manual", status: "run-started", run_id: "r3", received_at: "2026-10-09T09:00:00.000Z", cv_text: "cv" },
     ];
-    const detail = await getPosition(makeDb([position("p1")], runs, apps), "p1");
+    const detail = await getPosition(makeDb([position("p1")], runs, apps), "p1", null);
     const steps = (detail?.candidates ?? []).map((c) => c.run?.step);
     expect(steps).toEqual(["Reading the sources", "GitHub contributions", "Reading the profile"]);
   });
 
   it("B6: getPosition of an unknown or implausible id returns null", async () => {
     const db = makeDb([position("p1")]);
-    expect(await getPosition(db, "nope")).toBeNull();
-    expect(await getPosition(db, "x".repeat(65))).toBeNull();
+    expect(await getPosition(db, "nope", null)).toBeNull();
+    expect(await getPosition(db, "x".repeat(65), null)).toBeNull();
   });
 
   it("B7: broken must_haves_json gives an empty array", async () => {
-    const detail = await getPosition(makeDb([position("p1", { must_haves_json: "{broken" })]), "p1");
+    const detail = await getPosition(makeDb([position("p1", { must_haves_json: "{broken" })]), "p1", null);
     expect(detail?.position.must_haves).toEqual([]);
     expect(detail?.group).toBeNull();
   });
 
   it("B8: patchPosition with a title leaves family and must-haves unchanged", async () => {
     const rows = [position("p1")];
-    const updated = await patchPosition(makeDb(rows), "p1", { title: "Renamed" });
+    const updated = await patchPosition(makeDb(rows), "p1", { title: "Renamed" }, null);
     expect(updated).toMatchObject({ title: "Renamed", family: "data" });
     expect(updated?.must_haves).toHaveLength(2);
     expect(updated?.extraction).not.toBe("edited");
@@ -202,7 +211,7 @@ describe("positions functions", () => {
   it("B9: patchPosition with must_haves stores JSON that parses back and keeps expires_at", async () => {
     const rows = [position("p1")];
     const next = [mh("mh-new")];
-    const updated = await patchPosition(makeDb(rows), "p1", { must_haves: next });
+    const updated = await patchPosition(makeDb(rows), "p1", { must_haves: next }, null);
     expect(JSON.parse(rows[0]?.must_haves_json as string)).toEqual(next);
     expect(updated?.must_haves).toEqual(next);
     expect(updated?.expires_at).toBe("2026-10-15T10:00:00.000Z");
@@ -210,7 +219,7 @@ describe("positions functions", () => {
   });
 
   it("B10: patchPosition on an unknown id returns null", async () => {
-    expect(await patchPosition(makeDb([]), "nope", { title: "x" })).toBeNull();
+    expect(await patchPosition(makeDb([]), "nope", { title: "x" }, null)).toBeNull();
   });
 });
 
@@ -269,5 +278,60 @@ describe("route functions", () => {
     const manual = await createPositionRoute(authed({ title: "Head of Sales", company: "Acme" }), e, { newId: () => "manual-id" });
     expect(manual.status).toBe(201);
     expect(rows.find((r) => r.id === "manual-id")).toMatchObject({ ingest_method: "manual", company: "Acme" });
+  });
+});
+
+describe("organization scope", () => {
+  const OWN = position("own", { organization_id: "org-1" });
+  const OTHER = position("other", { organization_id: "org-2", created_at: "2026-10-08T11:00:00.000Z" });
+  const LEGACY = position("legacy", { created_at: "2026-10-08T12:00:00.000Z" });
+  const rows = () => [{ ...OWN }, { ...OTHER }, { ...LEGACY }];
+  const env = (positions: Row[], sessionOrg?: string): PositionsEnv => ({
+    DB: makeDb(positions, [], [], [], sessionOrg), SOURCES: { put: () => Promise.resolve({}) } as unknown as R2Bucket,
+    RESEARCH_RUN: {} as Workflow<{ runId: string }>, RUN_BUDGET_USD: "0.5", RUN_BUDGET_CALLS: "16", RUN_TOKEN: "secret",
+  });
+  const session = (method = "GET", body?: unknown) =>
+    new Request("http://x/api/positions", { method, headers: { Cookie: "oldboys_session=tok" }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
+  const bearer = (method = "GET", body?: unknown) =>
+    new Request("http://x/api/positions", { method, headers: { Authorization: "Bearer secret" }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
+
+  it("a session lists only its organization's positions; NULL-owner and other organizations are absent", async () => {
+    const res = await listPositionsRoute(session(), env(rows(), "org-1"));
+    expect((await res.json<{ positions: { id: string }[] }>()).positions.map((p) => p.id)).toEqual(["own"]);
+    expect((await listPositions(makeDb(rows()), "org-2")).map((p) => p.id)).toEqual(["other"]);
+  });
+
+  it("the bearer still lists every position", async () => {
+    const res = await listPositionsRoute(bearer(), env(rows()));
+    expect((await res.json<{ positions: { id: string }[] }>()).positions.map((p) => p.id)).toEqual(["legacy", "other", "own"]);
+  });
+
+  it("a session reads its own position and gets 404 for another organization's or a NULL-owner one", async () => {
+    expect((await getPositionRoute(session(), env(rows(), "org-1"), "own")).status).toBe(200);
+    expect((await getPositionRoute(session(), env(rows(), "org-1"), "other")).status).toBe(404);
+    expect((await getPositionRoute(session(), env(rows(), "org-1"), "legacy")).status).toBe(404);
+  });
+
+  it("the bearer reads any position", async () => {
+    for (const id of ["own", "other", "legacy"]) expect((await getPositionRoute(bearer(), env(rows()), id)).status).toBe(200);
+  });
+
+  it("a session cannot edit another organization's position; its own one saves", async () => {
+    const stored = rows();
+    expect((await patchPositionRoute(session("PATCH", { title: "Hijack" }), env(stored, "org-1"), "other")).status).toBe(404);
+    expect((await patchPositionRoute(session("PATCH", { title: "Hijack" }), env(stored, "org-1"), "legacy")).status).toBe(404);
+    expect(stored.map((r) => r.title)).toEqual(["Title own", "Title other", "Title legacy"]);
+    expect((await patchPositionRoute(session("PATCH", { title: "Mine" }), env(stored, "org-1"), "own")).status).toBe(200);
+    expect(stored[0]?.title).toBe("Mine");
+    expect((await patchPositionRoute(bearer("PATCH", { title: "Ops" }), env(stored), "legacy")).status).toBe(200);
+  });
+
+  it("creating from a session stores its organization; the bearer stores NULL", async () => {
+    const stored: Row[] = [];
+    const llm = fakeLlm(() => ({ title: "Dev", family: "engineering", must_haves: [{ id: "mh-a", text: "A", accepted_evidence: [] }] }));
+    expect((await createPositionRoute(session("POST", { title: "Head of Sales" }), env(stored, "org-1"), { newId: () => "s-id" })).status).toBe(201);
+    expect((await createPositionRoute(session("POST", { postingText: "A posting" }), env(stored, "org-1"), { newId: () => "p-id", ports: { llm } })).status).toBe(201);
+    expect((await createPositionRoute(bearer("POST", { title: "Head of Sales" }), env(stored), { newId: () => "b-id" })).status).toBe(201);
+    expect(stored.map((r) => [r.id, r.organization_id])).toEqual([["s-id", "org-1"], ["p-id", "org-1"], ["b-id", null]]);
   });
 });
