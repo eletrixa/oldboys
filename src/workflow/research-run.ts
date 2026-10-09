@@ -12,6 +12,8 @@
  *   identity and set investigations.subject/anchor; a scrape or model failure is a ledger note, never a failed run;
  *   seed row ids are stable (stableId), so a retried seed step upserts instead of duplicating sources/candidates;
  *   the given profile's ProfileFacts go into its ledger ref as `digest`
+ * - `role_template` step: a run started from a position (questions_json set, role_questions skipped) still matches the
+ *   catalog template by title (no model call), so role_sites_serp and the technical-role gate get their sites and family
  * - verify's ledger row carries `ref.challenge` (devil's advocate record, idea #8: checked, held, per claim ground + why)
  * - a collector's `digest` (StepOutcome.digest) lands in the step's ledger ref as `digest`
  * - `onEmpty`: run the declared fallback step once, or record a Gap (ledger decision with ref.gap)
@@ -39,6 +41,7 @@ import { makeFetchJson } from "@/adapters/fetch";
 import { makeLlmCall } from "@/adapters/llm";
 import type { Candidate, GoalId } from "@/domain/claim";
 import type { Ports } from "@/domain/ports";
+import { matchRoleTemplate } from "@/domain/role-catalog";
 import { missingSecrets } from "@/domain/secrets";
 import { planBatch } from "@/recipe/batch";
 import { recipeFor } from "@/recipe/goals";
@@ -60,6 +63,7 @@ type Head = {
   goal: GoalId;
   role: string | null;
   questions_json: string | null;
+  role_template: string | null;
   profile_url: string | null;
   cv_text: string | null;
 };
@@ -98,7 +102,7 @@ export class ResearchRunWorkflow extends WorkflowEntrypoint<CloudflareEnv, Resea
 
   private async runRecipe(runId: string, step: WorkflowStep): Promise<void> {
     const head = await step.do("load-investigation", async () => {
-      const row = await this.env.DB.prepare("SELECT subject, anchor, goal, role, questions_json, profile_url, cv_text FROM investigations WHERE id = ?")
+      const row = await this.env.DB.prepare("SELECT subject, anchor, goal, role, questions_json, role_template, profile_url, cv_text FROM investigations WHERE id = ?")
         .bind(runId)
         .first<Head>();
       if (!row) throw new Error(`investigation ${runId} not found`);
@@ -120,6 +124,15 @@ export class ResearchRunWorkflow extends WorkflowEntrypoint<CloudflareEnv, Resea
     }
     if (head.subject.trim() === "") throw new Error("could not work out the candidate's name from the profile or CV");
 
+    if (head.role !== null && head.role.length > 0 && head.questions_json !== null && head.role_template === null) {
+      // A run started from a position already carries its questions, so role_questions is skipped below; the catalog
+      // template still has to be matched (no model call) or role_sites_serp and the technical-role gate see no template.
+      await step.do("role_template", async () => {
+        const hit = matchRoleTemplate(head.role ?? "", await loadRoleTemplates(this.env.DB));
+        if (hit !== null) await this.env.DB.prepare("UPDATE investigations SET role_template = ? WHERE id = ?").bind(hit.key, runId).run();
+        return hit?.key ?? null;
+      });
+    }
     if (head.role !== null && head.role.length > 0 && head.questions_json === null) {
       await step.do("role_questions", async () => {
         const started = Date.now();
