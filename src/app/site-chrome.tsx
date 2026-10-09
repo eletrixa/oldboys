@@ -8,7 +8,8 @@
  *
  * Key responsibilities:
  * - SiteHeader: Echo r mark + wordmark and the nav the layout passes in (SiteNav, a server component)
- * - SiteFooter: the short honesty line and a link to /validation (what is real, simulated, incomplete)
+ * - SiteFooter: the short honesty line and a link to /validation (what is real, simulated, incomplete), with an
+ *   "Architecture" link to /architecture on its own line below it (the landing page uses this footer too)
  * - Both render nothing under /apply/<tag> (plans/008: the candidate sees "received", never the research product)
  *
  * Design constraints:
@@ -29,6 +30,8 @@ function EchoMark({ size }: Readonly<{ size: number }>): React.JSX.Element {
     </svg>
   );
 }
+
+const FOOTER_LINK = "underline decoration-muted/40 underline-offset-4 hover:text-ink";
 
 // Candidate pages live at /apply/<tag>; bare /apply has no page.
 const isCandidateRoute = (pathname: string | null): boolean => pathname?.startsWith("/apply/") ?? false;
@@ -52,10 +55,15 @@ export function SiteFooter(): React.JSX.Element | null {
   if (isCandidateRoute(usePathname())) return null;
   return (
     <footer className="border-t border-divider">
-      <p className="mx-auto max-w-5xl px-4 py-6 text-xs text-muted">
-        Radar prepares evidence and never scores people. A person makes every decision.{" "}
-        <Link href="/validation" className="underline decoration-muted/40 underline-offset-4 hover:text-ink">What is real, simulated or unfinished</Link>
-      </p>
+      <div className="mx-auto flex max-w-5xl flex-col gap-2 px-4 py-6 text-xs text-muted">
+        <p>
+          Radar prepares evidence and never scores people. A person makes every decision.{" "}
+          <Link href="/validation" className={FOOTER_LINK}>What is real, simulated or unfinished</Link>
+        </p>
+        <p>
+          <Link href="/architecture" className={FOOTER_LINK}>Architecture</Link>
+        </p>
+      </div>
     </footer>
   );
 }

@@ -4,7 +4,7 @@
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/runs/[id]/brief-page.tsx
  * Deps:    react, next/link, src/domain/run-cost, ../../ui, ./brief-layout, ./brief-tabs, ./brief-plan, ./brief-evidence,
- *          ./call-panel(-view), ./challenge, ./evidence, ./kit-actions, ./parts, ./profile-sections, ./report-lang, ./report-text,
+ *          ./call-panel(-view), ./challenge, ./evidence, ./kit-actions, ./parts, ./profile-sections, ./report-lang, ./scorecard(-card), ./report-text,
  *          ./sections, ./summary, ./summary-card, ./state, ./code-profile-card, ./profile-signals-card, ./registry-checks-card, ./delete-card
  * Tested:  helpers in __tests__/brief-layout.test.ts; the page itself in the browser (1440 px and 390 px)
  *
@@ -15,7 +15,7 @@
  *   card, About this research + Audit record, delete, the "never scores people" note, All briefs); a fixed phone bar
  *   with copy + calendar below lg
  * - BriefView: the same main column without header and sidebar, for a brief on a run that is not done
- * - Tabs: Interview plan (default), Evidence (TopLine, criteria table / RoleCriteria, confirmed evidence, career
+ * - Tabs: Interview plan (default), Evidence (TopLine, role fit scorecard (plans/013, English), criteria table / RoleCriteria, confirmed evidence, career
  *   timeline, ProfileSections, findings as compact rows or PerQuestion, code profile, registries), Phone screen
  *   (CallPanel), Sources and gaps (confirmed profiles, "How we confirmed it is X", gap groups, Also found, removed
  *   protected line, profile signals)
@@ -49,6 +49,8 @@ import { ProfileSignalsCard } from "./profile-signals-card";
 import { RegistryChecksCard } from "./registry-checks-card";
 import { LangSwitch, ReportContext, useReport, useReportLanguage } from "./report-lang";
 import { allUnavailable } from "./report-text";
+import { scorecard } from "./scorecard";
+import { ScorecardCard } from "./scorecard-card";
 import { SectionRows } from "./sections";
 import { type RunState, briefSections, headerText, hiringFor } from "./state";
 import { aiOff, criteriaCounts, criteriaRows } from "./summary";
@@ -130,6 +132,9 @@ function BriefMain({ state, brief, calls, confirmation, first }: { state: RunSta
         </TabPanel>
         <TabPanel k="evidence">
           <TopLine headline={brief.headline ?? null} locationNote={brief.location_note ?? null} role={hiringFor(state)} />
+          <div lang={english}>
+            <ScorecardCard card={scorecard(state)} evidence={evidence} />
+          </div>
           {allUnavailable(brief) ? <RoleCriteria questions={state.questions} /> : <CriteriaTable state={state} brief={brief} />}
           {brief.degraded !== null && <ConfirmedEvidence items={brief.evidence} />}
           {brief.profile && (

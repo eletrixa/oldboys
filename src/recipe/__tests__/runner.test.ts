@@ -175,4 +175,36 @@ describe("collectWith waves and digest", () => {
     expect(out.sources.map((s) => s.url)).toEqual(["a", "b", "c", "d"].map((k) => `https://example.com/${k}`));
     expect(out.digest).toEqual(["a", "b", "c", "d"]);
   });
+
+  it("stores a request's hits up to 6 at a time and keeps parsed order", async () => {
+    const hits = Array.from({ length: 8 }, (_, i) => `https://example.com/h${String(i)}`);
+    const collector = fake({ parse: () => hits.map((url) => ({ url, excerpt: "e", raw: {} })) });
+    const pending: (() => void)[] = [];
+    let inFlight = 0;
+    let peak = 0;
+    const ports = fakePorts({
+      fetchJson: () => Promise.resolve({}),
+      storeSource: (s) => {
+        inFlight += 1;
+        peak = Math.max(peak, inFlight);
+        return new Promise((resolve) => {
+          pending.push(() => {
+            inFlight -= 1;
+            resolve({ ...s, r2_key: `k/${s.id}` });
+          });
+        });
+      },
+    });
+    const run = collectWith(collector, step, baseContext(), ports);
+    // release stores in reverse order of start so completion order differs from parsed order
+    while (pending.length < 6) await Promise.resolve();
+    expect(peak).toBe(6);
+    for (let released = 0; released < 8; released++) {
+      while (pending.length === 0) await Promise.resolve();
+      pending.pop()?.();
+    }
+    const out = await run;
+    expect(peak).toBe(6);
+    expect(out.sources.map((s) => s.url)).toEqual(hits);
+  });
 });

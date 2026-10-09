@@ -1,0 +1,398 @@
+{
+  "schema_version": 1,
+  "diagram_type": "dataflow",
+  "meta": {
+    "title": "Oldboys: research data flow",
+    "quality_profile": "showcase",
+    "views": [
+      {
+        "id": "sources",
+        "label": "Where data comes from",
+        "focus": [
+          "cand",
+          "pos",
+          "apify",
+          "pub",
+          "collect",
+          "r2"
+        ],
+        "note": "Candidate and position are the input. Collectors read Apify, free APIs and registries. Raw payloads go to R2."
+      },
+      {
+        "id": "identity",
+        "label": "Identity and claims",
+        "focus": [
+          "collect",
+          "identity",
+          "extract",
+          "pos"
+        ],
+        "note": "Only sources of the confirmed person reach the model. Name and city alone never merge."
+      },
+      {
+        "id": "verify",
+        "label": "Verify and brief",
+        "focus": [
+          "extract",
+          "verify",
+          "synth",
+          "d1",
+          "out"
+        ],
+        "note": "A FACT needs a quote inside the excerpt. The second model and the devil's advocate may only downgrade."
+      },
+      {
+        "id": "call",
+        "label": "Call with the candidate",
+        "focus": [
+          "phone",
+          "d1",
+          "out"
+        ],
+        "note": "Call answers are stored as STATEMENT, never FACT, and do not change coverage."
+      }
+    ],
+    "viewBox": [
+      1080,
+      540
+    ],
+    "locale": "en"
+  },
+  "stages": [
+    {
+      "label": "Inputs and sources"
+    },
+    {
+      "label": "Collection"
+    },
+    {
+      "label": "Identity and claims"
+    },
+    {
+      "label": "Verify and synthesis"
+    },
+    {
+      "label": "Storage and output"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "pos",
+      "type": "frontend",
+      "label": "Position",
+      "sublabel": "must-haves · role sites",
+      "stage": 0,
+      "row": 0,
+      "width": 130,
+      "yOffset": -20
+    },
+    {
+      "id": "cand",
+      "type": "frontend",
+      "label": "Candidate",
+      "sublabel": "LinkedIn · CV",
+      "stage": 0,
+      "row": 1,
+      "width": 130,
+      "yOffset": -36
+    },
+    {
+      "id": "apify",
+      "type": "external",
+      "label": "Apify actors",
+      "sublabel": "LinkedIn · SERP · social",
+      "stage": 0,
+      "row": 2,
+      "width": 130,
+      "tag": "paid",
+      "yOffset": -52
+    },
+    {
+      "id": "collect",
+      "type": "backend",
+      "label": "Collectors",
+      "sublabel": "seed · SERP · 21 steps",
+      "stage": 1,
+      "row": 2,
+      "width": 130,
+      "tag": "$0.50 / 18 calls",
+      "yOffset": -52
+    },
+    {
+      "id": "pub",
+      "type": "external",
+      "label": "Public APIs",
+      "sublabel": "GitHub · ORCID · registries",
+      "stage": 0,
+      "row": 3,
+      "width": 130,
+      "tag": "free",
+      "yOffset": -68
+    },
+    {
+      "id": "identity",
+      "type": "security",
+      "label": "Identity",
+      "sublabel": "merge · lineup",
+      "stage": 2,
+      "row": 2,
+      "width": 130,
+      "yOffset": -52
+    },
+    {
+      "id": "extract",
+      "type": "backend",
+      "label": "Extraction",
+      "sublabel": "FACT · INFERENCE",
+      "stage": 2,
+      "row": 1,
+      "width": 130,
+      "tag": "Opus",
+      "yOffset": -36
+    },
+    {
+      "id": "r2",
+      "type": "database",
+      "label": "R2",
+      "sublabel": "raw JSON · CV",
+      "stage": 2,
+      "row": 3,
+      "width": 130,
+      "tag": "7 days",
+      "yOffset": -68
+    },
+    {
+      "id": "verify",
+      "type": "security",
+      "label": "Verify",
+      "sublabel": "quote · challenge",
+      "stage": 3,
+      "row": 1,
+      "width": 130,
+      "tag": "Sonnet",
+      "yOffset": -36
+    },
+    {
+      "id": "synth",
+      "type": "backend",
+      "label": "Synthesis",
+      "sublabel": "coverage · gaps",
+      "stage": 3,
+      "row": 2,
+      "width": 130,
+      "tag": "Opus",
+      "yOffset": -52
+    },
+    {
+      "id": "phone",
+      "type": "external",
+      "label": "Call",
+      "sublabel": "ElevenLabs · transcript",
+      "stage": 3,
+      "row": 3,
+      "width": 130,
+      "yOffset": -68
+    },
+    {
+      "id": "out",
+      "type": "frontend",
+      "label": "Brief and exports",
+      "sublabel": "UI · kit · ATS · CZ",
+      "stage": 4,
+      "row": 0,
+      "width": 130,
+      "yOffset": -20
+    },
+    {
+      "id": "d1",
+      "type": "database",
+      "label": "D1",
+      "sublabel": "ledger · claims · brief",
+      "stage": 4,
+      "row": 2,
+      "width": 130,
+      "tag": "7 days",
+      "yOffset": -52
+    }
+  ],
+  "flows": [
+    {
+      "id": "cand-collect",
+      "from": "cand",
+      "to": "collect",
+      "label": "URL · CV",
+      "variant": "emphasis",
+      "fromSide": "right",
+      "toSide": "top",
+      "via": [
+        [
+          315,
+          235
+        ]
+      ]
+    },
+    {
+      "id": "apify-collect",
+      "from": "apify",
+      "to": "collect",
+      "label": "dataset",
+      "variant": "emphasis",
+      "fromSide": "right",
+      "toSide": "left",
+      "route": "straight"
+    },
+    {
+      "id": "pub-collect",
+      "from": "pub",
+      "to": "collect",
+      "label": "JSON · text",
+      "fromSide": "right",
+      "toSide": "bottom",
+      "via": [
+        [
+          315,
+          431
+        ]
+      ]
+    },
+    {
+      "id": "collect-identity",
+      "from": "collect",
+      "to": "identity",
+      "label": "excerpts",
+      "variant": "emphasis",
+      "route": "straight"
+    },
+    {
+      "id": "collect-r2",
+      "from": "collect",
+      "to": "r2",
+      "label": "payload",
+      "variant": "dashed",
+      "fromSide": "right",
+      "toSide": "left",
+      "via": [
+        [
+          422,
+          333
+        ],
+        [
+          422,
+          431
+        ]
+      ]
+    },
+    {
+      "id": "pos-extract",
+      "from": "pos",
+      "to": "extract",
+      "label": "must-haves",
+      "fromSide": "right",
+      "toSide": "top",
+      "via": [
+        [
+          530,
+          137
+        ]
+      ]
+    },
+    {
+      "id": "identity-extract",
+      "from": "identity",
+      "to": "extract",
+      "label": "confirmed",
+      "variant": "security",
+      "fromSide": "top",
+      "toSide": "bottom",
+      "route": "straight",
+      "labelAt": [
+        592,
+        284
+      ]
+    },
+    {
+      "id": "extract-verify",
+      "from": "extract",
+      "to": "verify",
+      "label": "claims",
+      "variant": "emphasis",
+      "route": "straight"
+    },
+    {
+      "id": "verify-synth",
+      "from": "verify",
+      "to": "synth",
+      "label": "verified",
+      "variant": "emphasis",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "route": "straight",
+      "labelAt": [
+        808,
+        284
+      ]
+    },
+    {
+      "id": "synth-d1",
+      "from": "synth",
+      "to": "d1",
+      "label": "brief",
+      "variant": "emphasis",
+      "route": "straight"
+    },
+    {
+      "id": "d1-out",
+      "from": "d1",
+      "to": "out",
+      "label": "/state",
+      "variant": "emphasis",
+      "fromSide": "top",
+      "toSide": "bottom",
+      "route": "straight"
+    },
+    {
+      "id": "phone-d1",
+      "from": "phone",
+      "to": "d1",
+      "label": "STATEMENT",
+      "variant": "dashed",
+      "fromSide": "right",
+      "toSide": "bottom",
+      "via": [
+        [
+          960,
+          431
+        ]
+      ]
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Sources",
+      "items": [
+        "Paid calls only through Apify, the runner enforces the budget",
+        "LinkedIn only through Apify, the extension reads 3 fields",
+        "Steps pass only sourceId and excerpt, the payload stays in R2"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Processing",
+      "items": [
+        "LLM only in fixed seams: seed, role, resolve, extract, verify, synthesize",
+        "FACT only with a quote inside the source excerpt",
+        "Without AI the brief is built from evidence only, marked NO AI"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Data protection",
+      "items": [
+        "No Art. 9 data, filtered in synthesis, state view and call",
+        "The ledger is append-only, every step with its cost",
+        "Cron or rejection deletes D1 and R2 data after 7 days"
+      ]
+    }
+  ]
+}

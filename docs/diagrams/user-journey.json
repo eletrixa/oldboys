@@ -1,0 +1,290 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "Oldboys: user journey",
+    "quality_profile": "showcase",
+    "views": [
+      {
+        "id": "recruiter",
+        "label": "Recruiter path",
+        "focus": [
+          "register",
+          "position",
+          "candidates",
+          "run",
+          "brief",
+          "export"
+        ],
+        "note": "Sign up, position, candidates, research, brief and the interview export."
+      },
+      {
+        "id": "candidate",
+        "label": "Candidate touchpoints",
+        "focus": [
+          "apply",
+          "candidates",
+          "phone",
+          "brief",
+          "delete"
+        ],
+        "note": "The candidate only applies and may take the verification call. They never see the run or the brief."
+      },
+      {
+        "id": "exceptions",
+        "label": "Exceptions",
+        "focus": [
+          "run",
+          "lineup",
+          "brief",
+          "export",
+          "delete"
+        ],
+        "note": "An unsure identity pauses the run and asks the recruiter. Rejection or 7 days deletes the data."
+      }
+    ],
+    "locale": "en"
+  },
+  "lanes": [
+    {
+      "id": "cand",
+      "label": "Candidate"
+    },
+    {
+      "id": "rec",
+      "label": "Recruiter · web and extension"
+    },
+    {
+      "id": "agent",
+      "label": "Agent · Cloudflare Workflow"
+    }
+  ],
+  "phases": [
+    {
+      "id": "setup",
+      "label": "Setup",
+      "fromCol": 0,
+      "toCol": 1
+    },
+    {
+      "id": "research",
+      "label": "Research",
+      "fromCol": 2,
+      "toCol": 3,
+      "variant": "emphasis"
+    },
+    {
+      "id": "decide",
+      "label": "Verify and decide",
+      "fromCol": 4,
+      "toCol": 5,
+      "variant": "dashed"
+    }
+  ],
+  "mainPath": [
+    "register",
+    "position",
+    "candidates",
+    "run",
+    "brief",
+    "export"
+  ],
+  "nodes": [
+    {
+      "id": "apply",
+      "lane": "cand",
+      "col": 1,
+      "type": "external",
+      "label": "Application",
+      "sublabel": "/apply · email · StartupJobs",
+      "width": 150
+    },
+    {
+      "id": "phone",
+      "lane": "cand",
+      "col": 4,
+      "type": "external",
+      "label": "Verification call",
+      "sublabel": "answers as STATEMENT",
+      "width": 150
+    },
+    {
+      "id": "register",
+      "lane": "rec",
+      "col": 0,
+      "type": "frontend",
+      "label": "Sign up",
+      "sublabel": "account · IČO via ARES",
+      "width": 140
+    },
+    {
+      "id": "position",
+      "lane": "rec",
+      "col": 1,
+      "type": "frontend",
+      "label": "Position",
+      "sublabel": "catalog · posting · must-haves",
+      "width": 150
+    },
+    {
+      "id": "candidates",
+      "lane": "rec",
+      "col": 2,
+      "type": "frontend",
+      "label": "Candidates",
+      "sublabel": "LinkedIn · CV · pool",
+      "width": 140
+    },
+    {
+      "id": "brief",
+      "lane": "rec",
+      "col": 4,
+      "type": "frontend",
+      "label": "Brief",
+      "sublabel": "evidence · gaps · Fit",
+      "width": 140
+    },
+    {
+      "id": "export",
+      "lane": "rec",
+      "col": 5,
+      "type": "frontend",
+      "label": "Interview and export",
+      "sublabel": "kit · ATS · .ics · CZ",
+      "width": 176
+    },
+    {
+      "id": "run",
+      "lane": "agent",
+      "col": 3,
+      "type": "backend",
+      "label": "Research run",
+      "sublabel": "sources · verify · synthesis",
+      "tag": "2–4 min · $0.50",
+      "width": 150
+    },
+    {
+      "id": "lineup",
+      "lane": "rec",
+      "col": 3,
+      "type": "security",
+      "label": "Who is this?",
+      "sublabel": "lineup · max 3 questions",
+      "width": 140
+    },
+    {
+      "id": "delete",
+      "lane": "agent",
+      "col": 5,
+      "type": "security",
+      "label": "Data deletion",
+      "sublabel": "rejection · after 7 days",
+      "width": 150
+    }
+  ],
+  "edges": [
+    {
+      "id": "register-position",
+      "from": "register",
+      "to": "position",
+      "variant": "emphasis",
+      "role": "main"
+    },
+    {
+      "id": "position-candidates",
+      "from": "position",
+      "to": "candidates",
+      "variant": "emphasis",
+      "role": "main"
+    },
+    {
+      "id": "apply-candidates",
+      "from": "apply",
+      "to": "candidates",
+      "label": "to pool",
+      "role": "branch"
+    },
+    {
+      "id": "candidates-run",
+      "from": "candidates",
+      "to": "run",
+      "label": "Research N",
+      "variant": "emphasis",
+      "role": "main"
+    },
+    {
+      "id": "run-lineup",
+      "from": "run",
+      "to": "lineup",
+      "variant": "security",
+      "role": "error",
+      "fromSide": "top",
+      "toSide": "bottom"
+    },
+    {
+      "id": "run-brief",
+      "from": "run",
+      "to": "brief",
+      "label": "brief",
+      "variant": "emphasis",
+      "role": "main",
+      "fromSide": "right",
+      "toSide": "bottom"
+    },
+    {
+      "id": "brief-phone",
+      "from": "brief",
+      "to": "phone",
+      "label": "approval",
+      "variant": "dashed",
+      "role": "branch",
+      "fromSide": "top",
+      "toSide": "bottom"
+    },
+    {
+      "id": "brief-export",
+      "from": "brief",
+      "to": "export",
+      "variant": "emphasis",
+      "role": "main"
+    },
+    {
+      "id": "export-delete",
+      "from": "export",
+      "to": "delete",
+      "variant": "security",
+      "role": "branch",
+      "fromSide": "bottom",
+      "toSide": "top"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Recruiter",
+      "items": [
+        "One role: the recruiter is also the hiring manager",
+        "The extension starts a run from a LinkedIn profile",
+        "A person decides, the tool rejects nobody"
+      ]
+    },
+    {
+      "dot": "violet",
+      "title": "Candidate",
+      "items": [
+        "Never sees the run, its status or the brief",
+        "Call only with consent, max 5 per run",
+        "Answers are STATEMENT, never FACT"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Exceptions",
+      "items": [
+        "Given profile or CV = confirmed identity, no pause",
+        "Budget used up: a gap, not an error",
+        "No AI: brief from evidence only, marked NO AI"
+      ]
+    }
+  ]
+}

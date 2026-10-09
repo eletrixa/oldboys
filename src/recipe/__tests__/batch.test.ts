@@ -1,5 +1,5 @@
 /**
- * planBatch: paid actor steps per batch never exceed the remaining call budget; free REST steps always run.
+ * nextToStart: the sliding-window rule. Free steps always start, paid steps only while paid calls are left or none runs.
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/recipe/__tests__/batch.test.ts
@@ -7,31 +7,46 @@
  * Tested:  n/a (this is the test)
  */
 import { describe, expect, it } from "vitest";
-import { isPaid, planBatch } from "@/recipe/batch";
+import { isPaid, nextToStart } from "@/recipe/batch";
 import type { Step } from "@/recipe/step";
 
 const paid = (id: string): Step => ({ id, kind: "actor", actor: "apify/instagram-profile-scraper" });
 const free = (id: string): Step => ({ id, kind: "actor", actor: "rest/github" });
-const ids = (xs: readonly Step[]) => xs.map((x) => x.id);
+const idOf = (s: Step | null) => s?.id ?? null;
 
-describe("planBatch", () => {
+describe("nextToStart", () => {
   it("classifies REST and ARES collectors as free, Apify actors and SERP as paid", () => {
     expect([paid("a"), free("b"), { id: "c", kind: "ares", actor: "ares/x" } as Step, { id: "d", kind: "serp", actor: "apify/google-search-scraper" } as Step].map(isPaid)).toEqual([true, false, false, true]);
   });
 
-  it("starts no more paid steps than the budget has left and defers the rest", () => {
-    const { now, later } = planBatch([paid("p1"), free("f1"), paid("p2"), paid("p3"), free("f2")], 1, 5);
-    expect(ids(now)).toEqual(["p1", "f1", "f2"]);
-    expect(ids(later)).toEqual(["p2", "p3"]);
+  it("returns null when the window is full", () => {
+    expect(nextToStart([free("a")], [free("r1"), free("r2")], 5, 2)).toBeNull();
   });
 
-  it("caps the batch size and keeps order", () => {
-    const { now, later } = planBatch([free("a"), free("b"), free("c")], 10, 2);
-    expect(ids(now)).toEqual(["a", "b"]);
-    expect(ids(later)).toEqual(["c"]);
+  it("returns null when nothing is pending", () => {
+    expect(nextToStart([], [], 5, 2)).toBeNull();
   });
 
-  it("with the budget spent, still runs paid steps so each records its own budget gap (always makes progress)", () => {
-    expect(ids(planBatch([paid("p1"), paid("p2")], 0, 5).now)).toEqual(["p1", "p2"]);
+  it("always starts a free step, even with no paid calls left and a paid step running", () => {
+    expect(idOf(nextToStart([free("f1")], [paid("r")], 0, 6))).toBe("f1");
+  });
+
+  it("starts a paid step while paid calls are left", () => {
+    expect(idOf(nextToStart([paid("p1")], [paid("r")], 1, 6))).toBe("p1");
+  });
+
+  it("blocks a paid step while a paid one runs and nothing is left, without blocking later free steps", () => {
+    expect(nextToStart([paid("p1")], [paid("r")], 0, 6)).toBeNull();
+    expect(idOf(nextToStart([paid("p1"), free("f1")], [paid("r")], 0, 6))).toBe("f1");
+  });
+
+  it("starts a paid step when no paid step runs, even with paidLeft 0 (always makes progress)", () => {
+    expect(idOf(nextToStart([paid("p1")], [free("r")], 0, 6))).toBe("p1");
+    expect(idOf(nextToStart([paid("p1")], [], 0, 6))).toBe("p1");
+  });
+
+  it("keeps pending order: the first step that may start wins", () => {
+    expect(idOf(nextToStart([paid("p1"), free("f1"), paid("p2")], [], 2, 6))).toBe("p1");
+    expect(idOf(nextToStart([free("f1"), paid("p1")], [], 2, 6))).toBe("f1");
   });
 });
