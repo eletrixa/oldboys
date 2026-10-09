@@ -60,6 +60,8 @@ export type ExportDict = {
     notes: string;
     codeProfile: string;
     profileSignals: string;
+    /** Heading of the role-fit scorecard section (plans/013); the lines stay English. */
+    scorecard: string;
     phone: string;
     answer: Record<CallAnswerStatus, string>;
     at: (time: string) => string;
@@ -103,6 +105,7 @@ const EN: ExportDict = {
     notes: "Notes:",
     codeProfile: "Code contributions (public GitHub)",
     profileSignals: "Profile signals (public accounts)",
+    scorecard: "Role fit scorecard (pluses and minuses, with evidence)",
     phone: "Phone verification (said by the candidate, not public evidence)",
     answer: {
       answered: ANSWER_BADGE.answered.label,
@@ -154,6 +157,7 @@ const CS: ExportDict = {
     notes: "Poznámky:",
     codeProfile: "Příspěvky do kódu (veřejný GitHub)",
     profileSignals: "Signály z profilů (veřejné účty, věty anglicky)",
+    scorecard: "Shoda s rolí: plusy a minusy s důkazy (věty anglicky)",
     phone: "Ověřovací hovor (řečeno v hovoru, nejde o veřejný doklad)",
     answer: { answered: "Zodpovězeno", unclear: "Nejasné", declined: "Odmítnuto", no_answer: "Bez odpovědi", not_asked: "Nepoloženo" },
     at: (time) => `v čase ${time}`,

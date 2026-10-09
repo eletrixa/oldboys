@@ -41,6 +41,7 @@ Limits you may hit: 6 started runs per hour per company and 20 runs per hour acr
    - **CV vs public record** on CV runs: "Matches public record" / "Differs, ask, don't assume" / "Not found publicly".
    - **Devil's advocate**: a second check tries to break each confirmed must-have (about someone else, a fork, a course exercise, outdated). What fails moves to "To verify".
    - **Profile signals** (deterministic sentences about the confirmed accounts).
+   - **Role fit scorecard**: the share of must-haves with public evidence, with every plus and minus listed under it, each with its evidence and its effect on the figure; open points (risks, CV differences, registry records, account signals) carry "no effect on fit" and a question. Never a score of the person.
    - **Code contributions** from a deep GitHub scrape, for engineering and data roles only.
    - **Public registries** (Czech, name search).
    - The **EN | CZ** switch translates the brief; quotes stay in the original language.

@@ -19,6 +19,7 @@
  * - Phone verification panel (CallPanel, client) right after "To verify"; it fetches its own data
  * - Interview kit exports (KitActions) after the gap lists, one block with AlsoFound and the removed line;
  *   gap rows split "Label: reason" into a medium label and muted reason; Check rows hang under a grid; gap labels come from state.ts (GAP_LABEL, gapText)
+ * - Role fit scorecard (plans/013, ScorecardCard from scorecard(state)) under the top line, English only
  * - Enriched profile (ProfileSections) above the findings when the brief carries one; English only (lang="en") until it is translated
  * - Findings as sections by confidence (SectionList); briefs stored before sections render per question; both get the
  *   per-run evidence lookup (evidenceOf: sources with retrieval dates, saved text around quotes) for "Show evidence"
@@ -48,6 +49,8 @@ import { LangSwitch, ReportContext, useReport, useReportLanguage } from "./repor
 import { allUnavailable, tid } from "./report-text";
 import { ProfileSections } from "./profile-sections";
 import { ClaimList, SectionList } from "./sections";
+import { scorecard } from "./scorecard";
+import { ScorecardCard } from "./scorecard-card";
 import { SummaryCard } from "./summary-card";
 import { STEP_LABEL } from "./source-labels";
 import { GAP_LABEL, PLATFORM_LABEL, type RowState, type RunState, briefSections, evidenceGroup, gapText, hiringFor, host, namesakeOnly, searchedEmpty } from "./state";
@@ -492,6 +495,9 @@ function BriefBody({ state, brief }: { state: RunState; brief: Brief }): React.J
         <LangSwitch runId={state.id} language={language} />
         <SummaryCard state={state} />
         <TopLine headline={brief.headline ?? null} locationNote={brief.location_note ?? null} role={hiringFor(state)} />
+        <div lang={english}>
+          <ScorecardCard card={scorecard(state)} evidence={evidence} />
+        </div>
         {brief.degraded !== null && <DegradedNotice reason={brief.degraded} />}
         {brief.degraded !== null && <ConfirmedEvidence items={brief.evidence} />}
         {brief.profile && (

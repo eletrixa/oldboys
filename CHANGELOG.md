@@ -9,6 +9,7 @@ All notable changes to oldboys are documented here. The format follows [Keep a C
 - Every page sets its own browser tab title ("Create account", "New brief", "Candidate brief", "Audit record", …) through the layout's `%s · Radar` template instead of sharing the root title
 
 ### Added
+- Role fit scorecard on the report (plans/013): the share of the hiring role's must-haves with public evidence (the Fit section's weighted figure, one shared formula) with every plus and minus the run found under it, each with FACT / INFERENCE / CHECK, its signed points (must-haves) or "no effect on fit" (achievements with an independent source, CV matches, risks, CV differences, challenged claims, registry records, account signals), source links and the question or check it leaves; the same lines in the interview kit. Deterministic, no model call; never a score of the person
 - Big Five lean in the Working style section of the candidate profile: a pentagon chart and one bipolar row per dimension (Openness, Conscientiousness, Extraversion, Agreeableness, Stress response) with a lean word, confidence, a summary sentence and the person's own quotes behind a disclosure, plus "How to work with them" recommendations; read only from their own writing, labelled an inference, no number is printed. `POST /api/runs/:id/personality` (session or bearer) reads the working style again for a finished run and stores it in the profile, one `llm` ledger row (`profile_personality`)
 
 ### Removed
