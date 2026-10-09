@@ -5,6 +5,7 @@ All notable changes to oldboys are documented here. The format follows [Keep a C
 ## [Unreleased]
 
 ### Added
+- Research goes deeper (plans/013): every hiring brief now checks SEC EDGAR full-text search (filings that name the person: Schedule 13D/13G, 8-K, 10-Q, Form 4, proxy statements), English and Czech Wikipedia, the Apple Podcasts index, and four more Google search packs (regulatory and stock-market pages, court / insolvency / enforcement pages, Czech and international business press, board and founder pages); the confirmed web pages are then read in full (up to 12, SEC filings first) and the paragraphs naming the person replace the search snippet, so facts quote the article or filing itself; extraction runs in batches so every source reaches the model; two new sections, "Filings and markets" and "Legal record". Run budget raised to $2.00 and 24 paid actor runs; the time promise reads "5 to 10 minutes"
 - Big Five lean in the Working style section of the candidate profile: a pentagon chart and one bipolar row per dimension (Openness, Conscientiousness, Extraversion, Agreeableness, Stress response) with a lean word, confidence, a summary sentence and the person's own quotes behind a disclosure, plus "How to work with them" recommendations; read only from their own writing, labelled an inference, no number is printed. `POST /api/runs/:id/personality` (session or bearer) reads the working style again for a finished run and stores it in the profile, one `llm` ledger row (`profile_personality`)
 
 ### Removed

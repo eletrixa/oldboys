@@ -225,7 +225,7 @@ export function RunView({ id }: { id: string }): React.JSX.Element {
           </p>
         )}
         {state.status !== "done" && (
-          <p className="text-sm text-muted">This usually takes 2 to 4 minutes. Keep this tab open.</p>
+          <p className="text-sm text-muted">This usually takes 5 to 10 minutes. Keep this tab open.</p>
         )}
         {cached && (
           <SimulatedPill kind="cached" detail={`run from ${state.created_at.slice(0, 16).replace("T", " ")} UTC`} className="w-fit" />

@@ -1,5 +1,5 @@
 /**
- * Resolve (incl. no-model fallback), extract and synthesize (incl. degraded brief) seam tests with a fake LLM.
+ * Resolve (incl. no-model fallback), extract (incl. batching) and synthesize (incl. degraded brief) seam tests with a fake LLM.
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/recipe/__tests__/seams.test.ts
@@ -9,7 +9,7 @@
 import { describe, expect, it } from "vitest";
 import type { Candidate, Claim, Source } from "@/domain/claim";
 import type { Ports } from "@/domain/ports";
-import { extractClaims, NO_QUOTE_MAX } from "@/recipe/seams/extract";
+import { EXTRACT_MAX_BATCHES, extractClaims, NO_QUOTE_MAX, PROMPT_CHARS } from "@/recipe/seams/extract";
 import { canonicalProfile, decisionFor, fallbackScores, isNoise, namesSubject, noneConfirmed, pickDrafts, profileKey, resolveCandidates, sourceIdentityUpdates, UNCONFIRMED_GAP } from "@/recipe/seams/resolve";
 import { verifyClaims } from "@/recipe/seams/verify";
 import { alsoFoundOf, askCandidate, coverageOf, excerptKey, headlineOf, interviewAllowed, locationNoteOf, profileQuestion, synthesizeBrief } from "@/recipe/seams/synthesize";
@@ -149,6 +149,52 @@ describe("extract", () => {
     const out = await extractClaims(ctx, ports);
     expect(out.claims).toHaveLength(1);
     expect(out.notes.join()).toContain("dropped invalid claim");
+  });
+
+  describe("batching", () => {
+    // Each excerpt is just over half the cap, so every source fills one batch
+    const big = (id: string, actor = "apify/google-search-scraper"): Source => ({ ...s(id, `https://example.cz/${id}`, `${id} ${"x".repeat(PROMPT_CHARS * 0.55)}`), actor, identity: "merged" });
+    const claimFor = (prompt: string) => {
+      const id = /\[(\w+)\] https/.exec(prompt)?.[1] ?? "";
+      return [{ question_id: "current-role", text: `from ${id}`, kind: "INFERENCE", confidence: 0.5, quote: null, source_ids: [id] }];
+    };
+
+    it("splits sources over the cap into batches: one call each, claims unioned, cost summed", async () => {
+      const ports = fakePorts({ llm: fakeLlm(claimFor) });
+      const out = await extractClaims(baseContext({ sources: [big("a"), big("b")] }), ports);
+      expect(ports.calls.llm).toHaveLength(2);
+      expect(out.calls).toBe(2);
+      expect(out.cost_usd).toBeCloseTo(0.002);
+      expect(out.claims.map((c) => c.text).sort()).toEqual(["from a", "from b"]);
+    });
+
+    it("keeps the other batches' claims when one batch fails, with a note", async () => {
+      const llm = ((input: { prompt: string }) =>
+        input.prompt.includes("[b] https") ? Promise.reject(new Error("boom")) : Promise.resolve({ value: claimFor(input.prompt), cost_usd: 0.001 })) as Ports["llm"];
+      const out = await extractClaims(baseContext({ sources: [big("a"), big("b")] }), fakePorts({ llm }));
+      expect(out.claims.map((c) => c.text)).toEqual(["from a"]);
+      expect(out.calls).toBe(1);
+      expect(out.notes).toContain("extract batch 2 failed: boom");
+      expect(out.empty).toBe(false);
+    });
+
+    it("puts the profile tier first and clips a source longer than the cap to fit alone", async () => {
+      const prompts: string[] = [];
+      const ports = fakePorts({ llm: fakeLlm((p) => (prompts.push(p), [])) });
+      const huge = { ...big("h"), excerpt: "x".repeat(PROMPT_CHARS * 2) };
+      await extractClaims(baseContext({ sources: [huge, big("li", "harvestapi/linkedin-profile-scraper")] }), ports);
+      expect(prompts).toHaveLength(2);
+      expect(prompts[0]).toContain("[li] https");
+      expect((prompts[1]?.split("Sources:\n")[1] ?? "").length).toBeLessThanOrEqual(PROMPT_CHARS);
+    });
+
+    it("notes the sources past the batch cap and never calls for them", async () => {
+      const ports = fakePorts({ llm: fakeLlm(() => []) });
+      const many = Array.from({ length: EXTRACT_MAX_BATCHES + 2 }, (_, i) => big(`m${String(i)}`));
+      const out = await extractClaims(baseContext({ sources: many }), ports);
+      expect(ports.calls.llm).toHaveLength(EXTRACT_MAX_BATCHES);
+      expect(out.notes).toContain("2 sources not extracted (over the batch cap)");
+    });
   });
 });
 

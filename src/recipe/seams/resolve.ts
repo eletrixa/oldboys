@@ -39,11 +39,10 @@
 import { z } from "zod";
 import type { Candidate, Source, SourceIdentity } from "@/domain/claim";
 import type { Ports } from "@/domain/ports";
-import { emptyOutcome } from "@/recipe/runner";
 import { isCvSource } from "@/domain/cv-check";
 import { corroborationReason, employerHit, fold, mentionsPlace, orgTokens, placeOf, professionalReasons, professionalSnippet, type OrgToken } from "@/domain/corroborate";
 import { experienceCompanies, LINKEDIN_PROFILE_ACTORS } from "@/recipe/sources/linkedin";
-import { clip, platformOf, type StepContext, type StepOutcome } from "@/recipe/sources/types";
+import { clip, emptyOutcome, platformOf, type StepContext, type StepOutcome } from "@/recipe/sources/types";
 
 export const MERGE_FLOOR = 0.8;
 export const ASK_FLOOR = 0.3;

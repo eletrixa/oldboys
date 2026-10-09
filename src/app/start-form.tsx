@@ -149,7 +149,7 @@ function StartFormInner({ initialRole, autoFocusRole = false, roleOptions = [] }
         >
           {busy ? "Creating..." : "Create brief"}
         </button>
-        <span className="text-sm text-muted">Usually takes 2 to 4 minutes</span>
+        <span className="text-sm text-muted">Usually takes 5 to 10 minutes</span>
       </div>
     </form>
   );

@@ -29,10 +29,14 @@ import { linkedinCompany } from "@/recipe/sources/linkedin-company";
 import { linkedinPosts } from "@/recipe/sources/linkedin-posts";
 import { openalex } from "@/recipe/sources/openalex";
 import { orcid } from "@/recipe/sources/orcid";
+import { podcasts } from "@/recipe/sources/podcasts";
+import { readPages } from "@/recipe/sources/read-pages";
+import { secEdgar } from "@/recipe/sources/sec-edgar";
 import { stackexchange } from "@/recipe/sources/stackexchange";
 import { tiktok } from "@/recipe/sources/tiktok";
 import type { Collector } from "@/recipe/sources/types";
 import { websiteCrawler } from "@/recipe/sources/website";
+import { wikipedia } from "@/recipe/sources/wikipedia";
 import { x } from "@/recipe/sources/x";
 import { youtube } from "@/recipe/sources/youtube";
 
@@ -61,6 +65,10 @@ const all: readonly Collector[] = [
   linkedinPosts,
   facebookPage,
   facebookSearch,
+  secEdgar,
+  wikipedia,
+  podcasts,
+  readPages,
 ];
 
 const byId = new Map(all.map((c) => [c.id, c]));

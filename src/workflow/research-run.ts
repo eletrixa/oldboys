@@ -21,6 +21,8 @@
  *   merged (lineupNeedsAnswer, seed merges count, so a given profile/CV never pauses); apply the manager's decisions on resume
  * - Budget (RUN_BUDGET_USD / RUN_BUDGET_CALLS) enforced here for collector steps, never by the LLM; parallel
  *   batches run at most (budget - spent) paid actor steps at once (planBatch), free REST steps always run
+ * - `read_pages` (rest/read-pages, plans/013) runs alone after the collector batches with the identity pass before it, so it
+ *   reads only pages the corroboration marked as the person's
  * - Source identity re-marked after the lineup and before extract (applySourceIdentity), so only SERP hits on
  *   a merged profile count as confirmed
  * - Truthful gaps: a collector that made no request, or whose requests all failed, records "not searched: <why>", not its onEmpty text; a
@@ -69,6 +71,8 @@ type Head = {
 };
 
 const COLLECTOR_KINDS = new Set<Step["kind"]>(["serp", "actor", "ares"]);
+/** The page reader needs every other collector done and the identity pass run first (plans/013); it runs alone, after the batches. */
+const READ_ACTOR = "rest/read-pages";
 /** Collector steps run concurrently after the lineup; Apify + REST calls are I/O bound and independent. */
 const PARALLEL = 5;
 
@@ -197,7 +201,7 @@ export class ResearchRunWorkflow extends WorkflowEntrypoint<CloudflareEnv, Resea
         afterResolve = true;
         continue;
       }
-      if (afterResolve && COLLECTOR_KINDS.has(recipeStep.kind)) {
+      if (afterResolve && COLLECTOR_KINDS.has(recipeStep.kind) && recipeStep.actor !== READ_ACTOR) {
         batch.push(recipeStep);
         continue;
       }
@@ -224,7 +228,7 @@ export class ResearchRunWorkflow extends WorkflowEntrypoint<CloudflareEnv, Resea
   ): Promise<{ empty: boolean; skipped: string | null; unconfirmed: boolean }> {
     return step.do(recipeStep.id, { retries: { limit: 1, delay: "5 seconds" } }, async () => {
       const started = Date.now();
-      if (recipeStep.kind === "extract") await applySourceIdentity(this.env.DB, runId);
+      if (recipeStep.kind === "extract" || recipeStep.actor === READ_ACTOR) await applySourceIdentity(this.env.DB, runId);
       const ctx = await loadContext(this.env.DB, runId, questions);
       if (COLLECTOR_KINDS.has(recipeStep.kind) && (ctx.spent.calls >= ctx.budget.calls || ctx.spent.usd >= ctx.budget.usd)) {
         await this.ledger(runId, recipeStep.id, "decision", 0, 0, { skipped: "run budget reached", spent: ctx.spent });

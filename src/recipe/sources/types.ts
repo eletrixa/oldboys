@@ -8,11 +8,13 @@
  *
  * Key responsibilities:
  * - StepContext: everything a step may read (never mutate)
- * - Collector: `requests()` decides what to fetch (empty array = nothing to do, triggers onEmpty); `parse()` maps one payload to sources;
+ * - Collector: `requests()` decides what to fetch (empty array = nothing to do, triggers onEmpty); `parse()` maps one payload to sources
+ *   (a ParsedSource with `replaces` rewrites the excerpt of the run's existing source for that page instead of being deduped);
  *   optional `alreadyFetched()` names sources an earlier step (seed) fetched, so the step does not scrape them twice;
  *   optional `followUp()` computes a second wave of requests from the first wave's request/payload pairs (`Fetched`); optional
  *   `digest()` summarises every pair into StepOutcome.digest; optional `skipReason()` names why `requests()` is empty when the
  *   default "no confirmed handle or id to look up" would be untrue (e.g. role not technical)
+ * - emptyOutcome(): the outcome of a step that produced nothing (the runner re-exports it)
  * - githubHandles(): accepted github handles (deduped case-insensitively, `@` stripped, max 2), shared by the GitHub collectors
  * - identityFor(): "merged" only for urls under a merged candidate (profile url prefix or handle segment), else "unverified"
  *
@@ -56,6 +58,8 @@ export type ParsedSource = {
   raw: unknown;
   /** Runner copies this into Source.identity (omitted = "unverified"). "merged" only when fetched for a merged candidate. */
   identity?: SourceIdentity;
+  /** Overwrite the excerpt and raw of the run's source with the same canonical URL (keeps its id, identity, actor, fetched_at); stored normally when the URL is new. */
+  replaces?: boolean;
 };
 
 /** One performed request with the payload it returned (null = empty 2xx body); followUp and digest read these pairs. */
@@ -94,6 +98,11 @@ export type StepOutcome = {
   /** Collector summary of everything it fetched (Collector.digest), written into the step's ledger ref as `digest`; read back by the run state route. */
   digest?: unknown;
 };
+
+/** An outcome that produced nothing (empty, no cost); steps and seams start from it. */
+export function emptyOutcome(): StepOutcome {
+  return { sources: [], candidates: [], claims: [], gaps: [], brief: null, claims_mode: "append", empty: true, cost_usd: 0, calls: 0, notes: [] };
+}
 
 /** Accepted identities only: the profiles the manager (or the threshold) confirmed. */
 export function acceptedCandidates(ctx: StepContext): readonly Candidate[] {

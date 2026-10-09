@@ -18,7 +18,9 @@
  * - Position fit: one card, the run's role only (none without a role); traits and weights fixed in code (profile-fit.ts:
  *   brief must-haves weight 2, catalog extras weight 1); fit_pct computed here: sum(weight x status) / sum(weight)
  * - Questions: cut to the best 5 in code (profile-fit.ts `topQuestions`), never by the model
- * - Truncation guard: a failed attempt is retried once with the 40 highest-value sources before degrading
+ * - Source block: the first attempt takes sources in rankSources order until FIRST_SOURCE_CHARS (90k chars), so long
+ *   read-page excerpts cannot blow the prompt; truncation guard: a failed attempt is retried once with the 40
+ *   highest-value sources within the default 60k-char block before degrading
  *
  * Design constraints:
  * - Degrade, never fail: model error gives a profile with `degraded` set and empty arrays
@@ -37,6 +39,7 @@ export { rankSources, validEvidence } from "@/recipe/seams/profile-gate";
 export { TOO_LITTLE_WRITING };
 
 const RETRY_SOURCES = 40;
+const FIRST_SOURCE_CHARS = 90_000;
 const ASK_QUESTIONS = 10;
 
 const Facts = z.object({ achievements: z.array(ProfileItem), risks: z.array(ProfileItem), history: z.array(HistoryEntry) });
@@ -86,8 +89,8 @@ function fitCard(
 }
 
 /** Two model calls over `sources`; cost and calls go into `out` once a call validates. Throws on model or parse failure. */
-async function attempt(ctx: StepContext, kept: readonly Claim[], sources: readonly Source[], ports: Ports, out: { calls: number; cost_usd: number }): Promise<Profile> {
-  const head = `Subject: ${ctx.subject}\nAnchor: ${ctx.anchor}\nRole: ${ctx.role ?? "(none)"}\n\nResearch questions:\n${ctx.questions.map((q) => `- ${q.id}: ${q.text}`).join("\n")}\n\n${sourceBlock(sources, kept)}`;
+async function attempt(ctx: StepContext, kept: readonly Claim[], sources: readonly Source[], ports: Ports, out: { calls: number; cost_usd: number }, maxChars?: number): Promise<Profile> {
+  const head = `Subject: ${ctx.subject}\nAnchor: ${ctx.anchor}\nRole: ${ctx.role ?? "(none)"}\n\nResearch questions:\n${ctx.questions.map((q) => `- ${q.id}: ${q.text}`).join("\n")}\n\n${sourceBlock(sources, kept, maxChars)}`;
   const merged = acceptedCandidates(ctx);
   const a = await ports.llm({
     model: "primary",
@@ -156,7 +159,7 @@ async function attempt(ctx: StepContext, kept: readonly Claim[], sources: readon
 
 const message = (error: unknown): string => (error instanceof Error ? error.message : String(error)).slice(0, 120);
 
-/** Two model calls, retried once over the 40 highest-value sources (truncated output); cost and calls go into `out`. Never throws. */
+/** Two model calls over up to 90k chars of sources, retried once over the 40 highest-value sources (truncated output); cost and calls go into `out`. Never throws. */
 export async function buildProfile(
   ctx: StepContext,
   kept: readonly Claim[],
@@ -166,7 +169,7 @@ export async function buildProfile(
   const sources = rankSources(confirmedSources(ctx));
   if (sources.length === 0 || kept.length === 0) return emptyProfile("no verified claims");
   try {
-    return await attempt(ctx, kept, sources, ports, out);
+    return await attempt(ctx, kept, sources, ports, out, FIRST_SOURCE_CHARS);
   } catch (first) {
     out.notes.push(`profile retry with top ${String(RETRY_SOURCES)} sources: ${message(first)}`);
     try {

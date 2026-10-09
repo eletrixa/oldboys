@@ -92,6 +92,8 @@ function global:cheatoldboys {
     Write-Host "  ┌─────────────────────────────────────────────────────────────────┐" -ForegroundColor DarkGray
     Write-Host "  │  ENVIRONMENT VARIABLES                                         │" -ForegroundColor Yellow
     Write-Host "  └─────────────────────────────────────────────────────────────────┘" -ForegroundColor DarkGray
+    Write-Host "    RUN_BUDGET_USD=2.00 RUN_BUDGET_CALLS=24 " -NoNewline -ForegroundColor Green
+    Write-Host "Per-run cap: USD (actors + LLM) and paid actor runs (wrangler.jsonc vars, plans/013)" -ForegroundColor White
     Write-Host "    POSITION_INGEST_USD=0.05               " -NoNewline -ForegroundColor Green
     Write-Host "Budget cap for position must-haves LLM call (wrangler.jsonc var)" -ForegroundColor White
     Write-Host "    CALL_PROVIDER=mock|elevenlabs          " -NoNewline -ForegroundColor Green
