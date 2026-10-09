@@ -38,6 +38,8 @@ export type LlmCall = <T>(input: {
   system: string;
   prompt: string;
   schema: z.ZodType<T>;
+  /** Output token cap; the adapter's default when absent. */
+  maxOutputTokens?: number;
 }) => Promise<{ value: T; cost_usd: number }>;
 
 /** Append one ledger row; the store assigns seq and ts and returns the stored entry. */

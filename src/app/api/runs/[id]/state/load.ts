@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/api/runs/[id]/state/load.ts
- * Deps:    D1Database (passed in), src/domain/code-profile (readCodeProfile), src/domain/profile-facts (readProfileFacts), src/domain/profile-signals (profileSignals), src/domain/report-translation (TRANSLATE_STEP), src/recipe/goals, src/domain/run-cost, src/domain/cv-check, src/domain/challenge, src/app/runs/[id]/challenge, src/app/intake/intake-rows (type), ./public-state
+ * Deps:    D1Database (passed in), src/domain/code-profile (readCodeProfile), src/domain/profile-facts (readProfileFacts), src/domain/profile-signals (profileSignals), src/domain/report-translation (TRANSLATE_STEP), src/domain/call-questions-llm (CALL_QUESTIONS_STEP), src/recipe/goals, src/domain/run-cost, src/domain/cv-check, src/domain/challenge, src/app/runs/[id]/challenge, src/app/intake/intake-rows (type), ./public-state
  * Tested:  src/app/api/runs/[id]/state/__tests__/route.test.ts (through the route; publicState: __tests__/public-state.test.ts; withCvQuestion: src/domain/__tests__/cv-check.test.ts; readChallenge: src/domain/__tests__/challenge.test.ts; challengeState: src/app/runs/[id]/__tests__/challenge.test.ts)
  *
  * Key responsibilities:
@@ -40,6 +40,7 @@ import { profileSignals } from "@/domain/profile-signals";
 import { readRegistryChecks } from "@/domain/cz-registry";
 import { withCvQuestion } from "@/domain/cv-check";
 import { TRANSLATE_STEP } from "@/domain/report-translation";
+import { CALL_QUESTIONS_STEP } from "@/domain/call-questions-llm";
 import { type CostRow, runCost } from "@/domain/run-cost";
 import { recipeFor } from "@/recipe/goals";
 import type { RunIntake } from "@/app/intake/intake-rows";
@@ -103,8 +104,8 @@ export async function loadRunState(db: D1Database, id: string): Promise<RunState
       .all<CostRow & { step: string; ref_json: string | null }>(),
   ]);
   // The failure row is written under step "run"; the step that broke is the first recipe step with no row yet.
-  // A report translation (idea #24) runs after the research and is no research step.
-  const last = ledger.results.findLast((row) => row.step !== "run" && row.step !== TRANSLATE_STEP);
+  // A report translation (idea #24) and an AI call-question draft run after the research and are no research steps.
+  const last = ledger.results.findLast((row) => row.step !== "run" && row.step !== TRANSLATE_STEP && row.step !== CALL_QUESTIONS_STEP);
   const failure = ledger.results
     .map((row) => {
       try {

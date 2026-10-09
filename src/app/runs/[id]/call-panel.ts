@@ -7,7 +7,8 @@
  * Tested:  src/app/runs/[id]/__tests__/call-panel.test.ts
  *
  * Key responsibilities:
- * - CallView / RunCalls: the GET /api/calls/:id and GET /api/runs/:id/calls contract (shared with the routes)
+ * - CallView / RunCalls / CallProposal: the GET /api/calls/:id, GET /api/runs/:id/calls and
+ *   POST /api/runs/:id/calls/proposal contracts (shared with the routes)
  * - finishAnswers: the per-question results stored in a `call:finish` ledger row's ref
  * - Phone number normalisation and validation, form validation, editable question drafts
  * - callPhase: call status + answers → what the panel shows and whether polling goes on
@@ -27,14 +28,29 @@ export type CallView = Omit<Call, "consent_note" | "operator" | "result_r2_key" 
   answers: CallAnswer[] | null;
 };
 
-/** GET /api/runs/:id/calls. `proposal` is computed on every request and never stored. */
+/**
+ * GET /api/runs/:id/calls. `proposal` (rule-based) is computed on every request and never stored; `ai_proposal` is
+ * the cached AI draft for the current research, null when none was drafted yet (the GET never calls the model).
+ */
 export type RunCalls = {
   provider: CallProvider;
   max: number;
   used: number;
   proposal: CallBrief;
+  ai_proposal: CallBrief | null;
   calls: CallView[];
 };
+
+/** POST /api/runs/:id/calls/proposal: the AI draft, or the rule-based questions with a short note why. */
+export type CallProposal = {
+  source: "ai" | "rules";
+  cached: boolean;
+  note: string | null;
+  proposal: CallBrief;
+};
+
+/** The AI draft in the panel: being drafted, drafted, or not available (rule-based questions with a note). */
+export type AiDraft = { kind: "drafting" } | { kind: "ai"; proposal: CallBrief } | { kind: "rules"; note: string | null };
 
 const FinishRef = z.object({ answers: z.array(CallAnswer).optional() }).loose();
 
@@ -63,15 +79,27 @@ export function validNumber(raw: string): boolean {
   return E164.test(normalizeNumber(raw));
 }
 
-/** A question in the editor; `key` is local (React list key), `question_id` only for proposed or saved ones. */
-export type DraftQuestion = { key: string; question_id?: string; text: string; why?: string };
+/**
+ * A question in the editor; `key` is local (React list key), `question_id` only for proposed or saved ones.
+ * `listen_for` / `follow_up` come with an AI draft and stay when HR edits the text.
+ */
+export type DraftQuestion = { key: string; question_id?: string; text: string; why?: string; listen_for?: string; follow_up?: string };
 
 export function draftsFromProposal(brief: Pick<CallBrief, "questions">): DraftQuestion[] {
-  return brief.questions.map((q) => ({ key: q.question_id, question_id: q.question_id, text: q.text, ...(q.why === undefined ? {} : { why: q.why }) }));
+  return brief.questions.map((q) => ({
+    key: q.question_id,
+    question_id: q.question_id,
+    text: q.text,
+    ...(q.why === undefined ? {} : { why: q.why }),
+    ...(q.listen_for === undefined ? {} : { listen_for: q.listen_for }),
+    ...(q.follow_up === undefined ? {} : { follow_up: q.follow_up }),
+  }));
 }
 
 /** Body questions for POST /api/runs/:id/calls. */
-export function toHrQuestions(drafts: readonly DraftQuestion[]): { question_id?: string; text: string; why?: string }[] {
+export function toHrQuestions(
+  drafts: readonly DraftQuestion[],
+): { question_id?: string; text: string; why?: string; listen_for?: string; follow_up?: string }[] {
   return drafts.map(({ key: _key, ...q }) => ({ ...q, text: q.text.trim() }));
 }
 

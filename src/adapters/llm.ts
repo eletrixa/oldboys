@@ -34,7 +34,7 @@ export function costOf(modelId: string, usage: Pick<LanguageModelUsage, "inputTo
 
 export function makeLlmCall(apiKey: string, models: { primary: string; verify: string }): LlmCall {
   const anthropic = createAnthropic({ apiKey });
-  return async ({ model, system, prompt, schema }) => {
+  return async ({ model, system, prompt, schema, maxOutputTokens }) => {
     const id = model === "primary" ? models.primary : models.verify;
     try {
       const result = await generateText({
@@ -42,7 +42,8 @@ export function makeLlmCall(apiKey: string, models: { primary: string; verify: s
         system,
         prompt,
         output: Output.object({ schema }),
-        maxOutputTokens: 32_000, // 17 questions x ~100 sources overflowed 8000 and truncated the JSON (run 88538fed)
+        // 17 questions x ~100 sources overflowed 8000 and truncated the JSON (run 88538fed); small seams pass their own cap
+        maxOutputTokens: maxOutputTokens ?? 32_000,
       });
       return { value: result.output, cost_usd: costOf(id, result.usage) };
     } catch (error) {

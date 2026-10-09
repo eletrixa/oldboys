@@ -1,5 +1,5 @@
 /**
- * Deterministic CallBrief builder: turns the brief, recipe questions, gaps and weak claims into a call script.
+ * CallBrief builder: turns the brief, recipe questions, gaps and weak claims (or drafted questions) into a call script.
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/domain/call-brief.ts
@@ -16,11 +16,15 @@
  * - composeCallBrief: the script (display), the agent's short first message (AI disclosure, who for and why,
  *   recording, consent question; at most FIRST_MESSAGE_MAX characters) and the agent system prompt (steps with the
  *   skip/stop sentence right after consent, questions in order, rules)
- * - briefFromHrQuestions: the operator's edited questions, validated (1–5, 5–300 chars, no Art. 9 topic)
+ * - Each question may carry `follow_up` and `listen_for` (LLM-drafted, call-questions-llm.ts); the agent prompt lists
+ *   them under the question as "If the answer is vague, ask: …" and "Listen for (do not read aloud): …"
+ * - briefFromHrQuestions: the operator's edited questions, validated (1–5, 5–300 chars, no Art. 9 topic in the text,
+ *   follow-up or listen-for)
  * - Drop anything that touches a GDPR Art. 9 topic before it can be asked
  *
  * Design constraints:
- * - Pure and deterministic: no I/O, no LLM, same input gives the same output
+ * - Pure and deterministic: no I/O, no LLM, same input gives the same output; the LLM drafter
+ *   (call-questions-llm.ts) only proposes question texts, this module still composes and filters everything
  * - Never read internal tool output (URLs, e-mails, HTTP codes, budget notes) to the candidate
  * - Never ask about Art. 9 data (shared denylist in art9.ts); an operator question that touches one is an
  *   error with its index, never a silent drop
@@ -88,6 +92,15 @@ function firstMessage(goal: GoalId, subject: string, role: string | null): strin
   return `Hi, this is an AI assistant calling for the hiring team about ${about}. ${CONSENT_CLOSE}`;
 }
 
+/** A question in the agent prompt: its text first, then its own follow-up and listen-for notes when it has them. */
+function questionLines(q: CallQuestion, i: number): string[] {
+  return [
+    `${String(i + 1)}. ${q.text}`,
+    ...(q.follow_up === undefined ? [] : [`   If the answer is vague, ask: "${q.follow_up}"`]),
+    ...(q.listen_for === undefined ? [] : [`   Listen for (do not read aloud): ${q.listen_for}`]),
+  ];
+}
+
 function agentPrompt(goal: GoalId, subject: string, role: string | null, identity: string, questions: readonly CallQuestion[]): string {
   const hiring = goal === "hiring";
   const team = hiring ? (role === null ? "a hiring team" : `the hiring team for the ${role} role`) : "a researcher doing a due-diligence check";
@@ -105,17 +118,18 @@ function agentPrompt(goal: GoalId, subject: string, role: string | null, identit
     "1. Wait for the answer to your first message. If the callee does not agree, or says it is a bad time, thank them, say goodbye and use the end_call tool.",
     `   If they agree, say in one short sentence: "${SKIP_STOP}" Then go on with step 2.`,
     `2. Ask: "${identity}" If the answer is no, apologise, share nothing about the research, say goodbye and use the end_call tool.`,
-    "3. Ask the questions below one at a time, in this order, and wait for each answer. Ask at most one short follow-up per question when the answer is unclear. If the callee does not want to answer, say \"No problem\" and move to the next question.",
+    "3. Ask the questions below one at a time, in this order, and wait for each answer. Ask at most one short follow-up per question when the answer is unclear; when the question has its own follow-up, use that one. If the callee does not want to answer, say \"No problem\" and move to the next question.",
     `4. After the last question, thank them, say that ${reviewer} will review the answers, say goodbye and use the end_call tool.`,
     "",
     "# Questions",
-    ...(questions.length === 0 ? ["(none: thank them and end the call after the identity question)"] : questions.map((q, i) => `${String(i + 1)}. ${q.text}`)),
+    ...(questions.length === 0 ? ["(none: thank them and end the call after the identity question)"] : questions.flatMap(questionLines)),
     "",
     "# Rules",
     "- Never evaluate, judge or comment on the answers; just thank them and move on.",
     "- Say nothing about the hiring decision, salary or other candidates.",
     "- Never ask about personal topics: health, family, religion, politics, ethnicity, sexuality, age or union membership. If the callee raises one, do not follow up.",
     "- Do not invent or reveal what the research found beyond the question text.",
+    "- The \"Listen for\" notes are for you only: never read them aloud and never use them to judge the answer; they only tell you whether the one follow-up is needed.",
     "- Keep your turns short and the whole call under 5 minutes.",
     "- If you reach voicemail, leave no message and use the end_call tool.",
   ].join("\n");
@@ -234,7 +248,10 @@ export function buildCallBrief(input: {
 }
 
 /** A question as the operator sends it: proposed ones keep their id, new ones get `hr-<n>`. */
-export type HrQuestion = { question_id?: string; text: string; why?: string };
+export type HrQuestion = { question_id?: string; text: string; why?: string; listen_for?: string; follow_up?: string };
+
+/** Cap of an operator's follow-up and listen-for note. */
+export const HR_NOTE_MAX = 200;
 
 export type HrBriefResult = { brief: CallBrief; error: null } | { brief: null; error: string; index: number | null };
 
@@ -253,16 +270,20 @@ export function briefFromHrQuestions(input: {
   if (input.questions.length > MAX_CALL_QUESTIONS) return fail(`at most ${String(MAX_CALL_QUESTIONS)} questions`, null);
 
   const used = new Set<string>();
-  const drafts: { id: string | null; text: string; why: string }[] = [];
+  const drafts: { id: string | null; text: string; why: string; listen_for: string; follow_up: string }[] = [];
   for (const [i, q] of input.questions.entries()) {
     const text = oneLine(q.text, HR_QUESTION_MAX + 1);
     if (text.length < HR_QUESTION_MIN || text.length > HR_QUESTION_MAX) {
       return fail(`question ${String(i + 1)} must be ${String(HR_QUESTION_MIN)} to ${String(HR_QUESTION_MAX)} characters`, i);
     }
     if (containsArt9Topic(text)) return fail(`question ${String(i + 1)} touches a protected topic (health, politics, religion, ethnicity, sexuality)`, i);
+    const listen_for = q.listen_for === undefined ? "" : oneLine(q.listen_for, HR_NOTE_MAX);
+    const follow_up = q.follow_up === undefined ? "" : oneLine(q.follow_up, HR_NOTE_MAX);
+    if (containsArt9Topic(follow_up)) return fail(`the follow-up of question ${String(i + 1)} touches a protected topic (health, politics, religion, ethnicity, sexuality)`, i);
+    if (containsArt9Topic(listen_for)) return fail(`the listen-for note of question ${String(i + 1)} touches a protected topic (health, politics, religion, ethnicity, sexuality)`, i);
     const id = q.question_id !== undefined && ID_PATTERN.test(q.question_id) && !used.has(q.question_id) ? q.question_id : null;
     if (id !== null) used.add(id);
-    drafts.push({ id, text, why: q.why === undefined ? "" : oneLine(q.why, 120) });
+    drafts.push({ id, text, why: q.why === undefined ? "" : oneLine(q.why, 120), listen_for, follow_up });
   }
 
   // New questions get the first free hr-<n>, after every kept id is known.
@@ -277,6 +298,8 @@ export function briefFromHrQuestions(input: {
     text: d.text,
     expected: "",
     ...(d.why === "" ? {} : { why: d.why }),
+    ...(d.listen_for === "" ? {} : { listen_for: d.listen_for }),
+    ...(d.follow_up === "" ? {} : { follow_up: d.follow_up }),
   }));
 
   return { brief: composeCallBrief({ ...input, questions }), error: null };

@@ -7,7 +7,10 @@
  * Tested:  n/a (validation in __tests__/call-panel.test.ts)
  *
  * Key responsibilities:
- * - Questions: edit, remove, add (up to MAX_CALL_QUESTIONS), reset to the proposal; `why` shown as a chip
+ * - Questions: edit, remove, add (up to MAX_CALL_QUESTIONS), reset to the proposal; `why` shown as a chip;
+ *   an AI draft is labelled "AI-drafted, edit before the call" and shows each question's follow-up and listen-for
+ *   notes read-only (they stay when the text is edited); while it is drafted a short loading line replaces the list,
+ *   a fallback shows the rule-based questions with a small note
  * - Form: phone number (E.164 after normalisation), consent checkbox, consent note, operator name
  *   (remembered in sessionStorage); "Call candidate now" only when formProblems is empty
  *
@@ -21,7 +24,7 @@ import { useRef, useState } from "react";
 import type { CallBrief } from "@/domain/call";
 import { MAX_CALL_QUESTIONS } from "@/domain/call-brief";
 import { BTN_PRIMARY } from "@/app/ui";
-import { type CallForm, type DraftQuestion, draftsFromProposal, formProblems, normalizeNumber } from "./call-panel";
+import { type AiDraft, type CallForm, type DraftQuestion, draftsFromProposal, formProblems, normalizeNumber } from "./call-panel";
 
 const OPERATOR_KEY = "oldboys.operator";
 const INPUT = "w-full rounded-xl border border-divider bg-surface px-3 py-2 text-sm text-ink focus:border-action focus:outline-none";
@@ -86,6 +89,8 @@ function QuestionEditor({
             }}
             className={`${INPUT} ${errorIndex === i ? "border-conflict" : ""}`}
           />
+          {d.follow_up !== undefined && <p className="text-xs text-muted">Follow-up if the answer is vague: {d.follow_up}</p>}
+          {d.listen_for !== undefined && <p className="text-xs text-muted">Listen for (not read aloud): {d.listen_for}</p>}
         </li>
       ))}
     </ol>
@@ -94,6 +99,7 @@ function QuestionEditor({
 
 export function CallSetup({
   proposal,
+  draft,
   used,
   max,
   busy,
@@ -101,6 +107,7 @@ export function CallSetup({
   onPlace,
 }: {
   proposal: CallBrief;
+  draft: AiDraft;
   used: number;
   max: number;
   busy: boolean;
@@ -117,21 +124,32 @@ export function CallSetup({
   const questions = drafts ?? draftsFromProposal(proposal);
   const form: CallForm = { number: normalizeNumber(number), consent, note, operator, questions };
   const problems = formProblems(form, used, max);
+  const drafting = draft.kind === "drafting";
 
   return (
     <form
       className="flex flex-col gap-4"
       onSubmit={(e) => {
         e.preventDefault();
-        if (problems.length > 0 || busy) return;
+        if (problems.length > 0 || busy || drafting) return;
         writeOperator(operator.trim());
         onPlace({ ...form, note: note.trim(), operator: operator.trim() });
       }}
     >
       <div className="flex flex-col gap-3">
-        <h3 className="text-sm font-semibold text-ink">Questions the agent will ask</h3>
-        {questions.length === 0 ? <p className="text-sm text-muted">No questions. Add one below.</p> : <QuestionEditor drafts={questions} errorIndex={errorIndex} onChange={setDrafts} />}
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <h3 className="text-sm font-semibold text-ink">Questions the agent will ask</h3>
+          {draft.kind === "ai" && <span className="rounded-full bg-canvas px-2 py-0.5 text-xs text-muted">AI-drafted, edit before the call</span>}
+        </div>
+        {draft.kind === "rules" && <p className="text-xs text-muted">{draft.note ?? "The AI draft was not available, so these are the rule-based questions."}</p>}
+        {drafting ? (
+          <p className="text-sm text-muted" aria-live="polite">Drafting questions from the research…</p>
+        ) : questions.length === 0 ? (
+          <p className="text-sm text-muted">No questions. Add one below.</p>
+        ) : (
+          <QuestionEditor drafts={questions} errorIndex={errorIndex} onChange={setDrafts} />
+        )}
+        {!drafting && <div className="flex flex-wrap gap-2">
           <button
             type="button"
             className={SMALL_BTN}
@@ -154,7 +172,7 @@ export function CallSetup({
               Reset to proposal
             </button>
           )}
-        </div>
+        </div>}
       </div>
 
       {proposal.first_message !== undefined && (
@@ -192,7 +210,7 @@ export function CallSetup({
       )}
       <button
         type="submit"
-        disabled={problems.length > 0 || busy}
+        disabled={problems.length > 0 || busy || drafting}
         className={`${BTN_PRIMARY} self-start`}
       >
         {busy ? "Placing the call…" : "Call candidate now"}
