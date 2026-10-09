@@ -80,14 +80,14 @@ export function fitPct(traits: readonly (Pick<z.infer<typeof TraitFit>, "status"
 /** Keeps evidence whose quote is inside the excerpt of the source it names (unknown ids fail); sets `strength` in code, never from the model. */
 export function validEvidence(
   evidence: readonly ProfileEvidence[],
-  sources: readonly Pick<Source, "id" | "excerpt" | "actor" | "url">[],
-  candidates: readonly Pick<Candidate, "profile_urls" | "handle" | "platform">[] = [],
+  sources: readonly Pick<Source, "id" | "excerpt" | "actor" | "url" | "identity">[],
+  candidates: readonly Pick<Candidate, "profile_urls" | "handle" | "platform" | "name">[] = [],
 ): ProfileEvidence[] {
   const byId = new Map(sources.map((s) => [s.id, s]));
   return evidence.flatMap((e) => {
     const s = byId.get(e.source_id);
     if (s === undefined || !quoteInExcerpt(e.quote, s.excerpt)) return [];
-    const { strength, note } = evidenceStrength(s, e.quote, candidates);
+    const { strength, note } = evidenceStrength(s, e.quote, candidates, e.kind);
     const supports = e.direction === undefined ? e.supports : e.direction !== "contradicts";
     return [note === "" ? { ...e, supports, strength } : { ...e, supports, strength, note: e.note ? `${e.note}, ${note}` : note }];
   });

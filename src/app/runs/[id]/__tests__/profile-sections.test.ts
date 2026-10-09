@@ -7,7 +7,7 @@
  * Tested:  n/a (this is the test)
  *
  * Key responsibilities:
- * - Summary box, Robert's section order, caps with "Show N more", run's role first, empty sections omitted
+ * - Verdict strip, Robert's section order, caps with "Show N more", run's role first, empty sections omitted
  * - Evidence lines: kind, direction, strength pill, [n] deep link, note, "source missing"; independent count per item
  * - Fit recomputed as Σ(weight × status) ÷ Σ(weight)
  * - A degraded profile renders only "Profile not built: <reason>"
@@ -58,29 +58,35 @@ const many = (n: number, prefix: string) => Array.from({ length: n }, (_, i) => 
 describe("ProfileSections", () => {
   it("renders the summary box, then sections in Robert's order, then sources", () => {
     const out = html(profile);
-    const order = ["Current role", "1. Achievements", "2. Risks", "3. History", "4. Working style", "5. Position fit", "6. What to ask", "Sources (1)"].map((t) =>
+    const order = ["Profile at a glance", "1. Achievements", "2. Risks", "3. History", "4. Working style", "5. Position fit", "6. What to ask", "Sources (1)"].map((t) =>
       out.indexOf(t),
     );
     expect(order[0]).toBeGreaterThanOrEqual(0);
     expect(order).toEqual([...order].sort((a, b) => a - b));
     expect(out).toContain("Data lead, Acme");
     expect(out).toContain("1 of 2 must-haves evidenced");
-    expect(out).toContain("4 facts · 2 inferences");
-    expect(out).toContain("Closes: Short tenures");
+    expect(out).toContain("Current role");
+    expect(out).toContain(">4 · 2<");
+    expect(out).toContain("from 1 source");
+    expect(out).toContain("closes: <span class=\"text-ink\">Short tenures</span>");
     expect(out).toContain("Inference from public writing, not an assessment of the person.");
-    expect(out).toContain("DISC C · low confidence");
+    expect(out).toContain("DISC C");
+    expect(out).toContain("· low confidence");
+    expect(out).toContain("How the % is computed");
     expect(out).toContain("Share of the role profile with public evidence, not a performance prediction.");
     expect(out).toContain('href="#ask"');
     expect(out).toContain("1 line dropped by the quote check");
     expect(out).toContain("2 lines dropped by the quote check");
   });
 
-  it("evidence lines carry kind, direction, [n] deep link and the contradicts count; sources list the retrieved date", () => {
+  it("evidence lines carry kind, direction, [n] deep link, retrieved day and the weakens count; sources list the retrieved date", () => {
     const out = html(profile);
     expect(out).toContain("Evidence (2)");
-    expect(out).toMatch(/text-conflict">· 1 contradicts</);
-    expect(out).toContain(">Supports<");
-    expect(out).toContain(">Contradicts<");
+    expect(out).toMatch(/text-conflict">· 1 weakens</);
+    expect(out).toContain(">supports<");
+    expect(out).toContain(">weakens<");
+    expect(out).toContain("border-conflict");
+    expect(out).toContain(">9 Oct 2026<");
     expect(out).toContain("source missing");
     expect(out).toContain('href="https://example.com/about#:~:text=led%20the%20data%20team%20at%20Acme"');
     expect(out).toContain(">[1] example.com<");
@@ -104,10 +110,13 @@ describe("ProfileSections", () => {
       personality: { ...profile.personality, traits: [{ text: "Builder bias", detail: "", evidence: [ev()] }] },
     };
     const out = html(withExtras);
-    expect(out).toContain(">Context<");
+    expect(out).toContain(">context<");
     expect(out).toContain("> · LinkedIn, self-reported<");
     expect(out).toContain("Company-level result.");
-    expect(out).toContain("2019 – Present · 1 yr 9 mos · Prague");
+    expect(out).toContain("2019 – Present");
+    expect(out).toContain(">1 yr 9 mos<");
+    expect(out).toContain(">Prague<");
+    expect(out).toMatch(/Acme<span class="font-normal text-ink">.*Data lead<\/span>/);
     expect(out).toMatch(/>75%</);
     expect(out).toContain("Builder bias");
   });
@@ -128,6 +137,7 @@ describe("ProfileSections", () => {
   it("caps visible items and puts the rest behind Show N more; non-jobs collapsed", () => {
     const jobs = Array.from({ length: 7 }, (_, i) => ({ ...acme, organization: `Org${String(i)}` }));
     const out = html({ ...profile, achievements: many(5, "Win"), questions: many(7, "Q").map((q) => ({ text: q.text, closes: "" })), history: [...profile.history, ...jobs] });
+    expect(html({ ...profile, questions: [{ text: "Why?", closes: "Closes the gap" }] })).toContain(">the gap<");
     expect(out).toContain("Show 2 more");
     expect(out).toContain("Show 3 earlier jobs");
     expect(out).toContain("Education, projects and community (1)");

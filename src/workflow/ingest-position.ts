@@ -10,7 +10,8 @@
  * - Order: fetch plan, dedupe on (board, external_id), resolve text (fetch with a 20 s abort, parse, paste fallback), strip boilerplate, one capped LLM extract, then insert and R2 put together
  * - Paste always works: a failed fetch falls back to the pasted text with a note, a failed LLM or R2 put never fails the ingest
  * - Jobs.cz career sites (`<company>.jobs.cz`) carry no posting in the HTML: the widget chain of `posting-jobscz-widget` is tried before giving up
- * - Manual entry (title alone, optional company and location, no text): method `manual`, the generic must-haves, no LLM call
+ * - Manual entry (title alone, optional company and location, no text): method `manual`, no LLM call; a role-catalog title gets the
+ *   template's family and must-haves (extraction `edited`), any other title the generic must-haves
  * - A lost insert (UNIQUE race) deletes the R2 object written in parallel, so no orphan remains
  * - Records the single LLM call's cost in `ingest_cost_usd`; the raw payload goes to R2 `positions/<id>.json` and is purged with the row
  *
@@ -23,6 +24,7 @@ import type { CreatePositionBody } from "@/app/api/_lib/position-body";
 import { RETENTION_DAYS } from "@/domain/audit";
 import type { Ports } from "@/domain/ports";
 import { errorMessage, fallbackMustHaves } from "@/domain/position";
+import { ROLE_CATALOG } from "@/domain/role-catalog";
 import { extractPosition, familyOf } from "@/recipe/seams/position-extract";
 import { fetchJobsCzWidget } from "@/recipe/seams/posting-jobscz-widget";
 import { parsePosting, type ParsedPosting } from "@/recipe/seams/posting-parse";
@@ -107,13 +109,15 @@ type Hint = { title?: string; company?: string; location?: string };
 async function extractOrGeneric(deps: IngestDeps, method: PostingMethod, text: string, hint: Hint, notes: string[]): ReturnType<typeof extractPosition> {
   if (method === "manual") {
     const title = hint.title ?? "";
+    // A role-catalog title (the New brief picker) brings its curated must-haves; those count as hand-made, not generic.
+    const template = ROLE_CATALOG.find((t) => t.title === title);
     return {
       title,
       ...(hint.company !== undefined ? { company: hint.company } : {}),
       ...(hint.location !== undefined ? { location: hint.location } : {}),
-      family: familyOf(title),
-      must_haves: fallbackMustHaves(title, hint.location ?? null),
-      extraction: "fallback",
+      family: template?.family ?? familyOf(title),
+      must_haves: template?.must_haves ?? fallbackMustHaves(title, hint.location ?? null),
+      extraction: template === undefined ? "fallback" : "edited",
       cost_usd: 0,
       notes: [],
     };

@@ -70,7 +70,11 @@ describe("profile seam", () => {
     // Own LinkedIn profile: weak; the same quote in press is strong; a first-person press quote is weak and noted
     expect(validEvidence([good] as never, [src])[0]?.strength).toBe("weak");
     const article = { ...src, url: "https://www.e15.cz/x", actor: "apify/website-content-crawler" };
-    expect(validEvidence([good, { ...style, note: "E15" }] as never, [article])).toMatchObject([{ strength: "strong" }, { strength: "weak", note: "E15, self-quoted in press" }]);
+    expect(validEvidence([good, { ...style, kind: "FACT", note: "E15" }, style] as never, [article])).toMatchObject([
+      { strength: "strong" },
+      { strength: "weak", note: "E15, self-quoted in press" },
+      { strength: "weak" },
+    ]);
     const o = out();
     const p = await buildProfile(ctx, [fact], fakePorts({ llm: llmFor(reading([style])) }), o);
     expect(p.achievements).toMatchObject([{ text: "Joined Kiwi.com in 2021", evidence: [good] }]);
