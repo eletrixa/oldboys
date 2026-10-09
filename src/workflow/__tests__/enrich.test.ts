@@ -32,7 +32,7 @@ function makeEnv(opts: { apps?: Row[]; recent?: number; recentOrg?: number; posi
     if (sql.startsWith("SELECT title, must_haves_json FROM positions")) {
       return (opts.positions ?? ["pos-1"]).includes(a[0] as string) ? [{ title: "Backend", must_haves_json: MUST }] : [];
     }
-    if (sql.startsWith("SELECT id, status, linkedin_url, cv_text FROM applications WHERE position_id = ? AND id IN")) {
+    if (sql.startsWith("SELECT id, status, linkedin_url, cv_text, run_id FROM applications WHERE position_id = ? AND id IN")) {
       return [...apps.values()].filter((r) => r.position_id === a[0] && a.slice(1).includes(r.id));
     }
     if (sql.startsWith("SELECT COUNT(*) AS n, COALESCE(SUM(via = 'start'")) {
@@ -102,7 +102,7 @@ describe("startEnrichment", () => {
     const { env, create } = makeEnv({
       apps: [
         app("ok"),
-        app("started", { status: "run-started" }),
+        app("started", { status: "run-started", run_id: "run-old" }),
         app("capped", { status: "capped" }),
         app("empty", { linkedin_url: null }),
         app("other", { position_id: "pos-2" }),
@@ -111,7 +111,7 @@ describe("startEnrichment", () => {
     const res = await startEnrichment(env, { positionId: "pos-1", applicationIds: ["ok", "ok", "started", "capped", "empty", "other", "ghost"], origin: api }, NOW);
     expect(res.ok && res.started.map((s) => s.applicationId)).toEqual(["ok"]);
     expect(res.ok && res.skipped).toEqual([
-      { applicationId: "started", reason: "already started" },
+      { applicationId: "started", reason: "already started", runId: "run-old" },
       { applicationId: "capped", reason: "not ready" },
       { applicationId: "empty", reason: "no LinkedIn URL or CV text" },
       { applicationId: "other", reason: "not in this position's pool" },

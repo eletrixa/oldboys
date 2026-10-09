@@ -106,8 +106,13 @@ export function defaultTag(title: string): string {
 
 export type EnrichResponse = {
   started: readonly { applicationId: string; runId: string }[];
-  skipped: readonly { applicationId: string; reason: string }[];
+  skipped: readonly { applicationId: string; reason: string; runId?: string }[];
 };
+
+/** Runs that skipped rows already have ("already started"), once each, so the notice can link them. */
+export function existingRuns(body: EnrichResponse): string[] {
+  return [...new Set(body.skipped.flatMap((s) => (s.runId === undefined ? [] : [s.runId])))];
+}
 
 export function enrichSummary(body: EnrichResponse): string {
   const n = body.started.length;

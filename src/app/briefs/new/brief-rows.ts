@@ -59,7 +59,8 @@ export function failText(status: number, fallback: string): string {
   return fallback;
 }
 
-export type Notice = { kind: "error" | "info"; text: string };
+/** `runs`: existing runs to link next to the text ("already started"). */
+export type Notice = { kind: "error" | "info"; text: string; runs?: readonly string[] };
 
 export function nextAfterStart(positionId: string, started: readonly { runId: string }[]): string {
   const [only, ...rest] = started;

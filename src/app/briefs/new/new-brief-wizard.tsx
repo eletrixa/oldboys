@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/briefs/new/new-brief-wizard.tsx
- * Deps:    react, next/navigation, src/app/ui, src/app/_components/{token,run-tray-store}, src/app/positions/pool-rows (enrichSummary), ./{position-step,candidates-step,brief-rows}
+ * Deps:    react, next/navigation, src/app/ui, src/app/_components/{token,run-tray-store}, src/app/positions/pool-rows (enrichSummary, existingRuns), next/link, ./{position-step,candidates-step,brief-rows}
  * Tested:  helpers in src/app/briefs/new/__tests__/brief-rows.test.ts; flow by e2e/brief-flow.spec.ts
  *
  * Key responsibilities:
@@ -17,13 +17,14 @@
  */
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { trackRun } from "@/app/_components/run-tray-store";
 import { authFetch, postJson, readToken } from "@/app/_components/token";
 import type { PositionDetail } from "@/app/api/positions/handler";
-import { enrichSummary, type EnrichResponse } from "@/app/positions/pool-rows";
-import { BTN_PRIMARY, Eyebrow, TILE } from "@/app/ui";
+import { enrichSummary, type EnrichResponse, existingRuns } from "@/app/positions/pool-rows";
+import { BTN_PRIMARY, Eyebrow, LINK, TILE } from "@/app/ui";
 import type { PositionListItem } from "@/domain/position";
 import type { RoleOption } from "@/domain/role-catalog";
 import { candidateBody, type DraftRow, emptyRow, enrichIds, failText, nextAfterStart, type Notice, patchRow, researchCount, rowReady } from "./brief-rows";
@@ -51,9 +52,19 @@ async function addRow(positionId: string, row: DraftRow): Promise<string | numbe
 }
 
 function NoticeLine({ notice }: { notice: Notice }): React.JSX.Element {
-  return notice.kind === "error"
-    ? <p role="alert" className="text-sm text-conflict">{notice.text}</p>
-    : <p role="status" className="text-sm text-muted">{notice.text}</p>;
+  if (notice.kind === "error") return <p role="alert" className="text-sm text-conflict">{notice.text}</p>;
+  const runs = notice.runs ?? [];
+  return (
+    <p role="status" className="text-sm text-muted">
+      {notice.text}
+      {runs.map((id, i) => (
+        <span key={id}>
+          {" · "}
+          <Link href={`/runs/${encodeURIComponent(id)}`} className={LINK}>{runs.length === 1 ? "Open the existing brief" : `Open existing brief ${String(i + 1)}`}</Link>
+        </span>
+      ))}
+    </p>
+  );
 }
 
 function Placeholder({ n, title, hint }: { n: number; title: string; hint: string }): React.JSX.Element {
@@ -147,7 +158,7 @@ export function NewBriefWizard({ positions, roleOptions, initialPositionId, init
       const out = await res.json<EnrichResponse>();
       for (const run of out.started) trackRun(run.runId);
       if (out.started.length === 0) {
-        setNotice({ kind: "info", text: enrichSummary(out) });
+        setNotice({ kind: "info", text: enrichSummary(out), runs: existingRuns(out) });
         return;
       }
       router.push(nextAfterStart(positionId, out.started));
