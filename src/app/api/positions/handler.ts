@@ -119,7 +119,7 @@ function poolRun(row: RoleRunRow): PoolRun {
   const next = HIRING_STEPS[done];
   const actor = next !== undefined && "actor" in next ? next.actor : undefined;
   const active = row.status === "queued" || row.status === "running";
-  const step = !active || next === undefined ? null : (actor === undefined ? undefined : STEP_LABEL[actor]) ?? KIND_LABEL[next.kind] ?? "Web search";
+  const step = !active || next === undefined ? null : (actor === undefined ? undefined : STEP_LABEL[actor]) ?? KIND_LABEL[next.kind] ?? "Reading a source";
   const pct = row.status === "done" ? 100 : Math.min(99, Math.round((done / HIRING_STEPS.length) * 100));
   const stalled = isStalled(row.status, row.last_at ?? row.created_at, new Date().toISOString());
   return { status: row.status, subject: row.subject, step, pct, stalled, ...briefStats(row.brief_json) };

@@ -20,11 +20,11 @@ import { Eyebrow } from "../../ui";
 export function ProfileSignalsCard({ signals }: { signals: ProfileSignals | null | undefined }): React.JSX.Element | null {
   if (signals === null || signals === undefined) return null;
   return (
-    <section aria-labelledby="profile-signals">
+    <section aria-labelledby="profile-signals" className="border-t border-divider pt-6">
       <Eyebrow>What the public accounts show</Eyebrow>
-      <h3 id="profile-signals" className="mt-1 font-sans text-base font-semibold">
+      <h2 id="profile-signals" className="mt-1 font-sans text-base font-semibold">
         Profile signals to check
-      </h3>
+      </h2>
 
       {signals.signals.length === 0 ? (
         <p className="mt-3 text-sm text-ink">No account signals on this run.</p>
@@ -49,7 +49,7 @@ export function ProfileSignalsCard({ signals }: { signals: ProfileSignals | null
 
       {signals.not_checked.length > 0 && (
         <div className="mt-4 text-sm">
-          <h4 className="text-xs font-semibold text-muted">Not checked</h4>
+          <h3 className="text-xs font-semibold text-muted">Not checked</h3>
           <ul className="mt-1 list-disc pl-5 text-ink">
             {signals.not_checked.map((n) => (
               <li key={n}>{n}</li>

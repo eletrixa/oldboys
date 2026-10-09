@@ -9,6 +9,7 @@
  * Key responsibilities:
  * - POST /api/positions/:id/candidates from the add form (needs a LinkedIn URL or CV text)
  * - Results table in added order (anchor #candidates) with a checkbox only for rows that can start; POST /api/positions/:id/enrich
+ * - Table sits in a focusable labelled region with a swipe hint under md; errors announce as alerts, confirmations as status
  * - Report started runs and skipped reasons, follow them in the run tray, then ask the page to reload the detail
  * - While any row is researching, re-GET the position detail every 5 s through onReload (one request for all rows)
  *
@@ -35,6 +36,12 @@ function failText(status: number, fallback: string): string {
   if (status === 401) return "You are logged out. Reload the page to log in again.";
   if (status === 429) return "The hourly run limit is reached. Try again later.";
   return fallback;
+}
+
+/** Errors announce at once (alert); confirmations wait politely (status). */
+function NoticeLine({ notice }: { notice: Notice }): React.JSX.Element {
+  const error = notice?.kind === "error";
+  return <span role={error ? "alert" : "status"} className={`text-sm ${error ? "text-conflict" : "text-muted"}`}>{notice?.text}</span>;
 }
 
 function AddCandidate({ positionId, onReload }: Pick<Props, "positionId" | "onReload">): React.JSX.Element {
@@ -102,7 +109,7 @@ function AddCandidate({ positionId, onReload }: Pick<Props, "positionId" | "onRe
       </label>
       <div className="flex flex-wrap items-center gap-3">
         <button type="submit" className={BTN_SECONDARY} disabled={!ready || busy}>Add to pool</button>
-        <span role="status" className={`text-sm ${notice?.kind === "error" ? "text-conflict" : "text-muted"}`}>{notice?.text}</span>
+        <NoticeLine notice={notice} />
       </div>
     </form>
   );
@@ -156,10 +163,12 @@ export function CandidatePool({ positionId, rows, onReload }: Props): React.JSX.
       <h2 id="pool-heading" className="font-serif text-2xl">Candidates</h2>
       <AddCandidate positionId={positionId} onReload={onReload} />
       {views.length === 0 ? (
-        <p className="text-muted">No candidates yet. Add one below, or bind an intake channel so applications land here.</p>
+        <p className="text-muted">No candidates yet. Add one above, or bind an intake channel so applications land here.</p>
       ) : (
         <>
-          <div className="relative overflow-x-auto rounded-xl border border-divider bg-surface">
+          <div className="rounded-xl border border-divider bg-surface">
+            <p className="px-4 pt-3 text-xs text-muted md:hidden">Swipe sideways to see every column.</p>
+            <div role="region" aria-label="Candidates" tabIndex={0} className="relative overflow-x-auto">
             <table className="w-full min-w-[40rem] text-left text-sm">
               <caption className="sr-only">Candidates in the order they were added; fit is the evidence share of this position&apos;s must-haves</caption>
               <thead className="bg-sage/50 text-xs text-muted">
@@ -200,12 +209,13 @@ export function CandidatePool({ positionId, rows, onReload }: Props): React.JSX.
                 ))}
               </tbody>
             </table>
+            </div>
           </div>
           <div className="flex flex-wrap items-center gap-3">
             <button type="button" className={BTN_PRIMARY} disabled={chosen.length === 0 || busy} onClick={() => void enrich()}>
               Research selected ({chosen.length})
             </button>
-            <span role="status" className={`text-sm ${notice?.kind === "error" ? "text-conflict" : "text-muted"}`}>{notice?.text}</span>
+            <NoticeLine notice={notice} />
           </div>
         </>
       )}

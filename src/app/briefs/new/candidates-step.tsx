@@ -7,7 +7,7 @@
  * Tested:  helpers in src/app/briefs/new/__tests__/brief-rows.test.ts; view by e2e/brief-flow.spec.ts
  *
  * Key responsibilities:
- * - Rows: visible Candidate N label, source switch, the matching field, Remove (when more than one row), Add another candidate
+ * - Rows: visible Candidate N label, source radios, the matching field, Remove (when more than one row), Add another candidate
  * - Pool: only rows that can start (pooled, with a profile or CV) get a checkbox; order = arrival
  *
  * Design constraints:
@@ -28,7 +28,7 @@ const SOURCES: readonly (readonly [RowSource, string])[] = [
   ["cv", "Paste CV"],
   ["file", "CV file"],
 ];
-const TAB = "rounded-full px-3 py-1.5 text-sm font-medium transition-colors";
+const TAB = "inline-flex min-h-11 cursor-pointer items-center rounded-full px-3 text-sm font-medium transition-colors has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-action";
 const TAB_ON = `${TAB} bg-ink text-white`;
 const TAB_OFF = `${TAB} text-muted hover:bg-sage/60 hover:text-ink`;
 
@@ -40,13 +40,15 @@ function Row({ row, n, onPatch, onRemove }: { row: DraftRow; n: number; onPatch:
     <li className={`${CARD_MUTED} flex flex-col gap-3`} aria-label={`Candidate ${String(n)}`}>
       <span className={KEY}>Candidate {n}</span>
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div role="tablist" aria-label={`How to add candidate ${String(n)}`} className="flex gap-1 rounded-full border border-line bg-surface p-1">
+        <fieldset className="flex gap-1 rounded-full border border-line bg-surface p-1">
+          <legend className="sr-only">How to add candidate {n}</legend>
           {SOURCES.map(([source, label]) => (
-            <button key={source} type="button" role="tab" aria-selected={row.source === source} className={row.source === source ? TAB_ON : TAB_OFF} onClick={() => { onPatch(row.key, { source }); }}>
+            <label key={source} className={row.source === source ? TAB_ON : TAB_OFF}>
+              <input type="radio" name={`source-${row.key}`} className="sr-only" checked={row.source === source} onChange={() => { onPatch(row.key, { source }); }} />
               {label}
-            </button>
+            </label>
           ))}
-        </div>
+        </fieldset>
         {onRemove !== null && <button type="button" className={BTN_QUIET} onClick={onRemove}>Remove</button>}
       </div>
       {row.source === "linkedin" && <ProfilePicker onUrl={onUrl} />}

@@ -22,21 +22,22 @@ import { BTN_PRIMARY, CARD, Eyebrow } from "../ui";
 import { BriefTable } from "./brief-table";
 import { groupByPosition, listOrganizationRuns } from "./load";
 
-export const metadata: Metadata = { title: "Our briefs" };
+export const metadata: Metadata = { title: "My briefs" };
 
 export default async function BriefsPage(): Promise<React.JSX.Element> {
   const user = await currentUser();
   if (user === null) redirect("/login");
   const { env } = getCloudflareContext();
   const groups = groupByPosition(await listOrganizationRuns(env.DB, user.organizationId));
+  const positions = groups.filter((g) => g.positionId !== null).length;
   const total = groups.reduce((n, g) => n + g.rows.length, 0);
   const plural = (n: number, word: string): string => `${String(n)} ${word}${n === 1 ? "" : "s"}`;
   return (
     <main className="mx-auto flex max-w-5xl flex-col gap-8 px-4 py-10 md:py-14">
       <header className="flex flex-col items-start gap-3 border-b border-divider pb-8">
         <Eyebrow>{user.organizationName}</Eyebrow>
-        <h1 className="font-serif text-4xl leading-[1.05] md:text-5xl">Our briefs</h1>
-        <p className="max-w-[62ch] text-muted">{total > 0 && `${plural(total, "brief")} across ${plural(groups.length, "position")}. `}Every brief your team has started, grouped by position, newest first. Open one to read the evidence.</p>
+        <h1 className="font-serif text-4xl leading-[1.05] md:text-5xl">My briefs</h1>
+        <p className="max-w-[62ch] text-muted">{total > 0 && `${plural(total, "brief")}${positions > 0 ? ` across ${plural(positions, "position")}` : ""}. `}Every brief your team has started, grouped by position, newest first. Open one to read the evidence.</p>
         <Link href="/briefs/new" className={BTN_PRIMARY}>New brief</Link>
       </header>
       {groups.length === 0 ? (

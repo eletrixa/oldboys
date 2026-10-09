@@ -67,7 +67,7 @@ function Body({ detail, onChange }: { detail: PositionDetail; onChange: (d: Posi
         </div>
       </header>
       <nav aria-label="On this page" className="flex flex-wrap gap-x-5 gap-y-2 text-sm">
-        {SECTIONS.map(([id, label]) => <a key={id} href={`#${id}`} className={LINK}>{label}</a>)}
+        {SECTIONS.map(([id, label]) => <a key={id} href={`#${id}`} className={`${LINK} inline-flex min-h-11 items-center`}>{label}</a>)}
       </nav>
       <PositionBasics position={position} onSaved={saved} />
       {position.extraction === "fallback" && (

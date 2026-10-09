@@ -1,18 +1,22 @@
 /**
- * Working-style section of the candidate profile: DISC / MBTI, our read, trait rows and the Big Five block, all labelled inference.
+ * Working-style section of the candidate profile: our read, the Big Five block, trait notes and DISC / MBTI, all inference.
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/runs/[id]/profile-style.tsx
- * Deps:    react, src/domain/claim (types), ../../ui, ./profile-evidence, ./big-five
+ * Deps:    react, src/domain/claim (types), ../../ui, ./big-five, ./evidence-line, ./profile-evidence
  * Tested:  src/app/runs/[id]/__tests__/profile-sections.test.ts
  *
  * Key responsibilities:
- * - Our read capped at 3 sentences behind "Show N more"; traits capped at 4; never an assessment of the person
+ * - One deck sentence under the heading says it is read only from their own writing, never an assessment of the person
+ * - Our read first (3 sentences visible, the rest behind "Show N more"), then the Big Five block with own-words evidence
+ * - Trait notes: 4 visible when there is no Big Five read, otherwise all behind "Other trait notes (n)"
+ * - Type labels last: the dt names DISC / MBTI, the dd prints only the type and its confidence
  */
 import type { Profile } from "@/domain/claim";
-import { CARD_MUTED, Chevron, Pill, SUMMARY_COMPACT } from "../../ui";
+import { CARD_MUTED, Chevron, KEY, SUMMARY_COMPACT } from "../../ui";
 import { BigFiveBlock } from "./big-five";
-import { Capped, type Ctx, Dropped, EvidenceList, Head, MEASURE, NOTE, plural } from "./profile-evidence";
+import { type Ctx, MEASURE, NOTE, OwnWords } from "./evidence-line";
+import { Capped, Dropped, EvidenceList, Head, INTRO, ItemRows, More, plural } from "./profile-evidence";
 
 /** Sentence split for model prose; no abbreviation handling. */
 const sentences = (text: string): string[] => text.match(/[^.!?]+[.!?]+["”’)]*\s*|[^.!?]+$/g)?.map((s) => s.trim()) ?? [];
@@ -29,14 +33,41 @@ export function WorkingStyle({ p, ctx }: { p: Profile["personality"]; ctx: Ctx }
   return (
     <section className={CARD_MUTED}>
       <Head id="working-style" eyebrow="Inference" title="4. Working style" />
-      <p className="mt-2">
-        <Pill tone="inference">Inference from public writing, not an assessment of the person.</Pill>
+      <p className={INTRO}>
+        Read only from their own posts, articles and interview answers, never an assessment of the person. No health, political, religious, ethnic or
+        sexual-orientation data is used.
       </p>
-      <p className={`mt-2 ${NOTE}`}>
-        Based only on their own posts, articles and interview text. No health, political, religious, ethnic or sexual-orientation data is used.
-      </p>
-      {/* One column on phones (label above value) so the read and its evidence keep the full card width. */}
-      <dl className="mt-4 grid grid-cols-1 gap-x-4 gap-y-1 text-sm sm:grid-cols-[8rem_minmax(0,1fr)] sm:gap-y-2">
+      {read.length > 0 && (
+        <div className="mt-4">
+          <h3 className={KEY}>Our read</h3>
+          <p className={`mt-1 ${MEASURE} text-sm text-ink`}>
+            {read.slice(0, VISIBLE).join(" ")}
+            {p.evidence.length === 0 && traits.length === 0 && <span className="text-muted"> (no supporting quote kept)</span>}
+          </p>
+          {read.length > VISIBLE && (
+            <details className="group">
+              <summary className={SUMMARY_COMPACT}>
+                <Chevron />
+                {`Show ${plural(read.length - VISIBLE, "more sentence", "more sentences")}`}
+              </summary>
+              <p className={`${MEASURE} text-sm text-ink`}>{read.slice(VISIBLE).join(" ")}</p>
+            </details>
+          )}
+          <EvidenceList items={p.evidence} ctx={ctx} about="our read" />
+        </div>
+      )}
+      {p.big5 !== null && <BigFiveBlock big5={p.big5} evidence={(items, about, open) => <OwnWords items={items} ctx={ctx} about={about} open={open} />} />}
+      {traits.length > 0 &&
+        (p.big5 === null ? (
+          <Capped items={traits} visible={4} ctx={ctx} quiet />
+        ) : (
+          <div className="mt-2">
+            <More label={`Other trait notes (${String(traits.length)})`}>
+              <ItemRows items={traits} ctx={ctx} quiet />
+            </More>
+          </div>
+        ))}
+      <dl className="mt-4 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 border-t border-divider pt-3 text-sm">
         {types.length === 0 ? (
           <>
             <dt className={NOTE}>Type</dt>
@@ -46,37 +77,14 @@ export function WorkingStyle({ p, ctx }: { p: Profile["personality"]; ctx: Ctx }
           types.map((v) => (
             <div key={v.label} className="contents">
               <dt className={`${NOTE} pt-px`}>{v.label}</dt>
-              <dd className="text-ink">
-                {`${v.label} ${v.type}`}
-                <span className="text-muted">{`\u00a0· ${v.confidence} confidence`}</span>
+              <dd className="text-muted">
+                <span className="text-ink">{v.type}</span>
+                {` · ${v.confidence} confidence`}
               </dd>
             </div>
           ))
         )}
-        {read.length > 0 && (
-          <>
-            <dt className={`${NOTE} pt-px`}>Our read</dt>
-            <dd>
-              <p className={`${MEASURE} text-ink`}>
-                {read.slice(0, VISIBLE).join(" ")}
-                {p.evidence.length === 0 && traits.length === 0 && <span className="text-muted"> (no supporting quote kept)</span>}
-              </p>
-              {read.length > VISIBLE && (
-                <details className="group">
-                  <summary className={SUMMARY_COMPACT}>
-                    <Chevron />
-                    {`Show ${plural(read.length - VISIBLE, "more sentence", "more sentences")}`}
-                  </summary>
-                  <p className={`${MEASURE} text-ink`}>{read.slice(VISIBLE).join(" ")}</p>
-                </details>
-              )}
-              <EvidenceList items={p.evidence} ctx={ctx} about="our read" />
-            </dd>
-          </>
-        )}
       </dl>
-      {traits.length > 0 && <Capped items={traits} visible={4} ctx={ctx} quiet />}
-      {p.big5 !== null && <BigFiveBlock big5={p.big5} evidence={(items, about) => <EvidenceList items={items} ctx={ctx} about={about} />} />}
       <Dropped n={p.evidence_dropped} />
     </section>
   );

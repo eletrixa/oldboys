@@ -62,7 +62,7 @@ export function DeleteCard({ runId, onDeleted }: { runId: string; onDeleted: (re
   }
 
   return (
-    <details ref={ref} id={DELETE_ANCHOR} open={open} className="group border-t border-divider pt-4">
+    <details ref={ref} id={DELETE_ANCHOR} open={open} className="group border-t border-divider pt-4 print:hidden">
       <summary className={SUMMARY}>
         <Chevron />
         Delete candidate data
@@ -96,7 +96,7 @@ export function DeleteCard({ runId, onDeleted }: { runId: string; onDeleted: (re
             </label>
             <div className="flex flex-wrap items-center gap-2">
               <button type="button" className={BTN_DANGER} disabled={step.kind === "deleting" || !sure} onClick={() => void send(step.reason)}>
-                {step.kind === "deleting" ? "Deleting..." : "Delete everything now"}
+                {step.kind === "deleting" ? "Deleting…" : "Delete everything now"}
               </button>
               <button type="button" className={BTN_QUIET} disabled={step.kind === "deleting"} onClick={() => { setStep({ kind: "choose", reason: step.reason }); setProblem({ kind: "none" }); setSure(false); }}>
                 Cancel

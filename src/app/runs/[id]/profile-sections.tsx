@@ -5,20 +5,20 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/runs/[id]/profile-sections.tsx
- * Deps:    react, src/domain/claim (types), ../../ui (Radar primitives), ./evidence (Evidence, quoteLink, retrievedLabel)
+ * Deps:    react, src/domain/claim (types), ../../ui (Radar primitives), ./evidence (Evidence), ./evidence-line (Cite, Ctx)
  * Tested:  src/app/runs/[id]/__tests__/profile-sections.test.ts
  *
  * Key responsibilities:
  * - Verdict strip: run's role fit with a neutral bar and must-haves evidenced, risks, questions, FACT / INFERENCE and
  *   source counts, current role; FACT / INFERENCE legend; section anchors
  * - Sections in Robert's order with caps (3 / 3 / 5 jobs / 3 sentences / run's role / 5) and "Show N more"; empty ones omitted
- * - Evidence line: serif quote on a hairline rule, then one meta line: Independent / Self-reported pill (none on a weak INFERENCE), FACT / INFERENCE,
- *   supports / weakens / context, [n] source deep-linked at the quote, retrieved day, note;
- *   "source missing" for an unknown id; numbered Sources list with retrieved dates
+ * - Evidence line (evidence-line.tsx): serif quote on a hairline rule, then one meta line: FACT / INFERENCE, Independent /
+ *   Self-reported pill (none on a weak INFERENCE), supports / weakens / context, [n] source deep-linked at the quote,
+ *   retrieved day, note; "source missing" for an unknown id; numbered Sources list (7. Sources) with retrieved dates
  * - History as a timeline (date column, hairline, org · title); working style on a muted card with trait rows
  * - Position fit: one bar row per role, weighted capability table, formula behind a disclosure, Σ(weight × status) ÷ Σ(weight) computed here
  * - Position fit table stacks under 640px (name, status, labelled weights); each capability's evidence is a full-width row below it
- * - Sections live in profile-evidence, -history, -style, -fit, -ask and -summary; this file orders them
+ * - Sections live in profile-evidence, evidence-line, -history, -style, -fit, -ask and -summary; this file orders them
  * - Motion and print live in globals.css under `.profile` (details rise, bar grow, verdict stagger, link underline), all
  *   behind prefers-reduced-motion: no-preference; hooks are the pf-* class names
  * - Prose capped at a 65ch measure; evidence summaries carry the item name for screen readers; "·" separators bind to the
@@ -33,7 +33,8 @@
 import type { Profile, ProfileEvidence, ProfileItem } from "@/domain/claim";
 import { CARD } from "../../ui";
 import type { Evidence } from "./evidence";
-import { Capped, type Cite, type Ctx, Dropped, Head, INTRO } from "./profile-evidence";
+import type { Cite, Ctx } from "./evidence-line";
+import { Capped, Dropped, Head, INTRO } from "./profile-evidence";
 import { Questions, Sources } from "./profile-ask";
 import { Fit, orderFits } from "./profile-fit";
 import { History } from "./profile-history";
@@ -90,6 +91,7 @@ export function ProfileSections({ profile, evidence, role = null }: { profile: P
     "working-style": p.disc !== null || p.mbti !== null || p.big5 !== null || p.read !== "" || p.traits.length > 0,
     fit: fits.length > 0,
     ask: profile.questions.length > 0,
+    sources: ctx.cite.size > 0,
   };
   const present = new Set(Object.entries(show).flatMap(([k, v]) => (v ? [k] : [])));
   // `profile` scopes the motion and print rules in globals.css; 24px between sections on phones, 32px from md up.

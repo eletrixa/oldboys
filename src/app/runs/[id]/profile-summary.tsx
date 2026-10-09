@@ -1,19 +1,21 @@
 /**
- * Verdict strip at the top of the candidate profile: fit, risks, questions, fact and inference counts, current role, legend, section anchors.
+ * Verdict strip at the top of the candidate profile: evidence coverage, risks, questions, fact and inference counts, current role, legend, section anchors.
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/runs/[id]/profile-summary.tsx
- * Deps:    react, src/domain/claim (types), ../../ui, ./profile-evidence, ./profile-fit
+ * Deps:    react, src/domain/claim (types), ../../ui, ./evidence-line, ./profile-evidence, ./profile-fit
  * Tested:  src/app/runs/[id]/__tests__/profile-sections.test.ts
  *
  * Key responsibilities:
- * - Fit with neutral bar and must-haves evidenced, risks, questions, FACT / INFERENCE and source counts
- * - FACT / INFERENCE legend and anchors to the sections that exist
+ * - Evidence coverage for the run's role as "3 of 5" must-haves evidenced (the % only as the sub-line, never a score of
+ *   the person) with a neutral bar, risks, questions, FACT / INFERENCE and source counts
+ * - FACT / INFERENCE legend and anchors (44px targets) to the sections that exist, Sources included
  */
 import type { PositionFit, Profile, ProfileEvidence } from "@/domain/claim";
-import { CARD, Eyebrow } from "../../ui";
-import { type Ctx, FIGURE, NOTE, plural } from "./profile-evidence";
-import { Bar, evidenced, fitPct } from "./profile-fit";
+import { CARD, Eyebrow, LINK } from "../../ui";
+import { type Ctx, NOTE } from "./evidence-line";
+import { FIGURE, plural } from "./profile-evidence";
+import { Bar, fitPct } from "./profile-fit";
 
 const SECTIONS = [
   ["achievements", "Achievements"],
@@ -22,15 +24,25 @@ const SECTIONS = [
   ["working-style", "Working style"],
   ["fit", "Position fit"],
   ["ask", "What to ask"],
+  ["sources", "Sources"],
 ] as const;
 
-/** Verdict strip the recruiter reads first: fit with bar, risks, questions, evidence; then current role, legend, anchors. */
+/** Verdict strip the recruiter reads first: evidence coverage with bar, risks, questions, evidence; then current role, legend, anchors. */
 export function SummaryBox({ profile, fits, all, ctx, present }: { profile: Profile; fits: PositionFit[]; all: ProfileEvidence[]; ctx: Ctx; present: ReadonlySet<string> }): React.JSX.Element {
   const job = profile.history.find((h) => h.kind === "job");
   const [fit] = fits;
   const facts = all.filter((e) => e.kind === "FACT").length;
   const cells: { label: string; value: string; sub: string; bar?: number }[] = [
-    ...(fit === undefined ? [] : [{ label: `Fit, ${fit.role}`, value: `${String(fitPct(fit))}%`, sub: evidenced(fit), bar: fitPct(fit) }]),
+    ...(fit === undefined
+      ? []
+      : [
+          {
+            label: `Must-haves evidenced, ${fit.role}`,
+            value: `${String(fit.traits.filter((t) => t.status === "has").length)} of ${String(fit.traits.length)}`,
+            sub: `${String(fitPct(fit))}% evidence coverage`,
+            bar: fitPct(fit),
+          },
+        ]),
     { label: "Risks", value: String(profile.risks.length), sub: "to check before an offer" },
     { label: "Questions", value: String(profile.questions.length), sub: "each closes a risk or gap" },
     { label: "Facts · inferences", value: `${String(facts)} · ${String(all.length - facts)}`, sub: `from ${plural(ctx.cite.size, "source")}` },
@@ -64,9 +76,9 @@ export function SummaryBox({ profile, fits, all, ctx, present }: { profile: Prof
         <span className="font-semibold tracking-wide text-inference">INFERENCE</span> derived from the quotes shown with it. Public data only; no
         contact data and no special-category data.
       </p>
-      <nav aria-label="Profile sections" className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm">
+      <nav aria-label="Profile sections" className="mt-2 flex flex-wrap gap-x-4 text-sm">
         {SECTIONS.filter(([id]) => present.has(id)).map(([id, label]) => (
-          <a key={id} href={`#${id}`} className="font-medium text-action underline decoration-action/40 underline-offset-4 hover:decoration-action">
+          <a key={id} href={`#${id}`} className={`${LINK} inline-flex min-h-11 items-center`}>
             {label}
           </a>
         ))}

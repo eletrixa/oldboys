@@ -7,11 +7,16 @@
  * Tested:  n/a (this is the test)
  *
  * Key responsibilities:
- * - Verdict strip, Robert's section order, caps with "Show N more", run's role first, empty sections omitted
- * - Evidence lines: kind, direction, strength pill, [n] deep link, note, "source missing"; independent count per item
+ * - Verdict strip (must-haves evidenced as "k of n", % as the sub-line), Robert's section order with 7. Sources, caps with
+ *   "Show N more", run's role first, empty sections omitted, 44px section anchors
+ * - Evidence lines: kind first, strength pill, direction, [n] deep link, cite, note, "source missing"; FACT and independent
+ *   counts per item, weakening lines first
+ * - Working style: one deck sentence (no pill), our read before type labels, the type printed once
+ * - Fit table keeps explicit table roles under 640px
  * - Fit recomputed as Σ(weight × status) ÷ Σ(weight)
  * - A degraded profile renders only "Profile not built: …" in plain words, never the model's error text
- * - Every animation and transition for the profile sits behind prefers-reduced-motion: no-preference (CSS and classes)
+ * - Every animation and transition for the profile sits behind prefers-reduced-motion: no-preference (CSS and classes);
+ *   print opens every disclosure under main
  *
  * Design constraints:
  * - Fixtures stay inline
@@ -60,19 +65,26 @@ const many = (n: number, prefix: string) => Array.from({ length: n }, (_, i) => 
 describe("ProfileSections", () => {
   it("renders the summary box, then sections in Robert's order, then sources", () => {
     const out = html(profile);
-    const order = ["Profile at a glance", "1. Achievements", "2. Risks", "3. History", "4. Working style", "5. Position fit", "6. What to ask", "Sources (1)"].map((t) =>
+    const order = ["Profile at a glance", "1. Achievements", "2. Risks", "3. History", "4. Working style", "5. Position fit", "6. What to ask", "7. Sources", "Sources (1)"].map((t) =>
       out.indexOf(t),
     );
     expect(order[0]).toBeGreaterThanOrEqual(0);
     expect(order).toEqual([...order].sort((a, b) => a - b));
     expect(out).toContain("Data lead, Acme");
     expect(out).toContain("1 of 2 must-haves evidenced");
+    expect(out).toContain(">Must-haves evidenced, CTO<");
+    expect(out).toContain(">1 of 2<");
+    expect(out).toContain(">50% evidence coverage<");
+    expect(out).toContain('href="#sources"');
+    expect(out).toMatch(/<a href="#ask" class="[^"]*min-h-11[^"]*"/);
     expect(out).toContain("Current role");
     expect(out).toContain(">4 · 2<");
     expect(out).toContain("from 1 source");
     expect(out).toContain("closes: <span class=\"text-ink\">Short tenures</span>");
-    expect(out).toContain("Inference from public writing, not an assessment of the person.");
-    expect(out).toContain("DISC C");
+    expect(out).toContain("Read only from their own posts, articles and interview answers, never an assessment of the person.");
+    expect(out).toMatch(/>DISC<\/dt><dd class="text-muted"><span class="text-ink">C<\/span>/);
+    expect(out).not.toContain("DISC C");
+    expect(out.indexOf("Our read")).toBeLessThan(out.indexOf(">DISC<"));
     expect(out).toContain("No supporting quote kept");
     expect(out).toContain("· low confidence");
     expect(out).toContain("How the % is computed");
@@ -92,6 +104,14 @@ describe("ProfileSections", () => {
     expect(out).toContain(">9 Oct 2026<");
     expect(out).toContain("source missing");
     expect(out).toContain('href="https://example.com/about#:~:text=led%20the%20data%20team%20at%20Acme"');
+    expect(out).toContain('<blockquote cite="https://example.com/about"');
+    expect(out).toMatch(/Evidence \(2\)<span class="sr-only"> for Short tenures<\/span>\u00a0·<\/span><span class="font-medium text-ok">1 FACT\u00a0·<\/span>/);
+    expect(out).toMatch(/text-inference">all inference\u00a0·</);
+    // Kind leads the meta line, before the strength pill.
+    expect(out).toMatch(/>FACT<\/span><\/span><\/span><span><span aria-hidden="true">\u00a0· <\/span><span class="whitespace-nowrap"><span class="[^"]*">Self-reported</);
+    // The weakening line comes first in its list.
+    const risk = out.slice(out.indexOf("Short tenures"));
+    expect(risk.indexOf(">weakens<")).toBeLessThan(risk.indexOf(">supports<"));
     expect(out).toContain(">[1] example.com<");
     expect(out).toContain("Retrieved 9 Oct 2026, 10:00 UTC");
   });
@@ -131,7 +151,7 @@ describe("ProfileSections", () => {
     const out = renderToStaticMarkup(
       createElement(ProfileSections, { profile: { ...profile, position_fit: [cto, cmo], personality: { ...profile.personality, disc: null } }, evidence, role: "CMO" }),
     );
-    expect(out).toContain("Fit, CMO");
+    expect(out).toContain("Must-haves evidenced, CMO");
     expect(out.indexOf(">CMO<")).toBeLessThan(out.indexOf(">CTO<"));
     expect(out).toMatch(/>50%</);
     expect(out).toContain(">Brand");
@@ -173,9 +193,11 @@ describe("ProfileSections", () => {
     expect(out).toMatch(/Evidence \(\d+\)<span class="sr-only"> for [^<]+<\/span>\u00a0·<\/span>/);
     expect(out).not.toMatch(/> ?· /);
     expect(out).toContain("max-sm:sr-only");
-    expect(out).toMatch(/<tr class="max-sm:block"><td colSpan="\d+"[^>]*>/);
+    expect(out).toMatch(/<tr role="row" class="max-sm:block"><td colSpan="\d+" role="cell"[^>]*>/);
+    expect(out).toContain('<table role="table"');
+    expect(out).toContain('<th scope="row" role="rowheader"');
     expect(out).toContain('<span class="sm:hidden">weight </span>');
-    expect(out).toContain("max-w-prose font-serif");
+    expect(out).toContain("max-w-prose [text-indent:-0.45em] font-serif");
   });
 
   it("collapses the read only when two or more sentences would be hidden", () => {
@@ -207,6 +229,8 @@ describe("profile motion", () => {
 
   it("keeps every animation and transition rule in globals.css inside the no-preference guard", () => {
     const css = read("../../../globals.css");
+    expect(css).toContain("main details::details-content");
+    expect(css).toContain("animation: pf-big5-draw");
     expect(css).toContain("animation: pf-rise");
     expect(outsideGuard(css)).not.toMatch(/(^|[\s;{])(animation|animation-name|transition|transition-property)\s*:/);
   });

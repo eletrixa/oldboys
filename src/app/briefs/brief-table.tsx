@@ -8,7 +8,7 @@
  *
  * Key responsibilities:
  * - One row per brief: the candidate name links to /runs/<id>, status pill, fit % when done, relative date
- * - Date column hidden under sm so five columns do not overflow at 390px
+ * - Date column hidden under sm so the table does not overflow at 390px; there the date is a muted second line under the name
  *
  * Design constraints:
  * - Server component; fit is the evidence share of must-haves, shown never sorted
@@ -19,7 +19,7 @@ import { type BriefGroup, relativeTime, statusOf } from "./load";
 
 function Fit({ status, fitPct }: { status: string; fitPct: number | null }): React.JSX.Element {
   if (status !== "done") return <>—<span className="sr-only">not finished</span></>;
-  if (fitPct === null) return <span className="text-muted">no fit</span>;
+  if (fitPct === null) return <>—<span className="sr-only">fit not computed</span></>;
   return <>{String(fitPct)}%</>;
 }
 
@@ -44,6 +44,7 @@ export function BriefTable({ group }: { group: BriefGroup }): React.JSX.Element 
                 <th scope="row" className="px-3 py-3 font-normal">
                   <Link href={`/runs/${row.id}`} className={`${LINK} font-serif text-base`}>{row.subject === "" ? "the candidate" : row.subject}</Link>
                   {row.started_by !== null && <span className="block text-xs text-muted">started by {row.started_by}</span>}
+                  <span className="block text-xs text-muted sm:hidden">{relativeTime(row.created_at)}</span>
                 </th>
                 <td className="px-3 py-3"><Pill tone={tone}>{label}</Pill></td>
                 <td className="whitespace-nowrap px-3 py-3 text-right tabular-nums"><Fit status={row.status} fitPct={row.fit_pct} /></td>

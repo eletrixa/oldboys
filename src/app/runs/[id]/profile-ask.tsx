@@ -3,17 +3,18 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/runs/[id]/profile-ask.tsx
- * Deps:    react, src/domain/claim (types), ../../ui, ./profile-evidence, ./evidence, ./state
+ * Deps:    react, src/domain/claim (types), ../../ui, ./evidence-line, ./profile-evidence, ./evidence, ./state
  * Tested:  src/app/runs/[id]/__tests__/profile-sections.test.ts
  *
  * Key responsibilities:
  * - Questions (5 visible, the rest behind "Show N more"), each saying which risk or gap it closes
- * - Sources in citation order with retrieved dates; the full address in the tooltip
+ * - "7. Sources" (anchor #sources) in citation order with retrieved dates behind a disclosure; the full address in the tooltip
  */
 import type { Profile } from "@/domain/claim";
-import { CARD } from "../../ui";
+import { CARD, LINK } from "../../ui";
 import { retrievedLabel } from "./evidence";
-import { type Ctx, Head, INTRO, More, NOTE } from "./profile-evidence";
+import { type Ctx, NOTE } from "./evidence-line";
+import { Head, INTRO, More } from "./profile-evidence";
 import { CV_SOURCE_TEXT, isCvSource } from "./state";
 
 function QuestionRows({ items, start }: { items: Profile["questions"]; start: number }): React.JSX.Element {
@@ -62,6 +63,7 @@ export function Sources({ ctx }: { ctx: Ctx }): React.JSX.Element | null {
   if (ctx.cite.size === 0) return null;
   return (
     <section className={CARD}>
+      <Head id="sources" eyebrow="Citations" title="7. Sources" />
       <More label={`Sources (${String(ctx.cite.size)})`}>
         <ol className="list-decimal pl-6 text-xs [overflow-wrap:anywhere]">
           {[...ctx.cite.keys()].map((id) => {
@@ -72,7 +74,7 @@ export function Sources({ ctx }: { ctx: Ctx }): React.JSX.Element | null {
                 {isCvSource(info.url) ? (
                   <span className="text-muted">{CV_SOURCE_TEXT}</span>
                 ) : (
-                  <a href={info.url} target="_blank" rel="noreferrer" title={info.url} className="pf-link text-action underline decoration-action/40 underline-offset-2 hover:decoration-action">
+                  <a href={info.url} target="_blank" rel="noreferrer" title={info.url} className={`${LINK} pf-link`}>
                     {shortUrl(info.url)}
                   </a>
                 )}

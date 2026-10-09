@@ -293,9 +293,9 @@ export function host(url: string): string {
   }
 }
 
-/** Where "Try again" and "start again" go: the position's brief form when the run has a position, else the plain one. */
+/** Where "Try again" and "start again" go: the position's brief form when the run has a position, else home (the page may be opened without a session; home sends a signed-in user on). */
 export function retryHref(position: RunState["position"]): string {
-  return position ? `/briefs/new?positionId=${encodeURIComponent(position.id)}` : "/briefs/new";
+  return position ? `/briefs/new?positionId=${encodeURIComponent(position.id)}` : "/";
 }
 
 /** The notice for a run with no ledger activity for 30 minutes (same rule as My briefs), else null. */

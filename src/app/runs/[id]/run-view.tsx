@@ -12,7 +12,7 @@
  *   then "From <source> · <tag> · <date>" when an intake application started the run
  * - "Researched for: <position title>" link to /positions/<id> under the name when the run came from a position
  * - When done, the brief comes first and the confirmation steps fold into a closed "How we confirmed it" disclosure
- * - One footer closes the page: running hint (not done), then "All briefs" and "Audit record" links, then the
+ * - One footer closes the page: running hint (not done), then "Home" and "Audit record" links, then the
  *   "Delete candidate data" disclosure (any status); after a delete the whole page becomes the deletion receipt
  * - Not-found view: eyebrow, heading, muted sentence and a primary back link on the header rhythm
  * - Stalled notice above the progress when no ledger activity for 30 minutes (stalledNotice); "Started N min ago" under the steps while running
@@ -29,6 +29,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { trackRun } from "@/app/_components/run-tray-store";
 import { intakeLine } from "@/app/intake/intake-rows";
 import type { Candidate, CandidateDecision } from "@/domain/claim";
 import { BTN_SECONDARY, CARD_CONFLICT, CARD_UNSURE, Chevron, Eyebrow, LINK, SimulatedPill, SUMMARY } from "../../ui";
@@ -79,10 +80,12 @@ export function RunView({ id }: { id: string }): React.JSX.Element {
   const [sent, setSent] = useState(false);
   const [sendFailed, setSendFailed] = useState(false);
   const [deleted, setDeleted] = useState<DeletionReceipt | null>(null);
+  const thanksRef = useRef<HTMLParagraphElement>(null);
 
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | undefined;
     let stopped = false;
+    let tracked = false;
     async function tick(): Promise<void> {
       let next = true;
       try {
@@ -93,6 +96,10 @@ export function RunView({ id }: { id: string }): React.JSX.Element {
         } else if (res.ok) {
           const s = await res.json<RunState>();
           setState(s);
+          if (!tracked && s.status !== "done" && s.status !== "failed") {
+            tracked = true;
+            trackRun(id);
+          }
           setPolledAt(Date.now());
           next = s.status !== "done" && s.status !== "failed";
         }
@@ -137,6 +144,11 @@ export function RunView({ id }: { id: string }): React.JSX.Element {
     });
   }, [state, pending.length, local, id]);
 
+  // After the last answer the question card disappears; move focus to the confirmation so keyboard users are not dropped.
+  useEffect(() => {
+    if (question === undefined && sent) thanksRef.current?.focus();
+  }, [question, sent]);
+
   const answer = useCallback((cid: string, decision: Answer) => {
     if (decision === "possibly-same-as") {
       setUnsure((u) => ({ ...u, [cid]: true }));
@@ -152,7 +164,7 @@ export function RunView({ id }: { id: string }): React.JSX.Element {
         <Eyebrow>Brief</Eyebrow>
         <h1 className="font-serif text-4xl leading-[1.05] md:text-5xl">We could not find this brief</h1>
         <p className="text-muted">The link may be mistyped, or the run is no longer available.</p>
-        <Link href="/briefs" className={LINK}>All briefs</Link>
+        <Link href="/" className={LINK}>Home</Link>
       </main>
     );
   }
@@ -219,7 +231,7 @@ export function RunView({ id }: { id: string }): React.JSX.Element {
           </button>
         </p>
       )}
-      {sent && !sendFailed && state.status === "paused" && <p className="text-sm text-muted">Thanks, continuing...</p>}
+      {sent && !sendFailed && state.status === "paused" && <p ref={thanksRef} tabIndex={-1} role="status" className="text-sm text-muted">Thanks, continuing...</p>}
     </>
   );
   const briefFirst = state.status === "done" && state.brief !== null;
@@ -269,7 +281,7 @@ export function RunView({ id }: { id: string }): React.JSX.Element {
           {stalled !== null && (
             <div role="status" className={`${CARD_UNSURE} text-sm`}>
               No progress for 30 minutes. The run was probably interrupted;{" "}
-              <Link href={stalled.href} className={LINK}>start it again</Link> from the position or My briefs.
+              <Link href={stalled.href} className={LINK}>start it again</Link> from the position or your briefs.
             </div>
           )}
           {progress}
@@ -281,7 +293,7 @@ export function RunView({ id }: { id: string }): React.JSX.Element {
       {!briefFirst && <BriefView state={state} />}
       {running && <p className="text-sm text-muted">The brief appears here when the research is done.</p>}
       <div className="flex items-center gap-6 border-t border-divider pt-6 text-sm">
-        <Link href="/briefs" className={LINK}>All briefs</Link>
+        <Link href="/" className={LINK}>Home</Link>
         <Link href={`/runs/${id}/audit`} className={LINK}>Audit record</Link>
       </div>
       <DeleteCard runId={id} onDeleted={setDeleted} />
