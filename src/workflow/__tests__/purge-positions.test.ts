@@ -11,7 +11,7 @@
  * - U9-U10: expired run-less applications lose their R2 CV and row; a run's applications go before its row (applications.run_id references investigations)
  *
  * Design constraints:
- * - No module mocks; the fake matches SQL prefixes and throws on anything unexpected
+ * - No module mocks; the fake matches SQL prefixes and throws on anything unexpected; statements report meta.changes like D1
  */
 import { describe, expect, it } from "vitest";
 import { purgeExpired } from "@/workflow/purge";
@@ -37,8 +37,9 @@ function makeEnv(opts: { positions?: Pos[]; applications?: App[]; runIds?: strin
       return rows;
     }
     if (q.startsWith("SELECT 1 AS present FROM sqlite_master")) return opts.noTable === true ? [] : [{ present: 1 }];
-    if (q.startsWith("UPDATE investigations SET position_id = NULL WHERE position_id IN")) {
-      log.push(`update:${a.join(",")}`);
+    const unlink = /^UPDATE (investigations|applications|intake_tags) SET position_id = NULL WHERE position_id IN/.exec(q);
+    if (unlink) {
+      log.push(`update-${unlink[1] ?? ""}:${a.join(",")}`);
       return [];
     }
     if (q.startsWith("DELETE FROM positions WHERE id IN")) {
@@ -59,7 +60,7 @@ function makeEnv(opts: { positions?: Pos[]; applications?: App[]; runIds?: strin
       const gone = applications.filter((x) => (q.includes("run_id = ?") ? x.run_id : x.id) === a[0]);
       log.push(...gone.map((x) => `delete-app:${x.id}`));
       for (const x of gone) applications.splice(applications.indexOf(x), 1);
-      return [];
+      return gone;
     }
     if (/^(SELECT .* FROM (sources|calls)|DELETE FROM|SELECT r2_key)/.test(q)) return [];
     throw new Error(`unexpected SQL: ${q}`);
@@ -74,7 +75,11 @@ function makeEnv(opts: { positions?: Pos[]; applications?: App[]; runIds?: strin
         return Promise.reject(e instanceof Error ? e : new Error(String(e)));
       }
     },
-    run: () => Promise.resolve({ results: exec(q, a) }),
+    run: () => {
+      // Like D1: meta.changes is the number of rows a DELETE removed (the fake returns the removed rows).
+      const results = exec(q, a);
+      return Promise.resolve({ results, meta: { changes: results.length } });
+    },
   });
   const db = {
     prepare: (q: string) => stmt(q),
@@ -83,7 +88,8 @@ function makeEnv(opts: { positions?: Pos[]; applications?: App[]; runIds?: strin
       return Promise.all(s.map((x) => x.run()));
     },
   } as unknown as D1Database;
-  const bucket = { delete: (keys: string[]) => (deleted.push(keys), Promise.resolve()) } as unknown as R2Bucket;
+  // head: no cached report translation exists for these runs (idea #24).
+  const bucket = { head: () => Promise.resolve(null), delete: (keys: string[]) => (deleted.push(keys), Promise.resolve()) } as unknown as R2Bucket;
   return { db, bucket, positions, applications, log, selects, deleted, batches };
 }
 
@@ -111,11 +117,11 @@ describe("purgeExpired positions", () => {
     expect(env.deleted).toEqual([["positions/p2.json"]]);
   });
 
-  it("U4: investigations lose their position_id and the UPDATE is recorded before the DELETE", async () => {
+  it("U4: investigations, applications and intake tags lose their position_id and the UPDATEs is recorded before the DELETE", async () => {
     const env = makeEnv({ positions: [{ id: "p1", r2_key: null, expires_at: PAST }] });
     await purgeExpired(env.db, env.bucket, NOW);
-    expect(env.log).toEqual(["update:p1", "delete:p1"]);
-    expect(env.batches).toEqual([2]);
+    expect(env.log).toEqual(["update-investigations:p1", "update-applications:p1", "update-intake_tags:p1", "delete:p1"]);
+    expect(env.batches).toEqual([4]);
   });
 
   it("U5: 45 expired positions run in batches of 20 and the result reports 45", async () => {
@@ -125,7 +131,7 @@ describe("purgeExpired positions", () => {
     expect(r.positions).toBe(45);
     expect(env.selects).toEqual([20, 20, 5, 0]);
     expect(env.deleted.map((k) => k.length)).toEqual([20, 20, 5]);
-    expect(env.batches).toEqual([2, 2, 2]);
+    expect(env.batches).toEqual([4, 4, 4]);
   });
 
   it("U6: a second sweep deletes nothing and returns positions 0", async () => {

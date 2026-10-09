@@ -59,6 +59,9 @@ describe("github", () => {
     expect(user[0]?.excerpt).toContain("Kiwi");
     const repos = github.parse([{ html_url: "https://github.com/jd/etl", name: "etl", language: "Python", stargazers_count: 5 }], ctx, step);
     expect(repos[0]?.excerpt).toContain("Python");
+    expect(repos[0]?.excerpt).not.toContain("forked");
+    const forked = github.parse([{ html_url: "https://github.com/jd/react", name: "react", fork: true }], ctx, step);
+    expect(forked[0]?.excerpt).toBe("react · forked repository · 0 stars · pushed ?");
     const found = github.parse({ items: [{ html_url: "https://github.com/jd", login: "jd" }] }, ctx, step);
     expect(found[0]?.excerpt).toContain("jd");
     expect(github.parse("nope", ctx, step)).toEqual([]);

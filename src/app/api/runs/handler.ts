@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/api/runs/handler.ts
- * Deps:    src/app/api/_lib/{body,run-body}, src/domain/{run-status,auth-limits}, bindings DB + RESEARCH_RUN
+ * Deps:    src/app/api/_lib/{body,run-body}, src/domain/run-status, src/workflow/start-run (runRoom), bindings DB + RESEARCH_RUN
  * Tested:  src/app/api/runs/__tests__/handler.test.ts; body contract in src/app/api/_lib/__tests__/run-body.test.ts
  *
  * Key responsibilities:
@@ -22,9 +22,8 @@
  */
 import { parseJsonBody } from "@/app/api/_lib/body";
 import { StartRunBody } from "@/app/api/_lib/run-body";
-import { HOUR_MS, since } from "@/domain/auth-limits";
-import { dedupeSince, RUNS_PER_HOUR_CAP, START_PER_HOUR_CAP } from "@/domain/run-status";
-import { loadPositionQuestions, startRun, type StartRunEnv } from "@/workflow/start-run";
+import { dedupeSince } from "@/domain/run-status";
+import { loadPositionQuestions, runRoom, startRun, type StartRunEnv } from "@/workflow/start-run";
 
 export type RunsEnv = StartRunEnv;
 
@@ -55,12 +54,8 @@ export async function createRun(
   }
 
   // Shared spend ceiling for everyone, plus a tighter per-organization cap for session runs (via = start).
-  const recent = await env.DB.prepare(
-    "SELECT COUNT(*) AS n, COALESCE(SUM(via = 'start' AND organization_id = ?), 0) AS org FROM investigations WHERE created_at > ?",
-  )
-    .bind(organizationId, since(now, HOUR_MS))
-    .first<{ n: number; org: number }>();
-  if ((recent?.n ?? 0) >= RUNS_PER_HOUR_CAP || (recent?.org ?? 0) >= START_PER_HOUR_CAP) {
+  const room = await runRoom(env.DB, organizationId, now);
+  if (room.shared < 1 || room.org < 1) {
     return Response.json({ error: "run cap reached, try again later" }, { status: 429 });
   }
 

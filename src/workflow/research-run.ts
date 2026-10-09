@@ -10,10 +10,13 @@
  * - One `step.do` per recipe step: load context from D1 -> executeStep -> persist -> ledger row
  * - `seed` step (plans/006) runs first, before role_questions: the manager's LinkedIn URL / CV become the merged
  *   identity and set investigations.subject/anchor; a scrape or model failure is a ledger note, never a failed run;
- *   seed row ids are stable (stableId), so a retried seed step upserts instead of duplicating sources/candidates
+ *   seed row ids are stable (stableId), so a retried seed step upserts instead of duplicating sources/candidates;
+ *   the given profile's ProfileFacts go into its ledger ref as `digest`
+ * - verify's ledger row carries `ref.challenge` (devil's advocate record, idea #8: checked, held, per claim ground + why)
+ * - a collector's `digest` (StepOutcome.digest) lands in the step's ledger ref as `digest`
  * - `onEmpty`: run the declared fallback step once, or record a Gap (ledger decision with ref.gap)
- * - resolve: persist candidates; pause with `step.waitForEvent('lineup-answer')` when any candidate is
- *   possibly-same-as or none merged (lineupNeedsAnswer, seed merges count); apply the manager's decisions on resume
+ * - resolve: persist candidates; pause with `step.waitForEvent('lineup-answer')` only when candidates exist and none is
+ *   merged (lineupNeedsAnswer, seed merges count, so a given profile/CV never pauses); apply the manager's decisions on resume
  * - Budget (RUN_BUDGET_USD / RUN_BUDGET_CALLS) enforced here for collector steps, never by the LLM; parallel
  *   batches run at most (budget - spent) paid actor steps at once (planBatch), free REST steps always run
  * - Source identity re-marked after the lineup and before extract (applySourceIdentity), so only SERP hits on
@@ -31,7 +34,7 @@
  */
 import { WorkflowEntrypoint, type WorkflowEvent, type WorkflowStep } from "cloudflare:workers";
 import { makeActorCall } from "@/adapters/apify";
-import { applySourceIdentity, loadContext, makeLedgerAppend, makeSourceStore, persistOutcome, setCandidateDecisions } from "@/adapters/d1";
+import { applySourceIdentity, loadContext, loadRoleTemplates, makeLedgerAppend, makeSourceStore, persistOutcome, setCandidateDecisions } from "@/adapters/d1";
 import { makeFetchJson } from "@/adapters/fetch";
 import { makeLlmCall } from "@/adapters/llm";
 import type { Candidate, GoalId } from "@/domain/claim";
@@ -41,7 +44,7 @@ import { planBatch } from "@/recipe/batch";
 import { recipeFor } from "@/recipe/goals";
 import { executeStep } from "@/recipe/runner";
 import { lineupNeedsAnswer, noneConfirmed, UNCONFIRMED_GAP } from "@/recipe/seams/resolve";
-import { roleQuestions } from "@/recipe/seams/role";
+import { roleQuestionsFor } from "@/recipe/seams/role";
 import { CV_ACTOR, seedProfile } from "@/recipe/seams/seed";
 import { HARVEST_ACTOR } from "@/recipe/sources/linkedin";
 import type { StepOutcome } from "@/recipe/sources/types";
@@ -120,11 +123,11 @@ export class ResearchRunWorkflow extends WorkflowEntrypoint<CloudflareEnv, Resea
     if (head.role !== null && head.role.length > 0 && head.questions_json === null) {
       await step.do("role_questions", async () => {
         const started = Date.now();
-        const r = await roleQuestions(head.role ?? "", this.ports(), head.anchor);
-        await this.env.DB.prepare("UPDATE investigations SET questions_json = ? WHERE id = ?")
-          .bind(JSON.stringify(r.questions), runId)
+        const r = await roleQuestionsFor(head.role ?? "", await loadRoleTemplates(this.env.DB), this.ports(), head.anchor);
+        await this.env.DB.prepare("UPDATE investigations SET questions_json = ?, role_template = ? WHERE id = ?")
+          .bind(JSON.stringify(r.questions), r.template, runId)
           .run();
-        await this.ledger(runId, "role_questions", "llm", r.cost_usd, Date.now() - started, { questions: r.questions.length, calls: r.calls, notes: r.notes });
+        await this.ledger(runId, "role_questions", "llm", r.cost_usd, Date.now() - started, { questions: r.questions.length, calls: r.calls, notes: r.notes, template: r.template });
         return r.questions.length;
       });
     }
@@ -225,6 +228,10 @@ export class ResearchRunWorkflow extends WorkflowEntrypoint<CloudflareEnv, Resea
         calls: out.calls,
         empty: out.empty,
         notes: out.notes,
+        // Devil's advocate record (verify only): read back by GET /api/runs/:id/state (readChallenge), no migration
+        ...(out.challenge === undefined ? {} : { challenge: out.challenge }),
+        // Collector digest (e.g. github-deep): same pattern, read back by the run state route
+        ...(out.digest === undefined ? {} : { digest: out.digest }),
       });
       const degraded = out.brief?.degraded ?? null;
       if (degraded !== null) await this.ledger(runId, recipeStep.id, "decision", 0, 0, { degraded });
@@ -247,7 +254,7 @@ export class ResearchRunWorkflow extends WorkflowEntrypoint<CloudflareEnv, Resea
       await this.env.DB.prepare("UPDATE investigations SET subject = ?, anchor = ? WHERE id = ?").bind(r.subject, r.anchor, runId).run();
       const ref = { subject: r.subject, anchor: r.anchor, headline: r.headline, employer: r.employer, sources: r.out.sources.length, candidates: r.out.candidates.length, notes: r.out.notes };
       const ms = Date.now() - started;
-      if (head.profile_url !== null) await this.ledger(runId, recipeStep.id, "call", r.actor.cost_usd, ms, { ...ref, actor: HARVEST_ACTOR, calls: r.actor.calls });
+      if (head.profile_url !== null) await this.ledger(runId, recipeStep.id, "call", r.actor.cost_usd, ms, { ...ref, ...(r.out.digest === undefined ? {} : { digest: r.out.digest }), actor: HARVEST_ACTOR, calls: r.actor.calls });
       if (head.cv_text !== null) await this.ledger(runId, recipeStep.id, "llm", r.llm.cost_usd, ms, { ...ref, actor: CV_ACTOR, calls: r.llm.calls });
       return { subject: r.subject, anchor: r.anchor };
     });

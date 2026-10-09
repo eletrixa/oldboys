@@ -1,6 +1,6 @@
 # Candidate intake: operator runbook
 
-Applications arrive by email, from a Google Form, from the hosted apply page or from a StartupJobs webhook. Each one becomes one `applications` row and, when it carries a LinkedIn URL or a readable CV for a known position tag, one research run. Contracts: `specs/intake/`. Decision: `plans/008-intake-connectors/00-SYNTHESIS.md`. This doc covers setup of every door, the smoke loop and troubleshooting.
+Applications arrive by email, from a Google Form, from the hosted apply page or from a StartupJobs webhook. Each one becomes one `applications` row. When a tag is bound to a position, applications pool instead of auto-starting runs; the recruiter adds candidates by hand and enriches selected pooled ones. When a tag has no position, the original auto-start rule applies. Contracts: `specs/intake/`. Decision: `plans/008-intake-connectors/00-SYNTHESIS.md` (auto-start), `plans/010-candidate-pool/00-SYNTHESIS.md` (pools and enrichment). This doc covers setup of every door, the smoke loop and troubleshooting.
 
 ## Purpose and Rules
 
@@ -48,7 +48,17 @@ pnpm exec wrangler secret put INTAKE_TOKEN
 
 **Local `.dev.vars`** (copy from `.dev.vars.example`): `INTAKE_TOKEN`, `STARTUPJOBS_WEBHOOK_TOKEN`, `STARTUPJOBS_TOKEN`, plus `RUN_TOKEN` for the operator routes.
 
-**Migration.** The intake migration (`migrations/0009_intake.sql`, adds `intake_tags`, `applications` and `investigations.application_id`) must be applied to prod D1 before deploying. CI cannot migrate D1; Robert runs `pnpm db:migrate:remote` first.
+**Migration.** The intake migration (`migrations/0009_intake.sql`, adds `intake_tags`, `applications` and `investigations.application_id`) must be applied to prod D1 before deploying. The pool migration (`migrations/0012_candidate_pool.sql`, rebuilds `applications` table with `position_id`, adds `position_id` to `intake_tags`, creates indexes) must also be applied before deploying pool features. CI cannot migrate D1; Robert runs `pnpm db:migrate:remote` before merge.
+
+## Candidate pool: pooled intake and enrichment
+
+A tag bound to a position (`intake_tags.position_id` set) pools applications instead of auto-starting runs. The recruiter:
+
+1. **Bind** the tag to the position via the Candidates section on the position page (`POST /api/intake/tags` with `positionId`); any of the four intake channels now feed the pool (status `pooled`, no run started).
+2. **Add manually** on the same Candidates section: paste a LinkedIn URL or CV text, optional name and email (`POST /api/positions/:id/candidates`); results in `pooled` status right away.
+3. **Select and enrich**: check the desired pooled rows in the table, click "Start enrichment" (`POST /api/positions/:id/enrich` max 20 per call); each starts one `ResearchRunWorkflow` with the position's must-haves as questions and updates the row status to `run-started`. Hourly caps (`RUNS_PER_HOUR_CAP` global, `START_PER_HOUR_CAP` per organization when origin is `via='start'`) apply; 429 if reached.
+
+Tags without a position (`intake_tags.position_id = NULL`) keep the original behaviour: known tag → auto-start a run (status `run-started`), unknown tag → `unmatched`. The position page pools are for positions only; older intake-only workflows remain in `/intake` with the original status labels and flows.
 
 ## Create a position tag
 

@@ -9,6 +9,7 @@
  * Key responsibilities:
  * - Server-render the AuditRecord from D1; "Download audit record (.json)" fetches the same data from
  *   GET /api/runs/:id/audit?download=1; "Download data access export" links GET /api/runs/:id/access-export (GDPR Art. 15)
+ * - "Delete candidate data" links to the delete card on the run page (/runs/:id#delete-data), which does the deletion
  *
  * Design constraints:
  * - Missing times are omitted from meta lines, never shown as a dash; lineup answers are Pills
@@ -24,7 +25,7 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import Link from "next/link";
 import { loadAuditRecord } from "@/app/api/runs/[id]/audit/load";
 import type { AuditRecord, LineupAnswer, SourceStatus } from "@/domain/audit";
-import { BTN_PRIMARY, BTN_QUIET, BTN_SECONDARY, CARD, Chevron, Eyebrow, Pill, SUMMARY, type Tone } from "@/app/ui";
+import { BTN_PRIMARY, BTN_QUIET, BTN_SECONDARY, CARD, Chevron, Eyebrow, Pill, SimulatedPill, SUMMARY, type Tone } from "@/app/ui";
 import { STEP_LABEL } from "../source-labels";
 import { GAP_LABEL, PLATFORM_LABEL } from "../state";
 
@@ -201,7 +202,7 @@ function CallsCard({ record }: { record: AuditRecord }): React.JSX.Element {
           {record.verification_calls.map((c, i) => (
             <li key={String(i)} className="flex items-center gap-3">
               <span>{c.status}</span>
-              {c.mock && <Pill tone="unsure">MOCK</Pill>}
+              {c.mock && <SimulatedPill kind="mock" />}
               {whenOrNull(c.created_at) !== null && <span className="text-xs text-muted tabular-nums">{when(c.created_at)}</span>}
             </li>
           ))}
@@ -248,6 +249,9 @@ export default async function AuditPage({ params }: { params: Promise<{ id: stri
         >
           Download data access export (GDPR Art. 15, .json)
         </a>
+        <Link href={`/runs/${id}#delete-data`} className="inline-flex min-h-11 items-center self-start text-sm font-medium text-conflict underline decoration-conflict/40 underline-offset-4 hover:decoration-conflict">
+          Delete candidate data
+        </Link>
       </header>
 
       <section className={CARD}>

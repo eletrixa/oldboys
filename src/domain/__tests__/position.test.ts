@@ -13,7 +13,7 @@
  * - Fixtures stay inline; A10 uses the recipe fakes to compare against roleQuestions
  */
 import { describe, expect, it } from "vitest";
-import { fallbackMustHaves, FAMILIES, Family, MustHave, mustHavesToQuestions, parseMustHaves, Position, POSITION_ID, shapeMustHaves } from "@/domain/position";
+import { fallbackMustHaves, FAMILIES, Family, familyOf, MustHave, mustHavesToQuestions, parseMustHaves, Position, POSITION_ID, roleFamilyOf, shapeMustHaves } from "@/domain/position";
 import { roleQuestions } from "@/recipe/seams/role";
 import { fakeLlm, fakePorts } from "@/recipe/__tests__/fakes";
 
@@ -166,5 +166,20 @@ describe("POSITION_ID", () => {
     expect(POSITION_ID.safeParse("a b").success).toBe(false);
     expect(POSITION_ID.safeParse("a/b").success).toBe(false);
     expect(POSITION_ID.safeParse("a".repeat(65)).success).toBe(false);
+  });
+});
+
+describe("familyOf / roleFamilyOf", () => {
+  it("maps titles by the first matching rule", () => {
+    expect(familyOf("Data Engineer")).toBe("data");
+    expect(familyOf("Senior Backend Developer")).toBe("engineering");
+    expect(familyOf("Zubař")).toBe("other");
+  });
+  it("prefers a valid template family, else the role title, else null", () => {
+    expect(roleFamilyOf("design", "Backend Developer")).toBe("design");
+    expect(roleFamilyOf("nonsense", "Backend Developer")).toBe("engineering");
+    expect(roleFamilyOf(null, "Backend Developer")).toBe("engineering");
+    expect(roleFamilyOf(null, "")).toBeNull();
+    expect(roleFamilyOf(undefined, null)).toBeNull();
   });
 });

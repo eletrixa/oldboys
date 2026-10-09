@@ -3,24 +3,25 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/runs/[id]/call-panel-view.tsx
- * Deps:    react, src/app/run-token, src/app/ui (Radar vocabulary), ./call-panel, ./call-setup, ./call-results, ./state (types)
+ * Deps:    next/link, react, src/app/login/next-path, src/app/ui (Radar vocabulary), ./call-panel, ./call-setup, ./call-results, ./state (types)
  * Tested:  n/a (pure parts in __tests__/call-panel.test.ts)
  *
  * Key responsibilities:
  * - GET /api/runs/:id/calls for the proposal, the call limit and earlier calls
  * - Place: POST /api/runs/:id/calls {language: "en", questions} → POST /api/calls/:id/approve; a draft whose
- *   approve is rejected (400/409) is skipped so it never counts; 401 clears the token and asks for it
+ *   approve is rejected (400/409) is skipped so it never counts; 401 asks the operator to log in again
  * - Track: GET /api/calls/:id every 3 s until callPhase settles (cap 35 min), then reload the run's calls
  *
  * Design constraints:
- * - Client only; shown only for a done run with a brief; the token stays in sessionStorage (run-token.tsx)
+ * - Client only; shown only for a done run with a brief; same-origin fetches carry the session cookie, no token
  * - The full number goes only into the approve request body
  */
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { TokenForm, readToken, writeToken } from "@/app/run-token";
-import { CARD } from "@/app/ui";
+import { loginHref } from "@/app/login/next-path";
+import { CARD, LINK, SimulatedPill } from "@/app/ui";
 import { type CallForm, type CallView, type RunCalls, callPhase, isSettled, placedCalls, toHrQuestions, usageLine } from "./call-panel";
 import { CallResult, EarlierCalls } from "./call-results";
 import { CallSetup } from "./call-setup";
@@ -33,7 +34,7 @@ type Load = { kind: "loading" } | { kind: "error" } | { kind: "ready"; data: Run
 
 type Action =
   | { kind: "idle" }
-  | { kind: "token"; error: string | null; form: CallForm }
+  | { kind: "unauthorized" }
   | { kind: "placing" }
   | { kind: "error"; message: string; index: number | null }
   | { kind: "tracking"; callId: string; call: CallView | null };
@@ -54,8 +55,8 @@ const APPROVE_ERROR: Record<number, string> = {
   502: "The phone provider could not place the call.",
 };
 
-async function placeCall(runId: string, token: string, form: CallForm): Promise<Placed> {
-  const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
+async function placeCall(runId: string, form: CallForm): Promise<Placed> {
+  const headers = { "Content-Type": "application/json" };
   const draft = await fetch(`/api/runs/${runId}/calls`, {
     method: "POST",
     headers,
@@ -76,7 +77,7 @@ async function placeCall(runId: string, token: string, form: CallForm): Promise<
   // 202 placed; 500 with an id means placed but the result workflow did not start (the call view shows last_error).
   if (approve.status === 202 || approve.status === 500) return { kind: "placed", callId: id };
   if (approve.status === 400 || approve.status === 409) {
-    await fetch(`/api/calls/${id}/skip`, { method: "POST", headers }).catch(() => undefined);
+    await fetch(`/api/calls/${id}/skip`, { method: "POST" }).catch(() => undefined);
   }
   return { kind: "error", message: APPROVE_ERROR[approve.status] ?? `The call failed (HTTP ${String(approve.status)}).`, index: null };
 }
@@ -145,20 +146,10 @@ export function CallPanel({ state }: { state: RunState }): React.JSX.Element | n
   }, [show, state.id]);
 
   const place = useCallback(
-    (form: CallForm, token: string | null) => {
-      if (token === null) {
-        setAction({ kind: "token", error: null, form });
-        return;
-      }
+    (form: CallForm) => {
       setAction({ kind: "placing" });
-      placeCall(state.id, token, form)
+      placeCall(state.id, form)
         .then((placed) => {
-          if (placed.kind === "unauthorized") {
-            writeToken(null);
-            setAction({ kind: "token", error: "That token did not work. Please try again.", form });
-            return;
-          }
-          writeToken(token);
           setAction(placed.kind === "placed" ? { kind: "tracking", callId: placed.callId, call: null } : placed);
           if (placed.kind === "error") void fetchRunCalls(state.id).then(setLoad);
         })
@@ -193,7 +184,7 @@ export function CallPanel({ state }: { state: RunState }): React.JSX.Element | n
     <section className={`${CARD} flex flex-col gap-4 text-ink`} aria-labelledby="phone-verify">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 id="phone-verify" className="text-lg">Verify with the candidate by phone</h2>
-        {data?.provider === "mock" && <span className="rounded bg-unsure-bg px-2 py-0.5 text-xs text-unsure">MOCK · No real call. Answers are simulated.</span>}
+        {data?.provider === "mock" && <SimulatedPill kind="mock" detail="No real call. Answers are simulated." />}
       </div>
       <p className="text-sm text-muted">The AI agent calls the candidate, asks these questions and saves the answers. A person reviews them.</p>
       {load.kind === "loading" && <p className="text-sm text-muted">Loading…</p>}
@@ -201,26 +192,20 @@ export function CallPanel({ state }: { state: RunState }): React.JSX.Element | n
       {action.kind === "tracking" && action.call === null && <p className="text-sm text-ink" aria-live="polite">Placing the call…</p>}
       {current !== null && <CallResult call={current} />}
       {action.kind === "error" && <p className="text-sm text-conflict" role="alert">{action.message}</p>}
-      {action.kind === "token" && (
-        <TokenForm
-          error={action.error}
-          hint="Placing a call needs the team token. Kept only in this tab."
-          submitLabel="Continue with the call"
-          onSubmit={(token) => {
-            place(action.form, token);
-          }}
-        />
+      {action.kind === "unauthorized" && (
+        <p className="text-sm text-conflict" role="alert">
+          Your login has expired.{" "}
+          <Link href={loginHref(`/runs/${state.id}`)} className={LINK}>Log in again.</Link>
+        </p>
       )}
-      {data !== null && action.kind !== "tracking" && action.kind !== "token" && (
+      {data !== null && action.kind !== "tracking" && (
         <CallSetup
           proposal={data.proposal}
           used={data.used}
           max={data.max}
           busy={action.kind === "placing"}
           errorIndex={action.kind === "error" ? action.index : null}
-          onPlace={(form) => {
-            place(form, readToken());
-          }}
+          onPlace={place}
         />
       )}
       {data !== null && <p className="text-xs text-muted">{usageLine(data.used, data.max)}</p>}

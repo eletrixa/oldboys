@@ -8,12 +8,15 @@
  *
  * Key responsibilities:
  * - Request recent videos for a candidate with platform tiktok and a handle; one Source per video item
+ * - `digest`: merged authors' ProfileFacts (followers = fans, following, bio, verified, avatar), one per author
  *
  * Design constraints:
  * - Pure: no fetch; the runner performs I/O. Empty `requests()` triggers the step's onEmpty branch
  * - Excerpts go through clip(); malformed payloads parse to []
  */
 import { z } from "zod";
+import { clipBio, count, facts } from "@/domain/profile-facts";
+import { dedupeBy, digestOf, parsedAll } from "@/recipe/sources/facts";
 import type { Collector } from "@/recipe/sources/types";
 import { clip, identityFor } from "@/recipe/sources/types";
 
@@ -26,6 +29,9 @@ const Item = z.object({
       signature: z.string().nullish(),
       fans: z.number().nullish(),
       profileUrl: z.string().nullish(),
+      following: z.number().nullish(),
+      avatar: z.string().nullish(),
+      verified: z.boolean().nullish(),
     })
     .nullish(),
 });
@@ -59,4 +65,23 @@ export const tiktok: Collector = {
       return [{ url, excerpt, raw: i, identity: identityFor(ctx, url) }];
     });
   },
+  digest: (fetched, ctx) =>
+    digestOf(
+      dedupeBy(
+        parsedAll(z.array(Item), fetched).flatMap((items) => items.flatMap((i) => (i.authorMeta ? [i.authorMeta] : []))),
+        (a) => (a.name ?? "").toLowerCase(),
+      )
+        .map((a) => ({ a, url: a.profileUrl ?? `https://www.tiktok.com/@${a.name ?? ""}` }))
+        .filter(({ url }) => identityFor(ctx, url) === "merged")
+        .map(({ a, url }) =>
+          facts("tiktok", url, {
+            handle: a.name ?? null,
+            bio: clipBio(a.signature),
+            followers: count(a.fans),
+            following: count(a.following),
+            verified: a.verified ?? null,
+            photo_url: a.avatar ?? null,
+          }),
+        ),
+    ),
 };

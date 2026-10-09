@@ -3,13 +3,13 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/recipe/seams/position-extract.ts
- * Deps:    zod, src/domain/position (FAMILIES, Family, MustHave, shapeMustHaves, fallbackMustHaves)
+ * Deps:    zod, src/domain/position (FAMILIES, Family, MustHave, shapeMustHaves, fallbackMustHaves, familyOf)
  * Tested:  src/recipe/__tests__/position-extract.test.ts
  *
  * Key responsibilities:
  * - `extractPosition`: must-haves shaped like `roleQuestions` (kebab `mh-` ids, no base ids, no duplicates, max 5);
  *   deterministic 3-item fallback when the call throws or yields nothing usable
- * - `familyOf`: CZ/EN keyword table from a title to a `Family`, used when the model's family is invalid
+ * - `familyOf`: re-exported from src/domain/position (the CZ/EN keyword table), used when the model's family is invalid
  *
  * Design constraints:
  * - Never throws; the result always has 3 to 5 must-haves; `cost_usd` is 0 when the model threw
@@ -17,7 +17,9 @@
  */
 import { z } from "zod";
 import type { Ports } from "@/domain/ports";
-import { errorMessage, FAMILIES, type Family, fallbackMustHaves, MustHave, shapeMustHaves } from "@/domain/position";
+import { errorMessage, FAMILIES, type Family, fallbackMustHaves, familyOf, MustHave, shapeMustHaves } from "@/domain/position";
+
+export { familyOf };
 
 const Extract = z.object({
   title: z.string(),
@@ -30,25 +32,8 @@ const Extract = z.object({
 const SYSTEM =
   `Read a job posting and extract: title, company, location (city), family (one of ${FAMILIES.join(", ")}), and 3 to 5 must-haves about a candidate. ` +
   'Each must-have is observable: answerable from public web evidence (repos, talks, job history, profiles). `id` is kebab-case starting with "mh-". `title` is a 2 to 5 word label. `accepted_evidence` lists short evidence types. ' +
+  "Skip hygiene items almost every candidate meets (version control, a degree, basic English, teamwork) unless the posting stresses them; prefer the skills that distinguish this role. " +
   "Never use criteria about health, politics, religion, ethnicity or sexuality, and never personality or trustworthiness traits.";
-
-// Order matters: the first matching family wins ("data engineer" is data, not engineering).
-const FAMILY_RULES: readonly [Family, RegExp][] = [
-  ["data", /data|analyst|analytik|\bml\b|machine learning|\bbi\b/],
-  ["marketing", /marketing|\bseo\b|content|\bpr\b|brand/],
-  ["product", /product|produkt/],
-  ["design", /design|\bux\b|\bui\b/],
-  ["finance", /financ|účetn|accountant|accounting|controller/],
-  ["sales", /obchodn|sales|account|prodej/],
-  ["people", /recruit|\bhr\b|people|talent|personal/],
-  ["operations", /operations|provoz|logistic|support|office/],
-  ["engineering", /vývojář|developer|engineer|programátor|devops|architect|\bqa\b|tester/],
-];
-
-export function familyOf(title: string): Family {
-  const t = title.toLowerCase();
-  return FAMILY_RULES.find(([, re]) => re.test(t))?.[0] ?? "other";
-}
 
 const isFamily = (v: string): v is Family => (FAMILIES as readonly string[]).includes(v);
 

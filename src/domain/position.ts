@@ -7,6 +7,7 @@
  * Tested:  src/domain/__tests__/position.test.ts
  *
  * Key responsibilities:
+ * - `familyOf` / `roleFamilyOf`: CZ/EN keyword table from a title to a `Family`; a matched template's family wins over the title
  * - `Family`, `MustHave`, `MustHaves`, `Position` Zod schemas (spec: specs/positions-domain.md)
  * - `fitQuestionText`: the one question-text formatter, shared with the role seam
  * - `mustHavesToQuestions`: must-haves become the run's question list, same shape as `roleQuestions` output
@@ -24,7 +25,7 @@ const MAX_TEXT = 160;
 const MAX_TITLE = 48;
 export const MAX_MUST_HAVES = 5;
 
-export const INGEST_METHODS = ["pasted", "jobs-cz", "greenhouse", "lever", "ashby", "jsonld"] as const;
+export const INGEST_METHODS = ["pasted", "manual", "jobs-cz", "startupjobs", "greenhouse", "lever", "ashby", "jsonld"] as const;
 export type IngestMethod = (typeof INGEST_METHODS)[number];
 
 export const POSITION_ID = z.string().trim().min(1).max(64).regex(/^[A-Za-z0-9_-]+$/);
@@ -41,6 +42,31 @@ export const errorMessage = (e: unknown): string => (e instanceof Error ? e.mess
 export const FAMILIES = ["engineering", "data", "product", "design", "marketing", "sales", "operations", "finance", "people", "other"] as const;
 export const Family = z.enum(FAMILIES);
 export type Family = z.infer<typeof Family>;
+
+// Order matters: the first matching family wins ("data engineer" is data, not engineering).
+const FAMILY_RULES: readonly [Family, RegExp][] = [
+  ["data", /data|analyst|analytik|\bml\b|machine learning|\bbi\b/],
+  ["marketing", /marketing|growth|\bseo\b|content|\bpr\b|brand|\bcmo\b/],
+  ["product", /product|produkt/],
+  ["design", /design|\bux\b|\bui\b/],
+  ["finance", /financ|účetn|accountant|accounting|controller/],
+  ["sales", /obchodn|sales|account|prodej/],
+  ["people", /recruit|\bhr\b|people|talent|personal/],
+  ["operations", /operations|provoz|logistic|support|office/],
+  ["engineering", /vývojář|developer|engineer|programátor|devops|architect|\bqa\b|tester/],
+];
+
+export function familyOf(title: string): Family {
+  const t = title.toLowerCase();
+  return FAMILY_RULES.find(([, re]) => re.test(t))?.[0] ?? "other";
+}
+
+/** The matched template's family when valid, else the role title's family, else null (no role). */
+export function roleFamilyOf(templateFamily: unknown, role: string | null): Family | null {
+  const known = Family.safeParse(templateFamily);
+  if (known.success) return known.data;
+  return role !== null && role !== "" ? familyOf(role) : null;
+}
 
 export const MustHave = z.object({
   id: z.string().startsWith("mh-"),

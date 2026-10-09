@@ -3,12 +3,13 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/workflow/start-run.ts
- * Deps:    src/domain/claim (GoalId), src/domain/position (parseMustHaves, mustHavesToQuestions), bindings DB + RESEARCH_RUN, vars RUN_BUDGET_USD / RUN_BUDGET_CALLS
+ * Deps:    src/domain/claim (GoalId), src/domain/auth-limits, src/domain/run-status (caps), src/domain/position (parseMustHaves, mustHavesToQuestions), bindings DB + RESEARCH_RUN, vars RUN_BUDGET_USD / RUN_BUDGET_CALLS
  * Tested:  src/workflow/__tests__/start-run.test.ts
  *
  * Key responsibilities:
  * - `startRun`: one INSERT into investigations (status 'queued', budget from vars) then RESEARCH_RUN.create
  * - `runsStartedSince`: run count since a time, optionally per `via`, for the hourly spend caps
+ * - `runRoom`: runs left this hour under the shared cap and the per-organization cap (POST /api/runs and enrichment)
  * - `loadPositionQuestions`: a stored position's title and its must-haves as the run's questions_json (specs/positions-start)
  *
  * Design constraints:
@@ -20,8 +21,10 @@
  * - Caps, auth and dedup belong to the callers; this module only starts what it is told to
  * - No Next.js imports (called from the Worker email handler too)
  */
+import { HOUR_MS, since } from "@/domain/auth-limits";
 import type { GoalId } from "@/domain/claim";
 import { mustHavesToQuestions, parseMustHaves } from "@/domain/position";
+import { RUNS_PER_HOUR_CAP, START_PER_HOUR_CAP } from "@/domain/run-status";
 
 export type StartRunEnv = {
   DB: D1Database;
@@ -76,6 +79,21 @@ export async function startRun(env: StartRunEnv, input: StartRunInput, now: Date
     .run();
   await env.RESEARCH_RUN.create({ id, params: { runId: id } });
   return { id };
+}
+
+/**
+ * How many more runs may start this hour: `shared` against RUNS_PER_HOUR_CAP for everyone, `org` against
+ * START_PER_HOUR_CAP for one organization's session runs (unbounded when there is no organization). One COUNT query.
+ */
+export async function runRoom(db: D1Database, organizationId: string | null, now: Date): Promise<{ shared: number; org: number }> {
+  const recent = await db
+    .prepare("SELECT COUNT(*) AS n, COALESCE(SUM(via = 'start' AND organization_id = ?), 0) AS org FROM investigations WHERE created_at > ?")
+    .bind(organizationId, since(now, HOUR_MS))
+    .first<{ n: number; org: number }>();
+  return {
+    shared: RUNS_PER_HOUR_CAP - (recent?.n ?? 0),
+    org: organizationId === null ? Number.POSITIVE_INFINITY : START_PER_HOUR_CAP - (recent?.org ?? 0),
+  };
 }
 
 export async function runsStartedSince(db: D1Database, since: Date, via?: string): Promise<number> {

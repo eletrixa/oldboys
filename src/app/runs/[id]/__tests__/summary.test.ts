@@ -24,6 +24,7 @@ const cand = (platform: string, decision: Candidate["decision"], url: string): C
 });
 
 const brief = (over: Partial<Brief> = {}): Brief => ({
+  profile: null,
   run_id: "r",
   per_question: [
     { question_id: "mh-sql", coverage: "evidenced", claim_ids: ["c1"], summary: "SQL in two projects." },
@@ -146,8 +147,19 @@ describe("summary30s", () => {
         }),
       }),
     );
-    expect(s?.documented).toBe("Confirmed: LinkedIn and GitHub profiles; 1 of 1 research questions have evidence.");
+    expect(s?.documented).toBe("Confirmed: LinkedIn and GitHub profiles; 1 of 1 research questions has evidence.");
     expect(s?.ask).toBe("Check: Dates at Acme.");
+  });
+});
+
+describe("documented agreement", () => {
+  const rows = (evidenced: number): Brief["per_question"] =>
+    ["mh-sql", "mh-py", "mh-cloud"].map((id, i) => ({ question_id: id, coverage: i < evidenced ? "evidenced" : "none", claim_ids: [], summary: "" }));
+
+  it("says has for one evidenced criterion and have for more", () => {
+    expect(summary30s(run({ brief: brief({ per_question: rows(1) }) }))?.documented).toBe("Confirmed: LinkedIn and GitHub profiles; 1 of 3 role criteria has evidence.");
+    expect(summary30s(run({ brief: brief({ per_question: rows(2) }) }))?.documented).toBe("Confirmed: LinkedIn and GitHub profiles; 2 of 3 role criteria have evidence.");
+    expect(summary30s(run({ brief: brief({ per_question: rows(0) }) }))?.documented).toBe("Confirmed: LinkedIn and GitHub profiles; 0 of 3 role criteria have evidence.");
   });
 });
 

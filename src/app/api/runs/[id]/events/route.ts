@@ -3,18 +3,22 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/api/runs/[id]/events/route.ts
- * Deps:    @opennextjs/cloudflare (getCloudflareContext), binding DB
- * Tested:  n/a
+ * Deps:    @opennextjs/cloudflare (getCloudflareContext), binding DB, ./public-ref (publicRef)
+ * Tested:  src/app/api/runs/[id]/events/__tests__/public-ref.test.ts (the ref projection; the stream loop has no test)
  *
  * Key responsibilities:
  * - Replay the whole ledger on connect (or from Last-Event-ID), then tail `seq > last`
+ * - Send each row's ref through publicRef; a ref_json that does not parse is sent as `ref: null`
  * - Close when the investigation reaches a terminal status, the client cancels, or MAX_STREAM_MS elapses
  *
  * Design constraints:
  * - No runtime = "edge"; events are idempotent by seq (SSE id) so reconnects are safe
  * - 1 s poll interval is the accepted latency (plans/002 risk C)
+ * - Open route (anyone with the run id): only whitelisted, scrubbed process facts leave it; no notes, lineup candidate
+ *   details, seed profile fields, question texts or provider failure text (see public-ref.ts)
  */
 import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { publicRef } from "./public-ref";
 
 type LedgerRow = {
   seq: number;
@@ -30,6 +34,16 @@ const POLL_MS = 1000;
 /** Upper bound on one SSE connection; matches the Workflow's 1 hour lineup timeout. */
 const MAX_STREAM_MS = 60 * 60 * 1000;
 const TERMINAL = new Set(["done", "failed"]);
+
+/** The stored ref JSON as a public projection; null when it is absent or does not parse. */
+function storedRef(step: string, refJson: string | null): Record<string, unknown> | null {
+  if (refJson === null) return null;
+  try {
+    return publicRef(step, JSON.parse(refJson));
+  } catch {
+    return null;
+  }
+}
 
 export async function GET(
   request: Request,
@@ -79,7 +93,7 @@ export async function GET(
             kind: row.kind,
             cost_usd: row.cost_usd,
             ms: row.ms,
-            ref: row.ref_json === null ? null : (JSON.parse(row.ref_json) as unknown),
+            ref: storedRef(row.step, row.ref_json),
           });
           last = row.seq;
         }

@@ -53,6 +53,7 @@ describe("seedProfile with a LinkedIn profile URL", () => {
       expect.objectContaining({ platform: "linkedin", handle: "josef-buryan", profile_urls: [URL_IN], decision: "merge", score: 1, reasons: ["profile given by the manager"], name: "Josef Buryan" }),
     ]);
     expect(r.out.notes).toEqual([]);
+    expect(r.out.digest).toEqual([expect.objectContaining({ platform: "linkedin", handle: "josef-buryan", display_name: "Josef Buryan", earliest_experience_year: 2023 })]);
   });
 
   it("does not fail when the actor throws: name from the handle, anchor = profile URL, candidate still merged", async () => {
@@ -160,8 +161,12 @@ describe("lineupNeedsAnswer", () => {
     expect(lineupNeedsAnswer([{ decision: "merge" }, { decision: "rejected" }])).toBe(false);
   });
 
-  it("asks for possibly-same-as even with a seed merge, and when nothing is merged", () => {
-    expect(lineupNeedsAnswer([{ decision: "merge" }, { decision: "possibly-same-as" }])).toBe(true);
+  it("never asks for a possibly-same-as next to a seed merge", () => {
+    expect(lineupNeedsAnswer([{ decision: "merge" }, { decision: "possibly-same-as" }])).toBe(false);
+  });
+
+  it("asks only when candidates exist and none is merged", () => {
+    expect(lineupNeedsAnswer([{ decision: "possibly-same-as" }])).toBe(true);
     expect(lineupNeedsAnswer([{ decision: "rejected" }])).toBe(true);
     expect(lineupNeedsAnswer([])).toBe(false);
   });

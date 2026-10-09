@@ -11,6 +11,9 @@
  * - `harvestRequest` / `harvestProfiles`: shared with the seed seam (plans/006), which scrapes the manager's profile URL first
  * - Never scrape a URL twice: profiles already fetched at seed are skipped and reported via `alreadyFetched`
  * - `experienceCompanies`: company names back out of a profile excerpt's experience lines (employer corroboration)
+ * - `employerPages`: the current employer's LinkedIn company URL, written as an "Employer page:" excerpt line by the
+ *   harvest parse and read back by the hiring `employer_company` step
+ * - `digest`: the merged profiles' ProfileFacts (`harvestFacts`: followers, connections, verified, premium, open-to-work, photo, earliest experience year)
  *
  * Design constraints:
  * - Pure: no network; the runner performs the actor call. Parsing is lenient (unknown fields ignored)
@@ -18,7 +21,9 @@
  */
 import { z } from "zod";
 import type { Source } from "@/domain/claim";
+import { clipBio, count, experienceYear, facts, type ProfileFacts } from "@/domain/profile-facts";
 import { normalizeLinkedinProfile } from "@/domain/profile-url";
+import { digestOf } from "@/recipe/sources/facts";
 import { lines, txt } from "@/recipe/sources/text";
 import type { Collector, CollectorRequest, StepContext } from "@/recipe/sources/types";
 import { clip, identityFor } from "@/recipe/sources/types";
@@ -51,10 +56,36 @@ const HarvestProfile = z.object({
   lastName: z.string().optional(),
   headline: z.string().optional(),
   location: Loose,
-  experience: z.array(z.object({ position: Loose, title: Loose, companyName: Loose, startDate: Loose, endDate: Loose, duration: Loose })).default([]),
+  experience: z
+    .array(z.object({ position: Loose, title: Loose, companyName: Loose, companyLinkedinUrl: Loose, startDate: Loose, endDate: Loose, duration: Loose }))
+    .default([]),
   education: z.array(z.object({ schoolName: Loose, school: Loose, degree: Loose, fieldOfStudy: Loose, field: Loose })).default([]),
   skills: z.array(z.unknown()).default([]),
+  photo: z.string().nullish(),
+  verified: z.boolean().nullish(),
+  premium: z.boolean().nullish(),
+  openToWork: z.boolean().nullish(),
+  connectionsCount: z.number().nullish(),
+  followerCount: z.number().nullish(),
+  about: z.string().nullish(),
 });
+export type HarvestProfile = z.infer<typeof HarvestProfile>;
+
+/** The public numbers and flags of one harvestapi profile (the seed seam and the linkedin_profile digest share it). */
+export function harvestFacts(p: HarvestProfile): ProfileFacts {
+  return facts("linkedin", p.linkedinUrl, {
+    handle: /\/in\/([^/?#]+)/.exec(p.linkedinUrl)?.[1] ?? null,
+    display_name: [p.firstName, p.lastName].filter(Boolean).join(" ") || null,
+    bio: clipBio(p.headline),
+    connections: count(p.connectionsCount),
+    followers: count(p.followerCount),
+    verified: p.verified ?? null,
+    premium: p.premium ?? null,
+    open_to_work: p.openToWork ?? null,
+    photo_url: p.photo ?? null,
+    earliest_experience_year: experienceYear(p.experience.map((e) => e.startDate)),
+  });
+}
 
 function expLine(title: unknown, company: unknown, start: unknown, end: unknown): string {
   const s = txt(start);
@@ -80,6 +111,16 @@ export function experienceCompanies(excerpt: string): string[] {
   return [...new Set(out.filter((c) => c !== ""))];
 }
 
+const EMPLOYER_PAGE = "Employer page: ";
+
+/** Current employers' LinkedIn company URLs from merged LinkedIn profile excerpts (the confirmed profile links them). */
+export function employerPages(sources: readonly Source[]): string[] {
+  const pages = sources
+    .filter((s) => s.identity === "merged" && LINKEDIN_PROFILE_ACTORS.has(s.actor))
+    .flatMap((s) => s.excerpt.split("\n").filter((l) => l.startsWith(EMPLOYER_PAGE)).map((l) => l.slice(EMPLOYER_PAGE.length).trim()));
+  return [...new Set(pages)];
+}
+
 function eduLine(school: unknown, degree: unknown, field: unknown): string {
   return [txt(school), txt(degree), txt(field)].filter(Boolean).join(", ");
 }
@@ -87,27 +128,33 @@ function eduLine(school: unknown, degree: unknown, field: unknown): string {
 export type HarvestParsed = {
   url: string;
   excerpt: string;
-  raw: unknown;
+  raw: HarvestProfile;
   name: string;
   headline: string;
   location: string;
   employer: string;
 };
 
-/** Lenient parse of harvestapi items into excerpt plus the identity fields the seed step needs. */
-export function harvestProfiles(payload: unknown): HarvestParsed[] {
+/** Lenient parse of harvestapi items; [] when the payload is not a profile list. */
+export function harvestRaw(payload: unknown): HarvestProfile[] {
   const items = z.array(HarvestProfile).safeParse(payload);
-  if (!items.success) return [];
-  return items.data.map((p) => {
+  return items.success ? items.data : [];
+}
+
+/** harvestapi items as excerpt plus the identity fields the seed step needs. */
+export function harvestProfiles(payload: unknown): HarvestParsed[] {
+  return harvestRaw(payload).map((p) => {
     const name = [p.firstName, p.lastName].filter(Boolean).join(" ");
     const cur = p.experience[0];
     const current = cur ? `Current: ${expLine(cur.position ?? cur.title, cur.companyName, "", "")}` : "";
+    const page = txt(cur?.companyLinkedinUrl);
+    const employerPage = page.includes("linkedin.com/company/") ? `${EMPLOYER_PAGE}${page}` : "";
     const exp = p.experience.slice(0, 5).map((x) => expLine(x.position ?? x.title, x.companyName, x.startDate, x.endDate));
     const edu = p.education.slice(0, 3).map((x) => eduLine(x.schoolName ?? x.school, x.degree, x.fieldOfStudy ?? x.field));
     const location = txt(p.location);
     return {
       url: p.linkedinUrl,
-      excerpt: clip(lines([name, p.headline ?? "", location, current, ...exp, ...edu, `Skills: ${String(p.skills.length)}`])),
+      excerpt: clip(lines([name, p.headline ?? "", location, current, employerPage, ...exp, ...edu, `Skills: ${String(p.skills.length)}`])),
       raw: p,
       name,
       headline: p.headline?.trim() ?? "",
@@ -125,6 +172,13 @@ export const linkedinProfile: Collector = {
   },
   alreadyFetched: fetchedSources,
   parse: (payload, ctx) => harvestProfiles(payload).map((p) => ({ url: p.url, excerpt: p.excerpt, raw: p.raw, identity: identityFor(ctx, p.url) })),
+  digest: (fetched, ctx) =>
+    digestOf(
+      fetched
+        .flatMap((f) => harvestRaw(f.payload))
+        .filter((p) => identityFor(ctx, p.linkedinUrl) === "merged")
+        .map(harvestFacts),
+    ),
 };
 
 const MaestroProfile = z.object({

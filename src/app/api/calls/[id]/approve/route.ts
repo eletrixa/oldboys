@@ -3,11 +3,12 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/api/calls/[id]/approve/route.ts
- * Deps:    @opennextjs/cloudflare (getCloudflareContext), zod, src/domain/call, src/workflow/calls, src/adapters/d1, bindings DB + SOURCES + VERIFY_CALL
+ * Deps:    @opennextjs/cloudflare (getCloudflareContext), src/app/api/_lib/session-or-bearer, zod, src/domain/call, src/workflow/calls, src/adapters/d1, bindings DB + SOURCES + VERIFY_CALL
  * Tested:  n/a
  *
  * Key responsibilities:
- * - Bearer auth; validate consent; one conditional UPDATE enforces drafted-only and RUN_CALL_MAX
+ * - Session or bearer auth (requireSessionOrBearer); validate consent; one conditional UPDATE enforces drafted-only and RUN_CALL_MAX
+ *   (only calls in COUNTED_CALL_SQL use a slot: a call that never connected does not)
  * - placeCall exactly once here (never from a retried Workflow step); a mock result is persisted at once
  *
  * Design constraints:
@@ -18,9 +19,9 @@
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { z } from "zod";
 import { makeLedgerAppend } from "@/adapters/d1";
-import { requireBearer } from "@/app/api/_lib/auth";
 import { parseJsonBody } from "@/app/api/_lib/body";
-import { type CallStatus, maskNumber } from "@/domain/call";
+import { requireSessionOrBearer } from "@/app/api/_lib/session-or-bearer";
+import { COUNTED_CALL_SQL, type CallStatus, maskNumber } from "@/domain/call";
 import { applyCallEvent, callResultR2Key, failCall, loadCall, providerFor, recordCallResult } from "@/workflow/calls";
 
 const ApproveBody = z.object({
@@ -35,7 +36,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> },
 ): Promise<Response> {
   const { env } = getCloudflareContext();
-  const denied = requireBearer(request, env.RUN_TOKEN);
+  const denied = await requireSessionOrBearer(request, env);
   if (denied) return denied;
 
   const { id } = await params;
@@ -58,7 +59,7 @@ export async function POST(
       approved_at: new Date().toISOString(),
     },
     {
-      sql: " AND (SELECT COUNT(*) FROM calls WHERE run_id = ? AND status NOT IN ('drafted', 'skipped')) < ?",
+      sql: ` AND (SELECT COUNT(*) FROM calls WHERE run_id = ? AND ${COUNTED_CALL_SQL}) < ?`,
       binds: [call.run_id, callMax],
     },
   ).run();

@@ -46,6 +46,11 @@ describe("IntakeInput", () => {
     expect(IntakeInput.parse({ ...base, cv }).cv?.filename).toBe("cv.pdf");
   });
 
+  it("accepts a manual add with a positionId", () => {
+    expect(IntakeInput.safeParse({ ...base, source: "manual", positionId: "pos-1" }).success).toBe(true);
+    expect(IntakeInput.safeParse({ ...base, positionId: "bad id!" }).success).toBe(false);
+  });
+
   it("rejects a bad email", () => {
     expect(IntakeInput.safeParse({ ...base, email: "not-an-email" }).success).toBe(false);
   });
@@ -81,14 +86,14 @@ describe("candidateInput", () => {
 });
 
 describe("decideStatus", () => {
-  const ok = { tagKnown: true, senderAllowed: true, candidate: { profileUrl: "https://www.linkedin.com/in/x1" }, capped: false };
+  const ok = { tagKnown: true, senderAllowed: true, candidate: { profileUrl: "https://www.linkedin.com/in/x1" }, capped: false, pool: false };
 
   it("run-started when everything passes", () => {
     expect(decideStatus(ok)).toEqual({ status: "run-started", note: null });
   });
 
   it("unknown tag wins over everything else", () => {
-    expect(decideStatus({ tagKnown: false, senderAllowed: false, candidate: {}, capped: true })).toEqual({
+    expect(decideStatus({ tagKnown: false, senderAllowed: false, candidate: {}, capped: true, pool: true })).toEqual({
       status: "unmatched",
       note: "unknown tag",
     });
@@ -111,6 +116,15 @@ describe("decideStatus", () => {
 
   it("capped when complete but over the cap", () => {
     expect(decideStatus({ ...ok, capped: true }).status).toBe("capped");
+  });
+
+  it("pooled when complete and position-bound, ahead of capped, with no note", () => {
+    expect(decideStatus({ ...ok, pool: true, capped: true })).toEqual({ status: "pooled", note: null });
+  });
+
+  it("pool never hides unmatched or incomplete", () => {
+    expect(decideStatus({ ...ok, pool: true, candidate: {} }).status).toBe("incomplete");
+    expect(decideStatus({ ...ok, pool: true, tagKnown: false })).toEqual({ status: "unmatched", note: "unknown tag" });
   });
 });
 

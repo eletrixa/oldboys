@@ -12,13 +12,16 @@ import { CreatePositionBody, PatchPositionBody } from "@/app/api/_lib/position-b
 const mh = (id: string) => ({ id, text: "Has shipped X", accepted_evidence: ["repo"] });
 
 describe("CreatePositionBody", () => {
-  it("B1: accepts text only, URL only and both; rejects empty, title only, oversize and non-URL", () => {
+  it("B1: accepts text only, URL only, both, and a title alone (manual); rejects empty, oversize and non-URL", () => {
     const ok = (v: unknown) => CreatePositionBody.safeParse(v).success;
     expect(ok({ postingText: "Senior dev wanted" })).toBe(true);
     expect(ok({ postingUrl: "https://www.jobs.cz/rpd/2000123456/" })).toBe(true);
     expect(ok({ postingText: "x", postingUrl: "https://example.com/job", title: "Dev" })).toBe(true);
+    expect(ok({ title: "Dev" })).toBe(true);
+    expect(ok({ title: "Dev", company: "Acme", location: "Brno" })).toBe(true);
     expect(ok({})).toBe(false);
-    expect(ok({ title: "Dev" })).toBe(false);
+    expect(ok({ company: "Acme" })).toBe(false);
+    expect(ok({ title: "Dev", company: "x".repeat(201) })).toBe(false);
     expect(ok({ postingText: "x".repeat(20_001) })).toBe(false);
     expect(ok({ postingUrl: `https://example.com/${"a".repeat(500)}` })).toBe(false);
     expect(ok({ postingUrl: "not a url" })).toBe(false);

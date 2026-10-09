@@ -21,6 +21,7 @@ import { describe, expect, it } from "vitest";
 import type { Brief, Claim } from "@/domain/claim";
 import type { CallView } from "../call-panel";
 import { interviewKit, kitFileName } from "../interview-kit";
+import type { ProfileSignals } from "@/domain/profile-signals";
 import type { RunState } from "../state";
 
 const AT = "2026-10-08T21:30:00.000Z";
@@ -30,6 +31,7 @@ const claim = (id: string, text: string, supports: string[], kind: Claim["kind"]
 });
 
 const brief = (over: Partial<Brief> = {}): Brief => ({
+  profile: null,
   run_id: "r",
   per_question: [{ question_id: "mh-exp", coverage: "evidenced", claim_ids: ["c1"], summary: "Five years of data work." }],
   interview_questions: ["Walk me through your last pipeline."],
@@ -74,6 +76,20 @@ const run = (over: Partial<RunState> = {}): RunState => ({
 const kit = (over: Partial<RunState> = {}): string => interviewKit(run(over), AT) ?? "";
 
 describe("interviewKit", () => {
+  it("adds the profile signals section and their asks to the checklist", () => {
+    const profile_signals: ProfileSignals = {
+      signals: [{ id: "young-account", platform: "github", profile_url: "https://github.com/jnovak", text: "The GitHub account was created on 2 Mar 2026.", source_url: "https://api.github.com/users/jnovak", ask: "Did you have an earlier GitHub account?" }],
+      not_checked: ["LinkedIn does not publish the account creation date without login."],
+      checked: ["github"],
+    };
+    const md = kit({ profile_signals });
+    expect(md).toContain("## Profile signals (public accounts)");
+    expect(md).toContain("- The GitHub account was created on 2 Mar 2026. (source: https://api.github.com/users/jnovak)");
+    expect(md).toContain("- Not checked: LinkedIn does not publish");
+    expect(md).toContain("- [ ] Walk me through your last pipeline.\n  Notes:\n- [ ] Did you have an earlier GitHub account?\n  Notes:");
+    expect(kit()).not.toContain("Profile signals");
+  });
+
   it("returns null while there is no brief", () => {
     expect(interviewKit(run({ brief: null }), AT)).toBeNull();
   });
@@ -134,6 +150,12 @@ describe("interviewKit", () => {
     expect(md).toContain("- jnovak: 12 repositories (<https://github.com/jnovak>)");
     expect(md).not.toContain("Coverage: evidenced");
     expect(md).toContain("2 items removed (protected categories)");
+  });
+
+  it("footer says 1 item removed in the singular", () => {
+    const md = kit({ brief: brief({ removed_protected: 1 }) });
+    expect(md).toContain("_1 item removed (protected categories)_");
+    expect(md).not.toContain("1 items removed");
   });
 
   it("lists sections by confidence instead of coverage, facts before inferences", () => {
@@ -228,5 +250,25 @@ describe("kitFileName", () => {
     const name = kitFileName(run());
     expect(name).toBe("interview-kit-01234567.md");
     expect(name.toLowerCase()).not.toContain("novak");
+  });
+});
+
+describe("interviewKit evidence lines (idea #5)", () => {
+  it("adds the verbatim quote and the retrieval date per linked source under a claim", () => {
+    const md = kit({
+      claims: [{ ...claim("c1", "Works at Acme since 2021", ["s1", "s2"]), quote: "Data *engineer* at Acme" }],
+      sources: [
+        { id: "s1", url: "https://www.linkedin.com/in/jnovak", fetched_at: "2026-10-08T21:14:00Z" },
+        { id: "s2", url: "javascript:alert(1)", fetched_at: "2026-10-08T21:15:00Z" },
+      ],
+    });
+    expect(md).toContain(
+      '- FACT: Works at Acme since 2021 (<https://www.linkedin.com/in/jnovak>)\n  - Quote: "Data \\*engineer\\* at Acme"\n  - Retrieved 8 Oct 2026, 21:14 UTC (linkedin.com)\n',
+    );
+    expect(md).not.toContain("21:15");
+  });
+
+  it("adds no retrieval line when the source has no time recorded", () => {
+    expect(kit()).not.toContain("Retrieved");
   });
 });

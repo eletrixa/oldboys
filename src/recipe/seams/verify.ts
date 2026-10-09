@@ -1,24 +1,31 @@
 /**
- * Verify seam: deterministic screens (noise, unknown ids, quote-in-excerpt, hedges, alias contradictions, duplicates), then a second model that may only downgrade.
+ * Verify seam: deterministic screens (noise, unknown ids, quote-in-excerpt, hedges, alias contradictions, duplicates), then a second model and a devil's advocate that may only downgrade.
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/recipe/seams/verify.ts
- * Deps:    zod, src/domain/corroborate (fold, hasWord, orgTokens), src/domain/similar (nearDuplicate), src/recipe/seams/resolve (confirmedSources)
- * Tested:  src/recipe/__tests__/verify.test.ts
+ * Deps:    zod, src/domain/challenge (JUDGEMENT), src/domain/corroborate (fold, hasWord, orgTokens), src/domain/cv-check, src/domain/similar (nearDuplicate), src/recipe/seams/challenge, src/recipe/seams/resolve (confirmedSources)
+ * Tested:  src/recipe/__tests__/verify.test.ts, src/recipe/__tests__/cv-consistency.test.ts (CV check), src/recipe/__tests__/challenge.test.ts (devil's advocate)
  *
  * Key responsibilities:
  * - Support ids outside confirmedSources (unknown, unverified, under a rejected profile) are dropped; a claim left
  *   with no support is dropped (never shown without a source)
  * - FACT keeps its kind only if the normalised quote is inside one cited excerpt (after unknown ids are dropped)
+ * - `cv-consistency` FACT (a CV statement the public record matches) keeps its kind only if the quote is inside a cited
+ *   PUBLIC excerpt: a quote found only in the CV itself proves nothing and is downgraded ("quote only in the CV")
  * - FACT with hedged wording ("likely", "may", "pravděpodobně", ...) becomes INFERENCE, note "hedged wording"
  * - screenClaims (shared with synthesize): drops self-declared noise ("unrelated content", "misattributed") and
  *   contradiction claims that call themselves compatible / not a contradiction (saysCompatible); a contradiction claim
  *   naming two aliases of one organisation ("A | B", "A (formerly B)", "A, formerly B" in a source, both sides
  *   organisation-like) is kept as INFERENCE ranked last with ALIAS_MARK in its text
+ * - screenClaims also drops a `cv-consistency` claim that judges the person (JUDGEMENT: fake, lie, inflated, …): a
+ *   difference is a question, never a verdict
  * - mergeDuplicates: claims with the same question_id whose folded texts are equal or token Jaccard >= 0.8
  *   (src/domain/similar) merge into the better-ranked / higher-confidence one, supports unioned, note
  *   "merged duplicate: <id>"
  * - Residue (FACTs that passed) goes to the verify model; "not supported" downgrades to INFERENCE
+ * - Devil's advocate (idea #8, src/recipe/seams/challenge): must-have / CV-match FACTs that survived everything are
+ *   challenged (fork pre-check, then one more `verify` model call); what does not hold becomes INFERENCE and the
+ *   record (checked, held, per claim ground + why) goes to `out.challenge` for the ledger ref
  *
  * Design constraints:
  * - Downgrade or drop only, never promote; an LLM failure keeps the deterministic result
@@ -27,10 +34,13 @@
 import { z } from "zod";
 import type { Claim, Source } from "@/domain/claim";
 import type { Ports } from "@/domain/ports";
+import { JUDGEMENT } from "@/domain/challenge";
 import { fold, hasWord, orgTokens } from "@/domain/corroborate";
+import { CV_QUESTION_ID, isCvSource } from "@/domain/cv-check";
 import { normalizeText, quoteInNormalized } from "@/domain/quote";
 import { nearDuplicate } from "@/domain/similar";
 import { emptyOutcome } from "@/recipe/runner";
+import { challengeClaims } from "@/recipe/seams/challenge";
 import { confirmedSources } from "@/recipe/seams/resolve";
 import type { StepContext, StepOutcome } from "@/recipe/sources/types";
 
@@ -45,6 +55,12 @@ export function quoteSupported(claim: Claim, sources: readonly Source[]): boolea
     claim.supports.every((id) => byId.has(id)) &&
     claim.supports.some((id) => quoteInNormalized(quote, normalizeText(byId.get(id)?.excerpt ?? "")))
   );
+}
+
+/** A `cv-consistency` FACT must quote a public source it cites; the CV agreeing with itself is no match. */
+export function cvQuoteSupported(claim: Claim, sources: readonly Source[]): boolean {
+  const publicIds = new Set(sources.filter((s) => !isCvSource(s)).map((s) => s.id));
+  return quoteSupported(claim, sources) && quoteSupported({ ...claim, supports: claim.supports.filter((id) => publicIds.has(id)) }, sources);
 }
 
 function downgrade(claim: Claim): Claim {
@@ -137,6 +153,10 @@ export function screenClaims(claims: readonly Claim[], sources: readonly Source[
       notes.push(`dropped (unrelated or misattributed content): ${c.id}`);
       return [];
     }
+    if (c.question_id === CV_QUESTION_ID && JUDGEMENT.test(c.text)) {
+      notes.push(`dropped CV check claim (judges the person): ${c.id}`);
+      return [];
+    }
     if (c.question_id !== "contradictions" || aliasNoted(c)) return [c];
     if (saysCompatible(c.text)) {
       notes.push(`dropped contradiction (compatible statements): ${c.id}`);
@@ -197,6 +217,10 @@ export async function verifyClaims(ctx: StepContext, ports: Ports): Promise<Step
       out.notes.push(unknown > 0 ? `downgraded (no confirmed support): ${c.id}` : `downgraded (quote not in source): ${c.id}`);
       return [downgrade(c)];
     }
+    if (c.question_id === CV_QUESTION_ID && !cvQuoteSupported(c, ctx.sources)) {
+      out.notes.push(`downgraded (quote only in the CV): ${c.id}`);
+      return [downgrade(c)];
+    }
     if (hedged(c.text)) {
       out.notes.push(`downgraded (hedged wording): ${c.id}`);
       return [downgrade(c)];
@@ -228,6 +252,10 @@ export async function verifyClaims(ctx: StepContext, ports: Ports): Promise<Step
       out.notes.push(`verify model failed, deterministic result kept: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
+  // Devil's advocate (idea #8): what survived every check above is challenged once more; what fails goes to the interview
+  out.challenge = await challengeClaims(final, ctx.sources, ports, out);
+  const challenged = new Set(out.challenge.challenges.map((ch) => ch.claim_id));
+  final = final.map((c) => (challenged.has(c.id) ? downgrade(c) : c));
   out.claims = final;
   out.empty = final.length === 0;
   return out;

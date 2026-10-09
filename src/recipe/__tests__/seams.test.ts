@@ -48,7 +48,8 @@ describe("resolve", () => {
     const byUrl = new Map(out.candidates.map((c) => [c.profile_urls[0], c.decision]));
     expect(byUrl.get("https://cz.linkedin.com/in/jana-dvorakova-nurse")).toBe("rejected");
     expect(byUrl.get("https://github.com/jdvorakova")).toBe("possibly-same-as");
-    expect(byUrl.get("https://cz.linkedin.com/in/jana-dvorakova-data")).toBe("merge");
+    // 0.92 on name + Brno only: no employer or link to a confirmed profile yet, so the lineup asks
+    expect(byUrl.get("https://cz.linkedin.com/in/jana-dvorakova-data")).toBe("possibly-same-as");
     expect(out.candidates[0]?.platform).toBe("linkedin");
   });
 
@@ -74,18 +75,19 @@ describe("resolve fallback (no model)", () => {
     expect(scores.map((x) => decisionFor(x.score))).toEqual(["possibly-same-as", "possibly-same-as"]);
   });
 
-  it("merges only on hard links: anchor URL, or cross-linked drafts with the anchor in one", () => {
+  it("merges only on hard links: anchor URL, or cross-linked drafts with a website anchor in one, never a city", () => {
     const byAnchorUrl = fallbackScores([{ id: "a", url: "https://www.jana.dev/", excerpt: "Jana" }], "jana.dev");
     expect(decisionFor(byAnchorUrl[0]?.score ?? 0)).toBe("merge");
-    const cross = fallbackScores(
-      [
-        { id: "a", url: "https://github.com/jdvorakova", excerpt: "Brno. https://cz.linkedin.com/in/jana-dvorakova-data" },
-        { id: "b", url: "https://cz.linkedin.com/in/jana-dvorakova-data", excerpt: "Data Engineer" },
-        { id: "c", url: "https://x.com/jana", excerpt: "Jana in Brno" },
-      ],
-      "Brno",
-    );
+    const drafts = (anchorText: string) => [
+      { id: "a", url: "https://github.com/jdvorakova", excerpt: `${anchorText}. https://cz.linkedin.com/in/jana-dvorakova-data` },
+      { id: "b", url: "https://cz.linkedin.com/in/jana-dvorakova-data", excerpt: "Data Engineer" },
+      { id: "c", url: "https://x.com/jana", excerpt: "Jana in Brno" },
+    ];
+    const cross = fallbackScores(drafts("jana.dev"), "jana.dev");
     expect(cross.map((x) => decisionFor(x.score))).toEqual(["merge", "merge", "possibly-same-as"]);
+    // two namesake pages may link each other: a shared city is no hard link
+    const city = fallbackScores(drafts("Brno"), "Brno");
+    expect(city.map((x) => decisionFor(x.score))).toEqual(["possibly-same-as", "possibly-same-as", "possibly-same-as"]);
     expect(byAnchorUrl[0]?.reasons).toEqual(["Profile link you supplied"]);
     expect(cross.flatMap((x) => x.reasons).join()).not.toContain("fallback");
   });
@@ -413,6 +415,12 @@ describe("review 004: handles, namesakes, political pages, brief top line", () =
     expect(pickDrafts(baseContext({ subject: "Josef Buryan", sources: [kurzy] }))).toEqual([]);
   });
 
+  it("never drafts the pasted CV as a lineup hit (it is the seed's own input, found by the eval set)", () => {
+    const cv = { ...s("cv", "cv:run-1", "Petra Fiktivní\nSenior Product Manager · Olomouc"), actor: "cv", identity: "merged" as const };
+    const page = s("w", "https://example.com/petra-fiktivni", "Petra Fiktivní | Mapovna");
+    expect(pickDrafts(baseContext({ subject: "Petra Fiktivní", sources: [cv, page] })).map((d) => d.url)).toEqual([page.url]);
+  });
+
   it("asks about a profile by its title, never by slug, and skips profiles without a handle", async () => {
     const li = { ...cand("l", "https://www.linkedin.com/in/josef-buryan-1a2b/", "possibly-same-as", "linkedin", "josef-buryan-1a2b"), snippet: "Josef Buryan - CMO, Groupon | LinkedIn" };
     expect(profileQuestion(li)).toBe("Is the LinkedIn profile 'Josef Buryan - CMO, Groupon | LinkedIn' yours?");
@@ -593,6 +601,7 @@ describe("Buryan fact check: extract prompt, interview questions, to_verify, als
     const none = new Map<string, Claim[]>();
     expect(interviewAllowed({ questions, role: "Senior Data Engineer" }, none)("public-code")).toBe(true);
     expect(interviewAllowed({ questions, role: "Chief Marketing Officer" }, none)("public-code")).toBe(false);
+    for (const id of ["employer-context", "press", "social-presence"]) expect(interviewAllowed({ questions, role: null }, none)(id)).toBe(false);
     expect(interviewAllowed({ questions, role: null }, none)("contradictions")).toBe(false);
     expect(interviewAllowed({ questions, role: null }, new Map([["contradictions", [claim("c", "contradictions", "INFERENCE", "x")]]]))("contradictions")).toBe(true);
   });

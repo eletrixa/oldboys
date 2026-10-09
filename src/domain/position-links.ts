@@ -20,7 +20,9 @@ import { FAMILIES, type Family, kebab, MAX_MUST_HAVES, type MustHave, type Posit
 
 const INGEST_LABELS: Readonly<Record<string, string>> = {
   pasted: "Pasted",
+  manual: "Entered by hand",
   "jobs-cz": "Jobs.cz",
+  startupjobs: "StartupJobs",
   greenhouse: "Greenhouse",
   lever: "Lever",
   ashby: "Ashby",

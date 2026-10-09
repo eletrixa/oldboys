@@ -44,6 +44,8 @@ function global:cheatoldboys {
     Write-Host "  └─────────────────────────────────────────────────────────────────┘" -ForegroundColor DarkGray
     Write-Host "    pnpm test                              " -NoNewline -ForegroundColor Green
     Write-Host "Run Vitest once" -ForegroundColor White
+    Write-Host "    pnpm eval                              " -NoNewline -ForegroundColor Green
+    Write-Host "Run the synthetic eval set; writes eval/results.json + eval/RESULTS.md" -ForegroundColor White
     Write-Host "    pnpm test:watch                        " -NoNewline -ForegroundColor Green
     Write-Host "Vitest watch mode" -ForegroundColor White
     Write-Host "    pnpm e2e                               " -NoNewline -ForegroundColor Green
@@ -84,6 +86,8 @@ function global:cheatoldboys {
     Write-Host "Apply migrations to local D1" -ForegroundColor White
     Write-Host "    pnpm db:migrate:remote                 " -NoNewline -ForegroundColor Green
     Write-Host "Apply migrations to remote D1" -ForegroundColor White
+    Write-Host "    pnpm roles:sql                         " -NoNewline -ForegroundColor Green
+    Write-Host "Print role_templates seed INSERTs from src/domain/role-catalog (paste into a migration)" -ForegroundColor White
     Write-Host ""
     Write-Host "  ┌─────────────────────────────────────────────────────────────────┐" -ForegroundColor DarkGray
     Write-Host "  │  ENVIRONMENT VARIABLES                                         │" -ForegroundColor Yellow

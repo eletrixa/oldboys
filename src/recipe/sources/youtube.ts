@@ -8,12 +8,15 @@
  *
  * Key responsibilities:
  * - Scrape a known channel url, else search the subject; one Source per video
+ * - `digest`: the merged channel's ProfileFacts (name, subscribers when the actor reports them); nothing without a merged channel
  *
  * Design constraints:
  * - Pure: no fetch; the runner performs I/O. Empty `requests()` triggers the step's onEmpty branch
  * - Excerpts go through clip(); malformed payloads parse to []
  */
 import { z } from "zod";
+import { count, facts } from "@/domain/profile-facts";
+import { parsedAll } from "@/recipe/sources/facts";
 import type { Collector } from "@/recipe/sources/types";
 import type { Candidate } from "@/domain/claim";
 import type { StepContext } from "@/recipe/sources/types";
@@ -23,6 +26,7 @@ const Video = z.object({
   url: z.string(),
   title: z.string().nullish(),
   channelName: z.string().nullish(),
+  numberOfSubscribers: z.number().nullish(),
   viewCount: z.number().nullish(),
   date: z.string().nullish(),
   text: z.string().nullish(),
@@ -61,5 +65,17 @@ export const youtube: Collector = {
       raw: v,
       identity: merged ? ("merged" as const) : identityFor(ctx, v.url),
     }));
+  },
+  digest: (fetched, ctx) => {
+    const ch = channel(ctx);
+    if (ch === undefined || identityFor(ctx, ch.url) !== "merged") return null;
+    const video = parsedAll(z.array(Video), fetched).flat()[0];
+    return [
+      facts("youtube", ch.url, {
+        handle: /\/@([^/?#]+)/.exec(ch.url)?.[1] ?? null,
+        display_name: video?.channelName ?? null,
+        followers: count(video?.numberOfSubscribers),
+      }),
+    ];
   },
 };

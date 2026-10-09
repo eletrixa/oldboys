@@ -28,6 +28,10 @@ export type RoleRunRow = {
   questions_json: string | null;
   brief_json: string | null;
   sources_confirmed: number;
+  /** Last recipe step with a ledger row; read by the position results table only. */
+  last_step?: string | null;
+  /** ts of the newest ledger row (any step), else created_at; read by the stalled display state. */
+  last_at?: string | null;
 };
 
 export const COVERAGE_LABELS = ["documented", "partial", "no evidence", "not checked"] as const;

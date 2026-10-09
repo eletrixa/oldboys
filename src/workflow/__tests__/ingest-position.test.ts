@@ -7,16 +7,21 @@
  * Tested:  n/a (this is the test)
  *
  * Key responsibilities:
- * - Cover I1-I11 of specs/positions-ingest.md: paste, LLM down, Greenhouse fetch, dedupe, 422, fallback, timeout, cap, R2 failure, race, title override
+ * - Cover I1-I14 of specs/positions-ingest.md: paste, LLM down, Greenhouse fetch, dedupe, 422, fallback, timeout, cap, R2 failure, race, title override, manual entry, Jobs.cz career-site widget chain, company and location overrides; I15 role-catalog title
  *
  * Design constraints:
  * - No module mocks; the fake D1 matches SQL prefixes and throws on anything unexpected
  */
+import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
 import type { Ports } from "@/domain/ports";
 import type { CreatePositionBody } from "@/app/api/_lib/position-body";
+import { ROLE_CATALOG } from "@/domain/role-catalog";
 import { ingestPosition, type IngestDeps, ingestCapUsd, estimatePositionUsd } from "@/workflow/ingest-position";
 import { fakeLlm } from "@/recipe/__tests__/fakes";
+import { WIDGET_API } from "@/recipe/seams/posting-jobscz-widget";
+
+const fixture = (name: string): string => readFileSync(new URL(`../../recipe/__tests__/fixtures/postings/${name}`, import.meta.url), "utf8");
 
 type Row = Record<string, unknown>;
 const NOW = new Date("2026-10-09T10:00:00.000Z");
@@ -206,6 +211,77 @@ describe("ingestPosition", () => {
     const env = makeEnv();
     await run(deps(env), { postingText: LONG, title: "Lead Data Person" });
     expect(env.rows.get("pos-1")?.title).toBe("Lead Data Person");
+  });
+  it("I12: a title alone is a manual entry: method manual, generic must-haves, no fetch and no LLM call, company and location kept", async () => {
+    const env = makeEnv();
+    const llm = vi.fn(() => Promise.reject(new Error("must not be called")));
+    const fetchFn = vi.fn(() => Promise.reject(new Error("must not fetch")));
+    const r = await run(deps(env, { ports: { llm: llm as unknown as Ports["llm"] }, fetchFn: fetchFn as unknown as typeof fetch }), { title: "Obchodní zástupce", company: "Acme", location: "Brno" });
+    expect(r).toMatchObject({ ok: true, reused: false, notes: [] });
+    expect(llm).not.toHaveBeenCalled();
+    expect(fetchFn).not.toHaveBeenCalled();
+    const row = env.rows.get("pos-1");
+    expect(row).toMatchObject({ ingest_method: "manual", extraction: "fallback", ingest_cost_usd: 0, title: "Obchodní zástupce", company: "Acme", location: "Brno", family: "sales", board: null, posting_url: null });
+    const mustHaves = JSON.parse(row?.must_haves_json as string) as { id: string; text: string }[];
+    expect(mustHaves.map((m) => m.id)).toEqual(["mh-title-experience", "mh-public-work", "mh-location-fit"]);
+    expect(mustHaves[2]?.text).toContain("Brno");
+    expect(JSON.parse(env.puts.get("positions/pos-1.json") ?? "{}")).toMatchObject({ method: "manual", raw: "" });
+  });
+
+  it("I15: a role-catalog title alone gets the template's family and must-haves, marked edited, no LLM call", async () => {
+    const env = makeEnv();
+    const template = ROLE_CATALOG[0];
+    if (template === undefined) throw new Error("empty catalog");
+    const llm = vi.fn(() => Promise.reject(new Error("must not be called")));
+    await run(deps(env, { ports: { llm: llm as unknown as Ports["llm"] } }), { title: template.title });
+    expect(llm).not.toHaveBeenCalled();
+    const row = env.rows.get("pos-1");
+    expect(row).toMatchObject({ ingest_method: "manual", extraction: "edited", family: template.family });
+    expect(JSON.parse(row?.must_haves_json as string)).toEqual(template.must_haves);
+  });
+
+  it("I13: a Jobs.cz career-site page without posting text goes through the widget chain and stores the GraphQL reply as raw", async () => {
+    const env = makeEnv();
+    const page = "https://jablotron.jobs.cz/detail-pozice?r=detail&id=2001283886&rps=0&impressionId=";
+    const script = "https://jablotron.jobs.cz/assets/js/script.min.js?av=768f9ce6ef234ef2";
+    const asset = "https://site-assets.jobs.cz/assets/jablotronalarms/768f9ce6ef234ef2/assets/js/script.min.js";
+    const routes: Record<string, string> = {
+      "https://www.jobs.cz/rpd/2001283886/": fixture("jobscz-widget-page.html"),
+      [script]: fixture("jobscz-widget-redirect.html"),
+      [asset]: fixture("jobscz-widget-script.js.txt"),
+      [WIDGET_API]: fixture("jobscz-widget-reply.json"),
+    };
+    const fetchFn = vi.fn((url: string) => {
+      const body = routes[url];
+      if (body === undefined) return Promise.reject(new Error(`unexpected fetch ${url}`));
+      // the rpd request redirects to the career site; Response.url is read-only, so mirror it through a property
+      const res = new Response(body, { status: 200 });
+      Object.defineProperty(res, "url", { value: url.startsWith("https://www.jobs.cz/rpd/") ? page : url });
+      return Promise.resolve(res);
+    });
+    const r = await run(deps(env, { fetchFn: fetchFn as unknown as typeof fetch }), { postingUrl: "https://www.jobs.cz/rpd/2001283886/" });
+    expect(r).toMatchObject({ ok: true, reused: false });
+    expect(fetchFn.mock.calls.map((c) => c[0])).toEqual(["https://www.jobs.cz/rpd/2001283886/", script, asset, WIDGET_API]);
+    const row = env.rows.get("pos-1");
+    expect(row).toMatchObject({ ingest_method: "jobs-cz", board: "jobs.cz", external_id: "2001283886", title: "Delphi vývojář/ka - produktový vývoj - remote/onsite", company: "JABLOTRON CLOUD Services s.r.o.", location: "Jablonec nad Nisou" });
+    expect(row?.excerpt as string).toContain("Delphi");
+    expect(JSON.parse(env.puts.get("positions/pos-1.json") ?? "{}")).toMatchObject({ method: "jobs-cz", url: "https://www.jobs.cz/rpd/2001283886/" });
+    expect((JSON.parse(env.puts.get("positions/pos-1.json") ?? "{}") as { raw: string }).raw).toContain("htmlContent");
+  });
+
+  it("I14: company and location in the body override the fetched ones; a widget failure without pasted text is a 422 naming the host", async () => {
+    const env = makeEnv();
+    const fetchFn = okFetch();
+    await run(deps(env, { fetchFn: fetchFn as unknown as typeof fetch }), { postingUrl: GH_URL, company: "Acme Europe", location: "Praha" });
+    expect(env.rows.get("pos-1")).toMatchObject({ company: "Acme Europe", location: "Praha" });
+
+    const env2 = makeEnv();
+    const bare = vi.fn(() => Promise.resolve(new Response("<html><body>Načítám...</body></html>", { status: 200 })));
+    const r = await run(deps(env2, { fetchFn: bare as unknown as typeof fetch }), { postingUrl: "https://jablotron.jobs.cz/detail-pozice?r=detail&id=2001283886" });
+    expect(r).toMatchObject({ ok: false, status: 422 });
+    expect(!r.ok && r.error).toContain("jablotron.jobs.cz");
+    expect(!r.ok && r.error).toContain("no career widget on the page");
+    expect(env2.rows.size).toBe(0);
   });
 });
 

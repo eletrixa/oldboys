@@ -12,6 +12,7 @@
  * - CallAnswer: the per-question result shown in the report (stored in the `call:finish` ledger row, no column)
  * - `allowedFrom` / `targetStatus` are the only place that knows which status changes are legal;
  *   `transitionCall` is the in-memory form, `applyCallEvent` (src/workflow/calls.ts) the atomic SQL form
+ * - `countsTowardCallLimit` / `COUNTED_CALL_SQL` are the only place that knows which calls use a RUN_CALL_MAX slot
  *
  * Design constraints:
  * - Field names are snake_case and mirror migrations/0004_calls.sql one to one; booleans are
@@ -170,6 +171,19 @@ export function transitionCall(status: CallStatus, event: CallEvent): CallStatus
   if (!allowedFrom(event.type).includes(status)) throw new IllegalCallTransition(status, event.type);
   return targetStatus(event);
 }
+
+/**
+ * Statuses that use a RUN_CALL_MAX slot: a call in progress or one that reached the person. A call that never
+ * connected (provider rejected it, busy, no answer: `failed` or `no_answer`) and a drafted or skipped one do not.
+ */
+export const COUNTED_CALL_STATUSES = ["dialing", "done", "refused"] as const satisfies readonly CallStatus[];
+
+export function countsTowardCallLimit(status: CallStatus): boolean {
+  return (COUNTED_CALL_STATUSES as readonly CallStatus[]).includes(status);
+}
+
+/** The same rule as a SQL condition on `calls.status` (constant literals, no binds). */
+export const COUNTED_CALL_SQL = `status IN (${COUNTED_CALL_STATUSES.map((s) => `'${s}'`).join(", ")})`;
 
 /** Mask an E.164 number for storage: keep the country prefix and the last three digits (short inputs are fully masked so nothing leaks). */
 export function maskNumber(e164: string): string {

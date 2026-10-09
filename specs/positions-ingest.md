@@ -1,6 +1,6 @@
 ---
 spec: positions-ingest
-status: draft
+status: implemented
 plan: 007
 created: 2026-10-08
 ---
@@ -23,7 +23,8 @@ Returns `{ method, request?: { url: string }, board?: string, externalId?: strin
 | Input | method | request.url | board | externalId |
 |---|---|---|---|---|
 | `null` or empty | `pasted` | none | none | none |
-| `https://(www.)jobs.cz/rpd/<id>/...` | `jobs-cz` | the input URL without fragment | `jobs.cz` | `<id>` |
+| `https://(www.)jobs.cz/rpd/<id>/...`, `/fp/<company>/<id>/`, `<company>.jobs.cz/share/<id>`, `<company>.jobs.cz/...?id=<id>`, `beta.jobs.cz/nabidka/<uuid>/` | `jobs-cz` | the input URL without fragment | `jobs.cz` | `<id>` (or the lower-cased uuid) |
+| `https://(www.)startupjobs.cz/nabidka/<id>/<slug>` | `startupjobs` | the input URL without fragment | `startupjobs.cz` | `<id>` |
 | `https://boards.greenhouse.io/<board>/jobs/<id>` and `https://job-boards.greenhouse.io/<board>/jobs/<id>` | `greenhouse` | `https://boards-api.greenhouse.io/v1/boards/<board>/jobs/<id>` | `greenhouse:<board>` | `<id>` |
 | `https://boards.greenhouse.io/<board>?gh_jid=<id>` (same for `job-boards`) | `greenhouse` | same API URL | `greenhouse:<board>` | `<id>` |
 | `https://jobs.lever.co/<co>/<uuid>` | `lever` | `https://api.lever.co/v0/postings/<co>/<uuid>` | `lever:<co>` | `<uuid>` |
@@ -33,12 +34,20 @@ Returns `{ method, request?: { url: string }, board?: string, externalId?: strin
 
 ### parsePosting(method, payload, externalId?)
 Returns `{ title?: string, company?: string, location?: string, text: string }`; never throws, an unreadable payload gives `{ text: "" }`.
+- `startupjobs`: payload is an HTML string; the JSON-LD path below (the `JobPosting` sits in a `@graph` next to a `WebSite`; the page body is rendered by JavaScript).
 - `jobs-cz`: payload is an HTML string (checked 2026-10-09: live `/rpd/<id>` pages carry no JSON-LD). `title` and `company` come from `<meta property="og:title" content="<title> – <company>">` (split at the last en dash with spaces), `location` from the text of the element with `data-test="jd-info-location"`, `text` from the HTML inside the element with `data-test="jd-body-richtext"` (HTML to text as below). Without the description marker the JSON-LD path below is tried; with neither the result is `{ text: "" }` and ingest falls back to paste.
 - `jsonld` (and the Jobs.cz fallback): payload is an HTML string; read every `<script type="application/ld+json">`, find a `JobPosting` (also inside `@graph` or an array); `title`, `hiringOrganization.name`, `jobLocation.address.addressLocality` (or `jobLocation[0]`), `description` (HTML to text: tags removed, entities decoded, block tags become newlines).
 - `greenhouse`: JSON `{ title, location.name, company_name?, content }`; `content` is HTML-escaped HTML, unescape then to text.
 - `lever`: JSON `{ text, categories.location, descriptionPlain, lists[] }`; `text` field of the result = `descriptionPlain` plus each list as `heading` line and items.
 - `ashby`: JSON `{ jobs: [...] }`; choose the entry whose `id` equals `externalId`; use `title`, `location`, `descriptionPlain` (else `descriptionHtml` to text). No match gives `{ text: "" }`.
 - `pasted`: payload is the string; `text` = the string trimmed; no title.
+
+### fetchJobsCzWidget(fetchFn, page, jobAdId, init?) — `src/recipe/seams/posting-jobscz-widget.ts`
+Most `jobs.cz/rpd/<id>` links redirect to a company career site (`<company>.jobs.cz`) whose HTML carries no posting: a widget renders it from `POST https://api.capybara.lmc.cz/api/graphql/widget` with a public client-side key. The chain, at most three requests, all with the shared user agent and timeout:
+1. `widgetFromInline(html)`: `window.__LMC_CAREER_WIDGET__.push({apiKey, widgetId})` on the page gives the credentials (key must be 64 hex chars).
+2. Else `widgetScript(html, pageUrl)`: the same-origin `<script src=".../script.min.js">` and the `data-widget` name (default `main`). The script URL answers with a meta-refresh page (`metaRefreshUrl`) pointing at `site-assets.jobs.cz`; that body holds `"widgets":{"<name>":{"id","apiKey"}}` (`widgetFromScript`, the named entry or the first one).
+3. `widgetQuery(widgetId, jobAdId)` posted with `X-API-KEY`; `parseWidgetReply` gives `title`, `employer.companyName`, first location `city` (else region, country) and `content.htmlContent` plus `sections` as text.
+Throws with a plain reason (`no career widget on the page`, `HTTP <status> from <host>`, `career widget config not found`, `career widget returned no posting`, `no job ad id in the URL`). `ingestPosition` calls it only for method `jobs-cz` when the page parse yields under 200 chars; the stored raw payload is then the GraphQL reply.
 
 ### stripBoilerplate(text)
 Removes sections whose heading line matches (case-insensitive, optional trailing colon) `About us`, `About the company`, `O nás`, `Benefits`, `Benefity`, `Co nabízíme`, `Equal opportunity`, `EEO`, from the heading through the line before the next heading. A heading is a line that is short (<= 60 chars), has no sentence-ending period, and is either `#`-prefixed, ends with a colon, or is the only text on its line between blank lines. Other sections are kept verbatim. Idempotent.
@@ -49,6 +58,9 @@ Removes sections whose heading line matches (case-insensitive, optional trailing
 - Title: `hint.title` wins when non-empty, else the model's.
 - Family fallback when the model value is invalid: `familyOf(title)`, a CZ/EN keyword table (for example `data engineer|analyst|ml` gives `data`, `vývojář|developer|engineer` gives `engineering`, `obchodní|sales|account` gives `sales`), else `other`. Export `familyOf` and test it.
 - Deterministic fallback when the call throws or yields zero usable must-haves: exactly 3 generic must-haves (the shared `fallbackMustHaves`, also used by `roleQuestions`: `mh-title-experience`, `mh-public-work`, `mh-location-fit`, expressed as `MustHave` with `accepted_evidence`), `family = familyOf(title)`, `cost_usd = 0` on throw, and a note starting `position extract:` that says why (`LLM failed (<message>)` or `no usable LLM output`).
+
+### Manual entry
+`body` with a `title` and neither `postingText` nor `postingUrl` is a manual entry: method `manual`, no fetch and no LLM call, `family = familyOf(title)`, exactly the 3 generic `fallbackMustHaves(title, location)`, `extraction = fallback`, `cost_usd = 0`, `company` and `location` from the body, R2 object with `raw: ""`. The detail page words the fallback card as "generic must-haves from the title". `body.company` and `body.location` also override the parsed values on every other path.
 
 ### ingestPosition(deps, body)
 `deps = { db: D1Database, bucket: R2Bucket, ports: Pick<Ports,"llm">, fetchFn: typeof fetch, now: Date, newId: () => string, capUsd: number, estimateUsd: (text: string) => number }`; `body` is the validated `CreatePositionBody` of `position-body.ts`.
@@ -74,6 +86,8 @@ Order: `postingFetchPlan(postingUrl ?? null)` -> dedupe check -> `resolveText` (
 posting-plan
 - [ ] P1: `null`, `""` and `"not a url"` give `pasted` with no request.
 - [ ] P2: `https://www.jobs.cz/rpd/2000123456/?searchId=x` gives `jobs-cz`, board `jobs.cz`, externalId `2000123456`.
+- [ ] P2b: `/fp/<company>/<id>/`, `<company>.jobs.cz/share/<id>`, `<company>.jobs.cz/...?id=<id>` and `beta.jobs.cz/nabidka/<uuid>/` give `jobs-cz` with the id; `<company>.jobs.cz/` without an id and `www.jobs.cz/prace/` are `jsonld`.
+- [ ] P2c: `startupjobs.cz/nabidka/49819/<slug>` gives `startupjobs`, board `startupjobs.cz`, externalId `49819`; `/nabidky` is `jsonld`.
 - [ ] P3: `boards.greenhouse.io/acme/jobs/12345` and `job-boards.greenhouse.io/acme/jobs/12345` give the boards-api URL, board `greenhouse:acme`.
 - [ ] P4: `boards.greenhouse.io/acme?gh_jid=12345` gives the same API URL; `https://careers.example.com/jobs?gh_jid=12345` gives `jsonld`.
 - [ ] P5: `jobs.lever.co/acme/<uuid>` gives the `api.lever.co/v0/postings/acme/<uuid>` URL.
@@ -81,6 +95,7 @@ posting-plan
 - [ ] P7: `https://example.com/careers/dev` gives `jsonld`; `javascript:alert(1)` and `file:///etc/passwd` give `pasted`.
 posting-parse
 - [ ] R1: Jobs.cz fixture HTML (`jobs-cz.html`, markers) gives title, company, location and a text containing the description with tags removed; R1b: a page with JSON-LD only (synthetic fixture) still parses through the fallback.
+- [ ] R1c: the StartupJobs fixture (`startupjobs.html`) gives title, company, location `Brno` and the description text through the `startupjobs` method.
 - [ ] R2: a JSON-LD `JobPosting` inside `@graph` is found; a page with no JobPosting gives `{ text: "" }`.
 - [ ] R3: Greenhouse fixture JSON gives title, location and unescaped text.
 - [ ] R4: Lever fixture JSON includes the list headings and items in `text`.
@@ -89,6 +104,14 @@ posting-parse
 - [ ] R7: `stripBoilerplate` removes an English `About us` and a Czech `Co nabízíme` section and keeps `Requirements` and `Responsibilities` intact.
 - [ ] R8: `stripBoilerplate` removes `Benefits:` through the next heading only, and is idempotent.
 - [ ] R9: text with none of the headings is returned unchanged.
+posting-jobscz-widget
+- [ ] W1: inline `__LMC_CAREER_WIDGET__.push` gives the credentials; a page without it, or with a short key, gives undefined.
+- [ ] W2: the same-origin `script.min.js` and `data-widget` name are read; a foreign-origin script is ignored.
+- [ ] W3: the meta-refresh fixture gives the `site-assets.jobs.cz` URL; a `javascript:` target gives undefined.
+- [ ] W4: the script config gives the named widget, the first one for an unknown name; no config or unbalanced JSON gives undefined.
+- [ ] W5: the reply fixture gives title, company, city and tag-free text over 1000 chars; an error reply or non-JSON gives `{ text: "" }`.
+- [ ] W6: the chain calls script, asset and API in that order, posts the key as `X-API-KEY` with the caller's headers; the inline page calls only the API.
+- [ ] W7: no widget on the page makes no request; HTTP 503 on the script, an empty reply and a missing id throw plain reasons.
 position-extract
 - [ ] X1: with `fakeLlm` output of 4 valid must-haves, the result has 4 with `mh-` ids, a valid family, and `cost_usd` from the fake.
 - [ ] X2: 8 model must-haves are cut to 5; an id without `mh-` is prefixed or dropped as `roleQuestions` does; a base id and duplicates are dropped.
@@ -109,3 +132,6 @@ ingest-position
 - [ ] I9: an R2 put failure still returns `ok: true`, with `r2_key` null and a note.
 - [ ] I10: the unique-constraint race returns the existing id with `reused: true`.
 - [ ] I11: the title in the body overrides the extracted title in the stored row.
+- [ ] I12: a title alone (with company and location) inserts a `manual` row with the 3 generic must-haves, family from the title, cost 0, no fetch and no LLM call.
+- [ ] I13: a `jobs.cz/rpd/<id>` page whose response redirected to a career site goes through the widget chain (page, script, asset, API), stores board, external id, method `jobs-cz` and the GraphQL reply as raw.
+- [ ] I14: `company` and `location` in the body override the fetched ones; a widget failure without pasted text is a 422 naming the career-site host and the reason, with nothing inserted.

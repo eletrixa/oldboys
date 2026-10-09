@@ -28,7 +28,7 @@ function position(id: string, over: Row = {}): Row {
   };
 }
 
-function makeDb(positions: Row[], runs: Row[] = []) {
+function makeDb(positions: Row[], runs: Row[] = [], applications: Row[] = [], tags: Row[] = []) {
   const exec = (q: string, a: unknown[]): { rows: Row[]; changes: number } => {
     if (q.startsWith("SELECT p.id")) {
       const keep = ["id", "title", "family", "company", "location", "posting_url", "ingest_method", "created_at", "expires_at"];
@@ -42,7 +42,15 @@ function makeDb(positions: Row[], runs: Row[] = []) {
       return { rows: hit ? [Object.fromEntries(Object.entries(hit).filter(([k]) => k !== "r2_key"))] : [], changes: 0 };
     }
     const mine = () => runs.filter((r) => r.position_id === a[0]).sort((x, y) => String(y.created_at).localeCompare(String(x.created_at)));
-    if (q.startsWith("SELECT i.id")) return { rows: mine().map((r) => ({ role: "x", questions_json: null, brief_json: null, sources_confirmed: 0, ...r })), changes: 0 };
+    if (q.startsWith("SELECT i.id")) return { rows: mine().map((r) => ({ role: "x", questions_json: null, brief_json: null, sources_confirmed: 0, last_step: null, ...r })), changes: 0 };
+    if (q.startsWith("SELECT id, source, name")) {
+      const rows = applications
+        .filter((r) => r.position_id === a[0])
+        .sort((x, y) => String(y.received_at).localeCompare(String(x.received_at)) || String(y.id).localeCompare(String(x.id)))
+        .map((r) => ({ has_profile: r.linkedin_url === undefined || r.linkedin_url === null ? 0 : 1, has_cv: r.cv_text === undefined || r.cv_text === null ? 0 : 1, ...Object.fromEntries(["id", "source", "name", "email", "status", "run_id", "note", "received_at", "linkedin_url"].map((k) => [k, r[k] ?? null])) }));
+      return { rows, changes: 0 };
+    }
+    if (q.startsWith("SELECT tag, role")) return { rows: tags.filter((t) => t.position_id === a[0]), changes: 0 };
     if (q.startsWith("SELECT id FROM positions WHERE board")) {
       const hit = positions.find((p) => p.board === a[0] && p.external_id === a[1]);
       return { rows: hit ? [{ id: hit.id }] : [], changes: 0 };
@@ -118,6 +126,43 @@ describe("positions functions", () => {
     expect((await getPosition(db, "p1"))?.group?.runs[0]?.cells).toEqual(["not checked"]);
   });
 
+  it("getPosition returns the pool newest first with presence flags only, and the bound tags", async () => {
+    const apps = [
+      { id: "a1", position_id: "p1", source: "manual", name: "Ada", status: "pooled", received_at: "2026-10-08T10:00:00.000Z", linkedin_url: "https://www.linkedin.com/in/ada", cv_text: null, cover_letter: "secret", external_id: "x" },
+      { id: "a2", position_id: "p1", source: "email", name: null, status: "pooled", received_at: "2026-10-09T10:00:00.000Z", linkedin_url: null, cv_text: "my cv", cover_letter: null, external_id: "y" },
+      { id: "a3", position_id: "other", source: "email", status: "pooled", received_at: "2026-10-09T11:00:00.000Z" },
+    ];
+    const tags = [{ tag: "staff-eng", role: "Staff", goal: "hiring", startupjobs_offer_id: null, position_id: "p1", created_at: "2026-10-08T10:00:00.000Z" }];
+    const detail = await getPosition(makeDb([position("p1")], [], apps, tags), "p1");
+    expect(detail?.candidates.map((c) => [c.id, c.has_profile, c.has_cv, c.handle, c.run])).toEqual([["a2", 0, 1, null, null], ["a1", 1, 0, "Ada", null]]);
+    for (const c of detail?.candidates ?? []) for (const key of ["cv_text", "cover_letter", "external_id", "linkedin_url"]) expect(c).not.toHaveProperty(key);
+    expect(detail?.tags.map((t) => t.tag)).toEqual(["staff-eng"]);
+    expect((await getPosition(makeDb([position("p1")]), "p1"))).toMatchObject({ candidates: [], tags: [] });
+  });
+
+  it("getPosition attaches each pooled run's progress, fit % and independent-evidence count", async () => {
+    const ev = { quote: "Led the launch", source_id: "s1", kind: "FACT", supports: true, strength: "strong" };
+    const profile = {
+      achievements: [{ text: "x", evidence: [ev] }], risks: [], history: [], questions: [], degraded: null,
+      personality: { disc: null, mbti: null, read: "", evidence: [] },
+      position_fit: [{ role: "Staff", fit_pct: 67, rationale: "", traits: [] }],
+    };
+    const runs = [
+      { id: "r1", position_id: "p1", subject: "Ada King", status: "running", created_at: "2026-10-09T10:00:00.000Z", last_step: "seed_profile", last_at: "2020-01-01T00:00:00.000Z" },
+      { id: "r2", position_id: "p1", subject: "Bo", status: "done", created_at: "2026-10-09T11:00:00.000Z", brief_json: JSON.stringify({ run_id: "r2", profile }) },
+    ];
+    const apps = [
+      { id: "a1", position_id: "p1", source: "manual", status: "run-started", run_id: "r1", received_at: "2026-10-08T10:00:00.000Z", linkedin_url: "https://www.linkedin.com/in/ada" },
+      { id: "a2", position_id: "p1", source: "manual", status: "run-started", run_id: "r2", received_at: "2026-10-09T10:00:00.000Z", cv_text: "cv" },
+    ];
+    const detail = await getPosition(makeDb([position("p1")], runs, apps), "p1");
+    const [done, running] = detail?.candidates ?? [];
+    expect(done?.run).toEqual({ status: "done", subject: "Bo", step: null, pct: 100, fit_pct: 67, independent: 1, stalled: false });
+    expect(running?.run).toMatchObject({ status: "running", subject: "Ada King", step: "Web search", fit_pct: null, independent: 0, stalled: true });
+    expect(running?.run?.pct).toBeGreaterThan(0);
+    expect(running?.run?.pct).toBeLessThan(100);
+  });
+
   it("B6: getPosition of an unknown or implausible id returns null", async () => {
     const db = makeDb([position("p1")]);
     expect(await getPosition(db, "nope")).toBeNull();
@@ -156,7 +201,7 @@ describe("positions functions", () => {
 describe("route functions", () => {
   const authed = (body?: unknown, method = "POST") =>
     new Request("http://x/api/positions", { method, headers: { Authorization: "Bearer secret" }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
-  const env = (rows: Row[] = [], token: string | undefined = "secret"): PositionsEnv => ({ DB: makeDb(rows), SOURCES: {} as R2Bucket, RUN_TOKEN: token });
+  const env = (rows: Row[] = [], token: string | undefined = "secret"): PositionsEnv => ({ DB: makeDb(rows), SOURCES: {} as R2Bucket, RESEARCH_RUN: {} as Workflow<{ runId: string }>, RUN_BUDGET_USD: "0.5", RUN_BUDGET_CALLS: "16", RUN_TOKEN: token });
 
   it("B13: every route is 401 without the bearer and 503 when RUN_TOKEN is unset; successes are no-store", async () => {
     const bare = () => new Request("http://x/api/positions", { method: "POST", body: "{}" });
@@ -188,7 +233,7 @@ describe("route functions", () => {
     const GH = "https://boards.greenhouse.io/acme/jobs/12345";
     const rows = [position("existing", { board: "greenhouse:acme", external_id: "12345" })];
     const bucket = { put: () => Promise.resolve({}) } as unknown as R2Bucket;
-    const e: PositionsEnv = { DB: makeDb(rows), SOURCES: bucket, RUN_TOKEN: "secret" };
+    const e: PositionsEnv = { ...env(), DB: makeDb(rows), SOURCES: bucket };
     const llm = fakeLlm(() => ({ title: "Dev", family: "engineering", must_haves: [{ id: "mh-a", text: "A", accepted_evidence: [] }] }));
     const down = (() => Promise.resolve(new Response("down", { status: 503 }))) as unknown as typeof fetch;
 
@@ -204,6 +249,9 @@ describe("route functions", () => {
     const failed = await createPositionRoute(authed({ postingUrl: "https://boards.greenhouse.io/acme/jobs/999" }), e, { fetchFn: down });
     expect(failed.status).toBe(422);
     expect((await failed.json<{ error: string }>()).error).toContain("paste the posting text");
-    expect((await createPositionRoute(authed({ title: "only" }), e)).status).toBe(400);
+    expect((await createPositionRoute(authed({ company: "no title" }), e)).status).toBe(400);
+    const manual = await createPositionRoute(authed({ title: "Head of Sales", company: "Acme" }), e, { newId: () => "manual-id" });
+    expect(manual.status).toBe(201);
+    expect(rows.find((r) => r.id === "manual-id")).toMatchObject({ ingest_method: "manual", company: "Acme" });
   });
 });

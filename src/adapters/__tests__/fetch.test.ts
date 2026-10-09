@@ -7,7 +7,7 @@
  * Tested:  itself
  *
  * Key responsibilities:
- * - Token only for api.github.com, snippet in error, one retry on 429
+ * - Token only for api.github.com, snippet in error, one retry on 429 and 202
  *
  * Design constraints:
  * - No network; retry delay set to 0
@@ -84,6 +84,24 @@ describe("makeFetchJson", () => {
     const fn = stub(new Response("slow down", { status: 429 }), Response.json({ ok: 1 }));
     await expect(makeFetchJson({ retryDelayMs: 0 })("https://api.openalex.org/authors")).resolves.toEqual({ ok: 1 });
     expect(fn).toHaveBeenCalledTimes(2);
+  });
+
+  it("retries once on 202 and returns the second body", async () => {
+    const fn = stub(new Response("", { status: 202 }), Response.json([{ total: 3 }]));
+    await expect(makeFetchJson({ retryDelayMs: 0 })("https://api.github.com/repos/o/r/stats/contributors")).resolves.toEqual([{ total: 3 }]);
+    expect(fn).toHaveBeenCalledTimes(2);
+  });
+
+  it("returns null for an empty 202 body after the retry", async () => {
+    const fn = stub(new Response("", { status: 202 }), new Response("", { status: 202 }));
+    await expect(makeFetchJson({ retryDelayMs: 0 })("https://api.github.com/repos/o/r/stats/contributors")).resolves.toBeNull();
+    expect(fn).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not re-send a POST on 202", async () => {
+    const fn = stub(Response.json({ accepted: true }, { status: 202 }), Response.json({ nope: 1 }));
+    await expect(makeFetchJson({ retryDelayMs: 0 })("https://ares.gov.cz/x", { method: "POST", body: "{}" })).resolves.toEqual({ accepted: true });
+    expect(fn).toHaveBeenCalledTimes(1);
   });
 
   it("does not retry twice", async () => {

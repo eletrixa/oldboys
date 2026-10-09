@@ -3,8 +3,8 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/recipe/seams/extract.ts
- * Deps:    zod
- * Tested:  src/recipe/__tests__/seams.test.ts
+ * Deps:    zod, src/domain/cv-check
+ * Tested:  src/recipe/__tests__/seams.test.ts, src/recipe/__tests__/cv-consistency.test.ts (CV check)
  *
  * Key responsibilities:
  * - Feed only identity-merged sources (fetched for, or SERP hits on, a merged profile); never rejected profiles,
@@ -14,6 +14,10 @@
  * - Prompt: FACT text states only its quote (numbers kept, no hedges); no meta-claims about snippets, no ratings,
  *   nothing about unrelated content; claims describe the candidate (company-wide figures only when the quote ties them
  *   to the candidate's own responsibility or result); contradictions only for incompatible statements on the same measure, aliases excluded
+ * - Only when the run has the `cv-consistency` question (a CV source exists): the CV source is labelled as the
+ *   candidate's CV in the source list and CV_RULE asks for one claim per checkable CV statement (match = FACT quoted
+ *   from the public source; difference = INFERENCE "CV: … Public <platform>: …" citing both; at most 3 not-found
+ *   INFERENCEs citing only the CV); CV-vs-public differences never go to `contradictions`
  * - LLM failure returns an empty outcome with a note (never throws), so the run degrades instead of failing
  *
  * Design constraints:
@@ -22,6 +26,7 @@
  */
 import { z } from "zod";
 import { Claim } from "@/domain/claim";
+import { CV_QUESTION_ID, isCvSource } from "@/domain/cv-check";
 import type { Ports } from "@/domain/ports";
 import { emptyOutcome } from "@/recipe/runner";
 import { confirmedSources } from "@/recipe/seams/resolve";
@@ -41,6 +46,15 @@ const Extracted = z.array(
   }),
 );
 
+/** Extract rule for `cv-consistency`; added to the system prompt only on runs with a CV source. */
+export const CV_RULE = [
+  `For the \`${CV_QUESTION_ID}\` question: the source marked "candidate's CV" is supplied by the candidate, not public. Emit one claim per concrete CV statement (employer, role or job title with dates, named project or product, education) that a public source speaks to:`,
+  "(a) a public source confirms it: FACT whose quote is verbatim from the PUBLIC source (never from the CV), source_ids = [that public source, the CV source];",
+  "(b) a public source says something incompatible (different dates beyond rounding, a different title, a different employer for the same period): INFERENCE with text 'CV: <what the CV says>. Public <platform>: <what the source says>.' citing both sources (quote may be the public source's verbatim text);",
+  "(c) a specific, checkable CV statement (named project, employer, publication, repository) that no listed public source mentions: INFERENCE 'CV mentions <x>; no public source we checked mentions it' citing only the CV source, at most 3 of these.",
+  "Month vs year granularity, 'over N' vs N, rounded dates and names joined by '|', 'formerly', 'now', 'dříve', 'nyní' are not differences. Describe what each side says, never the person: no words like fake, lie, inflated, dishonest or suspicious. CV-vs-public differences belong to this question, never to `contradictions`.",
+].join(" ");
+
 export async function extractClaims(ctx: StepContext, ports: Ports): Promise<StepOutcome> {
   const out = emptyOutcome();
   // Only confirmed material reaches the model. A name + city SERP returns every namesake, so a SERP hit counts only
@@ -50,9 +64,11 @@ export async function extractClaims(ctx: StepContext, ports: Ports): Promise<Ste
     out.notes.push("no usable sources");
     return out;
   }
+  const cvCheck = ctx.questions.some((q) => q.id === CV_QUESTION_ID);
   let body = "";
   for (const s of sources) {
-    const line = `[${s.id}] ${s.url}\n${s.excerpt}\n\n`;
+    const label = cvCheck && isCvSource(s) ? " (candidate's CV, supplied by the candidate, not public)" : "";
+    const line = `[${s.id}] ${s.url}${label}\n${s.excerpt}\n\n`;
     if (body.length + line.length > PROMPT_CHARS) break;
     body += line;
   }
@@ -69,9 +85,13 @@ export async function extractClaims(ctx: StepContext, ports: Ports): Promise<Ste
           "Anything you conclude rather than read is an INFERENCE (quote may be null).",
           "Claims are about the subject, never about the sources: no claims that a snippet is truncated, unclear or ambiguous, and no ratings or judgements of the person (reputation, visibility, seniority level, quality).",
           "A claim must describe the candidate: a role they held, an action they took, a result they are credited with, or a statement they made. Company-wide figures (revenue, GMV, customers, cities, marketplace spend) only when the quote ties them to the candidate's own responsibility or result; otherwise skip them, never store them as a claim about the candidate.",
+          "For `employer-context`: describe the current employer itself (what it does, industry, size, headquarters) from its own page, naming the employer as the subject of the claim; never credit employer facts to the candidate.",
+          "For `social-presence`: which platforms and handles the confirmed profiles are on; what they post about and how often is an INFERENCE unless one quote states it. Never judge tone, popularity, influence or character.",
+          "For `writing`, `public-talks`, `press`, `education` and `community`: one claim per item (title, outlet, event or school, and the date when given), each with its quote.",
           "Ignore content you judge unrelated to the subject or misattributed: emit no claim about it at all.",
           "For the `contradictions` question: emit a claim only when two sources make incompatible statements about the same measure or fact (same metric, same period, same role). Different measures (marketplace spend vs media budget) or different granularity are not contradictions. 'over N', 'N+' and rounded or approximate figures that agree within the rounding (e.g. 'over 13 years' vs '15 years') are compatible, not contradictions: emit nothing. Names joined by '|', 'formerly', 'now', 'dříve', 'nyní' or appearing together in one title line are aliases of one organisation, not a contradiction.",
           "Never infer health, religion, politics, ethnicity or sexuality. No claims about questions that no source answers.",
+          ...(cvCheck ? [CV_RULE] : []),
         ].join("\n"),
       prompt: `Subject: ${ctx.subject}\nAnchor: ${ctx.anchor}\n\nQuestions:\n${ctx.questions.map((q) => `- ${q.id}: ${q.text}`).join("\n")}\n\nSources:\n${body}`,
       schema: Extracted,

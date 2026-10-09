@@ -14,12 +14,16 @@
  */
 import { aresSearch, aresVr } from "@/recipe/sources/ares";
 import { bluesky } from "@/recipe/sources/bluesky";
+import { facebookPage } from "@/recipe/sources/facebook";
 import { github } from "@/recipe/sources/github";
+import { githubApify } from "@/recipe/sources/github-apify";
+import { githubDeep } from "@/recipe/sources/github-deep";
 import { googleSearch } from "@/recipe/sources/google-search";
 import { huggingface } from "@/recipe/sources/huggingface";
 import { instagram } from "@/recipe/sources/instagram";
 import { linkedinProfile, linkedinProfileDetail } from "@/recipe/sources/linkedin";
 import { linkedinCompany } from "@/recipe/sources/linkedin-company";
+import { linkedinPosts } from "@/recipe/sources/linkedin-posts";
 import { openalex } from "@/recipe/sources/openalex";
 import { orcid } from "@/recipe/sources/orcid";
 import { stackexchange } from "@/recipe/sources/stackexchange";
@@ -34,6 +38,8 @@ const all: readonly Collector[] = [
   aresSearch,
   aresVr,
   github,
+  githubDeep,
+  githubApify,
   stackexchange,
   huggingface,
   orcid,
@@ -47,6 +53,8 @@ const all: readonly Collector[] = [
   linkedinProfile,
   linkedinProfileDetail,
   linkedinCompany,
+  linkedinPosts,
+  facebookPage,
 ];
 
 const byId = new Map(all.map((c) => [c.id, c]));

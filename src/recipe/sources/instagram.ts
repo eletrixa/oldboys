@@ -8,6 +8,7 @@
  *
  * Key responsibilities:
  * - Request profiles only for candidates with platform instagram and a handle (merge or possibly-same-as); one Source per profile
+ * - `digest`: merged profiles' ProfileFacts (followers, following, posts, verified, bio, photo)
  *
  * Design constraints:
  * - Pure: no fetch; the runner performs I/O. Empty `requests()` triggers the step's onEmpty branch
@@ -15,6 +16,8 @@
  */
 import { z } from "zod";
 import type { Candidate } from "@/domain/claim";
+import { clipBio, count, facts } from "@/domain/profile-facts";
+import { digestOf, parsedAll } from "@/recipe/sources/facts";
 import type { Collector } from "@/recipe/sources/types";
 import { clip, identityFor } from "@/recipe/sources/types";
 
@@ -27,6 +30,7 @@ const Profile = z.object({
   postsCount: z.number().nullish(),
   verified: z.boolean().nullish(),
   externalUrl: z.string().nullish(),
+  profilePicUrl: z.string().nullish(),
   latestPosts: z.array(z.object({ caption: z.string().nullish() })).nullish(),
 });
 
@@ -70,4 +74,22 @@ export const instagram: Collector = {
       return { url, excerpt: clip(lines.join("\n")), raw: p, identity: identityFor(ctx, url) };
     });
   },
+  digest: (fetched, ctx) =>
+    digestOf(
+      parsedAll(z.array(Profile), fetched)
+        .flat()
+        .filter((p) => identityFor(ctx, `https://www.instagram.com/${p.username}/`) === "merged")
+        .map((p) =>
+          facts("instagram", `https://www.instagram.com/${p.username}/`, {
+            handle: p.username,
+            display_name: p.fullName ?? null,
+            bio: clipBio(p.biography),
+            followers: count(p.followersCount),
+            following: count(p.followsCount),
+            posts: count(p.postsCount),
+            verified: p.verified ?? null,
+            photo_url: p.profilePicUrl ?? null,
+          }),
+        ),
+    ),
 };

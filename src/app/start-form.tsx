@@ -3,15 +3,17 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/start-form.tsx
- * Deps:    react, next/navigation, ./ui (Radar tokens), ./start-body, ./start-position, src/app/_lib/form-text
+ * Deps:    react, next/navigation, ./ui (Radar tokens), ./start-body, ./start-position, ./profile-picker, ./role-picker, src/app/_lib/form-text
  * Tested:  n/a (body builder: src/app/__tests__/start-body.test.ts)
  *
  * Key responsibilities:
  * - Submit {goal: "hiring", role, profileUrl?, cvText?} (plans/006); on 201 route to /runs/<id>
+ * - The profile comes from ProfilePicker (plans/011): a pasted URL or a picked public-profile suggestion, via the hidden profileUrl input
  * - With `?positionId=<id>` (specs/positions-pages): show the position's title and must-haves read-only, hide the role
  *   field and send positionId instead of role; an unknown id shows an inline note and the normal form
  * - Client check: one of profile URL or CV; the server normalises and validates the URL
  * - initialRole / autoFocusRole prefill and focus the role field; 401 shows a log-in link
+ * - Role field is the RolePicker over `roleOptions` (catalog titles, families, aliases from the server page); free text still allowed
  * - Inline humane error on 4xx/5xx or network failure
  *
  * Design constraints:
@@ -23,54 +25,22 @@
 "use client";
 
 import Link from "next/link";
+import { trackRun } from "@/app/_components/run-tray-store";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { formText } from "@/app/_lib/form-text";
 import { buildStartBody, positionIdParam } from "./start-body";
+import { ProfilePicker } from "./profile-picker";
 import { PositionBanner, usePositionSummary } from "./start-position";
+import { RolePicker } from "./role-picker";
+import type { RoleOption } from "@/domain/role-catalog";
 import { BTN_PRIMARY, CARD_PEACH, CARD_SAGE, Chevron, FIELD, LINK, SUMMARY } from "./ui";
 
 const CV_MAX = 20_000;
 
-type FieldProps = {
-  name: string;
-  label: string;
-  helper?: string;
-  type?: "text" | "url";
-  placeholder?: string;
-  required?: boolean;
-  defaultValue?: string;
-  autoFocus?: boolean;
-  invalid?: boolean;
-};
+type StartFormProps = { initialRole?: string; autoFocusRole?: boolean; roleOptions?: readonly RoleOption[] };
 
-function Field({ name, label, helper, type = "text", placeholder, required = false, defaultValue, autoFocus = false, invalid = false }: FieldProps): React.JSX.Element {
-  return (
-    <div className="flex flex-col gap-1.5">
-      <label htmlFor={name} className="text-sm font-semibold">{label}</label>
-      {/* type="text" with a url keyboard: the browser would reject "linkedin.com/in/..." without https, the server accepts it */}
-      <input
-        id={name}
-        name={name}
-        type="text"
-        inputMode={type === "url" ? "url" : "text"}
-        required={required}
-        maxLength={type === "url" ? 500 : 300}
-        placeholder={placeholder}
-        defaultValue={defaultValue}
-        autoFocus={autoFocus}
-        aria-describedby={helper === undefined ? undefined : `${name}-help`}
-        aria-invalid={invalid || undefined}
-        className={FIELD}
-      />
-      {helper !== undefined && <span id={`${name}-help`} className="text-xs text-muted">{helper}</span>}
-    </div>
-  );
-}
-
-type StartFormProps = { initialRole?: string; autoFocusRole?: boolean };
-
-function StartFormInner({ initialRole, autoFocusRole = false }: StartFormProps): React.JSX.Element {
+function StartFormInner({ initialRole, autoFocusRole = false, roleOptions = [] }: StartFormProps): React.JSX.Element {
   const router = useRouter();
   const position = usePositionSummary(positionIdParam(useSearchParams()));
   const positionId = position.status === "ready" ? position.summary.id : null;
@@ -98,6 +68,7 @@ function StartFormInner({ initialRole, autoFocusRole = false }: StartFormProps):
       });
       if (res.status === 201) {
         const { id } = await res.json<{ id: string }>();
+        trackRun(id);
         router.push(`/runs/${id}`);
         return;
       }
@@ -138,14 +109,7 @@ function StartFormInner({ initialRole, autoFocusRole = false }: StartFormProps):
           We could not load that position, so you can name the role yourself.
         </p>
       )}
-      <Field
-        name="profileUrl"
-        type="url"
-        invalid={error?.includes("LinkedIn") === true}
-        label="Candidate's LinkedIn profile"
-        placeholder="https://www.linkedin.com/in/..."
-        helper="We read their name, location and employer from it, so we know exactly who they are."
-      />
+      <ProfilePicker invalid={error?.includes("LinkedIn") === true} />
       <details className="group border-t border-divider pt-2">
         <summary className={SUMMARY}><Chevron />Or paste their CV instead</summary>
         <textarea
@@ -157,7 +121,7 @@ function StartFormInner({ initialRole, autoFocusRole = false }: StartFormProps):
         />
       </details>
       {positionId === null && position.status !== "loading" && (
-        <Field name="role" label="Role you are hiring for" required defaultValue={initialRole} autoFocus={autoFocusRole} helper="The brief focuses on what matters for this role." />
+        <RolePicker options={roleOptions} defaultValue={initialRole} autoFocus={autoFocusRole} />
       )}
       <p className={`${CARD_SAGE} text-sm text-ink`}>
         <strong>Privacy:</strong> Public information only. We never look at private accounts, and we do not judge

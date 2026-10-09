@@ -9,14 +9,15 @@
  * Key responsibilities:
  * - Question selection, ordering, cap, dedupe, step-keyed gaps and Art. 9 filtering
  * - Script content per goal and language handling
- * - Brief-driven order (must-haves without evidence, partial, to verify, then gaps), first message, agent prompt
+ * - Brief-driven order (must-haves without evidence, partial, to verify, then gaps) and natural spoken wording
+ * - Short first message (AI disclosure, purpose, recording, consent, length cap), skip/stop in the agent prompt
  * - Operator-edited questions: ids, limits and the Art. 9 error
  *
  * Design constraints:
  * - Fixtures stay inline
  */
 import { describe, expect, it } from "vitest";
-import { briefFromHrQuestions, buildCallBrief, composeCallBrief, MAX_CALL_QUESTIONS } from "@/domain/call-brief";
+import { briefFromHrQuestions, buildCallBrief, composeCallBrief, FIRST_MESSAGE_MAX, MAX_CALL_QUESTIONS } from "@/domain/call-brief";
 import { CallBrief } from "@/domain/call";
 import { Brief, type Claim, type Gap } from "@/domain/claim";
 import type { Question } from "@/recipe/step";
@@ -68,6 +69,44 @@ describe("buildCallBrief", () => {
         expected: "",
       },
     ]);
+  });
+
+  it("never reads a failed request (URL, e-mail, HTTP code) to the candidate", () => {
+    const reason =
+      "not searched: request failed: https://api.openalex.org/authors?search=Jan%20Novak&per-page=5&mailto=someone@example.org: HTTP 429 Too Many Requests";
+    const b = buildCallBrief({ ...base, gaps: [{ run_id: "r1", question_id: "openalex_author", reason }] });
+    expect(b.questions).toEqual([]);
+    const out = [b.script, b.first_message, b.agent_prompt, ...b.questions.map((q) => q.text)].join("\n");
+    for (const leak of ["http", "mailto", "@", "request failed", "HTTP 429"]) expect(out).not.toContain(leak);
+  });
+
+  it("skips budget, fallback and namesake-only gaps and keeps a plain nothing-found gap", () => {
+    const stepGap = (question_id: string, reason: string): Gap => ({ run_id: "r1", question_id, reason });
+    const b = buildCallBrief({
+      ...base,
+      gaps: [
+        stepGap("x_profile", "not searched: run budget reached"),
+        stepGap("serp_person", "fallback social_serp also empty"),
+        stepGap("linkedin_profile", "no usable fallback"),
+        stepGap("orcid_search", "hits found, none confirmed (same name, identity not verified)"),
+        stepGap("github_profile", "  no public GitHub profile found"),
+      ],
+    });
+    expect(b.questions.map((q) => q.question_id)).toEqual(["github_profile"]);
+    expect(b.agent_prompt).not.toContain("budget");
+    expect(b.agent_prompt).not.toContain("fallback");
+    expect(b.agent_prompt).not.toContain("none confirmed");
+  });
+
+  it("scrubs a kept step-gap reason down to the host", () => {
+    const b = buildCallBrief({
+      ...base,
+      gaps: [{ run_id: "r1", question_id: "personal_site_crawl", reason: "no personal site found at https://jane.example.com/about?ref=cv" }],
+    });
+    expect(b.questions).toHaveLength(1);
+    expect(b.questions[0]?.text).toBe(
+      "Our public research found nothing here: no personal site found at jane.example.com. Can you confirm that, or tell me what we missed?",
+    );
   });
 
   it("includes low-confidence and contradicted claims, excludes confident ones", () => {
@@ -182,15 +221,48 @@ describe("buildCallBrief with a brief", () => {
     expect(b.questions.map((q) => q.question_id)).toEqual(["mh-1", "mh-2", "tv-1", "c"]);
     expect(b.questions[0]).toEqual({
       question_id: "mh-1",
-      text: "Can you tell me about your experience with Go backend? We could not find public evidence for it.",
+      text: "Do you have Go backend experience?",
       expected: "",
       why: "No public evidence: Go backend",
     });
     expect(b.questions[1]).toMatchObject({
-      text: "Can you tell me more about Kubernetes? We found only partial public evidence.",
+      text: "Can you tell me a bit more about your Kubernetes?",
       why: "Partial evidence: Kubernetes",
     });
-    expect(b.questions[2]).toMatchObject({ text: "Our research suggests: Led a team of five at Acme. Is that correct?", why: "To verify" });
+    expect(b.questions[2]).toMatchObject({
+      text: "We read that you led a team of five at Acme. Is that right?",
+      expected: "Led a team of five at Acme",
+      why: "To verify",
+    });
+  });
+
+  it("proposes the live-call must-have and to-verify item as natural questions", () => {
+    const b = buildCallBrief({
+      ...base,
+      subject: "Robert Vojacek",
+      role: "Cleaner",
+      questions: [...questions, { id: "mh-prior-cleaning", text: "Has prior cleaning work at a named employer (job history, profile)", title: "Prior cleaning experience" }],
+      brief: runBrief({
+        per_question: [{ question_id: "mh-prior-cleaning", coverage: "none", claim_ids: [], summary: "" }],
+        to_verify: [
+          "A former Revolt.BI team member thanked Robert Vojacek for the opportunity at Revolt.BI, consistent with him having a leadership/hiring role there.",
+        ],
+      }),
+    });
+    expect(b.questions.map((q) => q.text)).toEqual([
+      "Can you tell me about your prior cleaning experience?",
+      "We read that a former Revolt.BI team member thanked you for the opportunity at Revolt.BI. Is that right?",
+    ]);
+    expect(b.questions[0]?.why).toBe("No public evidence: Prior cleaning experience");
+    for (const q of b.questions) {
+      expect(q.text).not.toContain("We could not find public evidence");
+      expect(q.text).not.toContain("Our research suggests");
+    }
+  });
+
+  it("keeps names as names on a due-diligence call", () => {
+    const b = buildCallBrief({ ...withBrief, goal: "due-diligence", subject: "Acme", brief: runBrief({ per_question: [], to_verify: ["Acme was founded in 2015."] }) });
+    expect(b.questions.map((q) => q.text)).toEqual(["We read that Acme was founded in 2015. Is that right?"]);
   });
 
   it("never asks about base questions through coverage, only must-haves", () => {
@@ -227,20 +299,52 @@ describe("composeCallBrief", () => {
     expect(hiring.identity_question).toBe("Am I speaking with Jane Doe?");
   });
 
-  it("opens with AI disclosure, purpose, recording, skip/stop and the consent question", () => {
+  it("opens briefly with AI disclosure, purpose and role, recording and the consent question", () => {
     const m = hiring.first_message ?? "";
-    expect(m).toContain("automated AI assistant");
-    expect(m).toContain("the hiring team for the Senior Go engineer role");
-    expect(m).toContain("recorded and transcribed");
-    expect(m).toContain("skip any question or stop at any time");
-    expect(m).toMatch(/do you agree to continue\?$/);
+    expect(m).toBe(
+      "Hi, this is an AI assistant calling for the hiring team about the Senior Go engineer role. This call is recorded. Do you have three minutes for a few questions?",
+    );
+    expect(m).toContain("AI assistant");
+    expect(m).toContain("hiring team about the Senior Go engineer role");
+    expect(m).toContain("This call is recorded.");
+    expect(m).toMatch(/Do you have three minutes for a few questions\?$/);
+    expect(m.length).toBeLessThanOrEqual(FIRST_MESSAGE_MAX);
+    expect(FIRST_MESSAGE_MAX).toBeLessThanOrEqual(220);
   });
 
-  it("names a hiring team without a role, and a due-diligence purpose for that goal", () => {
-    expect(composeCallBrief({ goal: "hiring", subject: "Jane Doe", role: null, questions: qs }).first_message).toContain("on behalf of a hiring team.");
+  it("names the hiring purpose without a role, and a due-diligence purpose for that goal", () => {
+    expect(composeCallBrief({ goal: "hiring", subject: "Jane Doe", role: null, questions: qs }).first_message).toContain(
+      "calling for the hiring team about a role you applied for.",
+    );
     const dd = composeCallBrief({ goal: "due-diligence", subject: "Acme s.r.o.", role: "ignored", questions: qs });
-    expect(dd.first_message).toContain("public facts about Acme s.r.o. for a due-diligence check");
+    expect(dd.first_message).toBe(
+      "Hi, this is an AI assistant calling for a researcher to confirm a few public facts about Acme s.r.o. This call is recorded. Do you have three minutes for a few questions?",
+    );
     expect(dd.first_message).not.toContain("ignored");
+  });
+
+  it("keeps the first message under the cap with a long role or subject", () => {
+    const long = "Principal Distributed Systems and Platform Reliability Engineering Manager for Payments";
+    const h = composeCallBrief({ goal: "hiring", subject: "Jane Doe", role: `${long}, Prague, hybrid`, questions: qs }).first_message ?? "";
+    const dd = composeCallBrief({ goal: "due-diligence", subject: long, role: null, questions: qs }).first_message ?? "";
+    for (const m of [h, dd]) {
+      expect(m.length).toBeLessThanOrEqual(FIRST_MESSAGE_MAX);
+      expect(m).toContain("This call is recorded.");
+      expect(m).toMatch(/\?$/);
+    }
+    expect(h).not.toContain("Prague");
+  });
+
+  it("says the skip/stop sentence right after consent, before the identity question", () => {
+    const p = hiring.agent_prompt ?? "";
+    const consent = p.indexOf("1. Wait for the answer to your first message.");
+    const skip = p.indexOf('"You can skip any question or stop at any time."');
+    const identity = p.indexOf(`2. Ask: "${hiring.identity_question}"`);
+    expect(consent).toBeGreaterThan(-1);
+    expect(skip).toBeGreaterThan(consent);
+    expect(identity).toBeGreaterThan(skip);
+    expect(p).toContain("If they agree, say in one short sentence");
+    expect(hiring.first_message).not.toContain("skip");
   });
 
   it("puts every question in order, end_call and the no-evaluation rule into the agent prompt", () => {

@@ -8,18 +8,32 @@
  *
  * Key responsibilities:
  * - Search actors by subject name; one Source per actor
+ * - `digest`: merged actors' ProfileFacts (followers, following, posts, created_at, bio, avatar)
  *
  * Design constraints:
  * - Pure: no fetch; the runner performs I/O. Empty `requests()` triggers the step's onEmpty branch
  * - Excerpts go through clip(); malformed payloads parse to []
  */
 import { z } from "zod";
+import { clipBio, count, facts } from "@/domain/profile-facts";
+import { digestOf, parsedAll } from "@/recipe/sources/facts";
 import type { Collector } from "@/recipe/sources/types";
 import { clip, identityFor } from "@/recipe/sources/types";
 
 const Result = z.object({
   actors: z
-    .array(z.object({ handle: z.string(), displayName: z.string().nullish(), description: z.string().nullish() }))
+    .array(
+      z.object({
+        handle: z.string(),
+        displayName: z.string().nullish(),
+        description: z.string().nullish(),
+        followersCount: z.number().nullish(),
+        followsCount: z.number().nullish(),
+        postsCount: z.number().nullish(),
+        createdAt: z.string().nullish(),
+        avatar: z.string().nullish(),
+      }),
+    )
     .default([]),
 });
 
@@ -47,4 +61,22 @@ export const bluesky: Collector = {
       raw: a,
     }));
   },
+  digest: (fetched, ctx) =>
+    digestOf(
+      parsedAll(Result, fetched)
+        .flatMap((r) => r.actors)
+        .filter((a) => identityFor(ctx, `https://bsky.app/profile/${a.handle}`) === "merged")
+        .map((a) =>
+          facts("bluesky", `https://bsky.app/profile/${a.handle}`, {
+            handle: a.handle,
+            display_name: a.displayName ?? null,
+            bio: clipBio(a.description),
+            created_at: a.createdAt ?? null,
+            followers: count(a.followersCount),
+            following: count(a.followsCount),
+            posts: count(a.postsCount),
+            photo_url: a.avatar ?? null,
+          }),
+        ),
+    ),
 };

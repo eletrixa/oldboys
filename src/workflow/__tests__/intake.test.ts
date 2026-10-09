@@ -7,6 +7,8 @@
  * Tested:  n/a (this is the test file)
  *
  * Key responsibilities:
+ * - Plans/010: a tag bound to a position and a manual add land as 'pooled' with position_id and start no run;
+ *   a duplicate manual add returns the first row; a manual add for an unknown position is unmatched
  * - Cover specs/intake/funnel.md: happy path, CV-only PDF, duplicate (a resend with other details noted) and insert
  *   race, a connector's cvNote (no second parse), unknown tag, sender not
  *   allowed (no CV file stored for either), incomplete, capped (the capped retry and the cron's queue pass), a
@@ -175,6 +177,19 @@ describe("ingestApplication", () => {
     expect(apps.get(first.applicationId)).toMatchObject({ status: "run-started", run_id: retried.runId, note: retried.note });
   });
 
+  it("a capped application pools on the next delivery once its tag is bound to a position", async () => {
+    const opts: Parameters<typeof makeEnv>[0] = { intakeRunsLastHour: 10 };
+    const { env, apps, create } = makeEnv(opts);
+    const first = await ingestApplication({ ...base, linkedinUrl: PROFILE }, env, NOW);
+    expect(first.status).toBe("capped");
+
+    opts.tags = { "senior-be": { role: "Senior backend engineer", goal: "hiring", position_id: "pos-1" } };
+    const retried = await ingestApplication({ ...base, linkedinUrl: PROFILE }, env, NOW);
+    expect(retried).toMatchObject({ applicationId: first.applicationId, status: "pooled", runId: null, duplicate: true, note: null });
+    expect(apps.get(first.applicationId)).toMatchObject({ status: "pooled", run_id: null, position_id: "pos-1", note: null });
+    expect(create).not.toHaveBeenCalled();
+  });
+
   it("a capped retry keeps the stored parser and subject notes and only drops the cap note", async () => {
     const opts = { intakeRunsLastHour: 10 };
     const { env, apps } = makeEnv(opts);
@@ -328,6 +343,69 @@ describe("ingestApplication", () => {
     expect(puts).toHaveLength(0);
     expect(apps.get(unknown.applicationId)).toMatchObject({ cv_key: null, cv_text: "Kubernetes" });
     expect(apps.get(denied.applicationId)).toMatchObject({ cv_key: null });
+  });
+
+  it("a tag bound to a position pools the application: no run, position_id written, CV file kept", async () => {
+    const { env, apps, investigations, create, puts, countArgs } = makeEnv({
+      tags: { "senior-be": { role: "Senior backend engineer", goal: "hiring", position_id: "pos-1" } },
+    });
+    const cv = { bytes: tinyPdf("Kubernetes"), filename: "cv.pdf", contentType: "application/pdf" };
+    const res = await ingestApplication({ ...base, cv }, env, NOW);
+    expect(res).toMatchObject({ status: "pooled", runId: null, duplicate: false, note: null });
+    expect(apps.get(res.applicationId)).toMatchObject({ status: "pooled", run_id: null, position_id: "pos-1", cv_text: "Kubernetes" });
+    expect(puts.map((p) => p.key)).toEqual([`intake/${res.applicationId}/cv.pdf`]);
+    expect(create).not.toHaveBeenCalled();
+    expect(investigations).toHaveLength(0);
+    expect(countArgs).toHaveLength(0);
+  });
+
+  it("a position-bound tag with an incomplete application is still incomplete, not pooled", async () => {
+    const { env } = makeEnv({ tags: { "senior-be": { role: "x", goal: "hiring", position_id: "pos-1" } } });
+    expect((await ingestApplication(base, env, NOW)).status).toBe("incomplete");
+  });
+
+  it("a tag without a position keeps auto-starting and writes a NULL position_id", async () => {
+    const { env, apps, create } = makeEnv();
+    const res = await ingestApplication({ ...base, linkedinUrl: PROFILE }, env, NOW);
+    expect(res.status).toBe("run-started");
+    expect(apps.get(res.applicationId)).toMatchObject({ position_id: null });
+    expect(create).toHaveBeenCalledOnce();
+  });
+
+  it("a manual add pools under its position and starts no run", async () => {
+    const { env, apps, create } = makeEnv({ positions: { "pos-1": "Senior backend engineer" } });
+    const res = await ingestApplication(
+      { source: "manual", externalId: "stable-1", positionId: "pos-1", name: "Eva", linkedinUrl: PROFILE },
+      env,
+      NOW,
+    );
+    expect(res).toMatchObject({ status: "pooled", runId: null, duplicate: false, note: null });
+    expect(apps.get(res.applicationId)).toMatchObject({ source: "manual", status: "pooled", position_id: "pos-1", linkedin_url: PROFILE });
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it("a duplicate manual add returns the first row as a duplicate and adds no second row", async () => {
+    const { env, apps } = makeEnv({ positions: { "pos-1": "Senior backend engineer" } });
+    const input = { source: "manual", externalId: "stable-1", positionId: "pos-1", linkedinUrl: PROFILE } as const;
+    const first = await ingestApplication(input, env, NOW);
+    const again = await ingestApplication(input, env, NOW);
+    expect(again).toEqual({ ...first, duplicate: true });
+    expect(apps.size).toBe(1);
+  });
+
+  it("a manual add for an unknown position is unmatched", async () => {
+    const { env, apps } = makeEnv();
+    const res = await ingestApplication({ source: "manual", externalId: "s", positionId: "nope", linkedinUrl: PROFILE }, env, NOW);
+    expect(res).toMatchObject({ status: "unmatched", runId: null, note: "unknown position" });
+    expect(apps.get(res.applicationId)).toMatchObject({ position_id: null });
+  });
+
+  it("a manual add without a positionId is unmatched", async () => {
+    const { env } = makeEnv();
+    const result = await ingestApplication({ source: "manual", externalId: "s", linkedinUrl: PROFILE }, env, NOW);
+    expect(result.status).toBe("unmatched");
+    expect(result.note).toContain("unknown position");
+    expect(result.runId).toBeNull();
   });
 
   it("rejects invalid input before touching D1", async () => {
