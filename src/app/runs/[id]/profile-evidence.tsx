@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/runs/[id]/profile-evidence.tsx
- * Deps:    react, src/domain/claim (types), ../../ui (Radar primitives), ./evidence-line
+ * Deps:    react, src/domain/claim (types), src/app/_lib/plural, ../../ui (Radar primitives), ./evidence-line
  * Tested:  src/app/runs/[id]/__tests__/profile-sections.test.ts
  *
  * Key responsibilities:
@@ -11,15 +11,14 @@
  *   all self-reported · k weakens; the open list puts weakening lines first
  * - Item rows (an item with no kept quote says so), capped lists with "Show N more", section head, dropped-line note
  */
+import { plural } from "@/app/_lib/plural";
 import type { ProfileEvidence, ProfileItem } from "@/domain/claim";
 import { Chevron, Eyebrow, SUMMARY, SUMMARY_COMPACT } from "../../ui";
 import { type Ctx, directionOf, EvidenceLine, MEASURE, NOTE, NoQuote, weakensFirst } from "./evidence-line";
 
 export const INTRO = `mt-2 ${MEASURE} text-sm text-muted`;
-export const H2 = "mt-1 scroll-mt-6 font-serif text-xl";
+const H2 = "mt-1 scroll-mt-6 font-serif text-xl";
 export const FIGURE = "font-serif text-xl leading-tight text-ink tabular-nums";
-
-export const plural = (n: number, one: string, many = `${one}s`): string => `${String(n)} ${n === 1 ? one : many}`;
 
 export function Dropped({ n }: { n: number }): React.JSX.Element | null {
   return n > 0 ? <p className={`mt-2 ${NOTE}`}>{plural(n, "line")} dropped by the quote check</p> : null;

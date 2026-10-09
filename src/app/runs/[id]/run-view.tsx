@@ -84,7 +84,6 @@ export function RunView({ id }: { id: string }): React.JSX.Element {
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | undefined;
     let stopped = false;
-    let tracked = false;
     async function tick(): Promise<void> {
       let next = true;
       try {
@@ -95,10 +94,7 @@ export function RunView({ id }: { id: string }): React.JSX.Element {
         } else if (res.ok) {
           const s = await res.json<RunState>();
           setState(s);
-          if (!tracked && s.status !== "done" && s.status !== "failed") {
-            tracked = true;
-            trackRun(id);
-          }
+          if (s.status !== "done" && s.status !== "failed") trackRun(id);
           setPolledAt(Date.now());
           next = s.status !== "done" && s.status !== "failed";
         }

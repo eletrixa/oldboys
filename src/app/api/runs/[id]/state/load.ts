@@ -151,7 +151,7 @@ export async function loadRunState(db: D1Database, id: string): Promise<RunState
     position: head.position_id !== null && head.position_title !== null ? { id: head.position_id, title: head.position_title } : null,
     organization_name: head.organization_name,
     created_at: head.created_at,
-    last_at: ledger.results.reduce((max, row) => (row.ts > max ? row.ts : max), head.created_at),
+    last_at: ledger.results.at(-1)?.ts ?? head.created_at,
     status: head.status,
     step: last?.step ?? null,
     mentions: sources.results.length,

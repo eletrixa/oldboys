@@ -15,10 +15,7 @@ import type { PositionFit } from "@/domain/claim";
 import { CARD, Chevron, Pill, SUMMARY_COMPACT, type Tone } from "../../ui";
 import { type Ctx, MEASURE, NOTE } from "./evidence-line";
 import { Dropped, EvidenceList, FIGURE, Head, INTRO } from "./profile-evidence";
-
 import { fitPct } from "./scorecard";
-
-export { fitPct };
 
 const STATUS: Record<"has" | "partial" | "none", { text: string; tone: Tone }> = {
   has: { text: "Has", tone: "ok" },
@@ -26,7 +23,7 @@ const STATUS: Record<"has" | "partial" | "none", { text: string; tone: Tone }> =
   none: { text: "No evidence", tone: "neutral" },
 };
 
-export const evidenced = (f: PositionFit): string =>
+const evidenced = (f: PositionFit): string =>
   `${String(f.traits.filter((t) => t.status === "has").length)} of ${String(f.traits.length)} must-haves evidenced`;
 
 /** Thin neutral bar; never a colour scale. */

@@ -26,7 +26,7 @@ import { AuthStates } from "@/app/_components/auth-states";
 import { RoleTable } from "@/app/_components/role-table";
 import { useAuthedJson } from "@/app/_components/use-authed-json";
 import type { PositionDetail } from "@/app/api/positions/handler";
-import { BTN_PRIMARY, CARD_PEACH, Eyebrow, LINK, Pill } from "@/app/ui";
+import { BTN_PRIMARY, CARD_PEACH, Eyebrow, LINK, LINK_TARGET, Pill } from "@/app/ui";
 import { ingestLabel } from "@/domain/position-links";
 import { CandidatePool } from "./candidate-pool";
 import { IntakeChannels } from "./intake-channels";
@@ -67,7 +67,7 @@ function Body({ detail, onChange }: { detail: PositionDetail; onChange: (d: Posi
         </div>
       </header>
       <nav aria-label="On this page" className="flex flex-wrap gap-x-5 gap-y-2 text-sm">
-        {SECTIONS.map(([id, label]) => <a key={id} href={`#${id}`} className={`${LINK} inline-flex min-h-11 items-center`}>{label}</a>)}
+        {SECTIONS.map(([id, label]) => <a key={id} href={`#${id}`} className={LINK_TARGET}>{label}</a>)}
       </nav>
       <PositionBasics position={position} onSaved={saved} />
       {position.extraction === "fallback" && (

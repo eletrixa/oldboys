@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/briefs/load.ts
- * Deps:    D1 (type only)
+ * Deps:    D1 (type only), src/app/runs/[id]/evidence (day)
  * Tested:  src/app/briefs/__tests__/load.test.ts (groupByPosition, statusOf, relativeTime)
  *
  * Key responsibilities:
@@ -17,6 +17,7 @@
  * - Reads only; never returns another organization's rows
  * - Fit is the evidence share of the position's must-haves; rows are never sorted by it
  */
+import { day as dayLabel } from "@/app/runs/[id]/evidence";
 import { isStalled } from "@/domain/run-status";
 
 export type BriefRow = {
@@ -36,8 +37,8 @@ export async function listOrganizationRuns(db: D1Database, organizationId: strin
   const { results } = await db
     .prepare(
       `SELECT i.id, i.subject, i.role, i.status, i.created_at, a.name AS started_by, p.id AS position_id, p.title AS position_title,
-              json_extract(b.brief_json, '$.profile.position_fit[0].fit_pct') AS fit_pct,
-              COALESCE((SELECT MAX(l.ts) FROM ledger_entries l WHERE l.run_id = i.id), i.created_at) AS last_at
+              CASE WHEN i.status = 'done' THEN json_extract(b.brief_json, '$.profile.position_fit[0].fit_pct') END AS fit_pct,
+              CASE WHEN i.status IN ('running','queued') THEN COALESCE((SELECT MAX(l.ts) FROM ledger_entries l WHERE l.run_id = i.id), i.created_at) ELSE i.created_at END AS last_at
        FROM investigations i
        LEFT JOIN accounts a ON a.id = i.account_id
        LEFT JOIN positions p ON p.id = i.position_id
@@ -71,8 +72,6 @@ export function statusOf(status: string, lastAt?: string, nowIso = new Date().to
   return { label: "Researching", tone: "unsure" };
 }
 
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-
 /** Short relative label for a timestamp (UTC calendar days); "" when either input is not a date. */
 export function relativeTime(iso: string, nowIso = new Date().toISOString()): string {
   const then = new Date(iso);
@@ -85,5 +84,5 @@ export function relativeTime(iso: string, nowIso = new Date().toISOString()): st
   if (minutes < 24 * 60) return `${String(Math.floor(minutes / 60))} h ago`;
   const day = (d: Date): number => Math.floor(d.getTime() / 86_400_000);
   if (day(now) - day(then) === 1) return "yesterday";
-  return `${String(then.getUTCDate())} ${MONTHS[then.getUTCMonth()] ?? ""} ${String(then.getUTCFullYear())}`;
+  return dayLabel(then);
 }

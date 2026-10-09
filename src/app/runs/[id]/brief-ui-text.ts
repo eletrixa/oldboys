@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/runs/[id]/brief-ui-text.ts
- * Deps:    src/domain/call (type), ./brief-layout (types)
+ * Deps:    src/domain/call (type), src/app/_lib/plural, ./brief-layout (types)
  * Tested:  src/app/runs/[id]/__tests__/i18n.test.ts (both languages have the same keys, no verdict words)
  *
  * Key responsibilities:
@@ -13,6 +13,7 @@
  * Design constraints:
  * - Pure data; the phone panel and the kit sidebar stay English (lang="en") like before
  */
+import { plural } from "@/app/_lib/plural";
 import type { CallAnswerStatus } from "@/domain/call";
 import type { GapGroup, HiringStep } from "./brief-layout";
 
@@ -95,8 +96,6 @@ export type BriefUi = {
   gapsIntro: string;
   gapGroup: Record<GapGroup, string>;
 };
-
-const plural = (n: number, one: string, many: string): string => `${String(n)} ${n === 1 ? one : many}`;
 
 export const UI_EN: BriefUi = {
   eyebrow: "Candidate brief",

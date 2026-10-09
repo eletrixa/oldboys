@@ -72,7 +72,7 @@ function Items(props: { id: string; eyebrow: string; title: string; intro: strin
 }
 
 /** The degraded line in plain words; the model's own error text stays in the ledger notes, never on the brief. */
-export function profileDegradedText(reason: string): string {
+function profileDegradedText(reason: string): string {
   return reason === "no verified claims"
     ? "Profile not built: no verified claims to build it from."
     : "Profile not built: the AI step that writes it failed on this run. The evidence and questions above are not affected.";
@@ -93,11 +93,10 @@ export function ProfileSections({ profile, evidence, role = null }: { profile: P
     ask: profile.questions.length > 0,
     sources: ctx.cite.size > 0,
   };
-  const present = new Set(Object.entries(show).flatMap(([k, v]) => (v ? [k] : [])));
   // `profile` scopes the motion and print rules in globals.css; 24px between sections on phones, 32px from md up.
   return (
     <div className="profile flex flex-col gap-6 md:gap-8">
-      <SummaryBox profile={profile} fits={fits} all={all} ctx={ctx} present={present} />
+      <SummaryBox profile={profile} fits={fits} all={all} ctx={ctx} show={show} />
       {(show.achievements || show.risks) && (
         <div className="grid gap-6 md:grid-cols-2 md:gap-8">
           {show.achievements && (

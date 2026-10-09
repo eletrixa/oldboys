@@ -23,10 +23,10 @@ import { trackRun } from "@/app/_components/run-tray-store";
 import { authFetch, postJson, readToken } from "@/app/_components/token";
 import type { PositionDetail } from "@/app/api/positions/handler";
 import { enrichSummary, type EnrichResponse } from "@/app/positions/pool-rows";
-import { BTN_PRIMARY, Eyebrow, TILE } from "@/app/ui";
+import { BTN_PRIMARY, Eyebrow, type Notice, NoticeLine, TILE } from "@/app/ui";
 import type { PositionListItem } from "@/domain/position";
 import type { RoleOption } from "@/domain/role-catalog";
-import { candidateBody, type DraftRow, emptyRow, enrichIds, failText, nextAfterStart, type Notice, patchRow, researchCount, rowReady } from "./brief-rows";
+import { candidateBody, type DraftRow, emptyRow, enrichIds, failText, nextAfterStart, patchRow, researchCount, rowReady } from "./brief-rows";
 import { CandidatesStep } from "./candidates-step";
 import { PositionStep } from "./position-step";
 
@@ -48,12 +48,6 @@ async function addRow(positionId: string, row: DraftRow): Promise<string | numbe
   if (!res.ok) return res.status;
   const out = await res.json<Added>().catch((): Added => ({}));
   return out.applicationId ?? 500;
-}
-
-function NoticeLine({ notice }: { notice: Notice }): React.JSX.Element {
-  return notice.kind === "error"
-    ? <p role="alert" className="text-sm text-conflict">{notice.text}</p>
-    : <p role="status" className="text-sm text-muted">{notice.text}</p>;
 }
 
 function Placeholder({ n, title, hint }: { n: number; title: string; hint: string }): React.JSX.Element {

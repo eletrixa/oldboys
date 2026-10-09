@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/runs/[id]/profile-summary.tsx
- * Deps:    react, src/domain/claim (types), ../../ui, ./evidence-line, ./profile-evidence, ./profile-fit
+ * Deps:    react, src/domain/claim (types), src/app/_lib/plural, ../../ui, ./evidence-line, ./profile-evidence, ./profile-fit
  * Tested:  src/app/runs/[id]/__tests__/profile-sections.test.ts
  *
  * Key responsibilities:
@@ -12,10 +12,12 @@
  * - FACT / INFERENCE legend and anchors (44px targets) to the sections that exist, Sources included
  */
 import type { PositionFit, Profile, ProfileEvidence } from "@/domain/claim";
-import { CARD, Eyebrow, LINK } from "../../ui";
+import { plural } from "@/app/_lib/plural";
+import { CARD, Eyebrow, LINK_TARGET } from "../../ui";
 import { type Ctx, NOTE } from "./evidence-line";
-import { FIGURE, plural } from "./profile-evidence";
-import { Bar, fitPct } from "./profile-fit";
+import { FIGURE } from "./profile-evidence";
+import { Bar } from "./profile-fit";
+import { fitPct } from "./scorecard";
 
 const SECTIONS = [
   ["achievements", "Achievements"],
@@ -28,7 +30,7 @@ const SECTIONS = [
 ] as const;
 
 /** Verdict strip the recruiter reads first: evidence coverage with bar, risks, questions, evidence; then current role, legend, anchors. */
-export function SummaryBox({ profile, fits, all, ctx, present }: { profile: Profile; fits: PositionFit[]; all: ProfileEvidence[]; ctx: Ctx; present: ReadonlySet<string> }): React.JSX.Element {
+export function SummaryBox({ profile, fits, all, ctx, show }: { profile: Profile; fits: PositionFit[]; all: ProfileEvidence[]; ctx: Ctx; show: Readonly<Record<string, boolean>> }): React.JSX.Element {
   const job = profile.history.find((h) => h.kind === "job");
   const [fit] = fits;
   const facts = all.filter((e) => e.kind === "FACT").length;
@@ -77,8 +79,8 @@ export function SummaryBox({ profile, fits, all, ctx, present }: { profile: Prof
         contact data and no special-category data.
       </p>
       <nav aria-label="Profile sections" className="mt-2 flex flex-wrap gap-x-4 text-sm">
-        {SECTIONS.filter(([id]) => present.has(id)).map(([id, label]) => (
-          <a key={id} href={`#${id}`} className={`${LINK} inline-flex min-h-11 items-center`}>
+        {SECTIONS.filter(([id]) => show[id] === true).map(([id, label]) => (
+          <a key={id} href={`#${id}`} className={LINK_TARGET}>
             {label}
           </a>
         ))}

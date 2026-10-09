@@ -40,7 +40,7 @@ export function shorten(text: string, max = MAX_PART): string {
 }
 
 /** "A", "A and B", "A, B and C". */
-function joinAnd(items: readonly string[]): string {
+export function joinAnd(items: readonly string[]): string {
   return items.length <= 1 ? (items[0] ?? "") : `${items.slice(0, -1).join(", ")} and ${items[items.length - 1] ?? ""}`;
 }
 

@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/runs/[id]/big-five-lean.ts
- * Deps:    src/domain/claim (BIG_FIVE, BigFive, BigFiveDimension)
+ * Deps:    src/domain/claim (BIG_FIVE, BigFive, BigFiveDimension), ./summary (joinAnd)
  * Tested:  src/app/runs/[id]/__tests__/big-five.test.ts
  *
  * Key responsibilities:
@@ -16,6 +16,7 @@
  * - No number is ever part of the text (brief: no personality scores)
  */
 import { BIG_FIVE, type BigFive, type BigFiveDimension } from "@/domain/claim";
+import { joinAnd } from "./summary";
 
 type Trait = BigFive["traits"][number];
 
@@ -42,7 +43,6 @@ export function leanLabel(t: Pick<Trait, "dimension" | "lean">): string {
 }
 
 /** "A" | "A and B" | "A, B and C". */
-const join = (xs: string[]): string => (xs.length <= 1 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs.at(-1) ?? ""}`);
 
 /** One-sentence read of the whole block, rows in BIG_FIVE order; unread dimensions are named, never shown as balanced. */
 export function leanSentence(traits: BigFive["traits"]): string {
@@ -52,6 +52,6 @@ export function leanSentence(traits: BigFive["traits"]): string {
   const balanced = rows.flatMap((t) => (t.lean === "balanced" ? [DIMENSION[t.dimension].name] : []));
   const missing = BIG_FIVE.filter((d) => !traits.some((t) => t.dimension === d)).map((d) => DIMENSION[d].name.toLowerCase());
   const first =
-    leaning.length > 0 ? `Leans ${join(leaning)}${balanced.length > 0 ? `; balanced on ${join(balanced)}` : ""}.` : `Balanced on ${join(balanced)}.`;
-  return missing.length > 0 ? `${first} Not enough of their writing to read ${join(missing)}.` : first;
+    leaning.length > 0 ? `Leans ${joinAnd(leaning)}${balanced.length > 0 ? `; balanced on ${joinAnd(balanced)}` : ""}.` : `Balanced on ${joinAnd(balanced)}.`;
+  return missing.length > 0 ? `${first} Not enough of their writing to read ${joinAnd(missing)}.` : first;
 }

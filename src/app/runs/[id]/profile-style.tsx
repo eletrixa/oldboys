@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/runs/[id]/profile-style.tsx
- * Deps:    react, src/domain/claim (types), ../../ui, ./big-five, ./evidence-line, ./profile-evidence
+ * Deps:    react, src/domain/claim (types), src/app/_lib/plural, ../../ui, ./big-five, ./evidence-line, ./profile-evidence
  * Tested:  src/app/runs/[id]/__tests__/profile-sections.test.ts
  *
  * Key responsibilities:
@@ -16,7 +16,8 @@ import type { Profile } from "@/domain/claim";
 import { CARD_MUTED, Chevron, KEY, SUMMARY_COMPACT } from "../../ui";
 import { BigFiveBlock } from "./big-five";
 import { type Ctx, MEASURE, NOTE, OwnWords } from "./evidence-line";
-import { Capped, Dropped, EvidenceList, Head, INTRO, ItemRows, More, plural } from "./profile-evidence";
+import { plural } from "@/app/_lib/plural";
+import { Capped, Dropped, EvidenceList, Head, INTRO, ItemRows, More } from "./profile-evidence";
 
 /** Sentence split for model prose; no abbreviation handling. */
 const sentences = (text: string): string[] => text.match(/[^.!?]+[.!?]+["”’)]*\s*|[^.!?]+$/g)?.map((s) => s.trim()) ?? [];

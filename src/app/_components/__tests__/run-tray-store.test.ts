@@ -8,11 +8,11 @@
  *
  * Key responsibilities:
  * - addRun puts the newest first, dedupes and caps at TRAY_MAX; dropRun removes
- * - readTray survives missing or broken storage
+ * - readTray survives missing or broken storage; trackRun of the newest id is a no-op
  * - trayRow: title before and after the name is known, progress share, live flag per status
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { addRun, dropRun, isLive, readTray, TRAY_MAX, trayRow } from "../run-tray-store";
+import { addRun, dropRun, isLive, readTray, TRAY_MAX, trackRun, trayRow } from "../run-tray-store";
 
 const base = {
   id: "r1",
@@ -50,6 +50,21 @@ describe("readTray", () => {
     expect(readTray()).toEqual([]);
     vi.stubGlobal("sessionStorage", { getItem: () => JSON.stringify(["a", 3, "b"]) });
     expect(readTray()).toEqual(["a", "b"]);
+  });
+});
+
+describe("trackRun", () => {
+  it("writes nothing and dispatches no event when the id is already the newest entry", () => {
+    const setItem = vi.fn();
+    const dispatchEvent = vi.fn();
+    vi.stubGlobal("sessionStorage", { getItem: () => JSON.stringify(["a", "b"]), setItem });
+    vi.stubGlobal("window", { dispatchEvent });
+    trackRun("a");
+    expect(setItem).not.toHaveBeenCalled();
+    expect(dispatchEvent).not.toHaveBeenCalled();
+    trackRun("b");
+    expect(setItem).toHaveBeenCalledWith("oldboys.tray", JSON.stringify(["b", "a"]));
+    expect(dispatchEvent).toHaveBeenCalledOnce();
   });
 });
 

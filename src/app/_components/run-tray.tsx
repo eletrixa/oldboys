@@ -13,7 +13,7 @@
  * - Side toggle (left or right, remembered in localStorage) and collapse to a small pill
  *
  * Design constraints:
- * - Hidden when the tray is empty, on candidate pages (/apply/<tag>) and on the run page of the only run it holds
+ * - Hidden when the tray is empty, on candidate pages (/apply/<tag>) and on a run page for that run (the open run is neither listed nor polled)
  * - Never blocks the page: fixed, narrow, scrolls inside itself; keyboard reachable (buttons and links only); an in-flow
  *   spacer as tall as the tray ends the page, so the last button (e.g. "Research N candidates" on a phone) scrolls above it
  * - Shows progress and status, never a verdict on a person
@@ -128,8 +128,9 @@ export function RunTray(): React.JSX.Element | null {
   const [side, setSide] = useState<Side>(() => (typeof window === "undefined" ? "right" : readSide()));
   const [open, setOpen] = useState(true);
 
-  if (ids.length === 0 || pathname.startsWith("/apply/")) return null;
-  if (ids.length === 1 && pathname === `/runs/${ids[0] ?? ""}`) return null;
+  // The run whose page is open is already on screen: neither listed nor polled.
+  const shown = ids.filter((id) => pathname !== `/runs/${id}`);
+  if (shown.length === 0 || pathname.startsWith("/apply/")) return null;
 
   function flip(): void {
     const next: Side = side === "right" ? "left" : "right";
@@ -153,14 +154,14 @@ export function RunTray(): React.JSX.Element | null {
           }}
           className={`fixed bottom-4 ${dock} z-40 rounded-full border border-line bg-surface px-4 py-2 text-sm shadow-lg hover:border-ink`}
         >
-          Briefs in progress ({ids.length})
+          Briefs in progress ({shown.length})
         </button>
       </>
     );
   }
   return (
     <>
-      <TraySpacer height={`min(calc(50vh + 4rem), ${String(4 + 6 * ids.length)}rem)`} />
+      <TraySpacer height={`min(calc(50vh + 4rem), ${String(4 + 6 * shown.length)}rem)`} />
       <aside aria-label="Briefs in progress" className={`fixed bottom-4 ${dock} z-40 w-[22rem] max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-line bg-surface shadow-lg`}>
         <div className="flex h-11 items-center justify-between gap-2 border-b border-divider bg-canvas pl-4 pr-2">
           <p className="text-xs font-semibold tracking-[0.08em] text-muted uppercase">Briefs in progress</p>
@@ -180,7 +181,7 @@ export function RunTray(): React.JSX.Element | null {
           </div>
         </div>
         <ul className="max-h-[50vh] overflow-y-auto">
-          {ids.map((id) => (
+          {shown.map((id) => (
             <TrayItem
               key={id}
               id={id}

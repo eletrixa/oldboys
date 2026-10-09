@@ -23,7 +23,7 @@ import { useEffect, useState } from "react";
 import { LoginCard } from "@/app/_components/login-card";
 import { RoleTable } from "@/app/_components/role-table";
 import type { RoleGroup } from "@/domain/role-overview";
-import { Eyebrow, LINK } from "../ui";
+import { Eyebrow, LINK, LINK_TARGET } from "../ui";
 
 type Load =
   | { kind: "loading" }
@@ -98,7 +98,7 @@ export function RolesView({ roleKey }: { roleKey?: string }): React.JSX.Element 
           </p>
         )}
         {roleKey !== undefined && load.kind === "ready" && (
-          <Link href="/roles" className={`${LINK} inline-flex min-h-11 items-center text-sm`}>Back to all roles</Link>
+          <Link href="/roles" className={`${LINK_TARGET} text-sm`}>Back to all roles</Link>
         )}
       </header>
       {load.kind === "loading" && (

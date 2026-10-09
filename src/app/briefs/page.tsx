@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/briefs/page.tsx
- * Deps:    next, next/link, @opennextjs/cloudflare, ./load, ./brief-table
+ * Deps:    next, next/link, @opennextjs/cloudflare, ../_lib/plural, ./load, ./brief-table
  * Tested:  grouping in src/app/briefs/__tests__/load.test.ts
  *
  * Key responsibilities:
@@ -17,6 +17,7 @@ import type { Metadata } from "next";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { plural } from "../_lib/plural";
 import { currentUser } from "../api/_lib/current-user";
 import { BTN_PRIMARY, CARD, Eyebrow } from "../ui";
 import { BriefTable } from "./brief-table";
@@ -31,7 +32,6 @@ export default async function BriefsPage(): Promise<React.JSX.Element> {
   const groups = groupByPosition(await listOrganizationRuns(env.DB, user.organizationId));
   const positions = groups.filter((g) => g.positionId !== null).length;
   const total = groups.reduce((n, g) => n + g.rows.length, 0);
-  const plural = (n: number, word: string): string => `${String(n)} ${word}${n === 1 ? "" : "s"}`;
   return (
     <main className="mx-auto flex max-w-5xl flex-col gap-8 px-4 py-10 md:py-14">
       <header className="flex flex-col items-start gap-3 border-b border-divider pb-8">

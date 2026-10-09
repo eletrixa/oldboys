@@ -8,7 +8,7 @@
  *
  * Key responsibilities:
  * - `trackRun` / `untrackRun` / `readTray`: a sessionStorage list of run ids (newest first, at most TRAY_MAX), and a
- *   window event (TRAY_EVENT) so the tray re-reads it without a reload
+ *   window event (TRAY_EVENT) so the tray re-reads it without a reload; `trackRun` of the newest id writes nothing (safe to call per poll)
  * - `addRun` / `dropRun`: the pure list operations behind them
  * - `trayRow`: name, status label and tone, progress (0..1) and the five step dots for one run state
  * - `isLive`: whether a run still needs polling
@@ -50,8 +50,9 @@ function writeTray(ids: readonly string[]): void {
   window.dispatchEvent(new Event(TRAY_EVENT));
 }
 
-/** Watch a run in the tray (call right after a run was started). */
+/** Watch a run in the tray (call right after a run was started); a no-op when it is already the newest entry. */
 export function trackRun(id: string): void {
+  if (readTray()[0] === id) return;
   writeTray(addRun(readTray(), id));
 }
 

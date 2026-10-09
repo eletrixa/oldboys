@@ -12,7 +12,6 @@
  * - patchRow: an idempotent row update (returns the same array when nothing changes, so a child effect cannot loop)
  * - researchCount / enrichIds: how many people the button starts and the de-duplicated application ids for one enrich call
  * - failText: calm copy for a refused request (401, 429, other)
- * - Notice: a status line that is either an error or plain information
  * - nextAfterStart: where the page goes once research started (the run itself for one, the position's candidates for several)
  *
  * Design constraints:
@@ -58,8 +57,6 @@ export function failText(status: number, fallback: string): string {
   if (status === 429) return "The hourly research limit is reached. Your candidates are kept here; try again later.";
   return fallback;
 }
-
-export type Notice = { kind: "error" | "info"; text: string };
 
 export function nextAfterStart(positionId: string, started: readonly { runId: string }[]): string {
   const [only, ...rest] = started;
