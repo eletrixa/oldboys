@@ -593,6 +593,7 @@ describe("Buryan fact check: extract prompt, interview questions, to_verify, als
     const none = new Map<string, Claim[]>();
     expect(interviewAllowed({ questions, role: "Senior Data Engineer" }, none)("public-code")).toBe(true);
     expect(interviewAllowed({ questions, role: "Chief Marketing Officer" }, none)("public-code")).toBe(false);
+    for (const id of ["employer-context", "press", "social-presence"]) expect(interviewAllowed({ questions, role: null }, none)(id)).toBe(false);
     expect(interviewAllowed({ questions, role: null }, none)("contradictions")).toBe(false);
     expect(interviewAllowed({ questions, role: null }, new Map([["contradictions", [claim("c", "contradictions", "INFERENCE", "x")]]]))("contradictions")).toBe(true);
   });

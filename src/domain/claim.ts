@@ -147,6 +147,90 @@ export const BriefSection = z.object({
 });
 export type BriefSection = z.infer<typeof BriefSection>;
 
+/** One evidence line of the enriched profile: a verbatim sentence by or about the person, and whether it supports or weakens the point. */
+export const ProfileEvidence = z.object({
+  quote: z.string().min(1),
+  source_id: z.string().min(1),
+  kind: z.enum(["FACT", "INFERENCE"]),
+  supports: z.boolean(),
+  /** Finer direction than `supports`: context lines neither prove nor weaken. Optional for briefs stored before it existed. */
+  direction: z.enum(["supports", "contradicts", "context"]).optional(),
+  /** Where the line comes from, as a recruiter would say it: "LinkedIn experience, self-reported", "Meta farewell post, 2022-03-28". */
+  note: z.string().default(""),
+});
+export type ProfileEvidence = z.infer<typeof ProfileEvidence>;
+
+export const ProfileItem = z.object({
+  text: z.string().min(1),
+  /** One or two sentences under the heading; empty when the heading says it all. */
+  detail: z.string().default(""),
+  evidence: z.array(ProfileEvidence),
+});
+export type ProfileItem = z.infer<typeof ProfileItem>;
+
+export const HistoryEntry = z.object({
+  organization: z.string().min(1),
+  title: z.string().min(1),
+  from: z.string().nullable(),
+  to: z.string().nullable(),
+  /** "job" or a relevant non-job part: education, project, volunteering. */
+  kind: z.enum(["job", "education", "project", "volunteering", "other"]),
+  location: z.string().default(""),
+  /** As the source writes it, e.g. "1 yr 9 mos". */
+  duration: z.string().default(""),
+  summary: z.string(),
+  evidence: z.array(ProfileEvidence),
+});
+export type HistoryEntry = z.infer<typeof HistoryEntry>;
+
+export const TraitFit = z.object({
+  trait: z.string().min(1),
+  status: z.enum(["has", "partial", "none"]),
+  /** Role weight 0..3; fit = sum(weight x status) / sum(weight), status has 1, partial 0.5, none 0. Weight 1 everywhere is the plain share. */
+  weight: z.number().int().min(0).max(3).default(1),
+  evidence: z.array(ProfileEvidence),
+});
+
+export const PositionFit = z.object({
+  role: z.string().min(1),
+  /** Share of required traits with supporting evidence, partial counts half; 0..100. */
+  fit_pct: z.number().int().min(0).max(100),
+  traits: z.array(TraitFit),
+  rationale: z.string(),
+});
+export type PositionFit = z.infer<typeof PositionFit>;
+
+/**
+ * Enriched hiring profile (Robert, 2026-10-09): achievements, risks, history, personality read, position fit and
+ * questions, every item with its evidence lines. Personality and fit are inferences from public writing, labelled so
+ * in the UI; never a score of the person as such.
+ */
+export const Profile = z.object({
+  achievements: z.array(ProfileItem),
+  risks: z.array(ProfileItem),
+  history: z.array(HistoryEntry),
+  personality: z.object({
+    disc: z.object({ type: z.string().min(1), confidence: z.enum(["low", "medium", "high"]) }).nullable(),
+    mbti: z.object({ type: z.string().min(1), confidence: z.enum(["low", "medium", "high"]) }).nullable(),
+    read: z.string(),
+    /** Working-style trait rows, each backed by the person's own quotes. */
+    traits: z.array(ProfileItem).default([]),
+    evidence: z.array(ProfileEvidence),
+    /** Lines dropped: quote not in the excerpt, or the source is not the person's own writing. Defaulted for older briefs. */
+    evidence_dropped: z.number().int().min(0).default(0),
+  }),
+  position_fit: z.array(PositionFit),
+  questions: z.array(z.object({ text: z.string().min(1), closes: z.string() })),
+  /** Why the profile could not be built (model failure); null when it ran. */
+  degraded: z.string().nullable(),
+  /** Evidence lines per section dropped by the quote-in-excerpt check, for "N lines dropped" footers. Defaulted for older briefs. */
+  achievements_dropped: z.number().int().min(0).default(0),
+  risks_dropped: z.number().int().min(0).default(0),
+  history_dropped: z.number().int().min(0).default(0),
+  fit_dropped: z.number().int().min(0).default(0),
+});
+export type Profile = z.infer<typeof Profile>;
+
 /** The hiring-manager brief: one block per question (= must-have), gaps turned into interview questions. */
 export const Brief = z.object({
   run_id: z.string().min(1),
@@ -178,5 +262,7 @@ export const Brief = z.object({
   location_note: z.string().nullable().default(null),
   /** Findings by section, built deterministically in the synthesize seam. Defaulted for older briefs. */
   sections: z.array(BriefSection).default([]),
+  /** Enriched profile built by the profile seam after synthesize; null for older briefs or when the step did not run. */
+  profile: Profile.nullable().default(null),
 });
 export type Brief = z.infer<typeof Brief>;

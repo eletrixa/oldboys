@@ -11,6 +11,8 @@
  * - `harvestRequest` / `harvestProfiles`: shared with the seed seam (plans/006), which scrapes the manager's profile URL first
  * - Never scrape a URL twice: profiles already fetched at seed are skipped and reported via `alreadyFetched`
  * - `experienceCompanies`: company names back out of a profile excerpt's experience lines (employer corroboration)
+ * - `employerPages`: the current employer's LinkedIn company URL, written as an "Employer page:" excerpt line by the
+ *   harvest parse and read back by the hiring `employer_company` step
  *
  * Design constraints:
  * - Pure: no network; the runner performs the actor call. Parsing is lenient (unknown fields ignored)
@@ -51,7 +53,9 @@ const HarvestProfile = z.object({
   lastName: z.string().optional(),
   headline: z.string().optional(),
   location: Loose,
-  experience: z.array(z.object({ position: Loose, title: Loose, companyName: Loose, startDate: Loose, endDate: Loose, duration: Loose })).default([]),
+  experience: z
+    .array(z.object({ position: Loose, title: Loose, companyName: Loose, companyLinkedinUrl: Loose, startDate: Loose, endDate: Loose, duration: Loose }))
+    .default([]),
   education: z.array(z.object({ schoolName: Loose, school: Loose, degree: Loose, fieldOfStudy: Loose, field: Loose })).default([]),
   skills: z.array(z.unknown()).default([]),
 });
@@ -80,6 +84,16 @@ export function experienceCompanies(excerpt: string): string[] {
   return [...new Set(out.filter((c) => c !== ""))];
 }
 
+const EMPLOYER_PAGE = "Employer page: ";
+
+/** Current employers' LinkedIn company URLs from merged LinkedIn profile excerpts (the confirmed profile links them). */
+export function employerPages(sources: readonly Source[]): string[] {
+  const pages = sources
+    .filter((s) => s.identity === "merged" && LINKEDIN_PROFILE_ACTORS.has(s.actor))
+    .flatMap((s) => s.excerpt.split("\n").filter((l) => l.startsWith(EMPLOYER_PAGE)).map((l) => l.slice(EMPLOYER_PAGE.length).trim()));
+  return [...new Set(pages)];
+}
+
 function eduLine(school: unknown, degree: unknown, field: unknown): string {
   return [txt(school), txt(degree), txt(field)].filter(Boolean).join(", ");
 }
@@ -102,12 +116,14 @@ export function harvestProfiles(payload: unknown): HarvestParsed[] {
     const name = [p.firstName, p.lastName].filter(Boolean).join(" ");
     const cur = p.experience[0];
     const current = cur ? `Current: ${expLine(cur.position ?? cur.title, cur.companyName, "", "")}` : "";
+    const page = txt(cur?.companyLinkedinUrl);
+    const employerPage = page.includes("linkedin.com/company/") ? `${EMPLOYER_PAGE}${page}` : "";
     const exp = p.experience.slice(0, 5).map((x) => expLine(x.position ?? x.title, x.companyName, x.startDate, x.endDate));
     const edu = p.education.slice(0, 3).map((x) => eduLine(x.schoolName ?? x.school, x.degree, x.fieldOfStudy ?? x.field));
     const location = txt(p.location);
     return {
       url: p.linkedinUrl,
-      excerpt: clip(lines([name, p.headline ?? "", location, current, ...exp, ...edu, `Skills: ${String(p.skills.length)}`])),
+      excerpt: clip(lines([name, p.headline ?? "", location, current, employerPage, ...exp, ...edu, `Skills: ${String(p.skills.length)}`])),
       raw: p,
       name,
       headline: p.headline?.trim() ?? "",

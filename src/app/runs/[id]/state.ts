@@ -199,6 +199,8 @@ export const GAP_LABEL: Record<string, string> = {
   serp_person: "Web search",
   social_serp: "Social profile search",
   linkedin_profile: "LinkedIn",
+  linkedin_posts: "LinkedIn posts",
+  employer_company: "Employer company page",
   github_profile: "GitHub",
   stackexchange_profile: "Stack Exchange",
   huggingface_profile: "Hugging Face",
@@ -211,7 +213,9 @@ export const GAP_LABEL: Record<string, string> = {
   bluesky_profile: "Bluesky",
   personal_site_crawl: "Personal website",
   talks_serp: "Talks and posts",
+  press_serp: "Press and awards search",
   facebook_profile: "Facebook",
+  facebook_page: "Facebook page",
 };
 
 type Gap = Brief["not_searched"][number];

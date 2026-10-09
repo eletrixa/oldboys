@@ -41,6 +41,10 @@ export const LINK = "font-medium whitespace-nowrap text-action underline decorat
 export const SUMMARY =
   "flex min-h-11 cursor-pointer list-none items-center gap-2 text-sm font-semibold text-muted hover:text-ink [&::-webkit-details-marker]:hidden";
 
+/** SUMMARY for dense rows (evidence under each item): 32px target, above the WCAG 2.2 24px minimum, smaller type. */
+export const SUMMARY_COMPACT =
+  "flex min-h-8 cursor-pointer list-none items-center gap-2 text-xs font-semibold text-muted hover:text-ink [&::-webkit-details-marker]:hidden";
+
 /** Disclosure marker that turns when the parent `details.group` is open. */
 export function Chevron(): React.JSX.Element {
   return (

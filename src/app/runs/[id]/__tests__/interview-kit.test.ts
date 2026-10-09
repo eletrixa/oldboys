@@ -30,6 +30,7 @@ const claim = (id: string, text: string, supports: string[], kind: Claim["kind"]
 });
 
 const brief = (over: Partial<Brief> = {}): Brief => ({
+  profile: null,
   run_id: "r",
   per_question: [{ question_id: "mh-exp", coverage: "evidenced", claim_ids: ["c1"], summary: "Five years of data work." }],
   interview_questions: ["Walk me through your last pipeline."],

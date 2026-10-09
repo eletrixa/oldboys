@@ -27,7 +27,8 @@
  *   subject in full plus a confirmed employer token becomes "merged" with a reason; extract and synthesize trust only "merged"
  * - `confirmedSources`: merged and not under a rejected profile, the one filter extract, verify and synthesize share
  * - `noneConfirmed`: a collector found hits but none sits on a merged profile; the Workflow records UNCONFIRMED_GAP
- * - `lineupNeedsAnswer`: pause for the manager only on possibly-same-as, or when nothing is merged (a seed merge counts)
+ * - `lineupNeedsAnswer`: pause for the manager only when there are candidates and none is merged (a seed merge counts); a possibly-same-as next to a merged
+ *   candidate never pauses, it stays possibly-same-as with unverified sources
  *
  * Design constraints:
  * - Never merges on name alone (plans/001 case studies §B); below ASK_FLOOR the UI asks the manager
@@ -196,11 +197,12 @@ export function noneConfirmed(sources: readonly Pick<Source, "url" | "identity">
 }
 
 /**
- * The lineup pauses when any candidate is possibly-same-as, or when there are candidates and none is merged.
- * `all` must include earlier candidates (the seed's merged profile), so a profile-first run never asks "who is it?".
+ * The lineup pauses only when there are candidates and none is merged (no profile/CV given, nothing confirmed).
+ * `all` must include earlier candidates (the seed's merged profile): the given profile settles identity, so a
+ * possibly-same-as beside a merge never asks "is this them?".
  */
 export function lineupNeedsAnswer(all: readonly Pick<Candidate, "decision">[]): boolean {
-  return all.length > 0 && (all.some((c) => c.decision === "possibly-same-as") || !all.some((c) => c.decision === "merge"));
+  return all.length > 0 && !all.some((c) => c.decision === "merge");
 }
 
 /** Titles of people-search and directory listings: one page, many different people. */

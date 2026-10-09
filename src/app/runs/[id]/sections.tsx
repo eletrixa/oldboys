@@ -12,7 +12,8 @@
  *   non-empty, and source links that open the page at the quote (quoteLink; tooltip = "Confirmed: <identity_reason>"
  *   and the retrieval date); also used for the per-question fallback
  * - Under each claim a "Show evidence" disclosure (ClaimEvidence, idea #5): quote, sources, retrieval dates, saved copy
- * - Source-only sections (platforms without claims) list their confirmed source links; empty ones are not rendered
+ * - Source-only sections (platforms without claims) list their confirmed source links; empty ones are not rendered;
+ *   social presence also lists its profile links that no claim cites
  * - SourceLink: the pasted CV renders as "Candidate's CV (pasted)" with no href (its URL is "cv:<runId>")
  *
  * Design constraints:
@@ -78,7 +79,10 @@ function SectionCard({ section, claims, evidence }: { section: BriefSection; cla
   const band = confidenceBand(section.confidence);
   const facts = claims.filter((c) => c.kind !== "INFERENCE");
   const inferences = claims.filter((c) => c.kind === "INFERENCE");
-  const links = claims.length === 0 ? [...new Set(section.source_ids.flatMap((sid) => evidence.sourceOf.get(sid)?.url ?? []))] : [];
+  // Social presence always lists its profiles; other sections list links only when no claim carries them
+  const cited = new Set(claims.flatMap((c) => c.supports));
+  const listed = claims.length === 0 ? section.source_ids : section.id === "social-presence" ? section.source_ids.filter((sid) => !cited.has(sid)) : [];
+  const links = [...new Set(listed.flatMap((sid) => evidence.sourceOf.get(sid)?.url ?? []))];
   return (
     <section className={CARD}>
       <div className="flex items-start justify-between gap-3">
@@ -102,9 +106,9 @@ function SectionCard({ section, claims, evidence }: { section: BriefSection; cla
   );
 }
 
-/** A section with no claims and no sources has nothing to show; neither has a claimless social-presence list. */
+/** A section with no claims and no sources has nothing to show; a claimless social-presence section lists the profiles. */
 export function isShown(s: BriefSection): boolean {
-  return s.claim_ids.length > 0 || (s.source_ids.length > 0 && s.id !== "social-presence");
+  return s.claim_ids.length > 0 || s.source_ids.length > 0;
 }
 
 export function SectionList({ sections, claims, evidence }: { sections: BriefSection[]; claims: Claim[]; evidence: Evidence }): React.JSX.Element {

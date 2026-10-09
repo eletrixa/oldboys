@@ -160,8 +160,12 @@ describe("lineupNeedsAnswer", () => {
     expect(lineupNeedsAnswer([{ decision: "merge" }, { decision: "rejected" }])).toBe(false);
   });
 
-  it("asks for possibly-same-as even with a seed merge, and when nothing is merged", () => {
-    expect(lineupNeedsAnswer([{ decision: "merge" }, { decision: "possibly-same-as" }])).toBe(true);
+  it("never asks for a possibly-same-as next to a seed merge", () => {
+    expect(lineupNeedsAnswer([{ decision: "merge" }, { decision: "possibly-same-as" }])).toBe(false);
+  });
+
+  it("asks only when candidates exist and none is merged", () => {
+    expect(lineupNeedsAnswer([{ decision: "possibly-same-as" }])).toBe(true);
     expect(lineupNeedsAnswer([{ decision: "rejected" }])).toBe(true);
     expect(lineupNeedsAnswer([])).toBe(false);
   });

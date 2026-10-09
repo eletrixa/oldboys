@@ -12,8 +12,8 @@
  *   identity and set investigations.subject/anchor; a scrape or model failure is a ledger note, never a failed run;
  *   seed row ids are stable (stableId), so a retried seed step upserts instead of duplicating sources/candidates
  * - `onEmpty`: run the declared fallback step once, or record a Gap (ledger decision with ref.gap)
- * - resolve: persist candidates; pause with `step.waitForEvent('lineup-answer')` when any candidate is
- *   possibly-same-as or none merged (lineupNeedsAnswer, seed merges count); apply the manager's decisions on resume
+ * - resolve: persist candidates; pause with `step.waitForEvent('lineup-answer')` only when candidates exist and none is
+ *   merged (lineupNeedsAnswer, seed merges count, so a given profile/CV never pauses); apply the manager's decisions on resume
  * - Budget (RUN_BUDGET_USD / RUN_BUDGET_CALLS) enforced here for collector steps, never by the LLM; parallel
  *   batches run at most (budget - spent) paid actor steps at once (planBatch), free REST steps always run
  * - Source identity re-marked after the lineup and before extract (applySourceIdentity), so only SERP hits on

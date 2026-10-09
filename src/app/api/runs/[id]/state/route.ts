@@ -24,8 +24,8 @@
  * - No runtime = "edge"; never cached; no auth (the id is an unguessable UUID, like GET /api/runs/:id)
  */
 import { getCloudflareContext } from "@opennextjs/cloudflare";
-import type { Brief, Candidate, Claim } from "@/domain/claim";
-import { GoalId } from "@/domain/claim";
+import type { Candidate, Claim } from "@/domain/claim";
+import { Brief, GoalId } from "@/domain/claim";
 import { quoteContexts } from "@/domain/quote";
 import { type CostRow, runCost } from "@/domain/run-cost";
 import { recipeFor } from "@/recipe/goals";
@@ -138,7 +138,8 @@ export async function GET(
     sources: sources.results.map(({ excerpt: _excerpt, ...s }) => s),
     quote_contexts: quoteContexts(runClaims, new Map(sources.results.map((s) => [s.id, s.excerpt]))),
     questions: [...base, ...extra],
-    brief: brief ? (JSON.parse(brief.brief_json) as Brief) : null,
+    // Brief.parse fills defaults (profile, sections...) for briefs stored before those fields existed
+    brief: brief ? Brief.parse(JSON.parse(brief.brief_json)) : null,
     cost: runCost(ledger.results, head.created_at),
     failure: failure ?? null,
     failed_step: head.status === "failed" ? (recipeSteps[stepIndex]?.id ?? last?.step ?? null) : null,

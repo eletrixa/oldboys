@@ -7,7 +7,7 @@
  * Tested:  n/a (this is the test)
  *
  * Key responsibilities:
- * - Sections with no claims and no sources never render; a claimless social presence list is hidden
+ * - Sections with no claims and no sources never render; a claimless social presence that lists profiles renders
  * - ClaimList: quote deep link with the retrieval date in the tooltip, quote + saved copy with the match marked,
  *   STATEMENT label, inference note, CV source as text
  *
@@ -30,10 +30,14 @@ describe("isShown", () => {
     expect(isShown(sec({ claim_ids: ["c1"] }))).toBe(true);
   });
 
-  it("hides sections with neither claims nor sources, and a claimless social presence", () => {
+  it("hides sections with neither claims nor sources", () => {
     expect(isShown(sec({}))).toBe(false);
     expect(isShown(sec({ id: "contradictions" }))).toBe(false);
-    expect(isShown(sec({ id: "social-presence", source_ids: ["s1"] }))).toBe(false);
+    expect(isShown(sec({ id: "social-presence" }))).toBe(false);
+  });
+
+  it("shows a claimless social presence that lists confirmed profiles", () => {
+    expect(isShown(sec({ id: "social-presence", source_ids: ["s1"] }))).toBe(true);
   });
 
   it("keeps a source-only platform section", () => {

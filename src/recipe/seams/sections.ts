@@ -9,7 +9,9 @@
  * Key responsibilities:
  * - One section per question with at least one kept claim (short title; role must-haves "mh-*" by their text)
  * - One section per non-social platform group (GitHub, business registry, web pages) whose confirmed sources no claim
- *   cites; uncited social profiles get no section (it would only list links)
+ *   cites; confirmed social sources (LinkedIn, X, Instagram, TikTok, YouTube, Bluesky, Facebook) instead join the
+ *   "social-presence" question's section: its claims plus the confirmed profile pages (canonical URL equal to a merged
+ *   candidate's profile URL), emitted when the recipe asks that question and either exists
  * - Source origin (self / mirror / independent) comes from sourceOrigin with the merged candidates' profile URLs
  * - Counts per section feed sectionConfidence: facts need a merged supporting source, sources are distinct canonical URLs;
  *   a support id that is not among the run's sources counts as no source and puts "source missing" in the reason
@@ -29,7 +31,13 @@ const QUESTION_TITLE: Record<string, string> = {
   "current-role": "Current role",
   "career-history": "Career history",
   "public-code": "Public code",
-  "public-talks": "Talks and writing",
+  "public-talks": "Talks and podcasts",
+  "employer-context": "Employer context",
+  education: "Education",
+  writing: "Writing and publications",
+  press: "Press coverage",
+  "social-presence": "Social presence",
+  community: "Community and awards",
   "location-match": "Location",
   contradictions: "Where sources disagree",
   "legal-entity": "Legal entity",
@@ -40,8 +48,9 @@ const QUESTION_TITLE: Record<string, string> = {
   "social-consistency": "Social consistency",
 };
 
-/** Social profiles carry no claim of their own, so a "Social presence" section would only list links: it is not emitted. */
-const SOCIAL = new Set(["linkedin", "x", "instagram", "tiktok", "youtube", "bluesky", "facebook"]);
+/** Social platforms: their confirmed sources feed the "social-presence" section, never a platform group of their own. */
+const SOCIAL_LABEL: Record<string, string> = { linkedin: "LinkedIn", x: "X", instagram: "Instagram", tiktok: "TikTok", youtube: "YouTube", bluesky: "Bluesky", facebook: "Facebook" };
+const SOCIAL_PRESENCE = "social-presence";
 const GROUP_TITLE: Record<string, string> = { github: "GitHub", ares: "Business registry", web: "Web pages", cv: "CV" };
 const TITLE_MAX = 48;
 
@@ -120,17 +129,24 @@ export function sectionsOf(
   const summaryOf = new Map(perQuestion.map((q) => [q.question_id, q.summary]));
   // Sources a surviving contradiction claim cites: every other claim resting on one of them is disputed
   const disputed = new Set(claims.filter((c) => c.question_id === "contradictions").flatMap((c) => c.supports));
+  const byPlatform = Map.groupBy(confirmedSources, (s) => platformOf(s.url));
+  // Social presence lists the confirmed profiles themselves (a merged candidate's profile URL), not every post
+  const profileKeys = new Set(profileUrls.map(canonicalUrl));
+  const profiles = confirmedSources.filter((s) => platformOf(s.url) in SOCIAL_LABEL && profileKeys.has(canonicalUrl(s.url)));
+  const platforms = [...new Set(profiles.map((s) => SOCIAL_LABEL[platformOf(s.url)] ?? ""))];
   const fromQuestions = questions.flatMap((q) => {
     const cs = claims.filter((c) => c.question_id === q.id);
-    if (cs.length === 0) return [];
-    return [section(q.id, sectionTitle(q), cs, cs.flatMap((c) => c.supports), identityOf, urlOf, summaryOf.get(q.id) ?? "", profileUrls, disputed, actorOf)];
+    const extra = q.id === SOCIAL_PRESENCE ? profiles.map((s) => s.id) : [];
+    if (cs.length === 0 && extra.length === 0) return [];
+    // Without claims the section is the profile list itself: it says where, never what the profiles mean
+    const summary = cs.length === 0 ? `Confirmed profiles on ${platforms.join(", ")}.` : (summaryOf.get(q.id) ?? "");
+    return [section(q.id, sectionTitle(q), cs, [...cs.flatMap((c) => c.supports), ...extra], identityOf, urlOf, summary, profileUrls, disputed, actorOf)];
   });
 
   const cited = new Set(claims.flatMap((c) => c.supports));
-  const byPlatform = Map.groupBy(confirmedSources, (s) => platformOf(s.url));
   const uncited = [...byPlatform].filter(([, ss]) => !ss.some((s) => cited.has(s.id)));
   const groups = uncited
-    .filter(([p]) => !SOCIAL.has(p))
+    .filter(([p]) => !(p in SOCIAL_LABEL))
     .map(([p, ss]) =>
       section(`evidence-${p}`, GROUP_TITLE[p] ?? p, [], ss.map((s) => s.id), identityOf, urlOf, `${plural(ss.length, "confirmed source")}; nothing from them is used in a claim.`, profileUrls, disputed, actorOf),
     );

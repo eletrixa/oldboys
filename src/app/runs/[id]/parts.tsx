@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/runs/[id]/parts.tsx
- * Deps:    react (client component, imported only by run-view.tsx), src/domain/claim (types), src/domain/run-cost, ../../ui (Radar vocabulary), ./sections, ./evidence, ./state, ./call-panel-view
+ * Deps:    react (client component, imported only by run-view.tsx), src/domain/claim (types), src/domain/run-cost, ../../ui (Radar vocabulary), ./profile-sections, ./sections, ./evidence, ./state, ./call-panel-view
  * Tested:  n/a
  *
  * Key responsibilities:
@@ -17,6 +17,7 @@
  * - Phone verification panel (CallPanel, client) right after "To verify"; it fetches its own data
  * - Interview kit exports (KitActions) after the gap lists, one block with AlsoFound and the removed line;
  *   gap rows split "Label: reason" into a medium label and muted reason; Check rows hang under a grid; gap labels come from state.ts (GAP_LABEL, gapLine)
+ * - Enriched profile (ProfileSections) above the findings when the brief carries one
  * - Findings as sections by confidence (SectionList); briefs stored before sections render per question; both get the
  *   per-run evidence lookup (evidenceOf: sources with retrieval dates, saved text around quotes) for "Show evidence"
  * - Accessibility: labelled progressbar with status text, QuestionCard focuses its heading on mount, 44px summary and link targets
@@ -34,6 +35,7 @@ import { BTN_PRIMARY, BTN_QUIET, BTN_SECONDARY, CARD, CARD_PEACH, CARD_UNSURE, C
 import { CallPanel } from "./call-panel-view";
 import { KitActions } from "./kit-actions";
 import { evidenceOf } from "./evidence";
+import { ProfileSections } from "./profile-sections";
 import { ClaimList, SectionList } from "./sections";
 import { SummaryCard } from "./summary-card";
 import { STEP_LABEL } from "./source-labels";
@@ -426,6 +428,7 @@ export function BriefView({ state }: { state: RunState }): React.JSX.Element | n
       <TopLine headline={brief.headline ?? null} locationNote={brief.location_note ?? null} role={hiringFor(state)} />
       {brief.degraded !== null && <DegradedNotice reason={brief.degraded} />}
       {brief.degraded !== null && <ConfirmedEvidence items={brief.evidence} />}
+      {brief.profile && <ProfileSections profile={brief.profile} evidence={evidence} role={hiringFor(state)} />}
       {sections !== null && <SectionList sections={sections} claims={state.claims} evidence={evidence} />}
       {allUnavailable ? (
         <RoleCriteria texts={roleCriteria(state.questions)} />

@@ -4,7 +4,16 @@ All notable changes to oldboys are documented here. The format follows [Keep a C
 
 ## [Unreleased]
 
+### Changed
+- Profile hardened: personality only from the person's own writing (types hidden under 3 lines), FACT lines only with a checked quote and per-section counts of dropped lines, a fixed sorted trait list per role (max 10, run's role plus 2 adjacent), one retry over the 40 strongest sources before the profile degrades, and prompts that forbid score, rating, trust and culture-fit wording.
+- Enriched profile on the report page follows the approved prototype, kept compact: a summary box (current role, sources, fact and inference counts, run's role fit with must-haves evidenced, risks and questions) with a FACT / INFERENCE legend and section links; numbered sections with a one-line intro; achievements and risks side by side, 3 visible each, with detail lines; evidence lines show FACT or INFERENCE, Supports / Contradicts / Context, the quote, a numbered source opened at the quote and a note, and the summary counts contradicting lines; 5 jobs with dates, duration and location, then education, projects and community collapsed; working style with a disclaimer banner, DISC and MBTI with a confidence word, our read capped at 3 sentences and trait rows with quotes; position fit cards per role and a weighted capability table, fit = sum(weight x status) / sum(weight) computed on the page; 5 questions visible, each with what it closes; a numbered sources list with retrieved dates; lines dropped by the quote check are counted per section.
+- Claim extraction output cap raised to 32k tokens: a full-profile brief (17 questions, ~100 sources) truncated at 8k and produced no claims.
+- A given LinkedIn profile or CV settles identity: the run no longer pauses to ask "is this them?" when a merged profile exists; other possible matches stay unverified and are shown read-only.
+
 ### Added
+- Hiring briefs carry an enriched profile: achievements, risks, dated history, a personality read (DISC and MBTI with confidence, inferred from the person's own writing), fit for the role and 2-3 adjacent roles, and interview questions. Every line cites a verbatim quote checked against its source; unsupported lines are dropped. Two extra model calls per hiring run.
+- Report page shows the enriched hiring profile above the findings: achievements, risks, history timeline, personality read (DISC and MBTI, labelled as inference from public writing), position fit per role with a trait checklist, and what to ask; every item has an "Evidence (N)" list with the quote, FACT or INFERENCE, supports or weakens, and a link that opens the source at the quote.
+- Hiring brief as a full profile: new evidence-backed sections for employer context, education, writing and publications, press coverage, social presence (confirmed profiles listed even without claims), and community and awards; new sources: LinkedIn posts (`harvestapi/linkedin-profile-posts`), the current employer's LinkedIn company page, public Facebook pages (`apify/facebook-pages-scraper`) and a press, awards and community web search.
 - Position selector ([plans/007-position-selector/](plans/007-position-selector/)): `/positions` lists positions by family with posting links, `/positions/new` ingests a posting from pasted text or a URL (Jobs.cz, Greenhouse, Lever, Ashby, JSON-LD) and extracts up to five must-haves once, `/positions/<id>` shows the posting, a LinkedIn people-search link, editable must-haves and the coverage table of its runs; "Research a candidate" pre-fills the start form and every run started from a position gets the same questions. Migration `0011_positions.sql`; var `POSITION_INGEST_USD`; `pnpm e2e` root Playwright smoke.
 - Profile-first start: candidate search from LinkedIn profile URL or pasted CV, plus role ([plans/006-profile-first/](plans/006-profile-first/))
 - Seed profile step to extract name, location, and LinkedIn from the given input
@@ -23,6 +32,7 @@ All notable changes to oldboys are documented here. The format follows [Keep a C
 - OPENALEX_API_KEY support for OpenAlex API calls
 
 ### Changed
+- Claim extraction output cap raised to 32k tokens: a full-profile brief (17 questions, ~100 sources) truncated at 8k and produced no claims.
 - Radar design applied to every page: run page (timeline progress, question card, brief sections, evidence lists), roles overview and table, audit record, start form, not-found and loading states. Shared class vocabulary in `src/app/ui.tsx`, spec in `docs/design/radar-ui.md`; the temporary zinc/teal remap in `globals.css` is gone.
 - Brief sections now shown only if content was found; honest gaps for unavailable sections
 - Lineup questions ask profile-platform confirmation only (web form handles up to 3)

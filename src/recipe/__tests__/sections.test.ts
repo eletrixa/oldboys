@@ -8,7 +8,8 @@
  *
  * Key responsibilities:
  * - A question gets a section only when it has claims; titles are short, must-haves keep their text
- * - Uncited social profiles get no section; other uncited platforms one section each
+ * - Uncited social profiles get no platform section; the "social-presence" question lists the confirmed profiles
+ *   (with or without claims); other uncited platforms one section each
  * - Mirror sites do not count as confirmation; the candidate's own site counts as self-reported
  * - Confidence follows the sources' identity (merged) and contradictions (explicit, or a contradictions claim citing a
  *   section's source); the degraded brief carries the same sections
@@ -95,6 +96,19 @@ describe("sectionsOf", () => {
     expect(byId.get("current-role")).toMatchObject({ confidence: 0.65, confidence_reason: "Self-reported, plus one independent source; sources disagree" });
     expect(byId.get("mh-sql")?.confidence_reason).toBe("Single independent source, not corroborated; sources disagree");
     expect(byId.get("contradictions")?.confidence_reason).not.toContain("sources disagree");
+  });
+
+  it("lists confirmed social profiles under social presence, with or without claims", () => {
+    const qs = [...questions, { id: "social-presence", text: "Which social profiles are theirs?" }];
+    const post = src("s-post", "https://www.linkedin.com/posts/jana_data-activity-1");
+    const profileUrls = ["https://www.linkedin.com/in/jana", "https://x.com/jana", "https://www.instagram.com/jana"];
+    const bare = sectionsOf(qs, [], perQuestion, [...all, post], [...confirmedOnly, post], profileUrls);
+    expect(bare.map((s) => s.id)).toEqual(["social-presence", "evidence-github", "evidence-web"]);
+    expect(bare[0]).toMatchObject({ title: "Social presence", claim_ids: [], source_ids: ["s-li", "s-ig", "s-x"], summary: "Confirmed profiles on LinkedIn, Instagram, X." });
+    const topic = claim("c1", "social-presence", ["s-post"], { kind: "INFERENCE", quote: null });
+    const withClaim = sectionsOf(qs, [topic], [...perQuestion, { question_id: "social-presence", coverage: "partial" as const, claim_ids: [], summary: "Posts about data." }], [...all, post], [...confirmedOnly, post], profileUrls);
+    expect(withClaim[0]).toMatchObject({ id: "social-presence", claim_ids: ["c1"], source_ids: ["s-post", "s-li", "s-ig", "s-x"], summary: "Posts about data." });
+    expect(sectionsOf(qs, [], perQuestion, all, confirmedOnly).map((s) => s.id)).not.toContain("social-presence");
   });
 
   it("has no sections when nothing was found", () => {

@@ -8,6 +8,10 @@
  *
  * Key responsibilities:
  * - Question list and ordered step list for goal "hiring"; `seed_profile` first (manager's LinkedIn URL or CV, plans/006)
+ * - One question per brief section: role, employer context, career, education, code, talks, writing, press, social
+ *   presence, community and awards, location, contradictions
+ * - Paid actor runs stay under RUN_BUDGET_CALLS (16): at most 14 here, and the extra web searches are packed as
+ *   several queries into one SERP run (press_serp, talks_serp)
  *
  * Design constraints:
  * - Must call `github_profile`; must never call ARES (that is due-diligence's step)
@@ -19,18 +23,26 @@ export const hiringRecipe: Recipe = {
   goal: "hiring",
   questions: [
     { id: "current-role", text: "What is the subject's current role and employer?" },
+    { id: "employer-context", text: "What does the current employer do, how large is it and where is it based, per its own pages?" },
     { id: "career-history", text: "What roles and tenures precede it?" },
+    { id: "education", text: "What education, degrees or certifications are stated?" },
     { id: "public-code", text: "What public code or technical output exists (GitHub, packages)?" },
-    { id: "public-talks", text: "What public talks, posts or writing show how they think?" },
+    { id: "public-talks", text: "What public talks, podcasts, webinars or conference appearances feature them?" },
+    { id: "writing", text: "What have they written or published (LinkedIn posts, articles, blogs, papers)?" },
+    { id: "press", text: "What do press articles, interviews or press releases say about them?" },
+    { id: "social-presence", text: "Which social profiles are theirs, what topics do they post about, and how often?" },
+    { id: "community", text: "What community roles, awards, volunteering or mentoring are documented?" },
     { id: "location-match", text: "Does their stated location match the anchor?" },
     { id: "contradictions", text: "Which sources disagree with each other?" },
   ],
   steps: [
     { id: "seed_profile", kind: "seed" },
     { id: "serp_person", kind: "serp", actor: "apify/google-search-scraper", query: '"{subject}" {anchor}\n{subject}', onEmpty: { gap: "no search hits for subject + anchor" } },
-    { id: "social_serp", kind: "serp", actor: "apify/google-search-scraper", query: '{subject} linkedin\n{subject} instagram OR twitter OR tiktok OR github', onEmpty: { gap: "no social profiles indexed by Google" } },
+    { id: "social_serp", kind: "serp", actor: "apify/google-search-scraper", query: '{subject} linkedin\n{subject} instagram OR twitter OR tiktok OR github OR facebook', onEmpty: { gap: "no social profiles indexed by Google" } },
     { id: "resolve_lineup", kind: "resolve" },
     { id: "linkedin_profile", kind: "actor", actor: "harvestapi/linkedin-profile-scraper", onEmpty: { gap: "no LinkedIn profile URL known or profile not scrapable" } },
+    { id: "linkedin_posts", kind: "actor", actor: "harvestapi/linkedin-profile-posts", onEmpty: { gap: "no public LinkedIn posts found" } },
+    { id: "employer_company", kind: "actor", actor: "harvestapi/linkedin-company", onEmpty: { gap: "no LinkedIn company page for the current employer" } },
     { id: "github_profile", kind: "actor", actor: "rest/github", onEmpty: { gap: "no public GitHub profile found" } },
     { id: "stackexchange_profile", kind: "actor", actor: "rest/stackexchange", onEmpty: { gap: "no Stack Exchange activity found" } },
     { id: "huggingface_profile", kind: "actor", actor: "rest/huggingface", onEmpty: { gap: "no Hugging Face models or datasets found" } },
@@ -40,9 +52,11 @@ export const hiringRecipe: Recipe = {
     { id: "instagram_profile", kind: "actor", actor: "apify/instagram-profile-scraper", onEmpty: { gap: "no public Instagram profile" } },
     { id: "tiktok_profile", kind: "actor", actor: "clockworks/tiktok-profile-scraper", onEmpty: { gap: "no public TikTok profile found" } },
     { id: "youtube_channel", kind: "actor", actor: "streamers/youtube-scraper", onEmpty: { gap: "no YouTube videos or channel found" } },
+    { id: "facebook_page", kind: "actor", actor: "apify/facebook-pages-scraper", onEmpty: { gap: "no public Facebook page found" } },
     { id: "bluesky_profile", kind: "actor", actor: "rest/bluesky", onEmpty: { gap: "no Bluesky account found" } },
     { id: "personal_site_crawl", kind: "actor", actor: "apify/website-content-crawler", onEmpty: { gap: "no personal site found" } },
-    { id: "talks_serp", kind: "serp", actor: "apify/google-search-scraper", query: '{subject} talk OR podcast OR conference OR blog OR interview', onEmpty: { gap: "no talks, podcasts or posts found in web search" } },
+    { id: "talks_serp", kind: "serp", actor: "apify/google-search-scraper", query: '"{subject}" talk OR podcast OR conference OR webinar OR přednáška\n"{subject}" blog OR article OR medium.com OR substack.com', onEmpty: { gap: "no talks, podcasts or articles found in web search" } },
+    { id: "press_serp", kind: "serp", actor: "apify/google-search-scraper", query: '"{subject}" interview OR rozhovor OR "tisková zpráva" OR "press release"\n"{subject}" award OR ocenění OR volunteer OR mentor OR meetup', onEmpty: { gap: "no press, awards or community mentions found in web search" } },
     { id: "extract_claims", kind: "extract" },
     { id: "verify_claims", kind: "verify" },
     { id: "synthesize_report", kind: "synthesize" },
