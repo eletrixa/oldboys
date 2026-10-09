@@ -158,6 +158,7 @@ Weights from the case brief ([`docs/brief.md`](docs/brief.md)).
 - ARES lookups at sign-up served from a stored copy.
 
 **Not done:**
+- Onboarding usability, **simulated: an AI persona with Playwright, not a real person** (2026-10-09 05:34): a first-time "HR administrator" persona went register → guide → brief → three tasks (find the requirement without evidence, open a quote, copy the candidate notice) without outside help, with 6 hesitations; one task ended with an answer the brief contradicts ("0 of 4" vs "1 of 4, 3 partly"). Script, table and open points: [docs/usability/first-brief.md](docs/usability/first-brief.md). A test with a real non-technical person is still pending.
 - There is no eval on real people with written ground truth. The eval uses five fictional personas with recorded search results and model answers, so it measures rules and wiring, not the live model's judgement. Its simulated recruiter is always right.
 - Known eval misses: own GitHub profiles found only by name + city stay unused; a CV-only quote shows as "differs"; an overstated claim is downgraded whole.
 - No ATS API write-back, by design. "Copy for ATS" and `.ics` are copy / download only.
