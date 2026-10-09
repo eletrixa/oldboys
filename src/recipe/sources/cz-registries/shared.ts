@@ -81,7 +81,8 @@ export function namesMatch(hitName: string, name: PersonName): boolean {
   return [...words(name.first), ...words(name.last)].every((w) => have.has(w));
 }
 
-export type Answer = { hits: RegistryHit[]; total: number | null; note: string | null };
+/** What a registry parser returns; `match` (attribution to the candidate) is added by the collector, not the parser. */
+export type Answer = { hits: Omit<RegistryHit, "match">[]; total: number | null; note: string | null };
 
 export type RegistrySource = {
   id: RegistryId;

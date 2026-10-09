@@ -76,7 +76,7 @@ export function CodeProfileCard({ profile }: { profile: CodeProfile | null | und
       )}
 
       {profile.repos.length > 0 && (
-        <div className="mt-4 overflow-x-auto">
+        <div className="relative mt-4 overflow-x-auto">
           <table className="w-full min-w-[34rem] text-left text-sm">
             <thead className="text-xs text-muted">
               <tr>

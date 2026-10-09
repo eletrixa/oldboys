@@ -71,8 +71,9 @@ export function formatReceived(iso: string): string {
 /** What `GET /api/runs/:id/state` returns as `intake` for a run an application started. */
 export type RunIntake = { source: ApplicationSource; tag: string | null; receivedAt: string };
 
-/** "From Email · senior-be · 2026-10-09"; the tag is left out when the application had none. */
+/** "From Email · senior-be · 2026-10-09"; "Added by hand · 2026-10-09" for a manual add; the tag is left out when the application had none. */
 export function intakeLine(intake: RunIntake): string {
   const date = formatReceived(intake.receivedAt).slice(0, 10);
-  return [`From ${SOURCE_LABEL[intake.source]}`, ...(intake.tag === null ? [] : [intake.tag]), date].join(" · ");
+  const from = intake.source === "manual" ? SOURCE_LABEL.manual : `From ${SOURCE_LABEL[intake.source]}`;
+  return [from, ...(intake.tag === null ? [] : [intake.tag]), date].join(" · ");
 }

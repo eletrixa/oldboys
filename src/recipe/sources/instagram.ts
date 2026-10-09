@@ -7,7 +7,8 @@
  * Tested:  src/recipe/__tests__/sources-audience.test.ts
  *
  * Key responsibilities:
- * - Request profiles only for candidates with platform instagram and a handle (merge or possibly-same-as); one Source per profile
+ * - Request profiles for candidates with platform instagram and a handle (merge or possibly-same-as: the given profile,
+ *   the CV, the Instagram name search or the web search found them); one Source per profile, six latest captions
  * - `digest`: merged profiles' ProfileFacts (followers, following, posts, verified, bio, photo)
  *
  * Design constraints:
@@ -49,17 +50,18 @@ export const instagram: Collector = {
         via: "actor",
         actor: "apify/instagram-profile-scraper",
         input: { usernames: [...new Set(usernames)] },
-        maxTotalChargeUsd: 0.02,
+        maxTotalChargeUsd: 0.03,
         timeoutSecs: 45,
       },
     ];
   },
+  skipReason: () => "no Instagram account under the candidate's name (Instagram profile search and web search found none, or the lineup rejected them)",
   parse: (payload, ctx) => {
     const items = z.array(Profile).safeParse(payload);
     if (!items.success) return [];
     return items.data.map((p) => {
       const captions = (p.latestPosts ?? [])
-        .slice(0, 3)
+        .slice(0, 6)
         .map((post) => clip(post.caption ?? "", 200))
         .filter((c) => c !== "");
       const lines = [

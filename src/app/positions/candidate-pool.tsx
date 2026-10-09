@@ -159,7 +159,7 @@ export function CandidatePool({ positionId, rows, onReload }: Props): React.JSX.
         <p className="text-muted">No candidates yet. Add one by hand or bind an intake channel.</p>
       ) : (
         <>
-          <div className="overflow-x-auto rounded-xl border border-divider bg-surface">
+          <div className="relative overflow-x-auto rounded-xl border border-divider bg-surface">
             <table className="w-full text-left text-sm">
               <caption className="sr-only">Candidates in the order they were added; fit is the evidence share of this position&apos;s must-haves</caption>
               <thead className="bg-sage/50 text-xs text-muted">

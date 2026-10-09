@@ -7,8 +7,9 @@
  * Tested:  n/a (the digest it renders is tested in src/recipe/__tests__/cz-registries.test.ts)
  *
  * Key responsibilities:
- * - RegistryChecksCard: rows "clear" / "N records (namesake possible)" / "not available", each with the search link; hits listed
- *   under the row with their status word and link; registries the role needs but no Worker may query are listed as "check by hand"
+ * - RegistryChecksCard: rows "clear" / "N records" (the candidate's, by city or company match, or "namesake possible" when no city
+ *   is known) / "N namesakes left out" / "not available", each with the search link; hits listed under the row with their status
+ *   word, match reason and link; registries the role needs but no Worker may query are listed as "check by hand"
  *   with the search page; the fixed caveats close the card; nothing when `checks` is null
  *
  * Design constraints:
@@ -38,15 +39,18 @@ function Row({ check }: { check: RegistryCheck }): React.JSX.Element {
         {check.status === "hits" && (
           <Pill tone="unsure">
             {String(shown)}
-            {more} record{shown === 1 && more === "" ? "" : "s"} · namesake possible
+            {more} record{shown === 1 && more === "" ? "" : "s"}
+            {check.hits.some((h) => h.match !== null) ? " · city or company matches the profile" : " · namesake possible"}
           </Pill>
         )}
+        {check.status === "namesakes" && <Pill tone="neutral">no record at the candidate&apos;s city or employers</Pill>}
         {check.status === "unavailable" && <Pill tone="conflict">not available</Pill>}
         <Ext url={check.source_url}>repeat the search</Ext>
       </div>
       <p className="mt-1 text-xs text-muted">
         Searched: {check.searched}. {r.means.charAt(0).toUpperCase() + r.means.slice(1)}.
         {check.note !== null && ` ${check.note}`}
+        {check.namesakes > 0 && ` ${String(check.namesakes)} record${check.namesakes === 1 ? "" : "s"} under the same name elsewhere left out as namesakes (repeat the search to see them).`}
       </p>
       {check.hits.length > 0 && (
         <ul className="mt-2 space-y-1 text-sm">
@@ -54,6 +58,7 @@ function Row({ check }: { check: RegistryCheck }): React.JSX.Element {
             <li key={`${h.url}:${h.label}`} className="flex flex-wrap items-baseline gap-2">
               <span>{h.label}</span>
               {h.status !== null && <Pill tone="neutral">{h.status}</Pill>}
+              {h.match !== null && <Pill tone="ok">{h.match}</Pill>}
               <Ext url={h.url}>source</Ext>
             </li>
           ))}
