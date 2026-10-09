@@ -8,6 +8,8 @@
  *
  * Key responsibilities:
  * - Mounted once in the root layout; reads the tray list from sessionStorage and re-reads on TRAY_EVENT
+ * - Signed out (`signedIn` from the layout): renders nothing, polls nothing and clears the list, so runs of a previous
+ *   session in this tab, or one a shared run page tracked, never show to a logged-out visitor
  * - Polls GET /api/runs/:id/state every 4 s for every live run, stops per run once it is done or failed; a 404 (run
  *   deleted) untracks the run so a deleted brief does not sit in the tray as "Starting"
  * - Each row: name, what it is hiring for, status pill, a progress bar and five step dots, one line with the remaining
@@ -16,7 +18,7 @@
  * - Side toggle (left or right, remembered in localStorage) and collapse to a small pill
  *
  * Design constraints:
- * - Hidden when the tray is empty, on candidate pages (/apply/<tag>) and on a run page for that run (the open run is neither listed nor polled)
+ * - Hidden when signed out, when the tray is empty, on candidate pages (/apply/<tag>) and on a run page for that run (the open run is neither listed nor polled)
  * - Never blocks the page: fixed, narrow, scrolls inside itself; keyboard reachable (buttons and links only); an in-flow
  *   spacer as tall as the tray ends the page, so the last button (e.g. "Research N candidates" on a phone) scrolls above it
  * - Shows progress and status, never a verdict on a person
@@ -30,7 +32,7 @@ import { progressView } from "@/domain/run-eta";
 import { trayLine } from "@/app/runs/[id]/progress-text";
 import type { RunState } from "@/app/runs/[id]/state";
 import { LINK, Pill } from "@/app/ui";
-import { readTray, TRAY_EVENT, type TrayRow, trayRow, untrackRun } from "./run-tray-store";
+import { clearTray, readTray, TRAY_EVENT, type TrayRow, trayRow, untrackRun } from "./run-tray-store";
 import { useNow } from "./use-now";
 
 const POLL_MS = 4000;
@@ -144,12 +146,18 @@ function TrayItem({ id, onClose }: { id: string; onClose: () => void }): React.J
   );
 }
 
-export function RunTray(): React.JSX.Element | null {
+export function RunTray({ signedIn }: { signedIn: boolean }): React.JSX.Element | null {
   const pathname = usePathname();
   const ids = useTrayIds();
   // Lazy initialiser: the stored side is read once on the client; the server renders nothing (ids are empty there).
   const [side, setSide] = useState<Side>(() => (typeof window === "undefined" ? "right" : readSide()));
   const [open, setOpen] = useState(true);
+
+  // Signed out: the list is account data, so drop it (a previous session in this tab, or a shared run page tracking its run).
+  useEffect(() => {
+    if (!signedIn && ids.length > 0) clearTray();
+  }, [signedIn, ids]);
+  if (!signedIn) return null;
 
   // The run whose page is open is already on screen: neither listed nor polled.
   const shown = ids.filter((id) => pathname !== `/runs/${id}`);

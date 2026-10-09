@@ -9,6 +9,7 @@
  * Key responsibilities:
  * - `trackRun` / `untrackRun` / `readTray`: a sessionStorage list of run ids (newest first, at most TRAY_MAX), and a
  *   window event (TRAY_EVENT) so the tray re-reads it without a reload; `trackRun` of the newest id writes nothing (safe to call per poll)
+ * - `clearTray`: drops the whole list (logout and signed-out tabs), so no run of an account outlives its session
  * - `addRun` / `dropRun`: the pure list operations behind them
  * - `trayRow`: name, status label and tone, progress (0..1, time-weighted when the state carries `progress`, plans/015),
  *   the five step dots, the phase projection and the fields `trayLine` needs, for one run state
@@ -16,7 +17,7 @@
  *
  * Design constraints:
  * - Storage may be blocked: reads give [], writes are ignored (same stance as token.ts)
- * - Pure helpers take and return arrays; only the three storage functions touch the browser
+ * - Pure helpers take and return arrays; only the storage functions touch the browser
  */
 import { progressView, type RunProgress } from "@/domain/run-eta";
 import { clockSkew, firstName, type RunState, type RowState, stepRows } from "@/app/runs/[id]/state";
@@ -60,6 +61,16 @@ export function trackRun(id: string): void {
 
 export function untrackRun(id: string): void {
   writeTray(dropRun(readTray(), id));
+}
+
+/** Forget every watched run (logout, or a tab that is not signed in): the list is account data. */
+export function clearTray(): void {
+  try {
+    sessionStorage.removeItem(TRAY_KEY);
+  } catch {
+    // Storage blocked: nothing was kept.
+  }
+  window.dispatchEvent(new Event(TRAY_EVENT));
 }
 
 export type TrayRow = {

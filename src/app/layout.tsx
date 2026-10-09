@@ -10,7 +10,8 @@
  * - Metadata (title with a "%s · Radar" template, description, Open Graph image public/marketing/og.jpg) and the <html>/<body> wrapper for every page
  * - Radar brand header (Echo r mark + wordmark, SiteNav: Positions, Roles, Applications, New brief as a secondary button so each page keeps one rust action)
  *   and a short honesty footer via SiteHeader/SiteFooter, both hidden on the candidate-facing /apply routes
- * - RunTray: the docked "Briefs in progress" panel that follows runs started in this tab across page changes
+ * - RunTray: the docked "Briefs in progress" panel that follows runs started in this tab across page changes; it gets
+ *   `signedIn` so a logged-out visitor (after logout, or on a shared /runs/<id> link) never sees an account's runs
  *
  * Design constraints:
  * - No runtime = "edge"; no next/font network fetch at build (fonts are self-hosted in public/fonts)
@@ -41,7 +42,7 @@ export default async function RootLayout({
         <SiteHeader nav={<SiteNav user={user} />} />
         <div className="flex-1">{children}</div>
         <SiteFooter />
-        <RunTray />
+        <RunTray signedIn={user !== null} />
       </body>
     </html>
   );

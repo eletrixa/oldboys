@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/runs/[id]/call-setup.tsx
- * Deps:    react, src/domain/call (types), src/domain/call-brief (limit), src/app/ui (Radar vocabulary), ./call-panel, ./report-lang (useReport)
+ * Deps:    react, src/domain/call (types), src/domain/call-brief (limit), src/app/_components/token (OPERATOR_KEY), src/app/ui (Radar vocabulary), ./call-panel, ./report-lang (useReport)
  * Tested:  n/a (validation in __tests__/call-panel.test.ts)
  *
  * Key responsibilities:
@@ -12,7 +12,7 @@
  *   notes read-only (they stay when the text is edited); while it is drafted a short loading line replaces the list,
  *   a fallback shows the rule-based questions with a small note (a note from the route stays English)
  * - Form: phone number (E.164 after normalisation), consent checkbox, consent note, operator name
- *   (remembered in sessionStorage); "Call candidate now" only when formProblems is empty
+ *   (remembered in sessionStorage, cleared on logout); "Call candidate now" only when formProblems is empty
  * - Labels, hints and validation follow the report language (`report.t.call`); the question texts, the `why` sent with
  *   them and the agent's first message stay English (the call is in English) and keep lang="en" on a Czech page
  *
@@ -25,11 +25,11 @@
 import { useRef, useState } from "react";
 import type { CallBrief } from "@/domain/call";
 import { MAX_CALL_QUESTIONS } from "@/domain/call-brief";
+import { OPERATOR_KEY } from "@/app/_components/token";
 import { BTN_PRIMARY } from "@/app/ui";
 import { type AiDraft, type CallForm, type DraftQuestion, draftsFromProposal, formProblems, normalizeNumber } from "./call-panel";
 import { useReport } from "./report-lang";
 
-const OPERATOR_KEY = "oldboys.operator";
 const INPUT = "w-full rounded-xl border border-divider bg-surface px-3 py-2 text-sm text-ink focus:border-action focus:outline-none";
 const SMALL_BTN = "rounded-xl border border-divider px-3 py-1.5 text-sm text-ink hover:bg-canvas";
 

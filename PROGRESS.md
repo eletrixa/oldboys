@@ -360,6 +360,9 @@ Each agent appends: what it starts, progress, what it finishes. Newest at the bo
 
 ## 2026-10-09 · privacy-logout-agent (Minas)
 - Started: 05:32. Briefs-in-progress tray only for a signed-in user; logout clears the tray list, operator token and operator name from the tab.
+- Finished: 05:36. `RunTray` gets `signedIn` from the root layout: signed out it renders nothing, polls nothing and clears the list (also when a shared /runs/<id> page tracks its live run). Logout clears the tray (`clearTray`, new in run-tray-store.ts, tested), the operator token (`writeToken(null)`) and the operator name (`clearOperator`; `OPERATOR_KEY` moved to token.ts), also when the logout request fails. Logged-in behaviour unchanged (tray still shows on /runs/* for other runs).
+- Checked: pnpm check green (2167 + 21 tests); next dev + local D1 + Playwright (state route mocked): tray visible logged in; after Log out none on /login and sessionStorage has no oldboys.tray / runToken / operator; logged out on a running /runs/<id> no tray and the list stays empty.
+- Files: src/app/layout.tsx, src/app/logout-button.tsx, src/app/_components/{run-tray.tsx,run-tray-store.ts,token.ts,__tests__/run-tray-store.test.ts}, src/app/runs/[id]/call-setup.tsx, PROGRESS.md.
 
 ## 2026-10-09 · guide-walk agent (Minas)
 - Started: 05:35. Simulated first-time non-technical recruiter walk on production with /guide; copy-only fixes; result in docs/usability/first-brief.md and JURY.md.
