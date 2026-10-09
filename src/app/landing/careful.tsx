@@ -7,8 +7,8 @@
  * Tested:  n/a (visual)
  *
  * Key responsibilities:
- * - Traceable sources (quote, host, retrieval date, "Confirmed: …"), explicit uncertainty (coverage words + Fact /
- *   Inference), research boundaries (searched / not searched / never), a person decides (audit record), the
+ * - Traceable sources (quote, host, retrieval date, "Confirmed: …"), explicit uncertainty (coverage words + FACT /
+ *   INFERENCE), research boundaries (searched / not searched / never), a person decides (audit record), the
  *   candidate is told (notice EN | CZ, 7-day deletion)
  *
  * Design constraints:
@@ -53,7 +53,8 @@ export function Careful(): React.JSX.Element {
             <li className="flex items-center gap-2.5"><Pill tone="ok">evidenced</Pill><span className="text-muted">A source supports it.</span></li>
             <li className="flex items-center gap-2.5"><Pill tone="unsure">partial</Pill><span className="text-muted">Some support; details are open.</span></li>
             <li className="flex items-center gap-2.5"><Pill tone="neutral">none</Pill><span className="text-muted">No source yet. Ask about it.</span></li>
-            <li className="flex items-center gap-2.5"><Pill tone="inference">Inference</Pill><span className="text-muted">Radar&apos;s reading, marked as such.</span></li>
+            <li className="flex items-center gap-2.5"><Pill tone="ok">FACT</Pill><span className="text-muted">A verbatim quote from the linked page.</span></li>
+            <li className="flex items-center gap-2.5"><Pill tone="inference">INFERENCE</Pill><span className="text-muted">Radar&apos;s reading of those quotes, marked as such.</span></li>
           </ul>
         </Tile>
         <Tile title="Research boundaries" body="Radar looks only at public professional work for one named role, and each brief says where it did not look.">

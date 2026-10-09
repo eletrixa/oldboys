@@ -201,7 +201,7 @@ export function ProfilePicker({ invalid = false, onUrl }: Props): React.JSX.Elem
       )}
       {message !== undefined && <span role="status" className="text-sm text-muted">{message}</span>}
       <span id={`${id}-help`} className="text-xs text-muted">
-        We read their name, location and employer from the profile, so we know exactly who they are.
+        We read their name, location and employer from the profile and treat it as the confirmed identity.
       </span>
     </div>
   );

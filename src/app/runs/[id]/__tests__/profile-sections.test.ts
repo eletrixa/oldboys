@@ -73,6 +73,7 @@ describe("ProfileSections", () => {
     expect(out).toContain("closes: <span class=\"text-ink\">Short tenures</span>");
     expect(out).toContain("Inference from public writing, not an assessment of the person.");
     expect(out).toContain("DISC C");
+    expect(out).toContain("No supporting quote kept");
     expect(out).toContain("· low confidence");
     expect(out).toContain("How the % is computed");
     expect(out).toContain("Share of the role profile with public evidence, not a performance prediction.");

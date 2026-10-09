@@ -92,7 +92,7 @@ export function NewPositionForm({ next = null }: { next?: string | null }): Reac
 
   return (
     <main className="mx-auto flex max-w-3xl flex-col gap-8 px-4 py-10 md:py-14">
-      <Link href="/positions" className="text-sm text-muted hover:text-ink">All positions</Link>
+      <Link href={next ?? "/positions"} className="text-sm text-muted hover:text-ink">{next === null ? "All positions" : "Back to the new brief"}</Link>
       <header className="flex flex-col items-start gap-3 border-b border-divider pb-8">
         <Eyebrow>Positions</Eyebrow>
         <h1 className="font-serif text-4xl leading-[1.05] md:text-5xl">Add a position</h1>

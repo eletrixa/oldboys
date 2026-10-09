@@ -8,7 +8,7 @@
  *
  * Key responsibilities:
  * - DeleteCard: a closed disclosure (opened by the #delete-data hash, e.g. from the audit page); step 1 picks the reason,
- *   step 2 explains what goes and that it cannot be undone, "Delete everything now" (danger tone) sends it
+ *   step 2 lists what is deleted and what remains, needs a ticked "I understand" box, then "Delete everything now" (danger tone) sends it
  * - 401 shows the login link like the call panel; 403 / 404 / 409 / 502 and network errors in plain words (role="alert")
  * - DeletedView: replaces the page after success with the receipt line, "Copy deletion note" (plain text for the ATS)
  *   and links back to the briefs list and home
@@ -35,14 +35,15 @@ type Step =
   | { kind: "deleting"; reason: DeleteReason };
 type Problem = { kind: "none" } | { kind: "unauthorized" } | { kind: "error"; message: string };
 
-const WHAT_GOES =
-  "This deletes the sources and saved copies, claims, the brief, call results, the application and the CV file for this candidate at once. It cannot be undone.";
+const GOES = ["Raw sources and saved copies", "The ledger and claims", "The brief", "Call results", "The application and the CV file"];
+const REMAINS = "Nothing about this candidate stays in the research tool. You get a receipt with counts only, no personal data.";
 
 export function DeleteCard({ runId, onDeleted }: { runId: string; onDeleted: (receipt: DeletionReceipt) => void }): React.JSX.Element {
   const [open] = useState(() => window.location.hash === `#${DELETE_ANCHOR}`);
   const ref = useRef<HTMLDetailsElement>(null);
   const [step, setStep] = useState<Step>({ kind: "choose", reason: null });
   const [problem, setProblem] = useState<Problem>({ kind: "none" });
+  const [sure, setSure] = useState(false);
 
   useEffect(() => {
     if (open) ref.current?.scrollIntoView({ block: "start" });
@@ -78,12 +79,26 @@ export function DeleteCard({ runId, onDeleted }: { runId: string; onDeleted: (re
             <p className="text-sm text-ink">
               <span className="font-semibold">Reason:</span> {REASON_LABEL[step.reason]}
             </p>
-            <p className="text-sm text-conflict">{WHAT_GOES}</p>
+            <div className="text-sm text-ink">
+              <p className="font-semibold">What is deleted, all at once</p>
+              <ul className="mt-1 list-disc pl-5">
+                {GOES.map((g) => (
+                  <li key={g}>{g}</li>
+                ))}
+              </ul>
+              <p className="mt-2 font-semibold">What remains</p>
+              <p>{REMAINS}</p>
+              <p className="mt-2 text-conflict">This cannot be undone.</p>
+            </div>
+            <label className="flex min-h-11 cursor-pointer items-center gap-3 text-sm text-ink">
+              <input type="checkbox" checked={sure} onChange={(e) => { setSure(e.target.checked); }} className="size-4 accent-conflict" />
+              I understand this cannot be undone.
+            </label>
             <div className="flex flex-wrap items-center gap-2">
-              <button type="button" className={BTN_DANGER} disabled={step.kind === "deleting"} onClick={() => void send(step.reason)}>
+              <button type="button" className={BTN_DANGER} disabled={step.kind === "deleting" || !sure} onClick={() => void send(step.reason)}>
                 {step.kind === "deleting" ? "Deleting..." : "Delete everything now"}
               </button>
-              <button type="button" className={BTN_QUIET} disabled={step.kind === "deleting"} onClick={() => { setStep({ kind: "choose", reason: step.reason }); setProblem({ kind: "none" }); }}>
+              <button type="button" className={BTN_QUIET} disabled={step.kind === "deleting"} onClick={() => { setStep({ kind: "choose", reason: step.reason }); setProblem({ kind: "none" }); setSure(false); }}>
                 Cancel
               </button>
             </div>

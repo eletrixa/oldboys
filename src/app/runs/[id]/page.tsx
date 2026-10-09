@@ -12,7 +12,10 @@
  * Design constraints:
  * - Server component; polling and answers live in run-view.tsx
  */
+import type { Metadata } from "next";
 import { RunView } from "./run-view";
+
+export const metadata: Metadata = { title: "Candidate brief" };
 
 export default async function RunPage({
   params,

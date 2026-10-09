@@ -60,7 +60,7 @@ function ReadAloud({ text }: { text: string }): React.JSX.Element | null {
   };
 
   return (
-    <button type="button" className={`${BTN_QUIET} shrink-0`} onClick={toggle} aria-pressed={speaking}>
+    <button type="button" className={`${BTN_QUIET} shrink-0 print:hidden`} onClick={toggle} aria-pressed={speaking}>
       {speaking ? t.stopReading : t.readAloud}
     </button>
   );

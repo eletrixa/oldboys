@@ -9,7 +9,7 @@
  * Key responsibilities:
  * - Picking a position loads GET /api/positions/:id for its must-haves and pool
  * - Research: each ready row goes to POST /api/positions/:id/candidates (JSON) or .../candidates/file (multipart), then one
- *   POST /api/positions/:id/enrich with the new ids plus the ticked pool ids; success routes to /positions/:id#candidates
+ *   POST /api/positions/:id/enrich with the new ids plus the ticked pool ids; success routes to the run (one started) or /positions/:id#candidates (several)
  * - A refusal (429 cap, 401, other) shows calm copy and keeps every row; a retry re-adds rows as duplicates, which keep their id
  *
  * Design constraints:
@@ -26,7 +26,7 @@ import { enrichSummary, type EnrichResponse } from "@/app/positions/pool-rows";
 import { BTN_PRIMARY, Eyebrow, TILE } from "@/app/ui";
 import type { PositionListItem } from "@/domain/position";
 import type { RoleOption } from "@/domain/role-catalog";
-import { candidateBody, type DraftRow, emptyRow, enrichIds, failText, patchRow, researchCount, rowReady } from "./brief-rows";
+import { candidateBody, type DraftRow, emptyRow, enrichIds, failText, nextAfterStart, type Notice, patchRow, researchCount, rowReady } from "./brief-rows";
 import { CandidatesStep } from "./candidates-step";
 import { PositionStep } from "./position-step";
 
@@ -50,6 +50,24 @@ async function addRow(positionId: string, row: DraftRow): Promise<string | numbe
   return out.applicationId ?? 500;
 }
 
+function NoticeLine({ notice }: { notice: Notice }): React.JSX.Element {
+  return notice.kind === "error"
+    ? <p role="alert" className="text-sm text-conflict">{notice.text}</p>
+    : <p role="status" className="text-sm text-muted">{notice.text}</p>;
+}
+
+function Placeholder({ n, title, hint }: { n: number; title: string; hint: string }): React.JSX.Element {
+  return (
+    <div role="group" aria-disabled="true" aria-labelledby={`step-${String(n)}`} className={`${TILE} gap-2 text-muted`}>
+      <div className="flex items-baseline gap-3">
+        <span className="font-serif text-3xl leading-none tabular-nums">{n}</span>
+        <h2 id={`step-${String(n)}`} className="text-2xl">{title}</h2>
+      </div>
+      <p className="text-sm">{hint}</p>
+    </div>
+  );
+}
+
 function Step({ n, title, children }: { n: number; title: string; children: React.ReactNode }): React.JSX.Element {
   return (
     <section aria-labelledby={`step-${String(n)}`} className={`${TILE} gap-5`}>
@@ -71,7 +89,7 @@ export function NewBriefWizard({ positions, roleOptions, initialPositionId, init
   const [rows, setRows] = useState<readonly DraftRow[]>([emptyRow("r1")]);
   const [ticked, setTicked] = useState<ReadonlySet<string>>(new Set());
   const [busy, setBusy] = useState(false);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [notice, setNotice] = useState<Notice | null>(null);
   const count = researchCount(rows, ticked);
 
   useEffect(() => {
@@ -82,7 +100,7 @@ export function NewBriefWizard({ positions, roleOptions, initialPositionId, init
       .catch(() => null)
       .then((d) => {
         if (!live) return;
-        if (d === null) setNotice("We could not load this position. Pick it again or reload the page.");
+        if (d === null) setNotice({ kind: "error", text: "We could not load this position. Pick it again or reload the page." });
         else setDetail(d);
       });
     return () => { live = false; };
@@ -116,25 +134,25 @@ export function NewBriefWizard({ positions, roleOptions, initialPositionId, init
         if (!rowReady(row)) continue;
         const got = await addRow(positionId, row);
         if (typeof got === "number") {
-          setNotice(failText(got, `Candidate ${String(i + 1)} could not be added. Check it and try again.`));
+          setNotice({ kind: "error", text: failText(got, `Candidate ${String(i + 1)} could not be added. Check it and try again.`) });
           return;
         }
         added.push(got);
       }
       const res = await postJson(`/api/positions/${encodeURIComponent(positionId)}/enrich`, { applicationIds: enrichIds(added, ticked) });
       if (!res.ok) {
-        setNotice(failText(res.status, "We could not start the research. Please try again."));
+        setNotice({ kind: "error", text: failText(res.status, "We could not start the research. Please try again.") });
         return;
       }
       const out = await res.json<EnrichResponse>();
       for (const run of out.started) trackRun(run.runId);
       if (out.started.length === 0) {
-        setNotice(enrichSummary(out));
+        setNotice({ kind: "info", text: enrichSummary(out) });
         return;
       }
-      router.push(`/positions/${encodeURIComponent(positionId)}#candidates`);
+      router.push(nextAfterStart(positionId, out.started));
     } catch {
-      setNotice("We could not reach the service. Please try again.");
+      setNotice({ kind: "error", text: "We could not reach the service. Please try again." });
     } finally {
       setBusy(false);
     }
@@ -152,23 +170,29 @@ export function NewBriefWizard({ positions, roleOptions, initialPositionId, init
       <Step n={1} title="Position">
         <PositionStep positions={positions} roleOptions={roleOptions} initialRole={initialRole} chosen={chosen} onPick={pick} onChange={() => { setPositionId(null); setDetail(null); }} />
       </Step>
-      {chosen !== null && (
+      {chosen === null ? (
+        <>
+          <Placeholder n={2} title="Candidates" hint="Add one or more people after you pick the position." />
+          <Placeholder n={3} title="Research" hint="Start research for everyone at once." />
+        </>
+      ) : (
         <>
           <Step n={2} title="Candidates">
             <CandidatesStep rows={rows} pool={detail?.candidates ?? []} ticked={ticked} onPatch={onPatch} onAdd={onAdd} onRemove={onRemove} onTick={onTick} />
           </Step>
           <Step n={3} title="Research">
-            <p className="text-sm text-muted">One brief per candidate, each with a source for every point. You can follow them in the results table.</p>
+            <p className="text-sm text-muted">One brief per person, each point linked to its source. Follow them in the tray at the bottom of the page or in My briefs.</p>
             <div className="flex flex-wrap items-center gap-4">
               <button type="button" className={BTN_PRIMARY} disabled={busy || count === 0} onClick={() => void research()}>
                 {busy ? "Starting…" : `Research ${String(count)} ${count === 1 ? "candidate" : "candidates"}`}
               </button>
-              {notice !== null && <p role="status" className="text-sm text-conflict">{notice}</p>}
+              {count === 0 && <p className="text-sm text-muted">Add at least one person above, or tick someone from the pool.</p>}
+              {notice !== null && <NoticeLine notice={notice} />}
             </div>
           </Step>
         </>
       )}
-      {chosen === null && notice !== null && <p role="status" className="text-sm text-conflict">{notice}</p>}
+      {chosen === null && notice !== null && <NoticeLine notice={notice} />}
     </main>
   );
 }

@@ -3,20 +3,21 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/runs/[id]/registry-checks-card.tsx
- * Deps:    src/domain/cz-registry (catalog, caveats, types), ../../ui (CARD, Eyebrow, LINK, Pill)
+ * Deps:    src/domain/cz-registry (catalog, caveats, types), ../../ui (Chevron, Eyebrow, LINK, Pill, SUMMARY)
  * Tested:  n/a (the digest it renders is tested in src/recipe/__tests__/cz-registries.test.ts)
  *
  * Key responsibilities:
  * - RegistryChecksCard: rows "clear" / "N records" (the candidate's, by city or company match, or "namesake possible" when no city
  *   is known) / "N namesakes left out" / "not available", each with the search link; hits listed under the row with their status
  *   word, match reason and link; registries the role needs but no Worker may query are listed as "check by hand"
- *   with the search page; the fixed caveats close the card; nothing when `checks` is null
+ *   with the search page and an "unsure" pill; hits, namesakes and unavailable rows come first, rows with no record sit behind a
+ *   "N registries with no record" disclosure; the fixed caveats close the section; nothing when `checks` is null
  *
  * Design constraints:
  * - No hooks, English only; the registry's wording and a link, never a judgment about the person
  */
 import { type Registry, REGISTRIES, REGISTRY_CAVEATS, type RegistryCheck, type RegistryChecks, registriesFor, registryById } from "@/domain/cz-registry";
-import { CARD, Eyebrow, LINK, Pill } from "../../ui";
+import { Chevron, Eyebrow, LINK, Pill, SUMMARY } from "../../ui";
 
 function Ext({ url, children }: { url: string; children: React.ReactNode }): React.JSX.Element {
   return (
@@ -31,7 +32,7 @@ function Row({ check }: { check: RegistryCheck }): React.JSX.Element {
   const shown = check.hits.length;
   const more = check.total !== null && check.total > shown ? ` of ${String(check.total)}` : "";
   return (
-    <li className="border-t border-divider py-3 first:border-t-0">
+    <li className="py-3">
       <div className="flex flex-wrap items-center gap-2">
         <span className="font-medium text-ink">{r.name}</span>
         <span className="text-xs text-muted">{r.name_cs}</span>
@@ -76,28 +77,49 @@ export function manualRegistries(role: string | null): Registry[] {
 export function RegistryChecksCard({ checks }: { checks: RegistryChecks | null | undefined }): React.JSX.Element | null {
   if (checks === null || checks === undefined) return null;
   const manual = manualRegistries(checks.role);
+  const clear = checks.checks.filter((c) => c.status === "clear");
+  const shown = checks.checks.filter((c) => c.status !== "clear");
   return (
-    <section className={CARD} aria-labelledby="registry-checks">
+    <section aria-labelledby="registry-checks">
       <Eyebrow>Czech public registries · name search</Eyebrow>
-      <h2 id="registry-checks" className="mt-1 font-serif text-2xl">
+      <h3 id="registry-checks" className="mt-1 font-sans text-base font-semibold">
         Public registries
-      </h2>
+      </h3>
       <p className="mt-1 text-sm text-muted">
         {String(checks.checks.length)} of {String(REGISTRIES.length)} registries searched for {checks.subject}
         {checks.role !== null && ` (role: ${checks.role})`}.
       </p>
-      <ul className="mt-3">
-        {checks.checks.map((c) => (
-          <Row key={c.registry} check={c} />
-        ))}
-      </ul>
+      {shown.length > 0 && (
+        <ul className="mt-3 divide-y divide-divider border-y border-divider">
+          {shown.map((c) => (
+            <Row key={c.registry} check={c} />
+          ))}
+        </ul>
+      )}
+      {clear.length > 0 && (
+        <details className="group mt-2">
+          <summary className={SUMMARY}>
+            <Chevron />
+            {String(clear.length)} {clear.length === 1 ? "registry" : "registries"} with no record
+          </summary>
+          <ul className="divide-y divide-divider border-y border-divider">
+            {clear.map((c) => (
+              <Row key={c.registry} check={c} />
+            ))}
+          </ul>
+        </details>
+      )}
       {manual.length > 0 && (
-        <div className="mt-3 border-t border-divider pt-3 text-sm">
-          <p className="text-xs text-muted">The role also needs these registries, which allow no automated query (CAPTCHA or signed access). Check by hand:</p>
-          <ul className="mt-1 flex flex-wrap gap-x-4 gap-y-1">
+        <div className="mt-4">
+          <h4 className="text-xs font-semibold text-muted">Check by hand</h4>
+          <p className="mt-1 text-xs text-muted">The role also needs these registries, which allow no automated query (CAPTCHA or signed access).</p>
+          <ul className="mt-1 divide-y divide-divider border-y border-divider text-sm">
             {manual.map((r) => (
-              <li key={r.id}>
-                <Ext url={r.url}>{r.name}</Ext> <span className="text-xs text-muted">({r.name_cs})</span>
+              <li key={r.id} className="flex flex-wrap items-center gap-2 py-2">
+                <span className="font-medium text-ink">{r.name}</span>
+                <span className="text-xs text-muted">{r.name_cs}</span>
+                <Pill tone="unsure">not checked</Pill>
+                <Ext url={r.url}>open the search</Ext>
               </li>
             ))}
           </ul>

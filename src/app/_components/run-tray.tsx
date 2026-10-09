@@ -96,10 +96,12 @@ function TrayItem({ id, onClose }: { id: string; onClose: () => void }): React.J
     <li className="flex flex-col gap-2 border-t border-divider px-4 py-3 first:border-t-0">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <p className="truncate font-medium">{row?.title ?? "New brief"}</p>
+          <Link href={`/runs/${encodeURIComponent(id)}`} className="block truncate font-medium hover:underline">
+            {row?.title ?? "New brief"}
+          </Link>
           {row?.detail !== null && row?.detail !== undefined && <p className="truncate text-xs text-muted">{row.detail}</p>}
         </div>
-        <button type="button" onClick={onClose} aria-label={`Stop following ${row?.title ?? "this brief"}`} className="text-muted hover:text-ink">
+        <button type="button" onClick={onClose} aria-label={`Stop following ${row?.title ?? "this brief"}`} className="-mt-2 -mr-3 inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center text-muted hover:text-ink">
           ×
         </button>
       </div>
@@ -154,10 +156,10 @@ export function RunTray(): React.JSX.Element | null {
   }
   return (
     <aside aria-label="Briefs in progress" className={`fixed bottom-4 ${dock} z-40 w-[22rem] max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-line bg-surface shadow-lg`}>
-      <div className="flex items-center justify-between gap-2 border-b border-divider bg-canvas px-4 py-2">
+      <div className="flex h-11 items-center justify-between gap-2 border-b border-divider bg-canvas pl-4 pr-2">
         <p className="text-xs font-semibold tracking-[0.08em] text-muted uppercase">Briefs in progress</p>
-        <div className="flex items-center gap-3 text-xs">
-          <button type="button" onClick={flip} className="text-muted hover:text-ink">
+        <div className="flex items-center text-xs">
+          <button type="button" onClick={flip} className="min-h-11 px-2 text-muted hover:text-ink">
             {side === "right" ? "Move left" : "Move right"}
           </button>
           <button
@@ -165,7 +167,7 @@ export function RunTray(): React.JSX.Element | null {
             onClick={() => {
               setOpen(false);
             }}
-            className="text-muted hover:text-ink"
+            className="min-h-11 px-2 text-muted hover:text-ink"
           >
             Hide
           </button>

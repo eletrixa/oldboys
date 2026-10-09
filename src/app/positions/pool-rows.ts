@@ -11,7 +11,7 @@
  *   progress, fit % and independent-evidence count once done, selectable flag)
  * - channelsFor: the four ways a candidate reaches a bound intake tag
  * - defaultTag: tag suggestion from a position title
- * - enrichSummary: one line for the result of Start enrichment
+ * - enrichSummary: one line for the result of Research selected
  *
  * Design constraints:
  * - Pure, no I/O, no React

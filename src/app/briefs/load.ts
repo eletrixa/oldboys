@@ -4,13 +4,14 @@
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/briefs/load.ts
  * Deps:    D1 (type only)
- * Tested:  src/app/briefs/__tests__/load.test.ts (groupByPosition, statusOf)
+ * Tested:  src/app/briefs/__tests__/load.test.ts (groupByPosition, statusOf, relativeTime)
  *
  * Key responsibilities:
  * - listOrganizationRuns: one query scoped to organization_id, joined to the starting account, the position and the
  *   brief's fit % (json_extract of profile.position_fit[0].fit_pct, so the brief JSON never leaves D1)
  * - groupByPosition: position groups in order of their newest run, "No position" last
  * - statusOf: plain label and tone for a run status; "Stalled, start again" when running with no ledger row for 30 min
+ * - relativeTime: "2 min ago" / "3 h ago" / "yesterday" / "9 Oct 2026" label for a timestamp, "" when invalid
  *
  * Design constraints:
  * - Reads only; never returns another organization's rows
@@ -68,4 +69,21 @@ export function statusOf(status: string, lastAt?: string, nowIso = new Date().to
   if (lastAt !== undefined && isStalled(status, lastAt, nowIso)) return { label: "Stalled, start again", tone: "unsure" };
   if (status === "paused") return { label: "Paused", tone: "unsure" };
   return { label: "Researching", tone: "unsure" };
+}
+
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/** Short relative label for a timestamp (UTC calendar days); "" when either input is not a date. */
+export function relativeTime(iso: string, nowIso = new Date().toISOString()): string {
+  const then = new Date(iso);
+  const now = new Date(nowIso);
+  const ms = now.getTime() - then.getTime();
+  if (Number.isNaN(ms)) return "";
+  const minutes = Math.floor(ms / 60_000);
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${String(minutes)} min ago`;
+  if (minutes < 24 * 60) return `${String(Math.floor(minutes / 60))} h ago`;
+  const day = (d: Date): number => Math.floor(d.getTime() / 86_400_000);
+  if (day(now) - day(then) === 1) return "yesterday";
+  return `${String(then.getUTCDate())} ${MONTHS[then.getUTCMonth()] ?? ""} ${String(then.getUTCFullYear())}`;
 }

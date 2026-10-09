@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/runs/[id]/profile-signals-card.tsx
- * Deps:    src/domain/profile-signals (types, caveats), src/domain/url (httpUrl), ../../ui (CARD, Eyebrow)
+ * Deps:    src/domain/profile-signals (types, caveats), src/domain/url (httpUrl), ../../ui (Eyebrow)
  * Tested:  src/app/runs/[id]/__tests__/profile-signals-card.test.ts
  *
  * Key responsibilities:
@@ -15,25 +15,25 @@
  */
 import { PROFILE_SIGNAL_CAVEATS, type ProfileSignals } from "@/domain/profile-signals";
 import { httpUrl } from "@/domain/url";
-import { CARD, Eyebrow } from "../../ui";
+import { Eyebrow } from "../../ui";
 
 export function ProfileSignalsCard({ signals }: { signals: ProfileSignals | null | undefined }): React.JSX.Element | null {
   if (signals === null || signals === undefined) return null;
   return (
-    <section className={CARD} aria-labelledby="profile-signals">
+    <section aria-labelledby="profile-signals">
       <Eyebrow>What the public accounts show</Eyebrow>
-      <h2 id="profile-signals" className="mt-1 font-serif text-2xl">
-        Profile signals
-      </h2>
+      <h3 id="profile-signals" className="mt-1 font-sans text-base font-semibold">
+        Profile signals to check
+      </h3>
 
       {signals.signals.length === 0 ? (
         <p className="mt-3 text-sm text-ink">No account signals on this run.</p>
       ) : (
-        <ul className="mt-3 flex flex-col gap-3 text-sm">
+        <ul className="mt-3 divide-y divide-divider border-y border-divider text-sm">
           {signals.signals.map((s) => {
             const href = httpUrl(s.source_url);
             return (
-              <li key={`${s.id}:${s.profile_url}`} className="break-words">
+              <li key={`${s.id}:${s.profile_url}`} className="py-2.5 break-words">
                 <span className="text-ink">{s.text}</span>
                 {href !== null && (
                   <a href={href} target="_blank" rel="noreferrer" className="ml-1 text-xs text-muted underline underline-offset-2 hover:text-ink">
@@ -49,7 +49,7 @@ export function ProfileSignalsCard({ signals }: { signals: ProfileSignals | null
 
       {signals.not_checked.length > 0 && (
         <div className="mt-4 text-sm">
-          <h3 className="text-xs font-semibold text-muted">Not checked</h3>
+          <h4 className="text-xs font-semibold text-muted">Not checked</h4>
           <ul className="mt-1 list-disc pl-5 text-ink">
             {signals.not_checked.map((n) => (
               <li key={n}>{n}</li>

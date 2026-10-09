@@ -45,7 +45,7 @@ function List({ items }: { items: Registry[] }): React.JSX.Element {
 export function RegistryChecks({ title }: { title: string }): React.JSX.Element {
   const plan = registryPlan(title);
   return (
-    <section className={CARD} aria-labelledby="position-registries">
+    <section id="registry-checks" className={`${CARD} scroll-mt-6`} aria-labelledby="position-registries">
       <Eyebrow>Every candidate of this position</Eyebrow>
       <h2 id="position-registries" className="mt-1 font-serif text-xl">
         Registry checks

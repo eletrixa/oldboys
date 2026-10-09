@@ -62,17 +62,17 @@ function BindTag({ positionId, title, onReload }: Omit<Props, "tags">): React.JS
       <h3 className="font-medium">Bind an intake tag</h3>
       <p className="text-sm text-muted">Applications that arrive under this tag land in the pool above. No research starts until you start it.</p>
       <div className="grid gap-3 md:grid-cols-2">
-        <label className="flex flex-col gap-1 text-xs text-muted">
+        <label className="flex flex-col gap-1.5 text-sm font-semibold text-ink">
           Tag
           <input className={`${FIELD} px-3 py-2`} value={tag} maxLength={40} onChange={(e) => { setTag(e.target.value); }} />
         </label>
-        <label className="flex flex-col gap-1 text-xs text-muted">
+        <label className="flex flex-col gap-1.5 text-sm font-semibold text-ink">
           StartupJobs offer id (optional)
           <input className={`${FIELD} px-3 py-2`} value={offer} maxLength={40} onChange={(e) => { setOffer(e.target.value); }} />
         </label>
       </div>
       {needToken && (
-        <label className="flex flex-col gap-1 text-xs text-muted">
+        <label className="flex flex-col gap-1.5 text-sm font-semibold text-ink">
           Team token
           <input type="password" autoComplete="off" className={`${FIELD} px-3 py-2`} value={token} onChange={(e) => { setToken(e.target.value); }} />
         </label>
@@ -88,7 +88,7 @@ function BindTag({ positionId, title, onReload }: Omit<Props, "tags">): React.JS
 export function IntakeChannels({ positionId, title, tags, onReload }: Props): React.JSX.Element {
   const origin = typeof window === "undefined" ? "" : window.location.origin;
   return (
-    <section aria-labelledby="channels-heading" className="flex flex-col gap-4">
+    <section id="intake-channels" aria-labelledby="channels-heading" className="flex scroll-mt-6 flex-col gap-4">
       <h2 id="channels-heading" className="font-serif text-2xl">Intake channels</h2>
       {tags.length === 0 ? (
         <BindTag positionId={positionId} title={title} onReload={onReload} />

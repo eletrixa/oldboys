@@ -12,8 +12,11 @@
  * Design constraints:
  * - Server component; token handling and fetching live in positions-view.tsx
  */
+import type { Metadata } from "next";
 import { ROLE_OPTIONS } from "@/domain/role-catalog";
 import { PositionsView } from "./positions-view";
+
+export const metadata: Metadata = { title: "Positions" };
 
 export default function PositionsPage(): React.JSX.Element {
   return <PositionsView catalog={ROLE_OPTIONS} />;

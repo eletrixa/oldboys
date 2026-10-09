@@ -12,8 +12,11 @@
  * Design constraints:
  * - Server component; no data fetching here
  */
+import type { Metadata } from "next";
 import { safeNext } from "@/app/login/next-path";
 import { NewPositionForm } from "./new-position-form";
+
+export const metadata: Metadata = { title: "Add a position" };
 
 export default async function NewPositionPage({ searchParams }: { searchParams: Promise<{ next?: string }> }): Promise<React.JSX.Element> {
   const next = safeNext((await searchParams).next);

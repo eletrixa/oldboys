@@ -71,7 +71,10 @@ export function PositionStep({ positions, roleOptions, initialRole = "", chosen,
     return (
       <div className={`${CARD_SAGE} flex flex-col gap-3`}>
         <div className="flex flex-wrap items-baseline justify-between gap-3">
-          <h3 className="font-serif text-2xl">{chosen.title}</h3>
+          <div className="flex flex-col gap-0.5">
+            <h3 className="font-serif text-2xl">{chosen.title}</h3>
+            {chosen.mustHaves !== null && <p className="text-sm text-muted">{String(chosen.mustHaves.length)} {chosen.mustHaves.length === 1 ? "must-have" : "must-haves"}</p>}
+          </div>
           <button type="button" className={BTN_QUIET} onClick={onChange}>Change</button>
         </div>
         {chosen.mustHaves === null ? (
@@ -108,7 +111,7 @@ export function PositionStep({ positions, roleOptions, initialRole = "", chosen,
                   <span className="font-semibold">{p.title}</span>
                   {(p.company ?? p.location) !== null && <span className="block text-xs text-muted">{[p.company, p.location].filter((s) => s !== null).join(" · ")}</span>}
                 </span>
-                <Pill tone="neutral">{p.family}</Pill>
+                <span className="shrink-0 whitespace-nowrap"><Pill tone="neutral">{p.family}</Pill></span>
               </button>
             </li>
           ))}

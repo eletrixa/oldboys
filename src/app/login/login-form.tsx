@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/login/login-form.tsx
- * Deps:    react, next/navigation, ../start-form (FIELD)
+ * Deps:    react, next/link, next/navigation, ../ui
  * Tested:  n/a
  *
  * Key responsibilities:
@@ -14,9 +14,10 @@
  */
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { BTN_PRIMARY, CARD, FIELD } from "../ui";
+import { BTN_PRIMARY, CARD, FIELD, LINK } from "../ui";
 
 type Status = { kind: "idle" } | { kind: "submitting" } | { kind: "error"; message: string };
 
@@ -62,7 +63,7 @@ export function LoginForm({ next = "/" }: { next?: string }): React.JSX.Element 
     >
       <label className="flex flex-col gap-1.5 text-sm font-semibold">
         Work email
-        <input name="email" type="email" autoComplete="email" required maxLength={254} className={FIELD} />
+        <input name="email" type="email" autoFocus autoComplete="email" required maxLength={254} className={FIELD} />
       </label>
       <label className="flex flex-col gap-1.5 text-sm font-semibold">
         Password
@@ -78,8 +79,12 @@ export function LoginForm({ next = "/" }: { next?: string }): React.JSX.Element 
         disabled={status.kind === "submitting"}
         className={`${BTN_PRIMARY} self-start`}
       >
-        {status.kind === "submitting" ? "Logging in..." : "Log in"}
+        {status.kind === "submitting" ? "Logging in…" : "Log in"}
       </button>
+      <p className="text-sm text-muted">
+        No account yet?{" "}
+        <Link href="/register" className={LINK}>Create one</Link>
+      </p>
     </form>
   );
 }

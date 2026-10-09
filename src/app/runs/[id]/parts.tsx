@@ -56,7 +56,7 @@ function Mark({ state }: { state: RowState }): React.JSX.Element {
   const base = "relative flex size-5 shrink-0 items-center justify-center rounded-full text-xs";
   if (state === "done") return <span className={`${base} bg-ok text-white`}><span aria-hidden="true">✓</span><span className="sr-only">Done</span></span>;
   if (state === "failed") return <span className={`${base} bg-conflict text-white`}><span aria-hidden="true">✕</span><span className="sr-only">Failed</span></span>;
-  if (state === "active") return <span className={`${base} animate-pulse border-2 border-action bg-canvas`}><span className="sr-only">In progress</span></span>;
+  if (state === "active") return <span className={`${base} motion-safe:animate-pulse border-2 border-action bg-canvas`}><span className="sr-only">In progress</span></span>;
   if (state === "skipped") return <span className={`${base} bg-divider text-muted`}><span aria-hidden="true">–</span><span className="sr-only">Skipped</span></span>;
   return <span className={`${base} border-2 border-line/60 bg-canvas`}><span className="sr-only">Waiting</span></span>;
 }
@@ -73,7 +73,9 @@ export function ProgressSteps({
   labels,
   stepIndex,
   stepCount,
+  elapsed = null,
 }: {
+  elapsed?: string | null;
   rows: RowState[];
   labels: string[];
   stepIndex: number;
@@ -109,6 +111,7 @@ export function ProgressSteps({
           </li>
         ))}
       </ol>
+      {elapsed !== null && <p className="text-sm text-muted">{elapsed}</p>}
     </div>
   );
 }
@@ -241,6 +244,7 @@ export function QuestionCard({
           I&apos;m not sure
         </button>
       </div>
+      <p className="mt-2 text-sm text-muted">Not sure? We keep it as &quot;possibly the same person&quot; and never quote it as a fact.</p>
     </section>
   );
 }

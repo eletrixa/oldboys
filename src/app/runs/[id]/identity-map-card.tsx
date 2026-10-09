@@ -24,6 +24,8 @@ const DESC_ID = "identity-map-desc";
 
 const MARK: Record<CandidateDecision, string> = { merge: "✓", "possibly-same-as": "?", rejected: "×" };
 
+const DECISION_TEXT: Record<CandidateDecision, string> = { merge: "this is them", "possibly-same-as": "not sure yet", rejected: "someone else" };
+
 const NODE_CLS: Record<CandidateDecision, { circle: string; mark: string }> = {
   merge: { circle: "fill-ok-bg stroke-ok", mark: "fill-ok" },
   "possibly-same-as": { circle: "fill-unsure-bg stroke-unsure", mark: "fill-unsure" },
@@ -63,10 +65,10 @@ export function IdentityMapCard({
   const { center } = layout;
   return (
     <section>
-      <h2 className="text-base font-semibold">Identity map</h2>
+      <h3 className="font-sans text-base font-semibold">Identity map</h3>
       <p className="mb-3 text-sm text-muted">{layout.summary}</p>
       <div className="hidden sm:block">
-      <svg viewBox={`0 0 ${String(layout.width)} ${String(layout.height)}`} className="h-auto w-full" role="img" aria-labelledby={`${TITLE_ID} ${DESC_ID}`}>
+        <svg viewBox={`0 0 ${String(layout.width)} ${String(layout.height)}`} className="h-auto w-full max-w-full" role="img" aria-labelledby={`${TITLE_ID} ${DESC_ID}`}>
         <title id={TITLE_ID}>Identity map</title>
         <desc id={DESC_ID}>{layout.summary}</desc>
         {layout.linked.map((n) => {
@@ -103,8 +105,13 @@ export function IdentityMapCard({
           </text>
         )}
       </svg>
-      <p className="mt-2 text-xs text-muted">Lines show which profiles we link to {first}, not how good a candidate is.</p>
+        <p className="mt-2 text-xs text-muted">Lines show which profiles we link to {first}, not how good a candidate is.</p>
       </div>
+      <ul className="sr-only" aria-label="Profiles on the identity map">
+        {[...layout.linked, ...layout.others].map((n) => (
+          <li key={`sr-${n.id}`}>{[n.label, n.handle].filter((t) => t !== null).join(" ")}: {DECISION_TEXT[n.decision]}</li>
+        ))}
+      </ul>
       <ul className="mt-3 hidden flex-wrap gap-x-4 gap-y-1 text-xs text-muted sm:flex">
         <li className="flex items-center gap-2">
           <span aria-hidden="true" className="inline-block w-5 border-t-[3px] border-ok" />

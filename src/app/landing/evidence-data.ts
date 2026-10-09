@@ -7,7 +7,7 @@
  * Tested:  n/a (static copy; e2e/home.spec.ts opens the evidence)
  *
  * Key responsibilities:
- * - EVIDENCED / PARTIAL / NONE (and EXAMPLES in tab order): each with requirement, claim (Fact or Inference), quote and source when
+ * - EVIDENCED / PARTIAL / NONE (and EXAMPLES in tab order): each with requirement, claim (FACT or INFERENCE), quote and source when
  *   there is one, the status explanation (with the open part marked) and the interview question it leads to
  *
  * Design constraints:
@@ -20,7 +20,7 @@ export type Example = {
   key: "evidenced" | "partial" | "none";
   tone: Tone;
   requirement: string;
-  claim: { kind: "Fact" | "Inference"; text: string } | null;
+  claim: { kind: "FACT" | "INFERENCE"; text: string } | null;
   quote: string | null;
   source: { host: string; read: string; confirmed: string; before: string; after: string; kept: string } | null;
   /** Status explanation; `open` is the unresolved part the question is built from. */
@@ -33,7 +33,7 @@ export const EVIDENCED: Example = {
   key: "evidenced",
   tone: "ok",
   requirement: "Writes production SQL",
-  claim: { kind: "Fact", text: "Owns the SQL for Acme's nightly reporting pipelines." },
+  claim: { kind: "FACT", text: "Owns the SQL for Acme's nightly reporting pipelines." },
   quote: "I own the SQL behind our nightly reporting pipelines and the tests around them.",
   source: {
     host: "linkedin.com",
@@ -52,7 +52,7 @@ export const PARTIAL: Example = {
   key: "partial",
   tone: "unsure",
   requirement: "Cloud data platforms",
-  claim: { kind: "Fact", text: "Maintains a public dbt project for a cloud warehouse." },
+  claim: { kind: "FACT", text: "Maintains a public dbt project for a cloud warehouse." },
   quote: "dbt models and tests for our BigQuery warehouse.",
   source: {
     host: "github.com",

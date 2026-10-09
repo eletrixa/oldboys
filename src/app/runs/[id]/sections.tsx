@@ -126,8 +126,8 @@ function SectionCard({ section, claims, evidence }: { section: BriefSection; cla
   const links = [...new Set(listed.flatMap((sid) => evidence.sourceOf.get(sid)?.url ?? []))];
   return (
     <section className={CARD}>
-      <div className="flex items-start justify-between gap-3">
-        <h3 className="text-base font-semibold">{report.text(tid.sectionTitle(section.id), section.title)}</h3>
+      <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1">
+        <h3 className="min-w-0 text-base font-semibold [overflow-wrap:anywhere]">{report.text(tid.sectionTitle(section.id), section.title)}</h3>
         <Pill tone={BAND_TONE[band]}>{report.t.band[band]}</Pill>
       </div>
       <p className="mt-1 text-xs text-muted">{report.text(tid.sectionReason(section.id), section.confidence_reason)}</p>
@@ -136,7 +136,7 @@ function SectionCard({ section, claims, evidence }: { section: BriefSection; cla
       <ClaimList claims={facts} evidence={evidence} />
       <ClaimList claims={inferences} evidence={evidence} />
       {links.length > 0 && (
-        <ul className="mt-3 flex flex-col gap-1 text-sm">
+        <ul className="mt-3 flex flex-col gap-1 text-sm [overflow-wrap:anywhere]">
           {links.map((url) => (
             <li key={url}>
               <SourceLink url={url} label={url.replace(/^https?:\/\/(www\.)?/, "")} />

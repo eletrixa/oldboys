@@ -111,7 +111,7 @@ export function RolePicker({ options, defaultValue = "", autoFocus = false }: Pr
         )}
       </div>
       <span id="role-help" className="text-xs text-muted">
-        Pick a preselected role or type your own. A preselected role gets its criteria and evidence sites at once; a custom one is read by the model.
+        Pick a preselected role (it brings its criteria and evidence sites) or type your own.
       </span>
     </div>
   );

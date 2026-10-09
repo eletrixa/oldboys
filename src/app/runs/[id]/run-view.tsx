@@ -12,9 +12,10 @@
  *   then "From <source> · <tag> · <date>" when an intake application started the run
  * - "Researched for: <position title>" link to /positions/<id> under the name when the run came from a position
  * - When done, the brief comes first and the confirmation steps fold into a closed "How we confirmed it" disclosure
- * - One footer closes the page: running hint (not done), then "Back to home" and "Audit record" links, then the
+ * - One footer closes the page: running hint (not done), then "All briefs" and "Audit record" links, then the
  *   "Delete candidate data" disclosure (any status); after a delete the whole page becomes the deletion receipt
  * - Not-found view: eyebrow, heading, muted sentence and a primary back link on the header rhythm
+ * - Stalled notice above the progress when no ledger activity for 30 minutes (stalledNotice); "Started N min ago" under the steps while running
  * - Show the run cost and research time line (ledger projection) while running and when done
  * - Identity map above the profile list (same live decisions)
  * - On failure keep the progress rows, mark the failed one, show the reason, sources so far and a retry link
@@ -30,7 +31,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { intakeLine } from "@/app/intake/intake-rows";
 import type { Candidate, CandidateDecision } from "@/domain/claim";
-import { BTN_SECONDARY, CARD_CONFLICT, Chevron, Eyebrow, LINK, SimulatedPill, SUMMARY } from "../../ui";
+import { BTN_SECONDARY, CARD_CONFLICT, CARD_UNSURE, Chevron, Eyebrow, LINK, SimulatedPill, SUMMARY } from "../../ui";
 import type { DeletionReceipt } from "@/domain/deletion";
 import { CodeProfileCard } from "./code-profile-card";
 import { ProfileSignalsCard } from "./profile-signals-card";
@@ -38,7 +39,7 @@ import { RegistryChecksCard } from "./registry-checks-card";
 import { DeleteCard, DeletedView } from "./delete-card";
 import { IdentityMapCard } from "./identity-map-card";
 import { type Answer, BriefView, CostLine, ProfileList, ProgressSteps, QuestionCard } from "./parts";
-import { LINEUP_MAX_QUESTIONS, type RunState, firstName, headerText, questionsToAsk, sortLineup, stepRows } from "./state";
+import { LINEUP_MAX_QUESTIONS, type RunState, firstName, headerText, questionsToAsk, retryHref, sortLineup, startedAgo, stalledNotice, stepRows } from "./state";
 
 const POLL_MS = 2000;
 /** A finished run older than this is shown as a replay of an earlier run. */
@@ -68,6 +69,7 @@ function failureText(state: RunState): string {
 
 export function RunView({ id }: { id: string }): React.JSX.Element {
   const [state, setState] = useState<RunState | null>(null);
+  const [polledAt, setPolledAt] = useState(() => Date.now());
   const [missing, setMissing] = useState(false);
   const [local, setLocal] = useState<Record<string, Answer>>({});
   const [unsure, setUnsure] = useState<Record<string, true>>({});
@@ -91,6 +93,7 @@ export function RunView({ id }: { id: string }): React.JSX.Element {
         } else if (res.ok) {
           const s = await res.json<RunState>();
           setState(s);
+          setPolledAt(Date.now());
           next = s.status !== "done" && s.status !== "failed";
         }
       } catch {
@@ -149,15 +152,16 @@ export function RunView({ id }: { id: string }): React.JSX.Element {
         <Eyebrow>Brief</Eyebrow>
         <h1 className="font-serif text-4xl leading-[1.05] md:text-5xl">We could not find this brief</h1>
         <p className="text-muted">The link may be mistyped, or the run is no longer available.</p>
-        <Link href="/" className={LINK}>Back to home</Link>
+        <Link href="/briefs" className={LINK}>All briefs</Link>
       </main>
     );
   }
   if (!state) {
     return (
-      <main className="mx-auto flex max-w-3xl animate-pulse flex-col gap-4 px-4 py-10 md:py-14" aria-busy="true">
-        <span className="sr-only">Loading...</span>
-        <div className="h-8 w-2/3 rounded bg-divider" />
+      <main className="mx-auto flex max-w-3xl motion-safe:animate-pulse flex-col gap-4 px-4 py-10 md:py-14" aria-busy="true">
+        <span className="sr-only">Loading</span>
+        <div className="h-3 w-24 rounded bg-divider" />
+        <div className="h-10 w-2/3 rounded bg-divider" />
         <div className="h-4 w-1/2 rounded bg-divider" />
       </main>
     );
@@ -176,12 +180,23 @@ export function RunView({ id }: { id: string }): React.JSX.Element {
     "Writing your brief",
   ];
 
-  const progress = <ProgressSteps rows={stepRows({ ...state, degraded })} labels={labels} stepIndex={state.step_index} stepCount={state.step_count} />;
+  const running = state.status !== "done" && state.status !== "failed";
+  const nowMs = polledAt;
+  const stalled = stalledNotice(state, new Date(nowMs).toISOString());
+  const progress = (
+    <ProgressSteps
+      rows={stepRows({ ...state, degraded })}
+      labels={labels}
+      stepIndex={state.step_index}
+      stepCount={state.step_count}
+      elapsed={running ? startedAgo(state.created_at, nowMs) : null}
+    />
+  );
   const failed = state.status === "failed" && (
     <div role="alert" className={`${CARD_CONFLICT} flex flex-col gap-2 text-sm text-conflict`}>
       <p>{failureText(state)}</p>
       {state.mentions > 0 && <p>We still found {String(state.mentions)} public {state.mentions === 1 ? "mention" : "mentions"}.</p>}
-      <Link href="/" className={`${LINK} w-fit`}>Try again</Link>
+      <Link href={retryHref(forPosition)} className={`${LINK} w-fit`}>Try again</Link>
     </div>
   );
   const identity = (
@@ -208,7 +223,6 @@ export function RunView({ id }: { id: string }): React.JSX.Element {
     </>
   );
   const briefFirst = state.status === "done" && state.brief !== null;
-  const running = state.status !== "done" && state.status !== "failed";
 
   return (
     <main className={`mx-auto flex max-w-3xl flex-col px-4 py-10 md:py-14 ${briefFirst ? "gap-10" : "gap-8"}`}>
@@ -225,7 +239,7 @@ export function RunView({ id }: { id: string }): React.JSX.Element {
           </p>
         )}
         {state.status !== "done" && (
-          <p className="text-sm text-muted">This usually takes 2 to 4 minutes. Keep this tab open.</p>
+          <p className="text-sm text-muted">Usually 2 to 4 minutes. You can leave; the brief waits in My briefs and the tray at the bottom follows it.</p>
         )}
         {cached && (
           <SimulatedPill kind="cached" detail={`run from ${state.created_at.slice(0, 16).replace("T", " ")} UTC`} className="w-fit" />
@@ -252,6 +266,12 @@ export function RunView({ id }: { id: string }): React.JSX.Element {
         </>
       ) : (
         <>
+          {stalled !== null && (
+            <div role="status" className={`${CARD_UNSURE} text-sm`}>
+              No progress for 30 minutes. The run was probably interrupted;{" "}
+              <Link href={stalled.href} className={LINK}>start it again</Link> from the position or My briefs.
+            </div>
+          )}
           {progress}
           {failed}
           {identity}
@@ -261,7 +281,7 @@ export function RunView({ id }: { id: string }): React.JSX.Element {
       {!briefFirst && <BriefView state={state} />}
       {running && <p className="text-sm text-muted">The brief appears here when the research is done.</p>}
       <div className="flex items-center gap-6 border-t border-divider pt-6 text-sm">
-        <Link href="/" className={LINK}>Back to home</Link>
+        <Link href="/briefs" className={LINK}>All briefs</Link>
         <Link href={`/runs/${id}/audit`} className={LINK}>Audit record</Link>
       </div>
       <DeleteCard runId={id} onDeleted={setDeleted} />

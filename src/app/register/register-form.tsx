@@ -18,7 +18,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import type { OrganizationInput } from "@/domain/organization";
-import { BTN_PRIMARY, BTN_QUIET, CARD, FIELD, LINK } from "../ui";
+import { BTN_PRIMARY, BTN_QUIET, CARD, FIELD, KEY, LINK } from "../ui";
 import { CompanyFields } from "./company-fields";
 
 type Step = "account" | "company";
@@ -110,9 +110,13 @@ export function RegisterForm(): React.JSX.Element {
           setStep("company");
         }}
       >
+        <div className="flex flex-col gap-1.5">
+          <p className={KEY}>Step 1 of 2 · About you</p>
+          <h2 className="text-lg font-semibold">Who is signing up?</h2>
+        </div>
         <label className="flex flex-col gap-1.5 text-sm font-semibold">
           Your name
-          <input value={account.name} onChange={set("name")} required maxLength={120} autoComplete="name" className={FIELD} />
+          <input value={account.name} onChange={set("name")} autoFocus required maxLength={120} autoComplete="name" className={FIELD} />
         </label>
         <label className="flex flex-col gap-1.5 text-sm font-semibold">
           Work email
@@ -120,12 +124,12 @@ export function RegisterForm(): React.JSX.Element {
         </label>
         <label className="flex flex-col gap-1.5 text-sm font-semibold">
           Password
-          <input type="password" value={account.password} onChange={set("password")} required minLength={8} maxLength={200} autoComplete="new-password" className={FIELD} />
-          <span className="text-xs font-normal text-muted">At least 8 characters.</span>
+          <input type="password" value={account.password} onChange={set("password")} required minLength={8} maxLength={200} autoComplete="new-password" aria-describedby="password-hint" className={FIELD} />
+          <span id="password-hint" className="text-xs font-normal text-muted">At least 8 characters.</span>
         </label>
         {error}
         <button type="submit" className={`${BTN_PRIMARY} self-start`}>
-          Next
+          Continue to company
         </button>
         <p className="text-sm text-muted">
           Already registered?{" "}
@@ -144,6 +148,11 @@ export function RegisterForm(): React.JSX.Element {
         void submit();
       }}
     >
+      <div className="flex flex-col gap-1.5">
+        <p className={KEY}>Step 2 of 2 · Your company</p>
+        <h2 className="text-lg font-semibold">Which company do you hire for?</h2>
+        <p className="text-sm text-muted">Briefs are shared with everyone at the company, so the company is your team.</p>
+      </div>
       <CompanyFields value={company} onChange={setCompany} />
       {error}
       <div className="flex items-center gap-4">
@@ -152,7 +161,7 @@ export function RegisterForm(): React.JSX.Element {
           disabled={busy}
           className={BTN_PRIMARY}
         >
-          {busy ? "Creating..." : "Create account"}
+          {busy ? "Creating…" : "Create account"}
         </button>
         <button type="button" onClick={() => { setStep("account"); }} className={BTN_QUIET}>
           Back

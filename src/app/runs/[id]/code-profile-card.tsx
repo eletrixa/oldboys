@@ -1,14 +1,14 @@
 /**
- * "Code contributions" card on the run page for technical roles: public GitHub numbers, each linked to where it was read.
+ * "GitHub contributions" section on the run page for technical roles: public GitHub numbers, each linked to where it was read.
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/runs/[id]/code-profile-card.tsx
- * Deps:    src/domain/code-profile (types, caveats), src/domain/url (httpUrl), ./code-profile-text, ../../ui (CARD, Eyebrow, LINK, Pill)
+ * Deps:    src/domain/code-profile (types, caveats), src/domain/url (httpUrl), ./code-profile-text, ../../ui (Eyebrow, LINK, Pill)
  * Tested:  n/a (the numbers and lines are tested in __tests__/code-profile-card.test.ts)
  *
  * Key responsibilities:
  * - CodeProfileCard: handle linked to the profile, stat row with a small "source" link per group, language pills, repo
- *   table (scrolls horizontally inside the card), merged-PR sample, organizations, the profile-page numbers (pinned repos, last-year contributions, first commit year),
+ *   hairline repo rows written as plain sentences, merged-PR sample, organizations, the profile-page numbers (pinned repos, last-year contributions, first commit year),
  *   the "statistics not computed yet" line and the caveats; nothing when `profile` is null
  *
  * Design constraints:
@@ -16,7 +16,7 @@
  */
 import { CODE_PROFILE_CAVEATS, type CodeProfile } from "@/domain/code-profile";
 import { httpUrl } from "@/domain/url";
-import { CARD, Eyebrow, LINK, Pill } from "../../ui";
+import { Eyebrow, LINK, Pill } from "../../ui";
 import { fmtInt, PENDING_PREFIX, repoNumbers, sharePct, statGroups, weeks } from "./code-profile-text";
 
 function Src({ url }: { url: string | null }): React.JSX.Element | null {
@@ -42,18 +42,18 @@ export function CodeProfileCard({ profile }: { profile: CodeProfile | null | und
   if (profile === null || profile === undefined) return null;
   const apify = profile.apify;
   return (
-    <section className={CARD} aria-labelledby="code-contributions">
+    <section aria-labelledby="code-contributions">
       <Eyebrow>Public GitHub work only</Eyebrow>
-      <h2 id="code-contributions" className="mt-1 font-serif text-2xl">
-        Code contributions
-      </h2>
+      <h3 id="code-contributions" className="mt-1 font-sans text-base font-semibold">
+        GitHub contributions
+      </h3>
       <p className="mt-1 text-sm text-muted">
         <Ext url={profile.profile_url}>{profile.handle}</Ext>
       </p>
 
-      <dl className="mt-4 grid grid-cols-1 gap-x-6 gap-y-3 text-sm sm:grid-cols-2">
+      <dl className="mt-3 grid grid-cols-1 gap-x-6 text-sm sm:grid-cols-2">
         {statGroups(profile).map((g) => (
-          <div key={g.label}>
+          <div key={g.label} className="border-t border-divider py-2">
             <dt className="text-xs text-muted">{g.label}</dt>
             <dd className="text-ink">
               {g.value}
@@ -76,51 +76,33 @@ export function CodeProfileCard({ profile }: { profile: CodeProfile | null | und
       )}
 
       {profile.repos.length > 0 && (
-        <div className="mt-4 overflow-x-auto">
-          <table className="w-full min-w-[34rem] text-left text-sm">
-            <thead className="text-xs text-muted">
-              <tr>
-                <th className="py-1 pr-3 font-medium">Repository</th>
-                <th className="py-1 pr-3 font-medium">Commits</th>
-                <th className="py-1 pr-3 font-medium">Lines</th>
-                <th className="py-1 pr-3 font-medium">Share</th>
-                <th className="py-1 pr-3 font-medium">First to last week</th>
-                <th className="py-1 pr-3 font-medium">Language</th>
-                <th className="py-1 pr-3 font-medium">Stars</th>
-                <th className="py-1 font-medium">Stats</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-divider">
-              {profile.repos.map((r) => {
-                const n = repoNumbers(r);
-                return (
-                  <tr key={r.full_name}>
-                    <td className="py-1.5 pr-3">
-                      <Ext url={r.url}>{r.full_name}</Ext>
-                    </td>
-                    <td className="py-1.5 pr-3 whitespace-nowrap">{n.commits}</td>
-                    <td className="py-1.5 pr-3 whitespace-nowrap">{n.lines}</td>
-                    <td className="py-1.5 pr-3 whitespace-nowrap">{sharePct(r.share)}</td>
-                    <td className="py-1.5 pr-3 whitespace-nowrap">{weeks(r.first_week, r.last_week)}</td>
-                    <td className="py-1.5 pr-3 whitespace-nowrap">{r.language ?? "n/a"}</td>
-                    <td className="py-1.5 pr-3 whitespace-nowrap">{fmtInt(r.stars)}</td>
-                    <td className="py-1.5">
-                      <Src url={httpUrl(r.source_url)} />
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+        <div className="mt-4">
+          <h4 className="text-xs font-semibold text-muted">Repositories</h4>
+          <ul className="mt-1 divide-y divide-divider border-y border-divider text-sm">
+            {profile.repos.map((r) => {
+              const n = repoNumbers(r);
+              return (
+                <li key={r.full_name} className="py-2 break-words">
+                  <Ext url={r.url}>{r.full_name}</Ext>
+                  <span className="text-muted">
+                    {" "}
+                    {n.commits} commits, {n.lines} lines, {sharePct(r.share)} of its commits, weeks {weeks(r.first_week, r.last_week)},{" "}
+                    {r.language ?? "no main language"}, {fmtInt(r.stars)} stars.
+                  </span>
+                  <Src url={httpUrl(r.source_url)} />
+                </li>
+              );
+            })}
+          </ul>
         </div>
       )}
 
       {profile.merged_prs_sample.length > 0 && (
         <div className="mt-4">
-          <h3 className="text-xs font-semibold text-muted">Merged pull requests in other repositories</h3>
-          <ul className="mt-1 flex flex-col gap-1 text-sm">
+          <h4 className="text-xs font-semibold text-muted">Merged pull requests in other repositories</h4>
+          <ul className="mt-1 divide-y divide-divider border-y border-divider text-sm">
             {profile.merged_prs_sample.map((pr) => (
-              <li key={pr.url} className="break-words">
+              <li key={pr.url} className="py-2 break-words">
                 <span className="text-muted">{pr.repo}: </span>
                 <Ext url={pr.url}>{pr.title === "" ? pr.url : pr.title}</Ext>
               </li>
@@ -129,14 +111,19 @@ export function CodeProfileCard({ profile }: { profile: CodeProfile | null | und
         </div>
       )}
 
-      {profile.orgs.length > 0 && <p className="mt-4 text-sm text-ink"><span className="text-xs text-muted">Organizations </span>{profile.orgs.join(", ")}</p>}
+      {profile.orgs.length > 0 && (
+        <p className="mt-4 text-sm text-ink">
+          <span className="text-xs text-muted">Organizations </span>
+          {profile.orgs.join(", ")}
+        </p>
+      )}
 
       {apify !== null && (
         <div className="mt-4 text-sm">
-          <h3 className="text-xs font-semibold text-muted">
+          <h4 className="text-xs font-semibold text-muted">
             From the GitHub profile page (via Apify)
             <Src url={httpUrl(apify.source_url)} />
-          </h3>
+          </h4>
           <p className="mt-1 text-ink">
             {[
               apify.last_year_contributions === null ? null : `${fmtInt(apify.last_year_contributions)} contributions in the last year`,
@@ -155,12 +142,12 @@ export function CodeProfileCard({ profile }: { profile: CodeProfile | null | und
             </ul>
           )}
           {apify.pinned_repos.length > 0 && (
-            <ul className="mt-2 flex flex-col gap-1">
+            <ul className="mt-2 divide-y divide-divider border-y border-divider">
               {apify.pinned_repos.map((r) => (
-                <li key={r.url} className="break-words">
+                <li key={r.url} className="py-2 break-words">
                   <Ext url={r.url}>{r.name}</Ext>
                   <span className="text-muted">
-                    {" "}pinned · {fmtInt(r.stars)} stars · {fmtInt(r.forks)} forks{r.languages.length > 0 ? ` · ${r.languages.join(", ")}` : ""}
+                    {" "}pinned, {fmtInt(r.stars)} stars, {fmtInt(r.forks)} forks{r.languages.length > 0 ? `, ${r.languages.join(", ")}` : ""}.
                   </span>
                 </li>
               ))}
@@ -169,10 +156,18 @@ export function CodeProfileCard({ profile }: { profile: CodeProfile | null | und
         </div>
       )}
 
-      {profile.stats_pending.length > 0 && <p className="mt-4 text-sm text-muted">{PENDING_PREFIX}{profile.stats_pending.join(", ")}</p>}
+      {profile.stats_pending.length > 0 && (
+        <p className="mt-4 flex flex-wrap items-baseline gap-2 text-sm text-muted">
+          <Pill tone="unsure">Still pending</Pill>
+          <span>
+            {PENDING_PREFIX}
+            {profile.stats_pending.join(", ")}
+          </span>
+        </p>
+      )}
 
       <div className="mt-4 text-sm text-muted">
-        <h3 className="text-xs font-semibold">What these numbers cannot tell you</h3>
+        <h4 className="text-xs font-semibold">What these numbers cannot tell you</h4>
         <ul className="mt-1 list-disc pl-5">
           {CODE_PROFILE_CAVEATS.map((c) => (
             <li key={c}>{c}</li>

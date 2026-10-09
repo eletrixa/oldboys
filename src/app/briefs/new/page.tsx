@@ -13,6 +13,7 @@
  * Design constraints:
  * - Server component; positions are team-shared, the same list as /positions
  */
+import type { Metadata } from "next";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { redirect } from "next/navigation";
 import { currentUser } from "@/app/api/_lib/current-user";
@@ -20,6 +21,8 @@ import { listPositions } from "@/app/api/positions/handler";
 import { loginHref } from "@/app/login/next-path";
 import { ROLE_OPTIONS } from "@/domain/role-catalog";
 import { NewBriefWizard } from "./new-brief-wizard";
+
+export const metadata: Metadata = { title: "New brief" };
 
 export default async function NewBriefPage({ searchParams }: { searchParams: Promise<{ positionId?: string; role?: string }> }): Promise<React.JSX.Element> {
   const { positionId, role } = await searchParams;

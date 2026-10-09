@@ -19,7 +19,7 @@
  */
 import { describe, expect, it } from "vitest";
 import type { Brief, Candidate } from "@/domain/claim";
-import { briefSections, confidenceBand, CV_SOURCE_TEXT, evidenceGroup, isCvSource, firstName, gapLine, gapText, headerText, questionsToAsk, roleCriteria, searchedTitle, seedHeadline, stepRows } from "../state";
+import { briefSections, confidenceBand, CV_SOURCE_TEXT, evidenceGroup, isCvSource, firstName, gapLine, gapText, headerText, questionsToAsk, retryHref, roleCriteria, searchedTitle, seedHeadline, stalledNotice, startedAgo, stepRows } from "../state";
 
 const cand = (id: string, platform: string, score: number, decision: Candidate["decision"] = "possibly-same-as"): Candidate => ({
   id, run_id: "r", name: "x", profile_urls: [`https://${id}`], anchor_match: null, score, decision, platform, handle: id, snippet: "", reasons: [],
@@ -138,5 +138,29 @@ describe("profile-first header (plans/006)", () => {
 
   it("puts the seed step in the first progress row", () => {
     expect(stepRows({ status: "running", step: "seed_profile", mentions: 0, failed_step: null })[0]).toBe("active");
+  });
+});
+
+describe("stalled run helpers", () => {
+  const base = { status: "running" as const, created_at: "2026-10-09T10:00:00.000Z", position: null };
+  it("retryHref goes to the position's form or the plain one", () => {
+    expect(retryHref({ id: "p 1", title: "T" })).toBe("/briefs/new?positionId=p%201");
+    expect(retryHref(null)).toBe("/briefs/new");
+    expect(retryHref(undefined)).toBe("/briefs/new");
+  });
+  it("stalledNotice shows after 30 idle minutes, from last_at else created_at", () => {
+    expect(stalledNotice(base, "2026-10-09T10:20:00.000Z")).toBeNull();
+    expect(stalledNotice(base, "2026-10-09T10:31:00.000Z")).toEqual({ href: "/briefs/new" });
+    expect(stalledNotice({ ...base, last_at: "2026-10-09T10:30:00.000Z" }, "2026-10-09T10:31:00.000Z")).toBeNull();
+    expect(stalledNotice({ ...base, position: { id: "p1", title: "T" } }, "2026-10-09T12:00:00.000Z")).toEqual({ href: "/briefs/new?positionId=p1" });
+    expect(stalledNotice({ ...base, status: "done" }, "2026-10-09T12:00:00.000Z")).toBeNull();
+    expect(stalledNotice({ ...base, status: "paused" }, "2026-10-09T12:00:00.000Z")).toBeNull();
+  });
+  it("startedAgo reads in plain words", () => {
+    const t = Date.parse("2026-10-09T10:00:00.000Z");
+    expect(startedAgo("2026-10-09T10:00:00.000Z", t + 20_000)).toBe("Started just now");
+    expect(startedAgo("2026-10-09T10:00:00.000Z", t + 60_000)).toBe("Started 1 min ago");
+    expect(startedAgo("2026-10-09T10:00:00.000Z", t + 135 * 60_000)).toBe("Started 2 h 15 min ago");
+    expect(startedAgo("nope", t)).toBeNull();
   });
 });
