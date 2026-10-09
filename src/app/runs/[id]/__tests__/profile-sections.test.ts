@@ -173,4 +173,10 @@ describe("ProfileSections", () => {
     expect(out).toContain('<span class="sm:hidden">weight </span>');
     expect(out).toContain("max-w-prose font-serif");
   });
+
+  it("collapses the read only when two or more sentences would be hidden", () => {
+    const withRead = (read: string): string => html({ ...profile, personality: { ...profile.personality, read } });
+    expect(withRead("A. B. C. D.")).not.toContain("more sentence");
+    expect(withRead("A. B. C. D. E.")).toContain("Show 2 more sentences");
+  });
 });

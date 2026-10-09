@@ -57,6 +57,7 @@ export function candidateStatus(r: PoolRow): { label: string; tone: StatusTone; 
   if (run === null) return { label: r.status === "pooled" ? "Pooled" : STATUS_LABEL[r.status], tone: STATUS_TONE[r.status], researching: false };
   if (run.status === "done") return { label: "Done", tone: "ok", researching: false };
   if (run.status === "failed") return { label: "Failed", tone: "conflict", researching: false };
+  if (run.stalled) return { label: "Stalled, start again", tone: "unsure", researching: false };
   if (run.status === "paused") return { label: "Paused, open the profile to answer", tone: "unsure", researching: true };
   const label = ["Researching", run.step, `${String(run.pct)}%`].filter((p) => p !== null).join(" · ");
   return { label, tone: "unsure", researching: true };

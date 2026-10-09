@@ -20,7 +20,8 @@ export const MAX_ROLE_RUNS = 500;
 
 export const ROLE_RUN_ROWS_SELECT = `SELECT i.id, i.subject, i.role, i.status, i.created_at, i.questions_json, b.brief_json,
        (SELECT COUNT(*) FROM sources s WHERE s.run_id = i.id AND s.identity = 'merged') AS sources_confirmed,
-       (SELECT l.step FROM ledger_entries l WHERE l.run_id = i.id AND l.step <> 'run' ORDER BY l.seq DESC LIMIT 1) AS last_step
+       (SELECT l.step FROM ledger_entries l WHERE l.run_id = i.id AND l.step <> 'run' ORDER BY l.seq DESC LIMIT 1) AS last_step,
+       COALESCE((SELECT MAX(l.ts) FROM ledger_entries l WHERE l.run_id = i.id), i.created_at) AS last_at
      FROM investigations i LEFT JOIN briefs b ON b.run_id = i.id`;
 
 export async function loadRoleRunRows(db: D1Database, where: string, binds: readonly unknown[] = []): Promise<RoleRunRow[]> {

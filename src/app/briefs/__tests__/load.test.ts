@@ -17,7 +17,7 @@ import { type BriefRow, groupByPosition, statusOf } from "../load";
 
 const row = (id: string, position_id: string | null, over: Partial<BriefRow> = {}): BriefRow => ({
   id, subject: id, role: null, status: "done", created_at: "2026-10-09T10:00:00.000Z", started_by: null,
-  position_id, position_title: position_id === null ? null : `Title ${position_id}`, fit_pct: null, ...over,
+  position_id, position_title: position_id === null ? null : `Title ${position_id}`, fit_pct: null, last_at: "2026-10-09T10:00:00.000Z", ...over,
 });
 
 describe("groupByPosition", () => {
@@ -41,5 +41,8 @@ describe("statusOf", () => {
     expect(statusOf("failed").tone).toBe("conflict");
     expect(statusOf("running").label).toBe("Researching");
     expect(statusOf("queued").label).toBe("Researching");
+    expect(statusOf("running", "2026-10-09T10:00:00.000Z", "2026-10-09T10:29:00.000Z").label).toBe("Researching");
+    expect(statusOf("running", "2026-10-09T10:00:00.000Z", "2026-10-09T10:31:00.000Z").label).toBe("Stalled, start again");
+    expect(statusOf("done", "2026-10-09T10:00:00.000Z", "2026-10-09T12:00:00.000Z").label).toBe("Done");
   });
 });

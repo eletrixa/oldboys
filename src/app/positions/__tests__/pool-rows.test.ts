@@ -22,7 +22,7 @@ const base: PoolRow = {
   received_at: "2026-10-09T14:05:00.000Z", has_profile: 1, has_cv: 0, handle: null, run: null,
 };
 const run = (over: Partial<NonNullable<PoolRow["run"]>> = {}): NonNullable<PoolRow["run"]> => ({
-  status: "running", subject: "", step: "LinkedIn", pct: 25, fit_pct: null, independent: 0, ...over,
+  status: "running", subject: "", step: "LinkedIn", pct: 25, fit_pct: null, independent: 0, stalled: false, ...over,
 });
 
 describe("shapePool", () => {
@@ -79,6 +79,7 @@ describe("candidateStatus", () => {
     expect(candidateStatus({ ...base, run: run({ status: "queued", step: null, pct: 0 }) }).label).toBe("Researching · 0%");
     expect(candidateStatus({ ...base, run: run({ status: "failed" }) })).toEqual({ label: "Failed", tone: "conflict", researching: false });
     expect(candidateStatus({ ...base, run: run({ status: "paused" }) }).researching).toBe(true);
+    expect(candidateStatus({ ...base, run: run({ stalled: true }) })).toEqual({ label: "Stalled, start again", tone: "unsure", researching: false });
     expect(candidateStatus({ ...base, status: "incomplete" }).label).toBe("Incomplete");
   });
 });

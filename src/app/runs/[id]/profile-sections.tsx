@@ -297,7 +297,8 @@ function WorkingStyle({ p, ctx }: { p: Profile["personality"]; ctx: Ctx }): Reac
   ].flatMap(({ label, v }) => (v === null ? [] : [{ label, ...v }]));
   const read = sentences(p.read);
   const { traits } = p;
-  const VISIBLE = 3;
+  // One hidden sentence is not worth a disclosure: collapse only when two or more would be hidden.
+  const VISIBLE = read.length <= 4 ? read.length : 3;
   return (
     <section className={CARD_MUTED}>
       <Head id="working-style" eyebrow="Inference" title="4. Working style" />

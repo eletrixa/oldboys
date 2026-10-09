@@ -15,7 +15,7 @@
  * - Fixtures stay inline
  */
 import { describe, expect, it } from "vitest";
-import { dedupeSince, toRunStatus, type InvestigationHead } from "@/domain/run-status";
+import { dedupeSince, isStalled, toRunStatus, type InvestigationHead } from "@/domain/run-status";
 
 const head: InvestigationHead = {
   id: "run-1",
@@ -41,5 +41,20 @@ describe("toRunStatus", () => {
 describe("dedupeSince", () => {
   it("is 24 hours before now", () => {
     expect(dedupeSince(new Date("2026-10-08T20:00:00.000Z"))).toBe("2026-10-07T20:00:00.000Z");
+  });
+});
+
+describe("isStalled", () => {
+  const last = "2026-10-09T10:00:00.000Z";
+  it("is true only for running or queued past the limit", () => {
+    expect(isStalled("running", last, "2026-10-09T10:31:00.000Z")).toBe(true);
+    expect(isStalled("queued", last, "2026-10-09T10:31:00.000Z")).toBe(true);
+    expect(isStalled("running", last, "2026-10-09T10:30:00.000Z")).toBe(false);
+    expect(isStalled("paused", last, "2026-10-09T18:00:00.000Z")).toBe(false);
+    expect(isStalled("done", last, "2026-10-09T18:00:00.000Z")).toBe(false);
+    expect(isStalled("running", last, "2026-10-09T10:05:00.000Z", 3)).toBe(true);
+  });
+  it("is false for an unparseable timestamp", () => {
+    expect(isStalled("running", "nope", last)).toBe(false);
   });
 });

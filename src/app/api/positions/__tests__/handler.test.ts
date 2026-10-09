@@ -148,7 +148,7 @@ describe("positions functions", () => {
       position_fit: [{ role: "Staff", fit_pct: 67, rationale: "", traits: [] }],
     };
     const runs = [
-      { id: "r1", position_id: "p1", subject: "Ada King", status: "running", created_at: "2026-10-09T10:00:00.000Z", last_step: "seed_profile" },
+      { id: "r1", position_id: "p1", subject: "Ada King", status: "running", created_at: "2026-10-09T10:00:00.000Z", last_step: "seed_profile", last_at: "2020-01-01T00:00:00.000Z" },
       { id: "r2", position_id: "p1", subject: "Bo", status: "done", created_at: "2026-10-09T11:00:00.000Z", brief_json: JSON.stringify({ run_id: "r2", profile }) },
     ];
     const apps = [
@@ -157,8 +157,8 @@ describe("positions functions", () => {
     ];
     const detail = await getPosition(makeDb([position("p1")], runs, apps), "p1");
     const [done, running] = detail?.candidates ?? [];
-    expect(done?.run).toEqual({ status: "done", subject: "Bo", step: null, pct: 100, fit_pct: 67, independent: 1 });
-    expect(running?.run).toMatchObject({ status: "running", subject: "Ada King", step: "Web search", fit_pct: null, independent: 0 });
+    expect(done?.run).toEqual({ status: "done", subject: "Bo", step: null, pct: 100, fit_pct: 67, independent: 1, stalled: false });
+    expect(running?.run).toMatchObject({ status: "running", subject: "Ada King", step: "Web search", fit_pct: null, independent: 0, stalled: true });
     expect(running?.run?.pct).toBeGreaterThan(0);
     expect(running?.run?.pct).toBeLessThan(100);
   });

@@ -37,7 +37,7 @@ function BriefTable({ group }: { group: BriefGroup }): React.JSX.Element {
         </thead>
         <tbody>
           {group.rows.map((row) => {
-            const { label, tone } = statusOf(row.status);
+            const { label, tone } = statusOf(row.status, row.last_at);
             return (
               <tr key={row.id} className="border-b border-divider">
                 <th scope="row" className="px-3 py-3 font-medium">

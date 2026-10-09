@@ -25,6 +25,7 @@ import type { TagRow } from "@/app/intake/intake-rows";
 import { STEP_LABEL } from "@/app/runs/[id]/source-labels";
 import type { ApplicationSource, ApplicationStatus } from "@/domain/application";
 import { parseMustHaves, POSITION_ID, type Position, type PositionListItem } from "@/domain/position";
+import { isStalled } from "@/domain/run-status";
 import { briefStats } from "@/domain/profile-stats";
 import { nameFromHandle } from "@/domain/profile-url";
 import { buildGroup, type RoleGroup, type RoleRunRow } from "@/domain/role-overview";
@@ -32,7 +33,7 @@ import { recipeFor } from "@/recipe/goals";
 
 export type PositionRun = { id: string; subject: string; status: string; created_at: string };
 /** The pooled person's run as the results table shows it: progress while running, fit % and independent lines once done. */
-export type PoolRun = { status: string; subject: string; step: string | null; pct: number; fit_pct: number | null; independent: number };
+export type PoolRun = { status: string; subject: string; step: string | null; pct: number; fit_pct: number | null; independent: number; stalled: boolean };
 /**
  * One pooled person; `has_*` are 0/1 so the page can show presence without the CV or profile text. `handle` is the
  * name-like part of the LinkedIn URL (never the URL itself); `run` is null until a hiring run of this position exists.
@@ -111,7 +112,8 @@ function poolRun(row: RoleRunRow): PoolRun {
   const active = row.status === "queued" || row.status === "running";
   const step = !active || next === undefined ? null : (actor === undefined ? undefined : STEP_LABEL[actor]) ?? next.id.replaceAll("_", " ");
   const pct = row.status === "done" ? 100 : Math.min(99, Math.round((done / HIRING_STEPS.length) * 100));
-  return { status: row.status, subject: row.subject, step, pct, ...briefStats(row.brief_json) };
+  const stalled = isStalled(row.status, row.last_at ?? row.created_at, new Date().toISOString());
+  return { status: row.status, subject: row.subject, step, pct, stalled, ...briefStats(row.brief_json) };
 }
 
 export async function getPosition(db: D1Database, id: string): Promise<PositionDetail | null> {
