@@ -111,14 +111,14 @@ Weights from the case brief ([`docs/brief.md`](docs/brief.md)).
 | Value and track relevance | 35 | A recruiter flow from position to interview to deletion. The brief answers the position's must-haves, not a generic summary. Exports go into the tools a recruiter already uses (ATS paste, calendar, kit). | `/briefs/new`, `/runs/<id>`, [`plans/012-brief-flow/`](plans/012-brief-flow/00-SYNTHESIS.md), commits `0b1e9ed` (ATS), `177df41` (.ics), `629f5a9` (kit review) |
 | Originality | 25 | Positions come first: catalog or job-ad link → must-haves → research per must-have. Identity is settled before anything reaches the model. A devil's advocate may only weaken findings. CV vs public record. An AI phone call with consent whose answers stay STATEMENTs. Czech registries by role. | `src/domain/role-catalog/`, `src/recipe/seams/challenge.ts`, `src/app/runs/[id]/cv-check.ts`, `src/domain/call-ingest.ts`, `src/domain/cz-registry.ts`; commits `f903bf1`, `236d2ba`, `e36e4aa` |
 | Working end-to-end | 20 | Live on production: sign-up → position → candidate → run → brief → exports → delete. Six intake channels. A degraded path when the AI is down (evidence-only brief, labelled NO AI). | https://oldboys.asajj.cz, live runs in [`docs/ops/llm-manual-runs.md`](docs/ops/llm-manual-runs.md), `src/workflow/intake-email.ts`, `src/app/apply/` |
-| Technical execution | 10 | Durable Workflow with a pause, append-only ledger, budget in the runner, deterministic quote check before any model verify, Zod contracts, strict TypeScript + ESLint, 2,037 + 21 tests, an eval that `pnpm check` guards. | `src/recipe/runner.ts`, `src/recipe/seams/verify.ts`, `migrations/0001_init.sql`, `pnpm check` |
+| Technical execution | 10 | Durable Workflow with a pause, append-only ledger, budget in the runner, deterministic quote check before any model verify, Zod contracts, strict TypeScript + ESLint, 1,873 + 21 tests, an eval that `pnpm check` guards. | `src/recipe/runner.ts`, `src/recipe/seams/verify.ts`, `migrations/0001_init.sql`, `pnpm check` |
 | Validation and honest limitations | 10 | An eval set with ground truth and traps, scored in two modes. A public `/validation` page generated from the eval results. Simulated parts carry a pill in the app. Known misses and issues are listed (section 8). | [`eval/RESULTS.md`](eval/RESULTS.md), `/validation`, [`src/app/validation/page.tsx`](src/app/validation/page.tsx), [`eval/reviews/`](eval/reviews/) |
 
 ## 6. Numbers
 
 | What | Value | Source |
 |---|---|---|
-| Tests | **2,037 app tests passed (2 skipped) + 21 extension tests**, all green | `pnpm check` at 05:05 |
+| Tests | **1,873 app tests passed (2 skipped) + 21 extension tests**, all green | `pnpm check` at 03:35 |
 | Eval | **84 of 95 checks, 0 unsafe misses, 11 conservative**, the same in strict mode; 0 lineup questions | [`eval/RESULTS.md`](eval/RESULTS.md) |
 | Run time on production (full hiring runs on Josef Buryan, a consenting team member) | **6 min 40 s** with parallel collectors (run a79b1d1b, CMO, 04:46); 8 min 37 s and 11 min 30 s before them (dff2cfdb, c9c2a2b6); the UI says "usually 6 to 12 minutes" | run state `cost.duration_ms`; [`docs/ops/llm-manual-runs.md`](docs/ops/llm-manual-runs.md) |
 | Cost per run | $0.78 to $0.84 for those three production runs (enriched profile, 26 source calls); $0.19 to $0.28 for the early 16-source runs | same file, from the ledger `cost_usd` |
@@ -173,14 +173,13 @@ Weights from the case brief ([`docs/brief.md`](docs/brief.md)).
 2. **The "Working style" section** of the enriched profile shows DISC and MBTI types with a confidence level. They are inferred only from the person's own public writing and labelled "Inference from public writing, not an assessment of the person" (`src/app/runs/[id]/profile-sections.tsx`). This sits uneasily with the case's out-of-bounds list and with our own start-form line "we do not judge personality".
 3. **The Czech registry step runs for every position**, by name only:
    - It searches the insolvency register, ARES, or.justice.cz persons and the Police wanted and missing persons list (`src/domain/cz-registry.ts`).
-   - Hits are labelled "namesake possible" and the card says to confirm at the interview. Still, a namesake's record can appear on a candidate's brief. Its address is cut to the town (no street, house number or postcode) since 05:00.
+   - Hits are labelled "namesake possible" and the card says to confirm at the interview. Still, a namesake's record can appear on a candidate's brief.
 4. **Art. 9 claims are filtered on output** but stay in the D1 `claims` table until the run is deleted or purged.
 5. **Sending the candidate notice is not recorded.** The audit record says "Not recorded by this tool".
 6. **Access control is thin:**
    - Run, audit and export pages open by their unguessable run UUID without login.
    - A run without a company (started by the API or the extension) can be deleted by any logged-in account.
    - The call-approve route does not check the call's company.
-   - Positions are not scoped to the company: every account sees and can open every team's positions in `/positions` and `/briefs/new` (the `positions` table has no organization column; fixing it needs a D1 migration).
 7. **The budget gates paid collectors only.** Model steps after the cap still run, so recorded run totals reach $0.83 against a $0.50 budget.
 
 ## 9. How we built it

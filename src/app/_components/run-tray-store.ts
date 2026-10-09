@@ -3,21 +3,23 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/_components/run-tray-store.ts
- * Deps:    src/app/runs/[id]/state (RunState, stepRows, firstName)
+ * Deps:    src/domain/run-eta (progressView), src/app/runs/[id]/state (RunState, stepRows, firstName)
  * Tested:  src/app/_components/__tests__/run-tray-store.test.ts
  *
  * Key responsibilities:
  * - `trackRun` / `untrackRun` / `readTray`: a sessionStorage list of run ids (newest first, at most TRAY_MAX), and a
  *   window event (TRAY_EVENT) so the tray re-reads it without a reload; `trackRun` of the newest id writes nothing (safe to call per poll)
  * - `addRun` / `dropRun`: the pure list operations behind them
- * - `trayRow`: name, status label and tone, progress (0..1) and the five step dots for one run state
+ * - `trayRow`: name, status label and tone, progress (0..1, time-weighted when the state carries `progress`, plans/015),
+ *   the five step dots, the phase projection and the fields `trayLine` needs, for one run state
  * - `isLive`: whether a run still needs polling
  *
  * Design constraints:
  * - Storage may be blocked: reads give [], writes are ignored (same stance as token.ts)
  * - Pure helpers take and return arrays; only the three storage functions touch the browser
  */
-import { firstName, type RunState, type RowState, stepRows } from "@/app/runs/[id]/state";
+import { progressView, type RunProgress } from "@/domain/run-eta";
+import { clockSkew, firstName, type RunState, type RowState, stepRows } from "@/app/runs/[id]/state";
 import type { Tone } from "@/app/ui";
 
 export const TRAY_KEY = "oldboys.tray";
@@ -70,6 +72,14 @@ export type TrayRow = {
   progress: number;
   dots: RowState[];
   live: boolean;
+  /** What the tray line needs between polls (plans/015): the phase projection and the run's clock fields. */
+  phases: RunProgress | null;
+  created_at: string;
+  cost: RunState["cost"];
+  mentions: number;
+  raw_status: RunState["status"];
+  /** Browser clock minus server clock at the poll (clockSkew), subtracted before any elapsed time. */
+  skew: number;
 };
 
 const STATUS_TEXT: Readonly<Record<RunState["status"], { text: string; tone: Tone }>> = {
@@ -84,17 +94,25 @@ export function isLive(status: RunState["status"]): boolean {
   return status === "queued" || status === "running" || status === "paused";
 }
 
-export function trayRow(state: Pick<RunState, "id" | "subject" | "headline" | "role" | "position" | "status" | "step" | "mentions" | "failed_step" | "step_index" | "step_count">): TrayRow {
+export function trayRow(state: Pick<RunState, "id" | "subject" | "headline" | "role" | "position" | "status" | "step" | "mentions" | "failed_step" | "step_index" | "step_count" | "progress" | "created_at" | "cost" | "now">, receivedAt = 0): TrayRow {
   const first = firstName(state.subject);
   const hiring = state.position?.title ?? state.role;
+  const skew = clockSkew(state, receivedAt);
+  const share = state.progress === undefined ? (state.step_count > 0 ? state.step_index / state.step_count : 0) : progressView(state.progress, state.status, receivedAt - skew).share;
   return {
     id: state.id,
     title: first === null ? "New brief" : state.subject,
     detail: hiring ?? state.headline,
     status: STATUS_TEXT[state.status].text,
     tone: STATUS_TEXT[state.status].tone,
-    progress: state.step_count > 0 ? Math.min(1, Math.max(0, state.step_index / state.step_count)) : 0,
+    progress: Math.min(1, Math.max(0, share)),
     dots: stepRows(state),
     live: isLive(state.status),
+    phases: state.progress ?? null,
+    created_at: state.created_at,
+    cost: state.cost,
+    mentions: state.mentions,
+    raw_status: state.status,
+    skew,
   };
 }

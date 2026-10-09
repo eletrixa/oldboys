@@ -48,7 +48,9 @@ describe("GET /api/runs/:id/state position", () => {
     head = row({ position_id: "p1", position_title: "Head of Growth" });
     const state = await get();
     expect(state.position).toEqual({ id: "p1", title: "Head of Growth" });
-    for (const key of ["id", "subject", "role", "status", "questions", "claims", "cost", "step_count"]) expect(state).toHaveProperty(key);
+    for (const key of ["id", "subject", "role", "status", "questions", "claims", "cost", "step_count", "progress"]) expect(state).toHaveProperty(key);
+    // plans/015: five phases, nothing finished on an empty ledger
+    expect((state.progress as { phases: { key: string; ended_at: string | null }[] }).phases.map((p) => p.key)).toEqual(["search", "lineup", "read", "check", "write"]);
   });
 
   it("returns null without a position or when it was purged", async () => {

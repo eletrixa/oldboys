@@ -9,9 +9,11 @@
  * Key responsibilities:
  * - addRun puts the newest first, dedupes and caps at TRAY_MAX; dropRun removes
  * - readTray survives missing or broken storage; trackRun of the newest id is a no-op
- * - trayRow: title before and after the name is known, progress share, live flag per status
+ * - trayRow: title before and after the name is known, progress share (time-weighted with a phase projection), live flag per status
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { runProgress } from "@/domain/run-eta";
+import { hiringRecipe } from "@/recipe/goals/hiring";
 import { addRun, dropRun, isLive, readTray, TRAY_MAX, trackRun, trayRow } from "../run-tray-store";
 
 const base = {
@@ -26,6 +28,8 @@ const base = {
   failed_step: null,
   step_index: 2,
   step_count: 8,
+  created_at: "2026-10-09T10:00:00.000Z",
+  cost: { usd: 0, source_calls: 0, llm_calls: 0, duration_ms: 0 },
 };
 
 describe("addRun / dropRun", () => {
@@ -73,6 +77,14 @@ describe("trayRow", () => {
     expect(trayRow(base)).toMatchObject({ title: "New brief", detail: "Senior Data Engineer", status: "Researching", progress: 0.25, live: true });
     expect(trayRow({ ...base, subject: "Ada Lovelace", position: { id: "p", title: "Head of Data" } })).toMatchObject({ title: "Ada Lovelace", detail: "Head of Data" });
     expect(trayRow({ ...base, role: null, position: null }).detail).toBe("Data engineer at Acme");
+  });
+
+  it("with a phase projection the share is time-weighted and the clock fields travel along", () => {
+    const progress = runProgress(hiringRecipe.steps, [], base.created_at);
+    const row = trayRow({ ...base, progress }, Date.parse(base.created_at) + 20_000);
+    expect(row.progress).toBeGreaterThan(0);
+    expect(row.progress).toBeLessThan(0.2);
+    expect(row).toMatchObject({ phases: progress, raw_status: "running", mentions: 0, created_at: base.created_at });
   });
 
   it("done and failed runs are not live and keep a sane progress", () => {

@@ -7,7 +7,8 @@
  * Tested:  n/a
  *
  * Key responsibilities:
- * - ProgressSteps, ProfileList, QuestionCard, CostLine (running and lineup views, and the "How we confirmed it" disclosure)
+ * - ProgressSteps (bar from the time-weighted share when given, five rows with a right-hand detail each, a foot slot),
+ *   ProfileList, QuestionCard, CostLine (running and lineup views, and the "How we confirmed it" disclosure)
  * - Brief pieces the finished brief (brief-page.tsx) places in its tabs: TopLine ("Confirmed profile" next to "Hiring
  *   for", location note), DegradedNotice, ConfirmedEvidence (grouped by the URL's platform), RoleCriteria (AI off),
  *   PerQuestion (briefs stored before sections), AlsoFound (namesakes, never claimed); platformLabel
@@ -53,17 +54,23 @@ function percent(rows: RowState[], stepIndex: number, stepCount: number): number
 export function ProgressSteps({
   rows,
   labels,
+  details = [],
+  share = null,
   stepIndex,
   stepCount,
-  elapsed = null,
+  foot = null,
 }: {
-  elapsed?: string | null;
   rows: RowState[];
   labels: string[];
+  /** Right-hand note per row: "48 s" for a finished phase, what is still read for the active one, the typical time for the rest. */
+  details?: (string | null)[];
+  /** Time-weighted share 0..1 (plans/015); null falls back to the step index. */
+  share?: number | null;
   stepIndex: number;
   stepCount: number;
+  foot?: React.ReactNode;
 }): React.JSX.Element {
-  const pct = percent(rows, stepIndex, stepCount);
+  const pct = share === null ? percent(rows, stepIndex, stepCount) : rows.includes("failed") ? Math.round(share * 100) : Math.max(4, Math.min(99, Math.round(share * 100)));
   const failed = rows.includes("failed");
   const activeIndex = rows.indexOf("active");
   const activeLabel = activeIndex >= 0 ? labels[activeIndex] : undefined;
@@ -86,14 +93,20 @@ export function ProgressSteps({
       </div>
       <ol className="relative flex flex-col gap-3">
         <span aria-hidden="true" className="absolute top-2.5 bottom-2.5 left-[9.5px] w-px bg-divider" />
-        {labels.map((label, i) => (
-          <li key={label} aria-current={i === activeIndex ? "step" : undefined} className={`flex items-center gap-3 text-sm ${rows[i] === "todo" || rows[i] === "skipped" ? "text-muted" : rows[i] === "failed" ? "text-conflict" : "text-ink"}`}>
-            <Mark state={rows[i] ?? "todo"} />
-            {label}
-          </li>
-        ))}
+        {labels.map((label, i) => {
+          const detail = details[i] ?? null;
+          return (
+            <li key={label} aria-current={i === activeIndex ? "step" : undefined} className={`flex items-start gap-3 text-sm ${rows[i] === "todo" || rows[i] === "skipped" ? "text-muted" : rows[i] === "failed" ? "text-conflict" : "text-ink"}`}>
+              <Mark state={rows[i] ?? "todo"} />
+              <span className="flex min-w-0 flex-1 flex-col gap-0.5 sm:flex-row sm:items-baseline sm:justify-between sm:gap-4">
+                <span>{label}</span>
+                {detail !== null && <span className="text-xs text-muted tabular-nums sm:text-right">{detail}</span>}
+              </span>
+            </li>
+          );
+        })}
       </ol>
-      {elapsed !== null && <p className="text-sm text-muted">{elapsed}</p>}
+      {foot}
     </div>
   );
 }
