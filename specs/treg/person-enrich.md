@@ -38,8 +38,10 @@
 
 ### normaliseSocialUrl(raw)
 - Trimmed; not a parseable absolute URL: `null`; empty path: `null`.
-- Host lower-cased, leading `www.` stripped for twitter/x.
-- `twitter.com` and `x.com` (with or without `www.`): `https://x.com/<first path segment>`.
+- Host lower-cased; a leading `www.` is stripped for github, twitter, x and facebook only.
+- `twitter.com` and `x.com`: `https://x.com/<first path segment>`.
+- `github.com`: `https://github.com/<first path segment>` (repository paths dropped).
+- `facebook.com` keeps its full path and, for `profile.php`, the `?id=<id>` query; every other query is dropped.
 - Other hosts: `https://<host>/<path segments>`; scheme forced to https, no query, no fragment, no trailing slash.
 
 ### digest(fetched, ctx)
@@ -63,6 +65,6 @@
 - requests: one capped POST with `linkedin_url` and `maxCostUsd 0.03`; `[]` with no candidates, a `possibly-same-as` LinkedIn candidate, a merged non-LinkedIn candidate; no `reveal_` key in params; skip reason text.
 - parse: one Source per social URL in order (twitter→`https://x.com/janad`, github), line 1 `Jana Dvořáková – Data engineer at Kiwi`, line 2 the literal sentence with the confirmed URL, `Current:`, `Location:` and history lines, identity `unverified`; headline fallback `<title> @ <org>`; name fallbacks (first+last, subject).
 - parse: `raw` contains none of email, `personal_emails`, `primary_phone`, history emails; `[]` for null person, no usable URL, `"nope"`, `null`, `{ person: { name: 5 } }`.
-- parse then `corroboration()`: an enrichment Source for a merged LinkedIn candidate yields reason `cross-link` (add; currently untested end to end).
-- normaliseSocialUrl: twitter with query and trailing slash, `www.x.com` with status path, github trailing slash, root path `null`, garbage `null`; add `www.github.com/janad` to `https://github.com/janad` and `github.com/janad/repo` to `https://github.com/janad` (red until the deviation is fixed).
+- parse then `corroboration()`: an enrichment Source for a merged LinkedIn candidate yields reason `cross-link` .
+- normaliseSocialUrl: twitter with query and trailing slash, `www.x.com` with status path, github trailing slash, root path `null`, garbage `null`; `www.github.com/janad` and `github.com/janad/repo` (with or without query) to `https://github.com/janad`.
 - digest: full shape, `null` for no person and `[]`; the same dedupe of URLs as parse.

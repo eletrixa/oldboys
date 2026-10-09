@@ -11,6 +11,7 @@
  * - Only hiring calls github; only due-diligence calls ares_vr
  * - `github_deep` (and the code-contributions question) is hiring-only and directly follows `github_profile`
  * - Each recipe has exactly one resolve step and unique step ids
+ * - treg steps (plans/016) sit around the lineup as planned, use `treg/*` actors and never take an Apify slot
  * - Hiring asks one question per brief section, each with a fixed title, within the paid actor run cap
  *
  * Design constraints:
@@ -102,6 +103,26 @@ describe("goal recipes diverge", () => {
   it("hiring stays within the 24 paid actor runs per run (seed scrape included)", () => {
     const paid = hiringRecipe.steps.filter(isPaid); // treg/* steps are USD-only reads, never an Apify run
     expect(paid.length + 1).toBeLessThanOrEqual(24);
+  });
+
+  it("treg steps sit around the lineup, use treg/ actors and are never paid", () => {
+    const h = ids(hiringRecipe.steps);
+    const lineup = h.indexOf("resolve_lineup");
+    expect(h.indexOf("treg_person_enrich")).toBeGreaterThanOrEqual(0);
+    expect(h.indexOf("treg_person_enrich")).toBeLessThan(lineup);
+    expect(h.indexOf("treg_people_search")).toBeGreaterThanOrEqual(0);
+    expect(h.indexOf("treg_people_search")).toBeLessThan(lineup);
+    expect(h.indexOf("treg_social_verify")).toBeGreaterThan(lineup);
+    const d = ids(dueDiligenceRecipe.steps);
+    const ddLineup = d.indexOf("resolve_lineup");
+    expect(d.indexOf("treg_company_enrich")).toBeGreaterThan(ddLineup);
+    expect(d.indexOf("treg_social_verify")).toBeGreaterThan(ddLineup);
+    const tregSteps = [...hiringRecipe.steps, ...dueDiligenceRecipe.steps].filter((s) => s.id.startsWith("treg_"));
+    expect(tregSteps).toHaveLength(5);
+    for (const step of tregSteps) {
+      expect(step.actor?.startsWith("treg/")).toBe(true);
+      expect(isPaid(step)).toBe(false);
+    }
   });
 
   it("recipeFor resolves both goals", () => {

@@ -8,7 +8,7 @@ profile before the identity lineup, where today only Google indexing and on-plat
 metered proxy over 60+ providers (catalog research: `research/*.md` in the session scratchpad, summarised below).
 
 ## Decision
-A third request kind in the collector contract, one adapter, five pure collectors, no model change, no new table.
+A third request kind in the collector contract, one adapter, four pure collectors (`social-verify` reads per-platform tables), no model change, no new table.
 
 | Topic | Decision |
 |---|---|

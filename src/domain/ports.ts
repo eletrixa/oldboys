@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/domain/ports.ts
- * Deps:    zod
+ * Deps:    zod (types only), src/domain/call.ts and claim.ts (types)
  * Tested:  n/a (types only; exercised through runner tests with fake ports)
  *
  * Key responsibilities:

@@ -93,6 +93,31 @@ function fullName(p: PersonRecord, ctx: StepContext): string {
   return text(p.name) || joined || ctx.subject.trim();
 }
 
+/** `<title> @ <org>` or whichever part exists; "" when neither. */
+function titleAtOrg(title: string, org: string): string {
+  return [title, org].filter((s) => s !== "").join(" @ ");
+}
+
+/** Excerpt lines: name – headline, the literal confirmed LinkedIn URL (cross-link rule), current job, place, up to 5 history entries. */
+function excerptLines(p: PersonRecord, linkedin: string, ctx: StepContext): string[] {
+  const org = text(p.organization?.name);
+  const title = text(p.title);
+  const headline = text(p.headline) || (title === "" ? "" : titleAtOrg(title, org)); // an org alone is no headline
+  const place = [text(p.city), text(p.country)].filter((s) => s !== "").join(", ");
+  const history = (p.employment_history ?? [])
+    .filter((j) => text(j.title) !== "" || text(j.organization_name) !== "")
+    .slice(0, 5)
+    .map((j) => `${text(j.title)} @ ${text(j.organization_name)} (${text(j.start_date)}–${text(j.end_date) || "now"})`);
+  const lines = [
+    headline === "" ? fullName(p, ctx) : `${fullName(p, ctx)} – ${headline}`,
+    `Linked from the confirmed LinkedIn profile ${linkedin} by Apollo people enrichment via treg`,
+    title === "" ? "" : `Current: ${title}${org === "" ? "" : ` at ${org}`}`,
+    place === "" ? "" : `Location: ${place}`,
+    ...history,
+  ];
+  return lines.filter((l) => l !== "");
+}
+
 export const tregPersonEnrich: Collector = {
   id: "treg/person-enrich",
   requests: (ctx) => {
@@ -105,22 +130,8 @@ export const tregPersonEnrich: Collector = {
     const p = personOf(payload);
     const linkedin = confirmedLinkedin(ctx);
     if (p === null || linkedin === null) return [];
-    const org = text(p.organization?.name);
-    const title = text(p.title);
-    const headline = text(p.headline) || (title === "" ? "" : org === "" ? title : `${title} @ ${org}`);
-    const place = [text(p.city), text(p.country)].filter((s) => s !== "").join(", ");
-    const history = (p.employment_history ?? [])
-      .filter((j) => text(j.title) !== "" || text(j.organization_name) !== "")
-      .slice(0, 5)
-      .map((j) => `${text(j.title)} @ ${text(j.organization_name)} (${text(j.start_date)}–${text(j.end_date) || "now"})`);
-    const lines = [
-      headline === "" ? fullName(p, ctx) : `${fullName(p, ctx)} – ${headline}`,
-      `Linked from the confirmed LinkedIn profile ${linkedin} by Apollo people enrichment via treg`,
-      title === "" ? "" : `Current: ${title}${org === "" ? "" : ` at ${org}`}`,
-      place === "" ? "" : `Location: ${place}`,
-      ...history,
-    ].filter((l) => l !== "");
-    return socialUrls(p).map((url): ParsedSource => ({ url, excerpt: clip(lines.join("\n")), raw: p, identity: identityFor(ctx, url) }));
+    const excerpt = clip(excerptLines(p, linkedin, ctx).join("\n"));
+    return socialUrls(p).map((url): ParsedSource => ({ url, excerpt, raw: p, identity: identityFor(ctx, url) }));
   },
   digest: (fetched: readonly Fetched[], ctx) => {
     for (const { payload } of fetched) {

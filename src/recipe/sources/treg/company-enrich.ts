@@ -41,6 +41,8 @@ const Company = z.object({
   domain: z.object({ domain: z.string().nullish() }).nullish(),
 });
 
+const filled = (x: string | null | undefined): x is string => x !== undefined && x !== null && x !== "";
+
 function anchorDomain(anchor: string): string | null {
   try {
     const u = new URL(anchor);
@@ -54,16 +56,17 @@ function anchorDomain(anchor: string): string | null {
 
 function read(payload: unknown, ctx: StepContext) {
   const r = Company.safeParse(payload);
-  const name = r.success ? r.data.about?.name : undefined;
-  if (!r.success || name === undefined || name === null || name === "") return null;
+  if (!r.success) return null;
+  const name = r.data.about?.name;
+  if (!filled(name)) return null;
   const a = r.data.about;
   const hq = r.data.locations?.headquarters;
   const host = anchorDomain(ctx.anchor);
   if (host === null) return null;
-  const place = [hq?.city?.name, hq?.country?.name].filter((x): x is string => x !== undefined && x !== null && x !== "");
+  const place = [hq?.city?.name, hq?.country?.name].filter(filled);
   const socials = Object.values(r.data.socials ?? {})
     .map((s) => s?.url)
-    .filter((u): u is string => u !== undefined && u !== null && /^https?:\/\//.test(u));
+    .filter((u) => filled(u) && /^https?:\/\//.test(u));
   return {
     name,
     legal: a?.nameLegal ?? null,
@@ -78,6 +81,12 @@ function read(payload: unknown, ctx: StepContext) {
   };
 }
 
+/** Exact count wins; the provider's range string is the documented fallback. */
+function employeeText(exact: number | null, range: string | null): string | null {
+  if (exact !== null) return `about ${String(exact)} employees`;
+  return range !== null ? `${range} employees` : null;
+}
+
 export const tregCompanyEnrich: Collector = {
   id: "treg/company-enrich",
   requests: (ctx) => {
@@ -90,7 +99,7 @@ export const tregCompanyEnrich: Collector = {
     const c = read(payload, ctx);
     if (c === null) return [];
     const url = `https://${c.host}/`;
-    const size = c.employees !== null ? `about ${String(c.employees)} employees` : c.range !== null ? `${c.range} employees` : null;
+    const size = employeeText(c.employees, c.range);
     const parts = [
       `${c.name}${c.legal !== null && c.legal !== c.name ? ` (legal name ${c.legal})` : ""} is ${c.industry !== null ? `a ${c.industry.replaceAll("-", " ")} company` : "a company"}`,
       c.founded !== null ? `founded in ${String(c.founded)}` : null,

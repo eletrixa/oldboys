@@ -4,13 +4,13 @@ Plan: `plans/016-treg-enrichment/00-SYNTHESIS.md` (Port, Adapter rows).
 
 ## Purpose
 - One metered HTTP call to treg.to by endpoint id, behind a plain function port; the runner owns budget and notes, the adapter owns the wire format.
-- Files: `src/domain/ports.ts` (`TregCall`, `Ports.callTreg: TregCall | null`), `src/adapters/treg.ts` (`TREG_BASE`, `tregUrl`, `makeTregCall`), `src/adapters/__tests__/treg.test.ts`.
+- Files: `src/domain/ports.ts` (`TregCall`, `Ports.callTreg: TregCall | null`), `src/adapters/treg.ts` (`makeTregCall`; URL building is internal), `src/adapters/__tests__/treg.test.ts`.
 
 ## Inputs
 - `makeTregCall(token: string): TregCall`.
 - `TregCall = (req: { endpoint: string; method: "GET" | "POST"; params: Record<string, string | number | boolean | string[]>; maxCostUsd: number }) => Promise<{ payload: unknown; cost_usd: number }>`.
-- `tregUrl(endpoint, params, method): string`.
-- `TREG_BASE = "https://treg.to/call"`; timeout `TIMEOUT_MS` (20 000 ms, `src/adapters/fetch.ts`); user agent `UA` (`oldboys-hackathon/0.1 (+https://oldboys.asajj.cz)`).
+- URL building is internal to `makeTregCall` (observable through the fetch URL).
+- Base `https://treg.to/call` (module constant); timeout `TIMEOUT_MS` (20 000 ms, `src/adapters/fetch.ts`); user agent `UA` (`oldboys-hackathon/0.1 (+https://oldboys.asajj.cz)`).
 
 ## Outputs
 - URL:
@@ -41,7 +41,7 @@ Existing:
 - Cost 0 when the header is missing or `abc`.
 - 402 throws `treg e: HTTP 402 <collapsed snippet>`.
 - Empty 2xx body = `{ payload: null, cost_usd: 0 }`.
-- `tregUrl` with empty params has no query string.
+- A GET with empty params has no query string (asserted through `makeTregCall`).
 
 To add:
 - Snippet is cut at 160 characters (a 500-character body).

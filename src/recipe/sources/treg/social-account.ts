@@ -42,8 +42,8 @@ export type Reader = {
   endpoint: string;
   method: "GET" | "POST";
   provider: string;
-  /** "profile", "account" or "page": the noun of the excerpt's first sentence. */
-  kind: string;
+  /** The noun of the excerpt's first sentence. */
+  kind: "profile" | "account" | "page";
   /** What the posts count counts ("posts", "videos"). */
   postsLabel: string;
   request: (c: Candidate) => TregParams | null;

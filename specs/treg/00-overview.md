@@ -84,7 +84,7 @@ Collectors are pure (no fetch); each endpoint id and its params are constants in
 - Budget too low for a request's cap: request dropped, note "run budget reached", no call.
 
 ## File map
-- `src/adapters/treg.ts`: `tregUrl`, `makeTregCall(token)`; the only code that talks to treg.to.
+- `src/adapters/treg.ts`: `makeTregCall(token)`; the only code that talks to treg.to.
 - `src/domain/ports.ts`: `TregCall` type, `Ports.callTreg`.
 - `src/recipe/sources/types.ts`: `CollectorRequest` `via: "treg"` variant.
 - `src/recipe/runner.ts`: request-dispatch treg branch, TREG_TOKEN-unset filter, USD reservation, cost accounting.
@@ -96,12 +96,11 @@ Collectors are pure (no fetch); each endpoint id and its params are constants in
 - `src/recipe/sources/treg/company-enrich.ts`: The Companies API record of the anchor domain.
 - `src/recipe/sources/treg/social-verify.ts`: second-read collector (requests, sentences, `ProfileFacts` digest).
 - `src/recipe/sources/treg/social-account.ts`: `Account`, `Reader`, `TregParams`, request builders and zod shorthands.
-- `src/recipe/sources/treg/social-readers.ts`: `READERS` with linkedin, instagram, tiktok readers.
-- `src/recipe/sources/treg/social-readers-more.ts`: x, youtube, facebook readers (`MORE_READERS`).
+- `src/recipe/sources/treg/social-readers.ts`: `READERS`, the merged reader table (linkedin, x, youtube, facebook here).
+- `src/recipe/sources/treg/social-readers-tikhub.ts`: instagram and tiktok readers (`TIKHUB_READERS`, same TikHub envelope).
 - `src/recipe/goals/hiring.ts`, `src/recipe/goals/due-diligence.ts`: step placement and gap texts.
 - `docs/ops/treg.md`: runbook; `CLAUDE.md` row "treg second source (016)".
 
-Deviation in code: `social-readers.ts` and `social-readers-more.ts` hold per-platform tables, not collectors; the dossier names five pure collectors while the code has four collector objects plus a reader table (informational, no fix needed). (still open)
 Deviation in code: the request dispatch throws "TREG_TOKEN not set" as a second guard besides the earlier filter; harmless, but only the filter's note is contractual. (still open)
 Deviation in code: `docs/ops/treg.md` lists live-test `live-treg` as pending in the dossier; no `live-treg` test exists yet (waits for balance). (still open)
 

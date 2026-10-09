@@ -10,7 +10,7 @@
  * - Question list and ordered step list for goal "hiring"; `seed_profile` first (manager's LinkedIn URL or CV, plans/006)
  * - One question per brief section: role, employer context, career, education, code, code contributions, talks, writing,
  *   press, social presence, community and awards, location, contradictions
- * - Paid actor runs stay under RUN_BUDGET_CALLS (18), and the extra web searches are packed as
+ * - Paid actor runs stay under RUN_BUDGET_CALLS (24; treg steps are USD-only and take no slot), and the extra web searches are packed as
  *   several queries into one SERP run (social_serp: one `site:` query per platform, press_serp, talks_serp)
  * - Instagram and Facebook are always searched by name on the platform itself (`instagram_search`, `facebook_search`,
  *   before the lineup, so the accounts found are scored against the anchor and the confirmed employers like any other

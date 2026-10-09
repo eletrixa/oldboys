@@ -13,18 +13,12 @@
  *   optional `alreadyFetched()` names sources an earlier step (seed) fetched, so the step does not scrape them twice;
  *   optional `followUp()` computes a second wave of requests from the first wave's request/payload pairs (`Fetched`); optional
  *   `digest()` summarises every pair into StepOutcome.digest; optional `skipReason()` names why `requests()` is empty when the
-<<<<<<< HEAD
- *   default "no confirmed handle or id to look up" would be untrue (e.g. role not technical)
- * - emptyOutcome(): the outcome of a step that produced nothing (the runner re-exports it)
-||||||| 6170f38
- *   default "no confirmed handle or id to look up" would be untrue (e.g. role not technical)
-=======
  *   default "no confirmed handle or id to look up" would be untrue (e.g. role not technical); `enriches: true` marks a
  *   profile scraper whose page is richer than the search hit of the same URL, so the runner stores it even when a search
  *   step already listed that URL (otherwise one source per URL per run)
  * - namesakeSkipReason(): the profile steps' skip note when the lineup rejected every account found on the platform
  *   ("only people with the same name"), so the gap says the platform was searched
->>>>>>> origin/main
+ * - emptyOutcome(): the outcome of a step that produced nothing (the runner re-exports it)
  * - githubHandles(): accepted github handles (deduped case-insensitively, `@` stripped, max 2), shared by the GitHub collectors
  * - CollectorRequest: `actor` (Apify run), `fetch` (public REST) or `treg` (one treg.to endpoint call, GET or POST, capped by `maxCostUsd`)
  * - identityFor(): "merged" only for urls under a merged candidate (profile url prefix or handle segment), else "unverified"

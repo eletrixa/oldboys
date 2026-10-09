@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/recipe/sources/treg/social-verify.ts
- * Deps:    src/domain/profile-facts, ./social-readers
+ * Deps:    src/domain/profile-facts, src/recipe/sources/{facts,types}, ./social-account, ./social-readers
  * Tested:  src/recipe/__tests__/treg-social-verify.test.ts
  *
  * Key responsibilities:
@@ -16,15 +16,14 @@
  * - Pure: no fetch; platform and handle come from the request, never from the payload
  * - Sensitive provider fields never reach the excerpt, raw or facts (the readers are allow-lists)
  */
-import { facts } from "@/domain/profile-facts";
+import { PLATFORM_LABEL, facts } from "@/domain/profile-facts";
 import { dedupeBy, digestOf } from "@/recipe/sources/facts";
-import type { Collector, CollectorRequest, Fetched, ParsedSource, StepContext } from "@/recipe/sources/types";
-import { acceptedCandidates, clip, identityFor } from "@/recipe/sources/types";
+import { acceptedCandidates, clip, type Collector, type CollectorRequest, type Fetched, identityFor, type ParsedSource, type StepContext } from "@/recipe/sources/types";
 import type { Account, Reader, TregParams } from "@/recipe/sources/treg/social-account";
 import { READERS } from "@/recipe/sources/treg/social-readers";
-import { PLATFORM_LABEL } from "@/domain/profile-facts";
 
 const MAX_REQUESTS = 6;
+const MAX_COST_USD = 0.005;
 const yesNo = (v: boolean): string => (v ? "yes" : "no");
 const n = (v: number): string => String(v);
 
@@ -84,7 +83,7 @@ export const tregSocialVerify: Collector = {
     const reqs = acceptedCandidates(ctx).flatMap((c): CollectorRequest[] => {
       const reader = READERS.find((r) => r.platform === c.platform);
       const params = reader?.request(c) ?? null;
-      return reader === undefined || params === null ? [] : [{ via: "treg", endpoint: reader.endpoint, method: reader.method, params, maxCostUsd: 0.005 }];
+      return reader === undefined || params === null ? [] : [{ via: "treg", endpoint: reader.endpoint, method: reader.method, params, maxCostUsd: MAX_COST_USD }];
     });
     return dedupeBy(reqs, dedupeKey).slice(0, MAX_REQUESTS);
   },

@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/domain/profile-signals.ts
- * Deps:    src/domain/profile-facts (ProfileFacts, PLATFORM_LABEL, FACT_PLATFORMS), src/domain/code-profile (CodeProfile), src/domain/claim (Candidate), src/domain/similar (nearDuplicate, tokens), src/domain/number-text (fmtInt)
+ * Deps:    src/domain/profile-facts (ProfileFacts, PLATFORM_LABEL, FACT_PLATFORMS), src/domain/code-profile (CodeProfile), src/domain/claim (Candidate), src/domain/similar (nearDuplicate, tokens), src/domain/number-text (fmtInt), src/domain/url (canonicalUrl)
  * Tested:  src/domain/__tests__/profile-signals.test.ts
  *
  * Key responsibilities:

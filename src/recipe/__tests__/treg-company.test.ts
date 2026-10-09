@@ -9,6 +9,7 @@
  * Key responsibilities:
  * - Request shape (endpoint, method, params, cost cap) and the skip when the anchor is a place
  * - Parse of a payload shaped like the thecompaniesapi.companies.enrich catalog example, digest, malformed payloads
+ * - Fallbacks (employee range, industries[0]) and the anchor host vs provider domain
  *
  * Design constraints:
  * - No network: the fixture follows the catalog example response
@@ -70,8 +71,9 @@ describe("tregCompanyEnrich", () => {
     });
     expect(tregCompanyEnrich.digest?.([{ req, payload: {} }], ctx)).toBeNull();
   });
+
   it("skips a non-http anchor and a dotless host with the exact reason", () => {
-    for (const anchor of ["Brno", "ftp://x", "ftp://files.example.com", "http://localhost"]) {
+    for (const anchor of ["ftp://x", "ftp://files.example.com", "http://localhost"]) {
       const c = baseContext({ goal: "due-diligence", anchor });
       expect(tregCompanyEnrich.requests(c, step)).toEqual([]);
       expect(tregCompanyEnrich.skipReason?.(c)).toBe("the anchor is not the company's website (no domain to look up)");

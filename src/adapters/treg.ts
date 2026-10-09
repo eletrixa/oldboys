@@ -7,7 +7,7 @@
  * Tested:  src/adapters/__tests__/treg.test.ts
  *
  * Key responsibilities:
- * - `tregUrl`: GET `https://treg.to/call/<endpoint>?<params>` (arrays joined with ","), POST the bare endpoint url
+ * - URL building: GET `https://treg.to/call/<endpoint>?<params>` (arrays joined with ","), POST the bare endpoint url
  * - `makeTregCall(token)`: sends `X-Treg-Token` and `X-Treg-Route-Max-Cost` (the request's cap), JSON body for POST;
  *   the real charge is read from `X-Treg-Cost-Micro` (integer micro-USD, missing = 0); an empty 2xx body is `null`, a negative value is 0
  * - Non-2xx throws `treg <endpoint>: HTTP <status> <160-char snippet>` (402 = balance exhausted, 503 = provider capacity;
@@ -21,12 +21,13 @@
 import { TIMEOUT_MS, UA } from "@/adapters/fetch";
 import type { TregCall } from "@/domain/ports";
 
-export const TREG_BASE = "https://treg.to/call";
+const TREG_BASE = "https://treg.to/call";
 const SNIPPET_CHARS = 160;
+const MICRO_PER_USD = 1_000_000;
 
 type Params = Parameters<TregCall>[0]["params"];
 
-export function tregUrl(endpoint: string, params: Params, method: "GET" | "POST"): string {
+function tregUrl(endpoint: string, params: Params, method: "GET" | "POST"): string {
   const base = `${TREG_BASE}/${endpoint}`;
   if (method === "POST") return base;
   const q = new URLSearchParams();
@@ -54,7 +55,7 @@ export function makeTregCall(token: string): TregCall {
     const snippet = body.replace(/\s+/g, " ").trim().replaceAll(token, "[token]").slice(0, SNIPPET_CHARS);
     if (!res.ok) throw new Error(`treg ${endpoint}: HTTP ${String(res.status)} ${snippet}`);
     const micro = Number(res.headers.get("x-treg-cost-micro") ?? "0");
-    const cost_usd = Number.isFinite(micro) ? Math.max(0, micro) / 1_000_000 : 0;
+    const cost_usd = Number.isFinite(micro) ? Math.max(0, micro) / MICRO_PER_USD : 0;
     if (body.trim() === "") return { payload: null, cost_usd };
     try {
       return { payload: JSON.parse(body) as unknown, cost_usd };

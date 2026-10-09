@@ -7,7 +7,7 @@ Plan: `plans/016-treg-enrichment/00-SYNTHESIS.md`. Pure collector, no fetch; the
 - Feeds `ProfileFacts[]` (digest) to the profile-signals card; `mergeAccounts` combines both readings.
 
 ## Files
-- `src/recipe/sources/treg/social-verify.ts` (`tregSocialVerify`), `social-readers.ts` (`READERS`: linkedin, instagram, tiktok), `social-readers-more.ts` (`MORE_READERS`: x, youtube, facebook), `social-account.ts` (`Account`, `Reader`, `TregParams`, helpers).
+- `src/recipe/sources/treg/social-verify.ts` (`tregSocialVerify`), `social-readers.ts` (`READERS`: linkedin, x, youtube, facebook and the merged table), `social-readers-tikhub.ts` (`TIKHUB_READERS`: instagram, tiktok), `social-account.ts` (`Account`, `Reader`, `TregParams`, helpers).
 - Test: `src/recipe/__tests__/treg-social-verify.test.ts`. Consumers: `src/domain/profile-facts.ts`, `src/domain/profile-signals.ts` (`mergeAccounts`).
 
 ## Inputs
@@ -44,7 +44,7 @@ Requests, one per merged candidate per platform, all `{ via: "treg", maxCostUsd:
 - Facebook `gender`, `email`, `phone`, `address` (and any other unnamed field) never reach excerpt, raw or facts; `reveal_*` flags are never sent.
 - `output.found === false` (X), `success === false` (YouTube, Facebook), a null user (Instagram, TikTok), a LinkedIn payload without id, publicIdentifier, firstName and title, or any malformed or foreign payload: `parse` returns `[]` and the digest has no entry.
 - Counts pass `count()` (non-negative integer or null); bio passes `clipBio` (≤ `BIO_MAX` 300).
-- `mergeAccounts` (`profile-signals.ts`): key `platform|canonicalUrl(url)`; the first reading is kept as base and its `url` stays; for each later reading every non-null field overrides (`source_url` included), a null never erases an earlier value. Apify then treg order: treg numbers win, Apify values survive where treg is null.
+- `mergeAccounts` (`profile-signals.ts`): key `platform|canonicalUrl(url)`; the first reading is kept as base and its `url` stays; for each later reading every non-null field overrides (including `source_url`, so the merged fact points at the later reading's treg URL), a null never erases an earlier value. Apify then treg order: treg numbers win, Apify values survive where treg is null.
 - Cost: runner reserves `maxCostUsd` against the run USD budget; no Apify allowance slot, `out.calls` not incremented; `ports.callTreg === null` → no request, note "TREG_TOKEN not set".
 
 ## Failure modes
@@ -64,5 +64,4 @@ Requests, one per merged candidate per platform, all `{ via: "treg", maxCostUsd:
 - `mergeAccounts` (in `profile-signals` tests): Apify + treg of one URL give one fact set, later non-null wins, null does not erase, first `url` kept.
 
 ## Deviations in code (for the refactor pass)
-- Deviation in code: `mergeAccounts` also lets the later reading replace `source_url`, so the Apify payload URL is lost from the merged fact; dossier only requires the first `url` kept. (still open)
 - Deviation in code: `parse` raw includes `photo_url` and `extras`, beyond the dossier's "allow-listed raw" (still allow-listed, but not named in the dossier). (still open)

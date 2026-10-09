@@ -19,7 +19,7 @@
  */
 import { z } from "zod";
 import { mentionsFullName } from "@/domain/corroborate";
-import type { Collector, ParsedSource } from "@/recipe/sources/types";
+import type { Collector, ParsedSource, StepContext } from "@/recipe/sources/types";
 import { acceptedCandidates, clip, identityFor } from "@/recipe/sources/types";
 
 const Work = z.object({
@@ -49,15 +49,43 @@ function canonicalProfile(raw: string): string | null {
 
 type WorkItem = z.infer<typeof Work>;
 
+/** `<title> @ <company>`, empty parts omitted. */
+function roleOf(j: WorkItem): string {
+  return [text(j.title), text(j.company?.name)].filter((s) => s !== "").join(" @ ");
+}
+
 /** `<title> @ <company> (<from>–<to>)`, empty parts omitted; no parenthesis without a start date. */
 function historyLine(j: WorkItem): string {
-  const role = [text(j.title), text(j.company?.name)].filter((s) => s !== "").join(" @ ");
+  const role = roleOf(j);
   const from = text(j.dates?.from);
   const to = text(j.dates?.to);
   return from === "" ? role : `${role} (${from}–${to === "" ? "now" : to})`;
 }
 
-const query = (ctx: { subject: string; anchor: string }): string => `${ctx.subject} ${ctx.anchor}`.trim();
+const query = (ctx: StepContext): string => `${ctx.subject} ${ctx.anchor}`.trim();
+
+/** The Source for one search result, or null when it is no LinkedIn profile or its name does not spell the full subject name. */
+function sourceOf(item: unknown, ctx: StepContext): ParsedSource | null {
+  const r = Result.safeParse(item);
+  if (!r.success) return null;
+  const url = canonicalProfile(r.data.url);
+  const props = r.data.entities?.[0]?.properties;
+  const name = text(props?.name) || text(r.data.title); // title only when the entity name is missing
+  if (url === null || !mentionsFullName(ctx.subject, name)) return null;
+  const work = (props?.workHistory ?? []).flatMap((w) => {
+    const j = Work.safeParse(w);
+    return j.success && (text(j.data.title) !== "" || text(j.data.company?.name) !== "") ? [j.data] : [];
+  });
+  const headline = work[0] === undefined ? "" : roleOf(work[0]);
+  const location = text(props?.location);
+  const lines = [
+    headline === "" ? name : `${name} – ${headline}`,
+    `Found by Exa people search for "${query(ctx)}" via treg`,
+    location === "" ? "" : `Location: ${location}`,
+    ...work.slice(0, 4).map(historyLine),
+  ].filter((l) => l !== "");
+  return { url, excerpt: clip(lines.join("\n")), raw: { url, name, location, workHistory: work }, identity: identityFor(ctx, url) };
+}
 
 export const tregPeopleSearch: Collector = {
   id: "treg/people-search",
@@ -81,26 +109,10 @@ export const tregPeopleSearch: Collector = {
     const seen = new Set<string>();
     const out: ParsedSource[] = [];
     for (const item of p.data.results) {
-      const r = Result.safeParse(item);
-      if (!r.success) continue;
-      const url = canonicalProfile(r.data.url);
-      const props = r.data.entities?.[0]?.properties;
-      const name = text(props?.name) || text(r.data.title); // title only when the entity name is missing
-      if (url === null || seen.has(url) || !mentionsFullName(ctx.subject, name)) continue;
-      seen.add(url);
-      const work = (props?.workHistory ?? []).flatMap((w) => {
-        const j = Work.safeParse(w);
-        return j.success && (text(j.data.title) !== "" || text(j.data.company?.name) !== "") ? [j.data] : [];
-      });
-      const latest = work[0];
-      const headline = latest === undefined ? "" : [text(latest.title), text(latest.company?.name)].filter((s) => s !== "").join(" @ ");
-      const lines = [
-        headline === "" ? name : `${name} – ${headline}`,
-        `Found by Exa people search for "${query(ctx)}" via treg`,
-        text(props?.location) === "" ? "" : `Location: ${text(props?.location)}`,
-        ...work.slice(0, 4).map(historyLine),
-      ].filter((l) => l !== "");
-      out.push({ url, excerpt: clip(lines.join("\n")), raw: { url, name, location: text(props?.location), workHistory: work }, identity: identityFor(ctx, url) });
+      const src = sourceOf(item, ctx);
+      if (src === null || seen.has(src.url)) continue;
+      seen.add(src.url);
+      out.push(src);
     }
     return out;
   },

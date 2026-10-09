@@ -129,8 +129,8 @@ describe("treg/social-verify parse", () => {
   });
   it("never lets a sensitive Facebook field into the excerpt or raw", () => {
     const [s] = parse("facebook");
-    const all = `${s?.excerpt ?? ""}${JSON.stringify(s?.raw)}`;
-    for (const bad of ["FEMALE", "gender", "a@b.cz", "+420111", "Brno", "email", "phone", "address"]) expect(all).not.toContain(bad);
+    const leaked = `${s?.excerpt ?? ""}${JSON.stringify(s?.raw)}`;
+    for (const bad of ["FEMALE", "gender", "a@b.cz", "+420111", "Brno", "email", "phone", "address"]) expect(leaked).not.toContain(bad);
   });
   it("gives nothing for not found, malformed or foreign payloads", () => {
     expect(parse("x", { output: { found: false } })).toEqual([]);

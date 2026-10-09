@@ -1,5 +1,5 @@
 /**
- * Tests for the treg.to adapter: url building, headers, POST body, cost header, error snippet, empty body.
+ * Tests for the treg.to adapter: url building (via makeTregCall), headers, POST body, cost header, error snippet, empty body.
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/adapters/__tests__/treg.test.ts
@@ -13,7 +13,7 @@
  * - No network
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { makeTregCall, tregUrl } from "@/adapters/treg";
+import { makeTregCall } from "@/adapters/treg";
 
 function stub(...responses: Response[]) {
   const fn = vi.fn<typeof fetch>();
@@ -27,7 +27,15 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+const req = { endpoint: "e", method: "GET", params: {}, maxCostUsd: 0.001 } as const;
+
 describe("makeTregCall", () => {
+  it("has no query string for empty GET params", async () => {
+    const fn = stub(Response.json({}));
+    await makeTregCall("tok")(req);
+    expect(fn.mock.calls[0]?.[0]).toBe("https://treg.to/call/e");
+  });
+
   it("GETs the endpoint with params as query and the treg headers", async () => {
     const fn = stub(Response.json({ ok: 1 }, { headers: { "x-treg-cost-micro": "1500" } }));
     const out = await makeTregCall("tok")({ endpoint: "tikhub.instagram.user.profile", method: "GET", params: { username: "x y", n: 2, flag: true, ids: ["a", "b"] }, maxCostUsd: 0.005 });
@@ -54,7 +62,6 @@ describe("makeTregCall", () => {
   it("reports cost 0 when the cost header is missing or not a number", async () => {
     stub(Response.json({}), Response.json({}, { headers: { "x-treg-cost-micro": "abc" } }));
     const call = makeTregCall("tok");
-    const req = { endpoint: "e", method: "GET", params: {}, maxCostUsd: 0.001 } as const;
     expect((await call(req)).cost_usd).toBe(0);
     expect((await call(req)).cost_usd).toBe(0);
   });
@@ -70,8 +77,6 @@ describe("makeTregCall", () => {
     stub(new Response(null, { status: 200 }));
     await expect(makeTregCall("tok")({ endpoint: "e", method: "GET", params: {}, maxCostUsd: 0.001 })).resolves.toEqual({ payload: null, cost_usd: 0 });
   });
-
-  const req = { endpoint: "e", method: "GET", params: {}, maxCostUsd: 0.001 } as const;
 
   it("cuts the error snippet at 160 characters", async () => {
     stub(new Response("x".repeat(500), { status: 500 }));
@@ -131,11 +136,5 @@ describe("makeTregCall", () => {
     const fn = stub(Response.json({}));
     await makeTregCall("tok")({ endpoint: "e", method: "POST", params: { a: "1" }, maxCostUsd: 0.01 });
     expect(fn.mock.calls[0]?.[0]).toBe("https://treg.to/call/e");
-  });
-});
-
-describe("tregUrl", () => {
-  it("has no query string for empty params", () => {
-    expect(tregUrl("e", {}, "GET")).toBe("https://treg.to/call/e");
   });
 });

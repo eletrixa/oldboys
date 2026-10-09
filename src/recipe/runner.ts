@@ -7,7 +7,7 @@
  * Tested:  src/recipe/__tests__/runner.test.ts
  *
  * Key responsibilities:
- * - serp/actor/ares steps: collector.requests -> ports (callActor | fetchJson) -> collector.parse -> ports.storeSource
+ * - serp/actor/ares steps: collector.requests -> ports (callActor | fetchJson | callTreg) -> collector.parse -> ports.storeSource
  * - resolve/extract/verify/synthesize: delegate to the LLM seams
  * - A collector whose sources an earlier step already fetched (`alreadyFetched`) and that has nothing new to request
  *   returns those sources, not empty, with the note "already fetched at seed" and no request
@@ -80,20 +80,23 @@ function budgetLeft(ctx: StepContext, spentCalls: number, spentUsd: number): boo
 }
 
 async function perform(req: CollectorRequest, ports: Ports): Promise<{ payload: unknown; cost_usd: number }> {
-  if (req.via === "actor") {
-    const r = await ports.callActor({
-      actor: req.actor,
-      input: req.input,
-      timeoutSecs: req.timeoutSecs,
-      maxTotalChargeUsd: req.maxTotalChargeUsd,
-    });
-    return { payload: r.items, cost_usd: r.cost_usd };
+  switch (req.via) {
+    case "actor": {
+      const r = await ports.callActor({
+        actor: req.actor,
+        input: req.input,
+        timeoutSecs: req.timeoutSecs,
+        maxTotalChargeUsd: req.maxTotalChargeUsd,
+      });
+      return { payload: r.items, cost_usd: r.cost_usd };
+    }
+    case "treg":
+      // followUp waves skip the up-front TREG_TOKEN filter, so the port can still be null here
+      if (ports.callTreg === null) throw new Error("TREG_TOKEN not set");
+      return ports.callTreg({ endpoint: req.endpoint, method: req.method, params: req.params, maxCostUsd: req.maxCostUsd });
+    case "fetch":
+      return { payload: await ports.fetchJson(req.url, req.init), cost_usd: 0 };
   }
-  if (req.via === "treg") {
-    if (ports.callTreg === null) throw new Error("TREG_TOKEN not set");
-    return ports.callTreg({ endpoint: req.endpoint, method: req.method, params: req.params, maxCostUsd: req.maxCostUsd });
-  }
-  return { payload: await ports.fetchJson(req.url, req.init), cost_usd: 0 };
 }
 
 async function collect(step: Step, ctx: StepContext, ports: Ports): Promise<StepOutcome> {

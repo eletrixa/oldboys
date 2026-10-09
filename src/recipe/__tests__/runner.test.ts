@@ -236,10 +236,12 @@ describe("treg requests", () => {
     params: { q: "x" },
     maxCostUsd,
   });
+  let hit = 0;
+  const nextHit = (): string => `https://example.com/${String(++hit)}`;
   const collectorOf = (reqs: ReturnType<typeof tregReq>[]): Collector => ({
     id: "treg/fake",
     requests: () => reqs,
-    parse: () => [{ url: `https://example.com/${String(Math.random())}`, excerpt: "hit", raw: {} }],
+    parse: () => [{ url: nextHit(), excerpt: "hit", raw: {} }],
   });
 
   it("performs a treg request through callTreg, adds its cost, counts no call and stores the source", async () => {
@@ -273,7 +275,7 @@ describe("treg requests", () => {
   const mixed = (treg: ReturnType<typeof tregReq>[]): Collector => ({
     id: "treg/fake",
     requests: () => [{ via: "fetch", url: "https://api.example.com/a" }, ...treg],
-    parse: () => [{ url: `https://example.com/${String(Math.random())}`, excerpt: "hit", raw: {} }],
+    parse: () => [{ url: nextHit(), excerpt: "hit", raw: {} }],
   });
 
   it("pushes run budget reached once per step however many treg requests are dropped", async () => {

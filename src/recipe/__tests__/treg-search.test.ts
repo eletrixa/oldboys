@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/recipe/__tests__/treg-search.test.ts
- * Deps:    vitest
+ * Deps:    vitest, src/recipe/seams/resolve (corroboration), src/recipe/__tests__/fakes (baseContext)
  * Tested:  src/recipe/sources/treg/person-enrich.ts, src/recipe/sources/treg/people-search.ts
  *
  * Key responsibilities:

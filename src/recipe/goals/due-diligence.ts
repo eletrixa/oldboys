@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/recipe/goals/due-diligence.ts
- * Deps:    none
+ * Deps:    src/recipe/step (Recipe type)
  * Tested:  src/recipe/__tests__/goals.test.ts
  *
  * Key responsibilities:

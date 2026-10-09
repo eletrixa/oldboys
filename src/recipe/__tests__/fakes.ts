@@ -7,7 +7,7 @@
  * Tested:  n/a (test helper)
  *
  * Key responsibilities:
- * - `fakePorts()` returns in-memory ports that record every call; tests inspect `calls` and override behaviour
+ * - `fakePorts()` returns in-memory ports that record every call; tests inspect `calls` (actor, fetch, llm, treg) and override behaviour; `callTreg: null` simulates an unset TREG_TOKEN
  *
  * Design constraints:
  * - No network, no timers; ids and timestamps are deterministic
