@@ -304,3 +304,6 @@ Each agent appends: what it starts, progress, what it finishes. Newest at the bo
 
 ## 2026-10-09 · brief-redesign agent (Minas)
 - Started: 04:26. Clearer finished brief on /runs/[id] for HR: header with role and hiring steps, 30-second card as 3 numbers, "Before the interview" list, tabs (Interview plan / Evidence / Phone screen / Sources and gaps), sticky sidebar with kit actions.
+
+## 2026-10-09 · architecture-page-agent (Minas)
+- Started: 04:29. Public `/architecture` page (English overview of Radar + links to the four archify diagrams served from `public/diagrams/`), "Architecture" link under the site footer and the landing footer.
