@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/recipe/sources/cz-registries/chambers-json.ts
- * Deps:    zod, ./shared
+ * Deps:    zod, src/domain/cz-registry (townOf), ./shared
  * Tested:  src/recipe/__tests__/cz-registries.test.ts
  *
  * Key responsibilities:
@@ -14,6 +14,7 @@
  * - Both are the sites' own front-end APIs (undocumented); an unexpected shape yields "unavailable", never a throw
  */
 import { z } from "zod";
+import { townOf } from "@/domain/cz-registry";
 import type { RegistrySource } from "./shared";
 import { form, namesMatch, unavailable } from "./shared";
 
@@ -60,7 +61,7 @@ export const csk: RegistrySource = {
     if (!r.success) return unavailable("is-api.dent.cz answered with an unexpected shape");
     // The API pads the page with empty rows: keep the members whose name is the one asked for
     const hits = r.data.data.filter((m) => namesMatch(`${m.first_name ?? ""} ${m.last_name ?? ""}`, name)).map((m) => {
-      const where = [m.workplace?.name, m.workplace?.address?.print].filter((x): x is string => typeof x === "string" && x !== "").join(", ");
+      const where = [m.workplace?.name, townOf(m.workplace?.address?.print)].filter((x): x is string => typeof x === "string" && x !== "").join(", ");
       return { label: `${(m.full_name ?? "").replace(/\s+/g, " ").trim()} — dentist, member of the Czech Dental Chamber${where === "" ? "" : `, ${where}`}`, url: "https://www.dent.cz/zubni-lekari", status: "member", born: null };
     });
     return { hits, total: hits.length, note: null };

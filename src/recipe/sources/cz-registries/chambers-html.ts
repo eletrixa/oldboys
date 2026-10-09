@@ -25,7 +25,7 @@ const href = (html: string, re: RegExp): string | null => re.exec(html)?.[1] ?? 
 /** The row's town line ("11000 Praha 1"), so the collector can attribute the record by the candidate's city. */
 const postal = (l: readonly string[]): string => {
   const town = l.find((x) => /^\d{3} ?\d{2} \S/.test(x));
-  return town === undefined ? "" : `, ${town}`;
+  return town === undefined ? "" : `, ${town.replace(/^\d{3} ?\d{2}\s+/, "")}`;
 };
 
 export const kdp: RegistrySource = {

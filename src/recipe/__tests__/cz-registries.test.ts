@@ -83,6 +83,8 @@ describe("parsers", () => {
     expect(a.hits[1]?.label).toContain("VLTAVA INVEST a.s.");
     expect(a.hits[1]?.url).toBe("https://or.justice.cz/ias/ui/rejstrik-$firma?ico=27098613");
     expect(a.hits[1]?.label).not.toContain("Výpis platných");
+    expect(a.hits[0]?.label).toContain("Svatý Jan");
+    expect(a.hits.map((h) => h.label).join(" ")).not.toMatch(/Hrachov 77|262 56/);
     expect(justicePersons.parse("<html>maintenance</html>", pavel).note).not.toBeNull();
   });
 
@@ -117,6 +119,8 @@ describe("parsers", () => {
     expect(a.total).toBe(1);
     expect(a.hits).toHaveLength(1);
     expect(a.hits[0]).toMatchObject({ status: "active", url: "https://ares.gov.cz/ekonomicke-subjekty?ico=00719331" });
+    expect(a.hits[0]?.label).toContain("Ostrožská Lhota, since");
+    expect(a.hits[0]?.label).not.toContain("120");
     const req = aresPerson.request(jana);
     expect(req.via === "fetch" ? req.init?.body : "").toContain('"pravniForma":["101"]');
   });
@@ -222,14 +226,14 @@ describe("chamber parsers (recorded pages)", () => {
   });
   it("notaries, bailiffs, pharmacists and health-care providers", () => {
     expect(nkcr.parse(fixture("nkcr.html"), { full: "Miroslav Novák", first: "Miroslav", last: "Novák" }).hits[0]?.label).toContain("JUDr. Miroslav Novák — notary, Notářská komora pro hlavní město Prahu");
-    expect(nkcr.parse(fixture("nkcr.html"), { full: "Miroslav Novák", first: "Miroslav", last: "Novák" }).hits[0]?.label).toContain(", 11000 Praha 1");
+    expect(nkcr.parse(fixture("nkcr.html"), { full: "Miroslav Novák", first: "Miroslav", last: "Novák" }).hits[0]?.label).toMatch(/, Praha 1$/);
     expect(ekcr.parse(fixture("ekcr.html"), { full: "Martin Svoboda", first: "Martin", last: "Svoboda" }).hits[0]?.label).toContain("č. soud. exek.: 110");
     const ph = clnk.parse(fixture("clnk.html"), { full: "Filip Novák", first: "Filip", last: "Novák" });
     expect(ph.hits.map((h) => h.label)).toEqual(["Novák Filip PharmDr. — pharmacist, member no. 7915", "Novák Filip PharmDr. — pharmacist, member no. 12613"]);
     const pr = nrpzs.parse(fixture("nrpzs.html"), jan);
     expect(pr.total).toBe(36);
     expect(pr.hits[0]).toMatchObject({ status: "registered provider", url: "https://nrpzs.uzis.cz/detail-94445-mddr-jan-novak.html" });
-    expect(pr.hits[0]?.label).toContain("zubní lékařství, 36005 Karlovy Vary");
+    expect(pr.hits[0]?.label).toContain("zubní lékařství, Karlovy Vary");
   });
   it("ČKA and ČSK JSON: architects post-filtered to the name, dentists without the padding rows", () => {
     const ar = cka.parse(JSON.parse(fixture("cka.json")), { full: "Petr Dobrovolný", first: "Petr", last: "Dobrovolný" });
