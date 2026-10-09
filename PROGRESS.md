@@ -186,6 +186,14 @@ Each agent appends: what it starts, progress, what it finishes. Newest at the bo
 - Finished: 01:50. pnpm check green, wrangler dry-run bundles.
 - Files: src/domain/call-brief.ts, src/domain/__tests__/call-brief.test.ts, src/app/runs/[id]/{interview-kit.ts,summary.ts,kit-actions.tsx} and their tests, CHANGELOG.md, PROGRESS.md.
 
+## 2026-10-09 · radar-gtm landing (Josef's agent)
+- Started: 01:38. Ported the go-to-market Radar website into the app: logged-out `/` renders `src/app/landing/` (hero, problem, product, moments, benefits, how, trust, FAQ, closing) in Radar tokens; `?positionId=` keeps the login redirect; logged-in home unchanged. Copy matches the product (7-day deletion, candidate notice EN/CZ, access export, no scores). Header gets Product / How it works / Trust anchors for logged-out visitors (md+); footer drops "Hackathon prototype"; metadata gets a description, metadataBase and og.jpg.
+- Finished: 02:20. pnpm check green (1017 tests), next build green; Playwright at 390/768/1440: no horizontal overflow, no console errors; positionId redirect, landing CTAs, register and logged-in start form checked against local dev (`pnpm e2e` itself needs `playwright install` on this machine).
+- Files: src/app/landing/{landing,hero,story,trust,parts}.tsx (new), public/marketing/*.jpg (new), src/app/{page,layout,site-chrome,site-nav}.tsx, e2e/home.spec.ts, scripts/auth-flow.mjs, CHANGELOG.md, PROGRESS.md.
+
+## 2026-10-09 · merge-design (Robert)
+- Merged PR #3 (radar-gtm landing by Josef's agent) into main after a design review loop (opus reviewer persona, 3/5 → re-scored after fixes): live HTML sample brief with numbered callouts instead of the unreadable screenshot, FAQ summary styling bug fixed and first answer open, GDPR legal-basis FAQ, Benefits grid cut (repetition), Create account + See a sample brief as the two actions with Log in in the header only, second CTA under the steps, h1 indent removed, balanced titles, one-row phone header, solid closing band. Left for Robert: legal footer (company, IČO, privacy, DPA) and pricing, which need real facts.
+- Files: src/app/landing/{sample-brief (new),hero,parts,story,trust,landing}.tsx, src/app/site-nav.tsx, e2e/home.spec.ts, public/marketing (brief.jpg, cta.jpg removed), CHANGELOG.md, PROGRESS.md.
 ## 2026-10-09 · interview-invite agent (Minas)
 - Started: 01:56. Idea #22 (cheapest form): "Add interview to calendar (.ics)" on the run page; date, time and duration in the browser; the RFC 5545 invite carries the 30-second summary, interview questions, to-verify items and the brief link, for Google Calendar or Outlook. No integration, nothing stored.
 - Finished: 02:00. Pure `interviewInvite` (CRLF, TEXT escaping, 75-octet folding safe for Czech diacritics) + `InviteForm`. No schema change, no new endpoint; pnpm check green, wrangler dry-run bundles.
