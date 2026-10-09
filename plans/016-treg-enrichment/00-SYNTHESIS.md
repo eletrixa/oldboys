@@ -30,7 +30,7 @@ Before the lineup (search pool):
 
 After the lineup (collect pool):
 - `treg_social_verify` → `treg/social-verify` (`enriches: true`): one profile read per merged candidate, max 6 requests:
-  linkedin `fetchinio.linkedin.user.profile` GET `profileUrlOrUrn` ($0.0015); instagram `tikhub.instagram.user.profile` GET `username` ($0.001); tiktok `tikhub.tiktok.user.profile` GET `uniqueId` ($0.001); x `anyapi.x.user.profile` POST `handle` ($0.00022); youtube `scrapecreators.youtube.channel.profile` GET `handle` ($0.00188); facebook `scrapecreators.x.v1-facebook-profile` GET `url`, `cache_max_age=7d` ($0.00188). `maxCostUsd 0.005` each. Excerpt: plain sentences with the numbers ("The Instagram account @x has 1 234 followers, follows 56 accounts and has 78 posts; bio: …; read by TikHub via treg (second source)"; the read date is the Source's `fetched_at`, collectors are pure). Digest: `ProfileFacts[]` for merged accounts.
+  linkedin `fetchinio.linkedin.user.profile` GET `profileUrlOrUrn` ($0.0015); instagram `tikhub.instagram.user.profile` GET `username` ($0.001, a posts count of 0 is unknown); tiktok `tikhub.tiktok.user.profile` GET `uniqueId` ($0.001); x `anyapi.x.user.profile` POST `handle` ($0.00022); youtube `scrapecreators.youtube.channel.profile` GET `handle` ($0.00188); facebook `scrapecreators.x.v1-facebook-profile` GET `url`, `cache_max_age=7d` ($0.00188). `maxCostUsd 0.005` each. Excerpt: plain sentences with the numbers ("The Instagram account @x has 1 234 followers, follows 56 accounts and has 78 posts; bio: …; read by TikHub via treg (second source)"; the read date is the Source's `fetched_at`, collectors are pure). Digest: `ProfileFacts[]` for merged accounts.
 
 Due diligence (both after `resolve_lineup`, collect pool):
 - `treg_company_enrich` → `treg/company-enrich`: `thecompaniesapi.companies.enrich` GET by `domain` (anchor URL's host, $0.0019; 99 % HIT on 447k). One Source (URL = `https://<anchor host>/`, the provider's own `domain.domain` only in the digest) with name, legal name, industry, employee count, founding year, HQ; `maxCostUsd 0.005`.
@@ -43,4 +43,4 @@ Due diligence (both after `resolve_lineup`, collect pool):
 - A comparison card ("Apify says 1 200, TikHub says 1 234"): the verify seam already ranks contradicting claims; the trust box counts sources by origin.
 
 ## Verification
-`pnpm check`; `LIVE=1 TREG_TOKEN=… pnpm exec vitest run live-treg` (to add once the balance is topped up: the team balance was $0.0001 on 2026-10-09, every live probe answers 402).
+`pnpm check`; `LIVE=1 TREG_TOKEN=… pnpm exec vitest run live-treg` (`src/recipe/__tests__/live-treg.test.ts`, about $0.05, see `docs/ops/treg.md`): every collector parsed the real provider shapes on 2026-10-09 once the balance was topped up (it was $0.0001 earlier that day, every probe answered 402). Found live: TikHub Instagram answers 0 timeline media for public accounts, read as unknown.

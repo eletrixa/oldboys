@@ -35,6 +35,9 @@ const isoDay = (unixSeconds: number | null | undefined): string | null => {
   return Number.isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10);
 };
 
+/** TikHub answers 0 timeline media for public accounts it cannot enumerate; a 0 is unknown, never a fact about the account. */
+const postsOrUnknown = (n: number | null | undefined): number | null => (n === 0 ? null : count(n));
+
 const instagramReader: Reader = {
   platform: "instagram", endpoint: "tikhub.instagram.user.profile", method: "GET", provider: "TikHub", kind: "account", postsLabel: "posts",
   param: () => "username", paramNames: ["username"],
@@ -45,7 +48,7 @@ const instagramReader: Reader = {
     if (nil(u)) return null;
     return {
       handle: id, display_name: u.full_name ?? null, bio: clipBio(u.biography), followers: count(u.edge_followed_by?.count),
-      following: count(u.edge_follow?.count), posts: count(u.edge_owner_to_timeline_media?.count), verified: u.is_verified ?? null,
+      following: count(u.edge_follow?.count), posts: postsOrUnknown(u.edge_owner_to_timeline_media?.count), verified: u.is_verified ?? null,
       photo_url: u.profile_pic_url ?? null,
     };
   },

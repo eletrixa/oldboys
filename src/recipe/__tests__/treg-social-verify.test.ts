@@ -108,6 +108,14 @@ describe("treg/social-verify requests", () => {
     ] }), step);
     expect(r.map((x) => (x.via === "treg" ? x.endpoint : ""))).toEqual(["scrapecreators.youtube.channel.profile", "anyapi.x.user.profile"]);
   });
+  it("V9: reads an Instagram timeline count of 0 as unknown (TikHub leaves it at 0 for public accounts)", () => {
+    const req = treg("tikhub.instagram.user.profile", "GET", { username: "jana" });
+    const payload = { data: { data: { user: { username: "jana", full_name: "Jana", edge_followed_by: { count: 10 }, edge_follow: { count: 2 },
+      edge_owner_to_timeline_media: { count: 0 } } } } };
+    const [src] = c.parse(payload, ctx, step, req);
+    expect(src?.excerpt).toContain("has 10 followers and follows 2 accounts.");
+    expect(src?.excerpt).not.toContain("posts");
+  });
   it("cuts seven merged candidates to six requests", () => {
     const seven = Array.from({ length: 7 }, (_, i) => cand("x", `h${String(i)}`, `https://x.com/h${String(i)}`, { id: `c${String(i)}` }));
     expect(c.requests(baseContext({ candidates: seven }), step)).toHaveLength(6);

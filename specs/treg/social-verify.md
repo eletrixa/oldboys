@@ -43,7 +43,7 @@ Requests, one per merged candidate per platform, all `{ via: "treg", maxCostUsd:
 - Readers are allow-lists with every provider field `.nullish()`; a field not named is dropped.
 - Facebook `gender`, `email`, `phone`, `address` (and any other unnamed field) never reach excerpt, raw or facts; `reveal_*` flags are never sent.
 - `output.found === false` (X), `success === false` (YouTube, Facebook), a null user (Instagram, TikTok), a LinkedIn payload without id, publicIdentifier, firstName and title, or any malformed or foreign payload: `parse` returns `[]` and the digest has no entry.
-- Counts pass `count()` (non-negative integer or null); bio passes `clipBio` (≤ `BIO_MAX` 300).
+- Counts pass `count()` (non-negative integer or null); bio passes `clipBio` (≤ `BIO_MAX` 300). Instagram `edge_owner_to_timeline_media.count === 0` is unknown, not a fact: TikHub answers 0 for public accounts it cannot enumerate, so `posts` is null and the "has N posts" phrase is left out (V9).
 - `mergeAccounts` (`profile-signals.ts`): key `platform|canonicalUrl(url)`; the first reading is kept as base and its `url` stays; for each later reading every non-null field overrides (including `source_url`, so the merged fact points at the later reading's treg URL), a null never erases an earlier value. Apify then treg order: treg numbers win, Apify values survive where treg is null.
 - Cost: runner reserves `maxCostUsd` against the run USD budget; no Apify allowance slot, `out.calls` not incremented; `ports.callTreg === null` → no request, note "TREG_TOKEN not set".
 

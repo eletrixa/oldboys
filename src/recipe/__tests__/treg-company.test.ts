@@ -36,6 +36,12 @@ describe("tregCompanyEnrich", () => {
     ]);
   });
 
+  it("uses the article the industry starts with", () => {
+    const payload = { ...record, about: { ...record.about, industry: "internet" } };
+    const [src] = tregCompanyEnrich.parse(payload, ctx, step);
+    expect(src?.excerpt).toContain("is an internet company,");
+  });
+
   it("skips when the anchor is a place, with a reason", () => {
     const place = baseContext({ goal: "due-diligence", anchor: "Brno" });
     expect(tregCompanyEnrich.requests(place, step)).toEqual([]);

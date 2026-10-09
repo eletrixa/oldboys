@@ -90,6 +90,8 @@ function employeeText(exact: number | null, range: string | null): string | null
   return range !== null ? `${range} employees` : null;
 }
 
+const article = (word: string): string => (/^[aeiou]/i.test(word) ? "an" : "a");
+
 export const tregCompanyEnrich: Collector = {
   id: "treg/company-enrich",
   requests: (ctx) => {
@@ -104,7 +106,7 @@ export const tregCompanyEnrich: Collector = {
     const url = `https://${c.host}/`;
     const size = employeeText(c.employees, c.range);
     const parts = [
-      `${c.name}${c.legal !== null && c.legal !== c.name ? ` (legal name ${c.legal})` : ""} is ${c.industry !== null ? `a ${c.industry.replaceAll("-", " ")} company` : "a company"}`,
+      `${c.name}${c.legal !== null && c.legal !== c.name ? ` (legal name ${c.legal})` : ""} is ${c.industry !== null ? `${article(c.industry)} ${c.industry.replaceAll("-", " ")} company` : "a company"}`,
       c.founded !== null ? `founded in ${String(c.founded)}` : null,
       size !== null ? `with ${size}` : null,
       c.hq !== null ? `headquartered in ${c.hq}` : null,

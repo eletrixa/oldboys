@@ -31,6 +31,7 @@ created: 2026-10-08
 | [positions-start](positions-start.md) | `positionId` on `POST /api/runs`, state route | `run-body.ts`, `runs/route.ts`, `runs/[id]/state/route.ts` |
 | [positions-pages](positions-pages.md) | `/positions`, `/positions/new`, `/positions/[id]`, home, start form, run header | `src/app/positions/**` |
 | [positions-purge](positions-purge.md) | expiry sweep of positions and R2 objects | `src/workflow/purge.ts` |
+| [positions-research-again](positions-research-again.md) | research a finished candidate again from the position page (`plans/016-treg-enrichment/`) | `src/workflow/enrich.ts`, `src/app/positions/pool-rows.ts` |
 | [positions-e2e](positions-e2e.md) | Playwright happy path | `e2e/positions.spec.ts` |
 
 Migration `0011_positions.sql` is defined in `plans/007-position-selector/00-SYNTHESIS.md` (Contracts) and is not repeated here.

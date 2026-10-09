@@ -7,8 +7,10 @@
  * Tested:  n/a (this is the test file)
  *
  * Key responsibilities:
- * - Eligible pooled rows start a hiring run with the position's questions and become 'run-started' with the run id
- * - Skips: duplicate ids deduped, over ENRICH_MAX, foreign pool, already started, not ready, nothing to research
+ * - Eligible rows start a hiring run with the position's questions and end 'run-started' with the new run id: pooled rows, and
+ *   run-started rows whose run is done, failed, deleted or stalled (research again, A1–A5)
+ * - Skips: duplicate ids deduped, over ENRICH_MAX, foreign pool, already started (a live run, or no run id yet), not ready, nothing to research
+ * - The claim binds the read status and run id, so a lost race skips the row; a failed start restores the row's previous status and run
  * - 404 on an unknown position; 429 (nothing started) when the shared or per-organization cap would be passed
  *
  * Design constraints:
@@ -23,17 +25,25 @@ type Row = Record<string, unknown>;
 const NOW = new Date("2026-10-09T12:00:00.000Z");
 const MUST = JSON.stringify([{ id: "mh-k8s", text: "Kubernetes", accepted_evidence: ["talk"] }]);
 
-function makeEnv(opts: { apps?: Row[]; recent?: number; recentOrg?: number; positions?: string[] } = {}) {
+function makeEnv(opts: { apps?: Row[]; recent?: number; recentOrg?: number; positions?: string[]; runs?: Record<string, { status: string; last_at: string }>; afterRead?: (apps: Map<string, Row>) => void } = {}) {
   const apps = new Map((opts.apps ?? []).map((a) => [a.id as string, { ...a }]));
   const investigations: Row[] = [];
   const countArgs: unknown[][] = [];
+  const claims: unknown[][] = [];
   const create = vi.fn((_: unknown) => Promise.resolve({ id: "wf" }));
   const exec = (sql: string, a: unknown[]): Row[] => {
     if (sql.startsWith("SELECT title, must_haves_json FROM positions")) {
       return (opts.positions ?? ["pos-1"]).includes(a[0] as string) ? [{ title: "Backend", must_haves_json: MUST }] : [];
     }
-    if (sql.startsWith("SELECT id, status, linkedin_url, cv_text, run_id FROM applications WHERE position_id = ? AND id IN")) {
-      return [...apps.values()].filter((r) => r.position_id === a[0] && a.slice(1).includes(r.id));
+    if (sql.startsWith("SELECT a.id, a.status, a.linkedin_url, a.cv_text, a.run_id, i.status AS run_status")) {
+      const read = [...apps.values()]
+        .filter((r) => r.position_id === a[0] && a.slice(1).includes(r.id))
+        .map((r) => {
+          const run = opts.runs?.[r.run_id as string];
+          return { ...r, run_status: run?.status ?? null, run_last_at: run?.last_at ?? null };
+        });
+      opts.afterRead?.(apps);
+      return read;
     }
     if (sql.startsWith("SELECT COUNT(*) AS n, COALESCE(SUM(via = 'start'")) {
       countArgs.push(a);
@@ -43,18 +53,20 @@ function makeEnv(opts: { apps?: Row[]; recent?: number; recentOrg?: number; posi
       investigations.push({ id: a[0], goal: a[3], profile_url: a[10], cv_text: a[11], application_id: a[12], position_id: a[15], via: a[9], account_id: a[13], organization_id: a[14], questions_json: a[16] });
       return [];
     }
-    if (sql.startsWith("UPDATE applications SET status = 'run-started' WHERE id = ? AND status = 'pooled'")) {
+    if (sql.startsWith("UPDATE applications SET status = 'run-started', run_id = NULL WHERE id = ? AND status = ? AND run_id IS ?")) {
+      claims.push(a);
       const row = apps.get(a[0] as string);
-      if (row?.status !== "pooled") return [];
+      if (row === undefined || row.status !== a[1] || (row.run_id ?? null) !== (a[2] ?? null)) return [];
       row.status = "run-started";
+      row.run_id = null;
       return [{ changed: 1 }];
     }
     if (sql.startsWith("UPDATE applications SET run_id = ? WHERE id = ?")) {
       Object.assign(apps.get(a[1] as string) ?? {}, { run_id: a[0] });
       return [];
     }
-    if (sql.startsWith("UPDATE applications SET status = 'pooled' WHERE id = ?")) {
-      Object.assign(apps.get(a[0] as string) ?? {}, { status: "pooled" });
+    if (sql.startsWith("UPDATE applications SET status = ?, run_id = ? WHERE id = ?")) {
+      Object.assign(apps.get(a[2] as string) ?? {}, { status: a[0], run_id: a[1] });
       return [];
     }
     throw new Error(`unexpected SQL: ${sql}`);
@@ -66,7 +78,7 @@ function makeEnv(opts: { apps?: Row[]; recent?: number; recentOrg?: number; posi
     run: () => Promise.resolve({ meta: { changes: exec(sql, a).length } }),
   });
   const env = { DB: { prepare: (s: string) => stmt(s) }, RESEARCH_RUN: { create }, RUN_BUDGET_USD: "0.50", RUN_BUDGET_CALLS: "16" } as unknown as StartRunEnv;
-  return { env, apps, investigations, create, countArgs };
+  return { env, apps, investigations, create, countArgs, claims };
 }
 
 const app = (id: string, over: Row = {}): Row => ({ id, position_id: "pos-1", status: "pooled", linkedin_url: `https://www.linkedin.com/in/${id}`, cv_text: null, ...over });
@@ -107,6 +119,7 @@ describe("startEnrichment", () => {
         app("empty", { linkedin_url: null }),
         app("other", { position_id: "pos-2" }),
       ],
+      runs: { "run-old": { status: "running", last_at: NOW.toISOString() } },
     });
     const res = await startEnrichment(env, { positionId: "pos-1", applicationIds: ["ok", "ok", "started", "capped", "empty", "other", "ghost"], origin: api }, NOW);
     expect(res.ok && res.started.map((s) => s.applicationId)).toEqual(["ok"]);
@@ -159,6 +172,65 @@ describe("startEnrichment", () => {
     const res = await startEnrichment(env, { positionId: "pos-1", applicationIds: ["a1"], origin: api }, NOW);
     expect(res).toMatchObject({ ok: true, started: [] });
     expect(countArgs).toHaveLength(0);
+  });
+
+  const RECENT = "2026-10-09T11:50:00.000Z";
+  const OLD = "2026-10-09T10:00:00.000Z";
+  const started = (id: string, over: Row = {}): Row => app(id, { status: "run-started", run_id: `run-${id}`, ...over });
+
+  it("A1: a row whose run is done starts a new run and moves to it", async () => {
+    const { env, apps, create } = makeEnv({ apps: [started("a1")], runs: { "run-a1": { status: "done", last_at: OLD } } });
+    const res = await startEnrichment(env, { positionId: "pos-1", applicationIds: ["a1"], origin: api }, NOW);
+    expect(res.ok && res.skipped).toEqual([]);
+    expect(res.ok && res.started.map((s) => s.applicationId)).toEqual(["a1"]);
+    expect(create).toHaveBeenCalledOnce();
+    const runId = res.ok ? res.started[0]?.runId : undefined;
+    expect(runId).not.toBe("run-a1");
+    expect(apps.get("a1")).toMatchObject({ status: "run-started", run_id: runId });
+  });
+
+  it("A2: failed, deleted and stalled runs can be researched again", async () => {
+    const { env, create } = makeEnv({
+      apps: [started("failed"), started("deleted"), started("stalled")],
+      runs: { "run-failed": { status: "failed", last_at: RECENT }, "run-stalled": { status: "running", last_at: OLD } },
+    });
+    const res = await startEnrichment(env, { positionId: "pos-1", applicationIds: ["failed", "deleted", "stalled"], origin: api }, NOW);
+    expect(res.ok && res.started.map((s) => s.applicationId)).toEqual(["failed", "deleted", "stalled"]);
+    expect(create).toHaveBeenCalledTimes(3);
+  });
+
+  it("A3: a running or paused run is still already started", async () => {
+    const { env, create } = makeEnv({
+      apps: [started("running"), started("paused"), started("inflight", { run_id: null })],
+      runs: { "run-running": { status: "running", last_at: RECENT }, "run-paused": { status: "paused", last_at: OLD } },
+    });
+    const res = await startEnrichment(env, { positionId: "pos-1", applicationIds: ["running", "paused", "inflight"], origin: api }, NOW);
+    expect(res.ok && res.skipped).toEqual([
+      { applicationId: "running", reason: "already started", runId: "run-running" },
+      { applicationId: "paused", reason: "already started", runId: "run-paused" },
+      { applicationId: "inflight", reason: "already started" },
+    ]);
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it("A4: the claim binds the read status and run id; a lost claim skips the row", async () => {
+    const { env, create, claims } = makeEnv({
+      apps: [started("a1")],
+      runs: { "run-a1": { status: "done", last_at: OLD } },
+      // another request re-links the row between the read and the claim
+      afterRead: (live) => { Object.assign(live.get("a1") ?? {}, { run_id: "run-a1-newer" }); },
+    });
+    const res = await startEnrichment(env, { positionId: "pos-1", applicationIds: ["a1"], origin: api }, NOW);
+    expect(claims).toEqual([["a1", "run-started", "run-a1"]]);
+    expect(res.ok && res.skipped).toEqual([{ applicationId: "a1", reason: "already started" }]);
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it("A5: a research-again row keeps its old run when the new one cannot start", async () => {
+    const { env, apps, create } = makeEnv({ apps: [started("a1")], runs: { "run-a1": { status: "done", last_at: OLD } } });
+    create.mockRejectedValueOnce(new Error("workflow down"));
+    await expect(startEnrichment(env, { positionId: "pos-1", applicationIds: ["a1"], origin: api }, NOW)).rejects.toThrow("workflow down");
+    expect(apps.get("a1")).toMatchObject({ status: "run-started", run_id: "run-a1" });
   });
 
   it("gives a claimed row back to the pool when the run cannot start", async () => {

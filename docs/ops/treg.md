@@ -28,6 +28,9 @@ The runner reserves each request's `maxCostUsd` against `RUN_BUDGET_USD`; treg c
 | `treg_social_verify` Facebook | `scrapecreators.x.v1-facebook-profile` | $0.00188 | $0.005 |
 | `treg_company_enrich` (due diligence) | `thecompaniesapi.companies.enrich` (GET `domain`) | $0.0019, free when not found | $0.005 |
 
+## Live smoke
+`LIVE=1 TREG_TOKEN=<token> pnpm exec vitest run live-treg` runs every treg collector through the real adapter (Apollo for a confirmed LinkedIn profile, Exa people search, one public account per social platform, The Companies API for a domain) and prints each excerpt, note and cost. About $0.05 per run; it fails on any HTTP error or when a 2xx payload parses to nothing (a provider changed its shape). Not part of `pnpm check`. The token: `treg login` writes it to `~/.treg/config.json` (`token`); never paste it into a file in the repo.
+
 ## Where spend is recorded
 - Each step's ledger row carries `cost_usd`: the sum of the `X-Treg-Cost-Micro` headers of its responses (up to 6 for social verify; a missing header counts as 0).
 - Audit trail on treg's side: `treg calls`.

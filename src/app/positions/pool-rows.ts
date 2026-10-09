@@ -8,7 +8,7 @@
  *
  * Key responsibilities:
  * - shapePool: PoolRow to results-table row in added order (candidateName, candidateSource, candidateStatus with run
- *   progress, fit % and independent-evidence count once done, selectable flag)
+ *   progress, fit % and independent-evidence count once done, selectable flag: pooled, or started with a finished run)
  * - channelsFor: the four ways a candidate reaches a bound intake tag
  * - defaultTag: tag suggestion from a position title
  * - enrichSummary: one line for the result of Research selected
@@ -63,9 +63,12 @@ export function candidateStatus(r: PoolRow): { label: string; tone: StatusTone; 
   return { label, tone: "unsure", researching: true };
 }
 
+/** A linked run that is over (done, failed, deleted, stalled) lets the row be researched again (specs/positions-research-again.md); a row with no run id yet is a start in flight. */
+const runFinished = (run: PoolRow["run"]): boolean => run === null || run.status === "done" || run.status === "failed" || run.stalled;
+
 /**
  * Rows in added order (the API sends newest first). Fit % and the independent count show only for a done run.
- * A pooled row can start a run only when it carries a LinkedIn URL or CV text.
+ * A row can start a run only when it carries a LinkedIn URL or CV text, and is pooled or its earlier run is over.
  */
 export function shapePool(rows: readonly PoolRow[]): PoolView[] {
   return [...rows].reverse().map((r) => {
@@ -81,7 +84,7 @@ export function shapePool(rows: readonly PoolRow[]): PoolView[] {
       researching,
       fit: done && r.run !== null && r.run.fit_pct !== null ? `${String(r.run.fit_pct)}%` : "—",
       independent: done ? String(r.run?.independent ?? 0) : "—",
-      selectable: r.status === "pooled" && (r.has_profile === 1 || r.has_cv === 1),
+      selectable: (r.has_profile === 1 || r.has_cv === 1) && (r.status === "pooled" || (r.status === "run-started" && r.run_id !== null && runFinished(r.run))),
       runHref: r.run_id === null ? null : `/runs/${encodeURIComponent(r.run_id)}`,
       note: r.note,
     };

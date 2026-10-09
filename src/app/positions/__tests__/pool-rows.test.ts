@@ -7,8 +7,9 @@
  * Tested:  n/a (this is the test)
  *
  * Key responsibilities:
- * - Selectable only for pooled rows with a profile or CV; added order; name/source/status labels; fit and independent count
- *   only when done; channels; tag suggestion; summary line
+ * - Selectable only for rows with a profile or CV that are pooled or whose earlier run is over (done, failed, stalled, deleted;
+ *   never while a start is in flight); added order; name/source/status labels; fit and independent count only when done;
+ *   channels; tag suggestion; summary line
  *
  * Design constraints:
  * - No score or rank field exists on a shaped row
@@ -35,14 +36,32 @@ describe("shapePool", () => {
     expect(shapePool([{ ...base, id: "new" }, { ...base, id: "old" }]).map((v) => v.id)).toEqual(["old", "new"]);
   });
 
-  it("is not selectable without a profile or CV, or once started", () => {
+  it("is not selectable without a profile or CV, or while a run is live", () => {
     const rows = shapePool([
       { ...base, id: "d", has_cv: 1 },
-      { ...base, id: "c", status: "run-started", run_id: "r1" },
+      { ...base, id: "c", status: "run-started", run_id: "r1", run: run() },
       { ...base, id: "b", has_profile: 0 },
     ]);
     expect(rows.map((r) => r.selectable)).toEqual([false, false, true]);
     expect(rows[1]?.runHref).toBe("/runs/r1");
+  });
+
+  it("A6: a finished, failed, stalled or deleted run can be researched again; a live one cannot", () => {
+    const started = (id: string, r: PoolRow["run"], over: Partial<PoolRow> = {}): PoolRow => ({ ...base, id, status: "run-started", run_id: `r-${id}`, run: r, ...over });
+    const rows = shapePool([
+      started("done", run({ status: "done", pct: 100 })),
+      started("failed", run({ status: "failed" })),
+      started("stalled", run({ stalled: true })),
+      started("deleted", null),
+      started("running", run()),
+      started("paused", run({ status: "paused" })),
+      started("nothing", run({ status: "done" }), { has_profile: 0 }),
+      started("inflight", null, { run_id: null }),
+    ]);
+    expect(Object.fromEntries(rows.map((r) => [r.id, r.selectable]))).toEqual({
+      done: true, failed: true, stalled: true, deleted: true, running: false, paused: false, nothing: false, inflight: false,
+    });
+    expect(rows.find((r) => r.id === "done")?.status).toBe("Done");
   });
 
   it("shows fit and the independent count only for a done run", () => {
