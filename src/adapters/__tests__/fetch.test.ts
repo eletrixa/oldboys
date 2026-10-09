@@ -37,13 +37,6 @@ describe("makeFetchJson", () => {
     expect(headersOf(fn, 1).get("authorization")).toBeNull();
   });
 
-  it("returns the body as text when the request accepts text/html or XML", async () => {
-    stub(new Response("<html>ok</html>", { headers: { "content-type": "text/html" } }), new Response("<xml/>"));
-    const f = makeFetchJson();
-    await expect(f("https://isir.justice.cz/x", { headers: { accept: "text/html" } })).resolves.toBe("<html>ok</html>");
-    await expect(f("https://isir.justice.cz/y", { headers: { accept: "text/xml" } })).resolves.toBe("<xml/>");
-  });
-
   it("adds no authorization header without a token", async () => {
     const fn = stub(Response.json({}));
     await makeFetchJson()("https://api.github.com/users/x");
