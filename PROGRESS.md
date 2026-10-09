@@ -258,3 +258,6 @@ Each agent appends: what it starts, progress, what it finishes. Newest at the bo
 - Not done: code-contribution lines and phone-call answer summaries stay English inside the Czech kit (no translation ids); the export buttons and the kit review card labels stay English. No browser check (no new elements, only texts).
 - Checked: pnpm check green (1584 + 21 tests), opennextjs build and wrangler dry-run bundle. 16 new tests in export-text.test.ts (dictionary completeness, Czech kit lines / translated ids / English fallback / quote marker / devil's advocate, filled Czech kit parsed the same as the English one, .ics valid with Czech diacritics, ATS and reference questions before the translation). No live LLM call.
 - Files: src/app/runs/[id]/{export-text.ts,__tests__/export-text.test.ts} (new), src/app/runs/[id]/{interview-kit,interview-invite,kit-review,i18n}.ts, src/app/runs/[id]/{kit-actions,invite-form,kit-review-card,report-lang,parts}.tsx, CHANGELOG.md, PROGRESS.md.
+
+## 2026-10-09 · eval-lineup agent (Minas)
+- Started: 03:10. The eval answers the identity lineup like a recruiter (from the ground truth) and reports how many questions it asked; the strict "no answer" score stays visible.
