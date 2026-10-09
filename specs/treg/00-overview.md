@@ -71,7 +71,7 @@ Identity
 Sensitive fields
 - Every parse is an allow-list: only fields a collector names are read, the rest of the response is dropped.
 - `reveal_*` flags are never sent.
-- Dropped on purpose: Facebook `gender`, PDL `birth_*`, emails, phone numbers, addresses. No GDPR Art. 9 inference from any field. No score, no verdict word.
+- Dropped on purpose: Facebook `gender`, email, phone and address; Apollo emails, phone numbers and `personal_*` fields. No GDPR Art. 9 inference from any field. No score, no verdict word.
 - Platform and handle in `treg/social-verify` come from the request params, never from the payload.
 
 Collectors are pure (no fetch); each endpoint id and its params are constants inside its collector file.

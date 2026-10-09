@@ -101,6 +101,7 @@ version: 1.0
 | Gradient text invisible/white | [design-tokens.md](react/design-tokens.md) |
 | Adding new color to theme | [design-tokens.md](react/design-tokens.md) |
 | Tailwind v4 @theme configuration | [design-tokens.md](react/design-tokens.md) |
+| Page looks like a generic template | [design-quality.md](web/design-quality.md) |
 
 ---
 
@@ -197,6 +198,7 @@ version: 1.0
 | Linting workflow | [linting-workflow.md](tools/linting-workflow.md) |
 | Git commit workflow | [git-commit-workflow.md](tools/git-commit-workflow.md) |
 | Changelog updates | [changelog-workflow.md](tools/changelog-workflow.md) |
+| Code changed: which docs to update in the same commit | [docs-sync.md](tools/docs-sync.md) |
 | Environment configuration | [environment-config.md](tools/environment-config.md) |
 | PowerShell jumper / cheatsheet for a repo | [project-cli-scripts.md](tools/project-cli-scripts.md) |
 | Adding a `Go<Name>` or `cheat<name>` shortcut | [project-cli-scripts.md](tools/project-cli-scripts.md) |
@@ -317,6 +319,7 @@ version: 1.0
 | [obvious-design.md](clean-code/obvious-design.md) | Reduce unknown unknowns, make code self-explanatory |
 | [react-patterns.md](clean-code/react-patterns.md) | Composition, minimal state, effects, stable keys |
 | [readability-patterns.md](clean-code/readability-patterns.md) | Guards, helpers, ternaries, simplified conditions |
+| [research-and-reuse.md](clean-code/research-and-reuse.md) | Search libraries and repo code before building |
 | [SOLID.md](clean-code/SOLID.md) | S.O.L.I.D. for React/TypeScript + cognitive load |
 | [typescript-patterns.md](clean-code/typescript-patterns.md) | Exhaustive switch, unions, guards, strict mode |
 
@@ -384,15 +387,17 @@ version: 1.0
 | [repository-pattern.md](architecture/repository-pattern.md) | Repository encapsulation |
 | [service-layer.md](architecture/service-layer.md) | Service layer for business logic |
 
-### Tools (7 files)
+### Tools (9 files)
 | File | Summary |
 |------|---------|
 | [changelog-workflow.md](tools/changelog-workflow.md) | Version changelog patterns |
+| [docs-sync.md](tools/docs-sync.md) | Changed paths → docs to update in the same commit |
 | [environment-config.md](tools/environment-config.md) | Environment variable setup |
 | [git-commit-workflow.md](tools/git-commit-workflow.md) | Commit message conventions |
 | [linting-workflow.md](tools/linting-workflow.md) | Multi-tier linting system |
 | [plans.md](tools/plans.md) | `plans/` folder convention — `NNN-<kebab-topic>/` + README frontmatter (required) |
 | [project-cli-scripts.md](tools/project-cli-scripts.md) | Per-repo PowerShell jumper + cheatsheet (required) |
+| [specs.md](tools/specs.md) | `specs/` contracts: re-read per slice, fix spec drift in spec and code together |
 | [when-to-lint.md](tools/when-to-lint.md) | Fast during dev, full before PR |
 
 ### Cloudflare (3 files)
@@ -402,21 +407,31 @@ version: 1.0
 | [configuration.md](cloudflare/configuration.md) | Worker configuration |
 | [worker-patterns.md](cloudflare/worker-patterns.md) | Handler structure, responses |
 
-### Cross-Cutting (7 files)
+### Cross-Cutting (3 files)
 | File | Summary |
 |------|---------|
 | [correlation-ids.md](cross-cutting/correlation-ids.md) | Request tracing across services |
 | [edge-function-error-handling.md](cross-cutting/edge-function-error-handling.md) | Custom error types, mapping |
 | [edge-function-security.md](cross-cutting/edge-function-security.md) | Secrets management |
 
-### Next.js (5 files)
+### Next.js (6 files)
 | File | Summary |
 |------|---------|
-| See [nextjs/](nextjs/) folder | App Router, Server Components, middleware |
+| [api-routes.md](nextjs/api-routes.md) | Route handler conventions |
+| [app-router.md](nextjs/app-router.md) | File-based routing conventions |
+| [data-fetching.md](nextjs/data-fetching.md) | Server components, caching, static generation |
+| [layouts-and-metadata.md](nextjs/layouts-and-metadata.md) | Root layout, providers, metadata |
+| [opennext-cloudflare.md](nextjs/opennext-cloudflare.md) | OpenNext on Workers: known issues, required config |
+| [server-client-components.md](nextjs/server-client-components.md) | Server by default, when to go client |
 
 ### Accessibility (2 files)
 | File | Summary |
 |------|---------|
 | [keyboard-nav.md](accessibility/keyboard-nav.md) | Keyboard navigation, focus management |
 | [screen-readers.md](accessibility/screen-readers.md) | Screen reader support |
+
+### Web (1 file)
+| File | Summary |
+|------|---------|
+| [design-quality.md](web/design-quality.md) | Anti-template policy: intentional, product-specific UI |
 

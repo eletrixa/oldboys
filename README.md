@@ -30,14 +30,14 @@ Give it a position and a candidate (a LinkedIn link or a CV). In six to twelve m
 
 One declared recipe (`src/recipe/goals/hiring.ts`) drives it:
 
-1. **Search.** Google SERP and a social-profile SERP.
+1. **Search.** Google SERP, a social-profile SERP, and name searches on Instagram, Facebook and (for technical roles) GitHub. With `TREG_TOKEN` set, treg also lists accounts linked from the LinkedIn profile, or searches LinkedIn for a CV-only run.
 2. **Identity lineup.** When it is unsure who is who, the run pauses and asks you at most three yes / no / not sure questions.
-3. **Read the sources.** LinkedIn profile and posts, the current employer's LinkedIn company page, GitHub, Stack Exchange, Hugging Face, ORCID, OpenAlex, X, Instagram, TikTok, YouTube, a public Facebook page, Bluesky, the personal site, a talks and articles search, and a press, awards and community search.
+3. **Read the sources.** LinkedIn profile and posts, the current employer's LinkedIn company page, GitHub (in depth for technical roles), Stack Exchange, Hugging Face, ORCID, OpenAlex, X, Instagram, TikTok, YouTube, a public Facebook page, Bluesky, the personal site, SEC EDGAR, Wikipedia (English and Czech), podcast episodes, Czech public registries, the role's evidence sites, and web searches for talks and articles, press, awards and community, filings, court records, business press and board seats. With `TREG_TOKEN` set, a second provider reads each confirmed account again. Then the confirmed web pages are read in full, not only their search snippets.
 4. **Extract.** The primary model pulls claims out of the saved text.
 5. **Verify twice.** First deterministically (the quote must sit inside a stored excerpt), then a second model that can only downgrade, never promote.
 6. **Write the brief.** Evidence-backed sections, interview questions, and an explicit list of what was not searched.
 
-Brief sections: current role, employer context, career history, education, public code, talks and podcasts, writing and publications, press coverage, social presence, community and awards, location, where sources disagree, plus one section per must-have of the role.
+Brief sections: current role, employer context, career history, education, public code, code contributions, talks and podcasts, writing and publications, press coverage, social presence, community and awards, location, filings and markets, legal record, public registries, where sources disagree, CV vs public record (CV runs only), plus one section per must-have of the role.
 
 ### The recruiter flow
 
@@ -47,22 +47,25 @@ Log in and `/` is your briefs. **New brief** (`/briefs/new`) is one page in thre
 2. **Add candidates.** One row each: a LinkedIn profile, a pasted CV, or a PDF / text CV file. Tick people already in the position's pool.
 3. **Research N candidates.** New rows join the pool and one run starts per candidate in a single enrich call. An hourly cap answers with a calm message and keeps the rows.
 
-You land on the position's results table and watch the briefs come in. Design dossier: plans/012.
+With one candidate you land on its brief. With several you land on the position's candidates table and watch the briefs come in. Design dossier: `plans/012-brief-flow/`.
+
+New to Radar? `/guide` (public) walks through the first brief in plain words. Onboarding, the nav, the footer and the run page link to it.
 
 ### What is live and what is not
 
 | Part | State |
 |---|---|
 | Apify actors and REST sources | Live (`src/recipe/sources/*`, verified with `LIVE=1 ... vitest run live-sources`) |
+| treg second source (plans/016) | Optional. Without `TREG_TOKEN` the treg steps are listed as "not searched" and the rest of the run is unchanged |
 | Role questions, identity scoring | Model calls with a deterministic fallback. Without a model the lineup never merges on its own, it only asks |
-| Extract, verify, brief | Model calls only. Without `ANTHROPIC_API_KEY` the run stops after the lineup and Screen 2 shows the failing step |
+| Extract, verify, brief | Model calls only. Without `ANTHROPIC_API_KEY` the run fails at once ("ANTHROPIC_API_KEY is not set"). A model failure mid-run gives an evidence-only brief labelled NO AI |
 | Verification phone calls (plans/005) | `CALL_PROVIDER=mock` unless ElevenLabs keys are set. Mock output is labeled MOCK |
 
 Limits we chose or hit:
 
 - No reverse image search.
-- Facebook is collected only for a confirmed Facebook candidate, through the public pages scraper (page fields, never email or phone).
-- ISIR and Companies House are listed as "not searched" with a reason.
+- Facebook pages are scraped only for accounts found under the candidate's name (confirmed or possibly the same person, at most 3), through the public pages scraper (page fields, never email or phone). Only a confirmed one counts as the candidate's.
+- Czech registries (ISIR, ARES, or.justice.cz, the Police wanted list, the chamber the role names) match on the name only, so a hit stays unverified and may be a namesake. Registries behind a CAPTCHA or login are linked for a hand check.
 - LinkedIn needs a public `/in/` URL from search or the form.
 - A nightly cron (`src/workflow/purge.ts`, 03:00 UTC) deletes every run older than 7 days: raw payloads in R2, sources, claims, candidates, gaps, brief, calls, ledger and the run row.
 
@@ -148,7 +151,7 @@ Two bugs the eval found and we fixed:
 - No eval yet on real, consenting people with written ground truth. Only the qualitative reviews in `eval/reviews/`.
 - The eval measures rules and wiring, not the live model's judgement. Its lineup answers are simulated and always right.
 - No ATS write-back. "Copy for ATS" and the `.ics` invite are copy / download only.
-- Facebook profiles are not opened.
+- Facebook gives only public page fields (title, intro, follower count), no posts.
 - The known misses above.
 
 ## Run it yourself
@@ -162,12 +165,12 @@ pnpm dev                      # UI + API on :3141 (Workflows are NOT available h
 pnpm preview                  # full stack incl. the research Workflow on :8787 (use this for a real run)
 ```
 
-Put `APIFY_TOKEN`, `ANTHROPIC_API_KEY` and `RUN_TOKEN` into `.dev.vars`.
+Put `APIFY_TOKEN`, `ANTHROPIC_API_KEY` and `RUN_TOKEN` into `.dev.vars`. Optional keys (`GITHUB_TOKEN`, `TREG_TOKEN`, `STACKEXCHANGE_KEY`, `OPENALEX_API_KEY`, `BRAVE_SEARCH_KEY`) are listed in `.dev.vars.example`.
 
 | Client | Route | Cap |
 |---|---|---|
-| Start form | `/api/start` (adds the bearer server-side) | 6 runs per hour |
-| Everything else | `POST /api/runs` with `Authorization: Bearer <RUN_TOKEN>` | 20 per hour |
+| Start form and New brief | `/api/start` and `POST /api/positions/:id/enrich` with the session cookie (no bearer) | 6 runs per hour per organization |
+| Everything else | `POST /api/runs` with `Authorization: Bearer <RUN_TOKEN>` | 20 per hour, shared by all runs |
 
 Live checks spend real Apify money, so they never run in CI:
 

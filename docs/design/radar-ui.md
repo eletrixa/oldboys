@@ -25,7 +25,7 @@ An editorial dossier on warm paper. The product prepares evidence for a person t
 | Conflict / failed | `bg-conflict-bg text-conflict` |
 | Inference | `bg-inference-bg text-inference` |
 
-Never write `zinc-*`, `teal-*`, `amber-*`, `red-*`, `emerald-*`, `violet-*` in a component. Those scales are a temporary remap and are removed when the migration ends. Never write a hex value in TSX.
+Never write `zinc-*`, `teal-*`, `amber-*`, `red-*`, `emerald-*`, `violet-*` in a component. The temporary remap of those scales is gone, so they would render stock Tailwind colours. Never write a hex value in TSX.
 
 ## Type
 
@@ -48,18 +48,20 @@ Never write `zinc-*`, `teal-*`, `amber-*`, `red-*`, `emerald-*`, `violet-*` in a
 
 ## Components (ui.tsx)
 
-`CARD`, `CARD_PEACH`, `CARD_SAGE`, `TILE`, `FRAG`, `KEY`, `BTN_PRIMARY`, `BTN_SECONDARY`, `BTN_QUIET`, `FIELD`, `LINK`, `<Eyebrow>`, `<Pill tone>`, `<SourceLink url>`. Use them; extend ui.tsx rather than inventing a parallel class string.
+`CARD`, `CARD_FLUSH`, `CARD_MUTED`, `CARD_PEACH`, `CARD_SAGE`, `CARD_CONFLICT`, `CARD_UNSURE`, `TILE`, `FRAG`, `KEY`, `BTN_PRIMARY`, `BTN_SECONDARY`, `BTN_QUIET`, `BTN_DANGER`, `FIELD`, `LINK`, `LINK_TARGET` (44px link), `SUMMARY` / `SUMMARY_COMPACT` with `<Chevron>`, `<Eyebrow>`, `<Pill tone>`, `<SimulatedPill kind>`, `<SourceLink url>`, `<NoticeLine notice>`. Use them; extend ui.tsx rather than inventing a parallel class string.
 
 ## Per-surface composition
 
 ### Run page (`/runs/[id]`)
 While running, paused or failed (one column, `max-w-3xl`):
 1. Header: eyebrow "Research in progress", serif h1 with the existing `headerText`, headline muted, meta line = cost line, CACHED pill when cached.
-2. Progress: a vertical timeline. Left rail of 20px marks joined by a 1px line; done = ok-green filled check, active = rust ring with a slow pulse (respect reduced motion), todo = divider ring, failed = conflict, skipped = muted dash. A slim `h-1.5` bar above it keeps the percent. Labels `text-sm`, muted for todo.
+2. Progress: a vertical timeline. Left rail of 20px marks joined by a 1px line; done = ok-green filled check, active = rust ring with a slow pulse (respect reduced motion), todo = divider ring, failed = conflict, skipped = muted dash. A slim `h-1.5` bar above it keeps the percent. Labels `text-sm`, muted for todo. Each phase row has a muted note on the right: its measured time, what it reads now, or "~1 min". The foot (`progress-panel.tsx`, plans/015) holds the remaining-time range ("About 2 to 4 min left", never a point), "Found so far" and, when done, the research time.
 3. Question card: `CARD_PEACH`, serif h2, the profile row, buttons: primary "Yes, it's them", secondary "No", quiet "I'm not sure".
 4. Identity map card on the canvas (no card chrome) with a sans h3; SVG colours via `fill-ok`, `stroke-unsure`, `fill-divider` etc.
 5. Profiles list: h3 + hairline rows, platform mark = 36px circle `bg-sage` with ink initials, decision `<Pill>`.
-6. Failure = `CARD` with `border-conflict bg-conflict-bg`.
+6. Failure = `CARD_CONFLICT` (`role="alert"`) with the reason and a "Try again" link. A stalled run (no ledger row for 30 minutes) gets a `CARD_UNSURE` notice above the progress.
+7. "Issues so far": `CARD_UNSURE` under the progress while the run is not done (`issues-card.tsx`): a counts line, one muted line per problem (raw reason in `title`), nothing for a clean run.
+8. Footer: while not done, a muted running hint with a "How to read your brief" `LINK` to `/guide#read`, then the "Home" and "Audit record" links.
 
 Finished brief (`brief-page.tsx`, `max-w-6xl`, root `id="brief"` with the report `lang`):
 1. Header: `<Eyebrow>` "Candidate brief · <role>" (role links the position), h1 = full name, headline muted, pills (identity ok, phone screen done ok, CACHED), the EN | CZ switch top right; below, five equal steps in the `TILE` idiom (2px rule: ok = done, ink = next, divider = later): Research, Identity, Phone screen, Interview, Decision ("Made by a person"). Only state the run proves is marked done.
@@ -68,19 +70,19 @@ Finished brief (`brief-page.tsx`, `max-w-6xl`, root `id="brief"` with the report
 4. "Before the interview (n)": serif h2 + `CARD_FLUSH` with hairline rows, only items that need action; public source vs phone answer as two `FRAG`s with a neutral "Compare" pill (never an automatic conflict); `conflict` tone only for research-vs-research contradictions; each row links to its plan question (scroll + one flash inside `prefers-reduced-motion: no-preference`).
 5. Tabs: WAI-ARIA tablist, sticky on top of the main column, rust underline on the selected tab, count badge per tab (`unsure` on Phone screen when answers are open), hash `#plan|#evidence|#call|#sources`. Inactive panels are `tab-inactive hidden`; the print rule shows every panel and hides the bar.
    - Interview plan: one numbered list (serif rust numbers, hairline rows) in groups Role criteria / To verify / Interview questions; topic `<Pill>`, muted "Why:" line, the question, a canvas "Phone" row (answer badge, summary, quote + "at m:ss" + "Said by the candidate. Not public evidence."), a "Covered" checkbox (React state only); the filled-kit review closes the panel.
-   - Evidence: TopLine, scorecard, role criteria table in `CARD_FLUSH` (third column from `md`), career timeline `CARD` (label column + bar on a year axis; ink bar, ok for an open end), ProfileSections, findings as compact disclosure rows in one `CARD_FLUSH` (title, one-line summary, confidence pill, claim count; short quotes inline), code profile, registries.
+   - Evidence: TopLine, scorecard, the "Confidence in this brief" card (plans/014), role criteria table in `CARD_FLUSH` (third column from `md`), career timeline `CARD` (label column + bar on a year axis; ink bar, ok for an open end), ProfileSections, findings as compact disclosure rows in one `CARD_FLUSH` (title, one-line summary, confidence pill, claim count; short quotes inline), code profile, registries.
    - Phone screen: the call panel, results first, setup folded under "Call again · N of M calls left" after a finished call.
    - Sources and gaps: confirmed profiles (hairline rows), "How we confirmed it is X" disclosure (progress, identity map, lineup), gaps grouped by reason in plain words as neutral pills (raw reason in `title`), Also found, removed line, profile signals.
-6. Sidebar: `CARD` "Interview kit" (`BTN_PRIMARY` copy = the page's one rust action, `BTN_SECONDARY` calendar disclosure, "More exports"), `CARD` "About this research" (`dl`, Audit record link), the delete disclosure in a conflict hairline box ("Do this when the candidate is rejected."), `CARD_SAGE` "Radar prepares evidence and never scores people. A person makes every decision.", "All briefs" link.
+6. Sidebar: `CARD` "Interview kit" (`BTN_PRIMARY` copy = the page's one rust action, `BTN_SECONDARY` calendar disclosure, "More exports"), `CARD` "About this research" (`dl`, Audit record link), the delete disclosure in a conflict hairline box ("Do this when the candidate is rejected."), `CARD_SAGE` "Radar prepares evidence and never scores people. A person makes every decision.", "My briefs" link. The sidebar labels follow the EN | CZ switch.
 
-### Start form (home card)
+### Start form (`/onboarding`)
 Fields with `FIELD`; labels `text-sm font-semibold`; helper `text-xs text-muted`; CV in a `details` with a hairline; privacy note in `CARD_SAGE`; submit `BTN_PRIMARY` with the "6 to 12 minutes" note beside it; error in `text-conflict`.
 
 ### Roles (`/roles`, `/roles/[key]`)
-Header per the rhythm. Token form as the start form. Role list = hairline rows with serif role name and muted count. Role table: `CARD` wrapper, th uppercase xs tracked muted, coverage cells = a 8px dot + label (ok / unsure / muted / muted italic), person link `LINK`.
+Header per the rhythm. Without a session the page shows `LoginCard` (no token form). Role list = hairline rows with serif role name and muted count. Role table: `CARD_SAGE` disclaimer above a `CARD_FLUSH` wrapper, th uppercase xs tracked muted, coverage cells = a 8px dot + label (ok / unsure / muted / muted italic), person link `LINK`.
 
 ### Audit (`/runs/[id]/audit`)
-Header per the rhythm with the download as `BTN_SECONDARY`. Sections = `CARD`; `dl` rows with a muted 8rem label column; source status `<Pill>`; MOCK `<Pill tone="unsure">`.
+Header per the rhythm with the download as `BTN_SECONDARY`. Sections = `CARD`; `dl` rows with a muted 8rem label column; source status `<Pill>`; MOCK `<SimulatedPill kind="mock">` (unsure tone).
 
 ### Not found / loading
 A short serif h1, a sentence, a `LINK` back. Loading = the page header skeleton (two muted bars with `animate-pulse`).

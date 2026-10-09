@@ -54,6 +54,12 @@ function global:cheatoldboys {
     Write-Host "                                           Live Apify smoke of every hiring collector (spends ~\$0.01)" -ForegroundColor White
     Write-Host "    node scripts/ui-flow.mjs name city role prefix" -NoNewline -ForegroundColor Green
     Write-Host "  Screen 1 -> 2 browser flow + screenshots against pnpm preview" -ForegroundColor White
+    Write-Host "    LIVE=1 SUBJECT=.. ROLE=.. pnpm exec vitest run live-registries" -ForegroundColor Green
+    Write-Host "                                           Live smoke of the Czech registries step (free, no Apify)" -ForegroundColor White
+    Write-Host "    node scripts/auth-flow.mjs base-url prefix" -NoNewline -ForegroundColor Green
+    Write-Host "      Account flow smoke (register, login, guards) against pnpm preview" -ForegroundColor White
+    Write-Host "    pnpm --filter oldboys-extension e2e    " -NoNewline -ForegroundColor Green
+    Write-Host "Extension Playwright Chromium smoke" -ForegroundColor White
     Write-Host ""
     Write-Host "  ┌─────────────────────────────────────────────────────────────────┐" -ForegroundColor DarkGray
     Write-Host "  │  DEPLOYMENT                                                    │" -ForegroundColor Yellow
@@ -76,6 +82,14 @@ function global:cheatoldboys {
     Write-Host "HMAC secret for POST /api/webhooks/elevenlabs" -ForegroundColor White
     Write-Host "    wrangler secret put TREG_TOKEN         " -NoNewline -ForegroundColor Green
     Write-Host "Optional treg.to token: second-source profile reads (docs/ops/treg.md)" -ForegroundColor White
+    Write-Host "    wrangler secret put GITHUB_TOKEN       " -NoNewline -ForegroundColor Green
+    Write-Host "Optional: lifts api.github.com above the shared anonymous limit" -ForegroundColor White
+    Write-Host "    wrangler secret put STACKEXCHANGE_KEY  " -NoNewline -ForegroundColor Green
+    Write-Host "Optional: Stack Apps key, lifts the 300 req/day per IP quota" -ForegroundColor White
+    Write-Host "    wrangler secret put OPENALEX_API_KEY   " -NoNewline -ForegroundColor Green
+    Write-Host "Optional: OpenAlex key (anonymous budget answers 429 from Worker IPs)" -ForegroundColor White
+    Write-Host "    wrangler secret put BRAVE_SEARCH_KEY   " -NoNewline -ForegroundColor Green
+    Write-Host "Optional: profile suggestions on the start form (unset = 503)" -ForegroundColor White
     Write-Host "    pnpm db:migrate:remote                 " -NoNewline -ForegroundColor Green
     Write-Host "Apply migrations to prod D1 (before pnpm deploy)" -ForegroundColor White
     Write-Host "    pnpm cf-typegen                        " -NoNewline -ForegroundColor Green
@@ -100,6 +114,12 @@ function global:cheatoldboys {
     Write-Host "Budget cap for position must-haves LLM call (wrangler.jsonc var)" -ForegroundColor White
     Write-Host "    CALL_PROVIDER=mock|elevenlabs          " -NoNewline -ForegroundColor Green
     Write-Host "wrangler.jsonc var for verification calls" -ForegroundColor White
+    Write-Host "    CALL_BUDGET_USD=0.50 RUN_CALL_MAX=5    " -NoNewline -ForegroundColor Green
+    Write-Host "Call-question drafting cap (USD) and max verification calls per run (wrangler.jsonc vars)" -ForegroundColor White
+    Write-Host "    ELEVENLABS_AGENT_ID / _PHONE_NUMBER_ID " -NoNewline -ForegroundColor Green
+    Write-Host "Non-secret ElevenLabs dashboard ids (wrangler.jsonc vars)" -ForegroundColor White
+    Write-Host "    LLM_MODEL_PRIMARY / LLM_MODEL_VERIFY   " -NoNewline -ForegroundColor Green
+    Write-Host "claude-opus-5-5 / claude-sonnet-5-5 (wrangler.jsonc vars)" -ForegroundColor White
     Write-Host "    POST /api/runs/:id/calls               " -NoNewline -ForegroundColor Green
     Write-Host "Draft a verification call" -ForegroundColor White
     Write-Host "    POST /api/calls/:id/approve            " -NoNewline -ForegroundColor Green

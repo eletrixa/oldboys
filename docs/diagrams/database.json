@@ -42,9 +42,10 @@
           "sessions",
           "auth_attempts",
           "ares_cache",
+          "positions",
           "investigations"
         ],
-        "note": "Company from ARES, account with a PBKDF2 password, cookie session. Only that company sees its briefs."
+        "note": "Company from ARES, account with a PBKDF2 password, cookie session. Only that company sees its briefs; a position names its company."
       }
     ],
     "locale": "en"
@@ -311,9 +312,32 @@
       "to": "organizations"
     },
     {
+      "id": "pos-org",
+      "from": "positions",
+      "to": "organizations",
+      "fromSide": "left",
+      "toSide": "right"
+    },
+    {
       "id": "ses-acc",
       "from": "sessions",
-      "to": "accounts"
+      "to": "accounts",
+      "fromSide": "right",
+      "toSide": "top",
+      "via": [
+        [
+          250,
+          129
+        ],
+        [
+          250,
+          215
+        ],
+        [
+          370,
+          215
+        ]
+      ]
     },
     {
       "id": "inv-acc",
@@ -451,7 +475,7 @@
       "dot": "violet",
       "title": "Outside D1",
       "items": [
-        "R2: raw JSON, CV, call transcript, Czech brief",
+        "R2: raw JSON, CV, transcript, Czech brief, call questions, positions",
         "Workflow state lives in Cloudflare, not in D1",
         "No KV and no Durable Objects"
       ]

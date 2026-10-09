@@ -49,7 +49,7 @@
 
 ## Rules
 - Identity stays `"unverified"`: LLM score plus `corroboration()` decide the merge; a rule that merged on the provider's link alone is a defect.
-- Allow-list parse; sensitive fields (Facebook `gender`, PDL `birth_*`, contact data) are never requested and never stored.
+- Allow-list parse; sensitive fields (Facebook `gender`, Apollo `personal_*`, contact data) are never requested and never stored.
 - Runs in the hiring search pool (before `resolve_lineup`) with `onEmpty` gap "people enrichment (Apollo via treg) listed no other public account for the confirmed LinkedIn profile".
 - Runner side (not this unit): reserves `maxCostUsd` against `ctx.budget.usd`, does not increment `out.calls`, `isPaid` false for `treg/` ids; `Ports.callTreg === null` gives note `TREG_TOKEN not set` and no request.
 

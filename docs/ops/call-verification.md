@@ -14,17 +14,17 @@ Call verification is optional per run; the backend accepts operator-entered, con
 
 ## What the UI Shows
 
-On a finished brief (`/runs/<id>`), after "To verify", the card **Verify with the candidate by phone**:
+On a finished brief (`/runs/<id>`), in the **Phone screen** tab (`#call`), the card **Verify with the candidate by phone**:
 
 1. Intro line; with `provider = mock` a MOCK badge "No real call. Answers are simulated."
 2. Proposed questions (max 5). When the setup opens, the panel asks `POST /api/runs/<id>/calls/proposal` once for an **AI draft** ("Drafting questions from the research…"): Opus 5.5 (`LLM_MODEL_PRIMARY`) writes 3–5 specific, open questions anchored on the confirmed research ("Your GitHub has a repo with Airflow DAGs from 2023 – which part did you build yourself, and what was the hardest problem?"), labelled **AI-drafted, edit before the call**. Under each question: "Follow-up if the answer is vague: …" and "Listen for (not read aloud): …" (read-only; they stay when the text is edited). The model sees only confirmed research: must-haves with coverage and summary, to-verify items (CV differences included), weak or contradicted claim texts, profile risks / history / position-fit gaps / questions and plain "no … found" gaps; never the personality read, unconfirmed (`also_found`) hits, evidence quotes, URLs, e-mails or tool notes. In code after the model: one line, length caps, Art. 9 and off-limits topics (salary, family, age, other candidates, personality) dropped, dedupe, at most 5. The draft is cached in R2 (`call-questions/<run>.json`, keyed by a hash of the research input and prompt version, deleted with the run); one `llm` ledger row `call:questions` per model call; no new draft once the run's drafts would pass `CALL_BUDGET_USD`. If the model fails, times out, returns nothing usable, there is no AI key or the user is not logged in, the panel silently shows the rule-based proposal with a small note. GET `/api/runs/<id>/calls` never calls the model; it returns the cached draft as `ai_proposal`. Rule-based proposal (fallback): must-haves without public evidence, then with partial evidence, then "to verify" items, then gaps. They are worded as plain spoken questions to the candidate ("Can you tell me about your prior cleaning experience?", "Do you have Go backend experience?", "We read that you led a team of five at Acme. Is that right?"); the missing evidence is not read out, it is in the grey chip with the reason (`why`). Each is editable and has a remove ×; "Add question" (up to 5) and "Reset to proposal".
 3. "What the agent says first" (collapsed): the first message.
-4. Form: phone number (E.164; spaces, dashes and a leading `00` are normalised), checkbox "The candidate agreed to this call and to the recording", how they agreed (required), your name (remembered in the tab). "Call candidate now" is enabled only when everything is valid and the run has calls left.
-5. On click: draft with the edited questions, approve (dial), then poll every 3 s: "Calling +420*****123…", "Call finished, reading the answers…", "No answer", "The candidate declined the call", "Call failed: …". The panel uses the operator's login session (no team token); if the session has expired it shows "Your login has expired. Log in again." with a link to `/login`. Scripts and curl send `Authorization: Bearer $RUN_TOKEN` instead.
+4. Form: phone number (E.164; spaces, dashes and a leading `00` are normalised), checkbox "The candidate agreed to this call and to the recording", how they agreed (required), your name (remembered in the tab, cleared on logout). "Call candidate now" is enabled only when everything is valid and the run has calls left.
+5. On click: draft with the edited questions, approve (dial), then poll every 3 s for up to 35 minutes (then "No result after 35 minutes. Reload the page later."): "Calling +420******123…", "Call finished, reading the answers…", "No answer", "The candidate declined the call", "Call failed: …". The panel uses the operator's login session (no team token); if the session has expired it shows "Your login has expired. Log in again." with a link to `/login`. Scripts and curl send `Authorization: Bearer $RUN_TOKEN` instead.
 6. Per question: Answered / Unclear / Declined / No answer / Not asked, STATEMENT tag, the summary, the quote with "at 1:23". Under it: "Said by the candidate on the phone. This is not public evidence and does not change the research coverage." Meta: duration, cost, identity confirmed, MOCK.
-7. "1 of 2 calls used for this run"; earlier calls collapsed. Only calls that are in progress or reached the person count (`dialing`, `done`, `refused`); a call that never connected (`failed`, `no_answer`: provider rejected it, busy, no answer) does not use a slot.
+7. "1 of 2 calls used for this run"; earlier calls collapsed. After a finished call the answers come first and the form folds under "Call again · N of M calls left". Only calls that are in progress or reached the person count (`dialing`, `done`, `refused`); a call that never connected (`failed`, `no_answer`: provider rejected it, busy, no answer) does not use a slot.
 
-The interview kit (Copy / Download .md) gets a section "Phone verification (said by the candidate, not public evidence)" with the latest call's answers.
+With the report switched to CZ the tab ("Telefonický screening"), labels and status lines are Czech, but the call stays English (questions, first message, answers and quotes; a note says so). The interview kit ("Copy interview kit", or "Download .md" under "More exports") gets a section "Phone verification (said by the candidate, not public evidence)" with the latest call's answers.
 
 ## Manual Setup (live calls)
 
@@ -39,7 +39,7 @@ Nothing here is done by code; do it once, in this order. Until step 11, everythi
 7. **Data collection:** add `identity_confirmed`, type boolean, description "true only if the callee clearly confirmed they are the named candidate". ElevenLabs sends it as `{data_collection_id, value, rationale}`; the code reads `value`.
 8. **Call config and privacy:** max duration **300 s**; audio storage off and the shortest transcript retention you can live with.
 9. **Phone import:** Phone Numbers → import the Twilio number (SID + auth token or API key) and assign it to the agent; note the `phone_number_id`.
-10. **Webhook:** workspace settings → Webhooks → POST `https://oldboys.asajj.cz/api/webhooks/elevenlabs`, auth **HMAC**, post-call **transcription** enabled (audio is ignored). Copy the secret.
+10. **Webhook:** workspace settings → Webhooks → POST `https://oldboys.asajj.cz/api/webhooks/elevenlabs`, auth **HMAC**, post-call **transcription** and **call initiation failure** enabled (audio is ignored; an initiation failure marks the call "No answer" for busy / no answer, else "Call failed", at once instead of after the 30-minute poll). Copy the secret.
 11. **Secrets** (Robert): `pnpm exec wrangler secret put ELEVENLABS_API_KEY` and `pnpm exec wrangler secret put ELEVENLABS_WEBHOOK_SECRET`.
 12. **Remote migration:** check that `migrations/0004_calls.sql` is applied remotely (`pnpm exec wrangler d1 migrations list oldboys --remote`); otherwise `pnpm db:migrate:remote`.
 13. **Switch:** in `wrangler.jsonc` set `CALL_PROVIDER: "elevenlabs"`, `ELEVENLABS_AGENT_ID` and `ELEVENLABS_PHONE_NUMBER_ID`, update the cheat file (`docs/cli/cheat/oldboys.ps1`) in the same commit, deploy. Without the API key or either id the Worker silently stays on MOCK (`selectCallProvider`). **Fallback:** set `CALL_PROVIDER` back to `"mock"` and deploy.
@@ -56,31 +56,32 @@ Nothing here is done by code; do it once, in this order. Until step 11, everythi
 - `ELEVENLABS_PHONE_NUMBER_ID` — imported number id
 - `CALL_PROVIDER` — `"mock"` or `"elevenlabs"` (default `"mock"`)
 - `RUN_CALL_MAX` — calls per run that are in progress or reached the person (status `dialing`, `done` or `refused`; default `"2"`). Failed and unanswered calls do not count.
+- `CALL_BUDGET_USD` — USD cap on the AI question drafts of one run (default `"0.50"`); once the run's `call:questions` rows plus about $0.15 would pass it, no new draft is made and the panel shows the rule-based questions
 
 **Local `.dev.vars`** (template `.dev.vars.example`, gitignored): the same secrets.
 
 ## API Workflow
 
-The UI does exactly this; `scripts/call-smoke.mjs` does steps 1–3 without `questions`.
+The UI does this, plus one `POST /api/runs/<run-id>/calls/proposal` (session or bearer; 200 `{source: "ai"|"rules", cached, note, proposal}`, a fallback is still 200) when step 0 has no `ai_proposal`, and it skips a draft whose approve answered 400 or 409; `scripts/call-smoke.mjs` does steps 1–3 without `questions`.
 
 ```bash
 # Step 0: proposal, limit and earlier calls (no auth)
 curl http://localhost:3141/api/runs/<run-id>/calls
-# {provider, max, used, proposal: {questions, first_message, agent_prompt, ...}, calls: [...]}
+# {provider, max, used, proposal: {questions, first_message, agent_prompt, ...}, ai_proposal: null | {...}, calls: [...]}
 
 # Step 1: draft the call; without "questions" the proposal is used
 curl -X POST http://localhost:3141/api/runs/<run-id>/calls \
   -H "Authorization: Bearer $RUN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"language":"en","questions":[{"question_id":"mh-1","text":"Can you tell me about your Go work?"},{"text":"Why are you leaving Acme?"}]}'
-# 201 {id, brief}; 400 {error, index} for an invalid or Art. 9 question
+# 201 {id, brief}; 400 {error, index} for an invalid or Art. 9 question; 409 while the run has not started yet
 
 # Step 2: approve with consent (dials once)
 curl -X POST http://localhost:3141/api/calls/<call-id>/approve \
   -H "Authorization: Bearer $RUN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"to_number":"+420777123456","consent_ack":true,"consent_note":"agreed by email on 8 Oct","operator":"minas"}'
-# 202 {id, status:"dialing", provider} (mock: status is already terminal); 409 when RUN_CALL_MAX is reached
+# 202 {id, status:"dialing", provider} (mock: status is already terminal); 409 when the call is not drafted or RUN_CALL_MAX is reached; 502 when the provider rejected the call; 500 {error, id} when the call was placed but the result Workflow did not start
 
 # Step 3: poll until terminal and answers !== null
 curl http://localhost:3141/api/calls/<call-id>
@@ -102,6 +103,7 @@ Per-question answers are stored in the `call:finish` ledger row (`ref_json.answe
 | Webhook returns 500 "unknown conversation" | Webhook arrived before approve committed | Normal; ElevenLabs retries |
 | "Reading the answers…" never ends | Workflow extract failed (e.g. Anthropic key) | The panel shows `last_error` once set; check the Workflow instance |
 | Call stuck in `dialing` > 30 min | No webhook and polling failed 3 times | Check `last_error`; the Workflow polls 3 times then fails the call |
+| Approve returns 500 "call placed but the result workflow could not start" | The call was dialed but creating the VERIFY_CALL Workflow failed | `last_error` starts with "workflow not started:"; nothing reads the answers, check the Workflow binding and redeploy |
 | All answers "Not asked" | Refused, not completed, or identity not confirmed | Expected; the gap reason is in the `call:finish` ledger row |
 
 ## Migration

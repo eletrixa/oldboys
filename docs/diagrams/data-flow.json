@@ -16,7 +16,7 @@
           "collect",
           "r2"
         ],
-        "note": "Candidate and position are the input. Collectors read Apify, free APIs and registries. Raw payloads go to R2."
+        "note": "Candidate and position are the input. Collectors read Apify, treg.to, free APIs and registries. Raw payloads go to R2."
       },
       {
         "id": "identity",
@@ -83,7 +83,7 @@
       "sublabel": "must-haves · role sites",
       "stage": 0,
       "row": 0,
-      "width": 130,
+      "width": 150,
       "yOffset": -20
     },
     {
@@ -93,17 +93,17 @@
       "sublabel": "LinkedIn · CV",
       "stage": 0,
       "row": 1,
-      "width": 130,
+      "width": 150,
       "yOffset": -36
     },
     {
       "id": "apify",
       "type": "external",
-      "label": "Apify actors",
+      "label": "Apify + treg.to",
       "sublabel": "LinkedIn · SERP · social",
       "stage": 0,
       "row": 2,
-      "width": 130,
+      "width": 150,
       "tag": "paid",
       "yOffset": -52
     },
@@ -111,21 +111,21 @@
       "id": "collect",
       "type": "backend",
       "label": "Collectors",
-      "sublabel": "seed · SERP · 21 steps",
+      "sublabel": "seed · 37 steps · read pages",
       "stage": 1,
       "row": 2,
       "width": 130,
-      "tag": "$0.50 / 18 calls",
+      "tag": "$2.00 / 24 runs",
       "yOffset": -52
     },
     {
       "id": "pub",
       "type": "external",
       "label": "Public APIs",
-      "sublabel": "GitHub · ORCID · registries",
+      "sublabel": "GitHub · SEC · Wikipedia · ARES",
       "stage": 0,
       "row": 3,
-      "width": 130,
+      "width": 150,
       "tag": "free",
       "yOffset": -68
     },
@@ -235,7 +235,7 @@
       "id": "apify-collect",
       "from": "apify",
       "to": "collect",
-      "label": "dataset",
+      "label": "results",
       "variant": "emphasis",
       "fromSide": "right",
       "toSide": "left",
@@ -371,8 +371,8 @@
       "dot": "cyan",
       "title": "Sources",
       "items": [
-        "Paid calls only through Apify, the runner enforces the budget",
-        "LinkedIn only through Apify, the extension reads 3 fields",
+        "Paid calls go through Apify and treg.to, the runner enforces the budget",
+        "LinkedIn through Apify and treg.to, the extension reads 3 fields",
         "Steps pass only sourceId and excerpt, the payload stays in R2"
       ]
     },

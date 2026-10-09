@@ -24,9 +24,10 @@
           "api",
           "research",
           "sources",
+          "treg",
           "anthropic"
         ],
-        "note": "ResearchRun Workflow calls sources within $0.50 and 18 paid calls. LLM only in fixed seams."
+        "note": "Workflow calls Apify, treg.to and free APIs within $2.00 and 24 paid actor runs. API routes call Anthropic too: translate, call questions."
       },
       {
         "id": "verify-call",
@@ -153,19 +154,19 @@
         180,
         64
       ],
-      "tag": "$0.50 / 18 calls"
+      "tag": "$2.00 / 24 actor runs"
     },
     {
       "id": "sources",
       "type": "external",
       "label": "Data sources",
-      "sublabel": "Apify · GitHub · ORCID · ARES",
+      "sublabel": "Apify · GitHub · SEC · Wikipedia",
       "pos": [
-        1160,
+        1140,
         110
       ],
       "size": [
-        180,
+        200,
         64
       ]
     },
@@ -175,11 +176,25 @@
       "label": "Anthropic",
       "sublabel": "Opus · Sonnet verify",
       "pos": [
-        1160,
+        1140,
         240
       ],
       "size": [
-        180,
+        200,
+        64
+      ]
+    },
+    {
+      "id": "treg",
+      "type": "external",
+      "label": "treg.to",
+      "sublabel": "Apollo · Exa · 2nd read",
+      "pos": [
+        1140,
+        370
+      ],
+      "size": [
+        200,
         64
       ]
     },
@@ -295,7 +310,7 @@
       "id": "research-sources",
       "from": "research",
       "to": "sources",
-      "label": "apify-client · HTTPS",
+      "label": "fetch · HTTPS",
       "fromSide": "top",
       "toSide": "bottom"
     },
@@ -305,6 +320,13 @@
       "to": "anthropic",
       "label": "LLM seams",
       "variant": "emphasis"
+    },
+    {
+      "id": "research-treg",
+      "from": "research",
+      "to": "treg",
+      "label": "USD cap",
+      "variant": "dashed"
     },
     {
       "id": "research-d1",

@@ -13,9 +13,9 @@ POST /api/intake/startupjobs/<token>  (StartupJobs webhook)                     
 
 - The **tag** is the position: `[a-z0-9][a-z0-9-]{1,39}`, one row in `intake_tags` (tag, role, goal, optional company shown on the apply page (migration `0015_intake_company.sql`), optional StartupJobs offer id). It is the plus-address, the apply page path, the Google Form "Position code" and the StartupJobs internal position name. An unknown tag never starts a run.
 - Idempotent per `(source, external_id)`: sending the same application twice returns the first row and starts no second run. A repeat that carries other details (another LinkedIn URL, CV file or text) keeps the first send and leaves a note on the row: `resent <time>Z with other details (LinkedIn ..., CV ...), the first send is kept` (only the latest). On the apply page the key is position + email, so this is how a candidate's correction, or someone applying under another person's email, shows up: check the note and contact the address.
-- Spend brakes: known tag required, `INTAKE_PER_HOUR_CAP` (default 10) intake runs per hour, on top of the global `RUNS_PER_HOUR_CAP` (20) and the per-run budget of $0.50.
+- Spend brakes: known tag required, `INTAKE_PER_HOUR_CAP` (default 10) intake runs per hour, and the per-run budget (`RUN_BUDGET_USD` $2.00, `RUN_BUDGET_CALLS` 24 paid actor runs). Intake runs count toward the global `RUNS_PER_HOUR_CAP` (20) that `POST /api/runs` and enrichment check, but the intake funnel itself does not check it.
 - The candidate never learns a run exists. The apply page and the webhook answer "received"; run ids appear only on the position page (bound tags) and in the operator queue `GET /api/intake/applications` (bearer `RUN_TOKEN`).
-- Statuses: `received` (inserted, not decided; stays here only when something threw: the row's note then says "delivery failed after it was stored; the next delivery resumes it", and the next delivery of the same source resumes it at once; an unmarked one after 5 minutes) -> `run-started` | `unmatched` (unknown or missing tag, sender not allowed) | `incomplete` (no LinkedIn URL and no readable CV text) | `capped`. The `note` column says why.
+- Statuses: `received` (inserted, not decided; stays here only when something threw: the row's note then says "delivery failed after it was stored; the next delivery resumes it", and the next delivery of the same source resumes it at once; an unmarked one after 5 minutes) -> `run-started` | `unmatched` (unknown or missing tag, sender not allowed) | `incomplete` (no LinkedIn URL and no readable CV text) | `pooled` (tag bound to a position, or added by hand: waits for the recruiter, no run) | `capped`. The `note` column says why.
 - Raw mail is not kept. Only the CV file (R2 `intake/<applicationId>/<filename>`, written only for a known tag and an allowed sender, purged with the other raw data) and the extracted text are stored.
 - Public data only, outreach drafted never sent, no Art. 9 inference: the brief's hard rules apply to intake runs unchanged.
 
@@ -48,24 +48,24 @@ pnpm exec wrangler secret put INTAKE_TOKEN
 
 **Local `.dev.vars`** (copy from `.dev.vars.example`): `INTAKE_TOKEN`, `STARTUPJOBS_WEBHOOK_TOKEN`, `STARTUPJOBS_TOKEN`, plus `RUN_TOKEN` for the operator routes.
 
-**Migration.** The intake migration (`migrations/0009_intake.sql`, adds `intake_tags`, `applications` and `investigations.application_id`) must be applied to prod D1 before deploying. The pool migration (`migrations/0012_candidate_pool.sql`, rebuilds `applications` table with `position_id`, adds `position_id` to `intake_tags`, creates indexes) must also be applied before deploying pool features. CI cannot migrate D1; Robert runs `pnpm db:migrate:remote` before merge.
+**Migration.** The intake migration (`migrations/0009_intake.sql`, adds `intake_tags`, `applications` and `investigations.application_id`) must be applied to prod D1 before deploying. The pool migration (`migrations/0012_candidate_pool.sql`, rebuilds `applications` table with `position_id`, adds `position_id` to `intake_tags`, creates indexes) must also be applied before deploying pool features, and `migrations/0015_intake_company.sql` (adds `intake_tags.company`) before the apply page and `POST /api/intake/tags`, which read and write it. CI cannot migrate D1; Robert runs `pnpm db:migrate:remote` before merge.
 
 ## Candidate pool: pooled intake and enrichment
 
 A tag bound to a position (`intake_tags.position_id` set) pools applications instead of auto-starting runs. The recruiter:
 
-1. **Bind** the tag to the position via the Candidates section on the position page (`POST /api/intake/tags` with `positionId`); any of the four intake channels now feed the pool (status `pooled`, no run started).
-2. **Add manually** on the same Candidates section: paste a LinkedIn URL or CV text, optional name and email (`POST /api/positions/:id/candidates`); results in `pooled` status right away.
-3. **Select and enrich**: check the desired pooled rows in the table, click "Start enrichment" (`POST /api/positions/:id/enrich` max 20 per call); each starts one `ResearchRunWorkflow` with the position's must-haves as questions and updates the row status to `run-started`. Hourly caps (`RUNS_PER_HOUR_CAP` global, `START_PER_HOUR_CAP` per organization when origin is `via='start'`) apply; 429 if reached.
+1. **Bind** the tag to the position via the Intake channels section on the position page (the bind form shows only while no tag is bound) (`POST /api/intake/tags` with `positionId`); any of the four intake channels now feed the pool (status `pooled`, no run started).
+2. **Add manually** on the same Candidates section: paste a LinkedIn URL or CV text, optional name and email (`POST /api/positions/:id/candidates`); results in `pooled` status right away (`incomplete` when the LinkedIn URL does not read and there is no CV text). A CV file is added with `POST /api/positions/:id/candidates/file` (multipart `cv`, optional `name`); the New brief wizard (`/briefs/new`) uses both routes and then starts research for the new rows at once.
+3. **Select and enrich**: check the desired pooled rows in the table, click "Research selected (n)" (`POST /api/positions/:id/enrich` max 20 per call); each starts one `ResearchRunWorkflow` with the position's must-haves as questions and updates the row status to `run-started`. Hourly caps (`RUNS_PER_HOUR_CAP` global, `START_PER_HOUR_CAP` per organization when origin is `via='start'`) apply; 429 if reached.
 
-Tags without a position (`intake_tags.position_id = NULL`) keep the original behaviour: known tag → auto-start a run (status `run-started`), unknown tag → `unmatched`. The position page pools are for positions only; applications on a tag without a position (and `unmatched` ones) have no UI page since the `/intake` page was removed, read them from the operator queue `GET /api/intake/applications` (see the smoke loop).
+Tags without a position (`intake_tags.position_id = NULL`) keep the original behaviour: known tag → auto-start a run (status `run-started`), unknown tag → `unmatched`. The position page pools are for positions only; applications on a tag without a position (and `unmatched` ones) have no UI page since the `/intake` page was removed, read them from the operator queue `GET /api/intake/applications` (see the smoke loop). A position expires 7 days after it was created: the nightly purge deletes it and unbinds its tags (`intake_tags.position_id` back to NULL), so later applications on that tag auto-start runs again. Pooled applications that never started a run are deleted 7 days after they arrived.
 
 ## Create a position tag
 
 One tag per open position. Any of the three ways works; the API takes a login session or `RUN_TOKEN`; a tag without a position can be created only by the API or SQL.
 
 ```bash
-# UI: the position page, Candidates section, bind form (the tag is bound to that position; recruiter login session)
+# UI: the position page, Intake channels section, bind form (the tag is bound to that position; recruiter login session)
 
 # API
 curl -X POST https://oldboys.asajj.cz/api/intake/tags \
@@ -102,7 +102,7 @@ curl -s -H "Authorization: Bearer $CF_API_TOKEN" "https://api.cloudflare.com/cli
 2. Gmail -> Settings (gear) -> See all settings -> **Forwarding and POP/IMAP** -> **Add a forwarding address** -> `jobs+<tag>@asajj.cz` -> Next -> Proceed.
 3. Gmail sends a confirmation mail to that address. The Worker stores it as an application (`incomplete`, harmless) and forwards it to `INTAKE_FORWARD_TO`. Open it in `robert@soulfire.cz`, click the link or copy the code back into Gmail's Verify field.
 4. Settings -> **Filters and Blocked Addresses** -> **Create a new filter**. Use narrow criteria, for example the sender (`jobs.cz`, `linkedin.com`), a subject phrase, or the alias the ad uses. Next -> tick **Forward it to** -> `jobs+<tag>@asajj.cz` -> Create filter.
-5. One forwarding address and one filter per tag. Do not forward the whole mailbox: every forwarded mail with a known tag and a LinkedIn URL or PDF starts a paid run.
+5. One forwarding address and one filter per tag. Do not forward the whole mailbox: every forwarded mail with a known tag and a LinkedIn URL, PDF or text attachment starts a paid run (or joins the pool when the tag is bound to a position).
 
 ### Seznam: copy a mailbox to a position
 
@@ -235,7 +235,7 @@ Rotate the token by putting a new secret value and pasting the new URL into ever
 
 ## Smoke loop
 
-Order: tag exists -> endpoint answers -> row in the queue (`GET /api/intake/applications`, or the position page for a bound tag) -> status as expected. A known tag plus a LinkedIn URL or CV **starts a real run that spends up to $0.50** (recorded in the run's ledger). For spend-free smokes use an unknown tag (`unmatched`) or send neither LinkedIn nor CV (`incomplete`).
+Order: tag exists -> endpoint answers -> row in the queue (`GET /api/intake/applications`, or the position page for a bound tag) -> status as expected. A known tag without a position plus a LinkedIn URL or CV **starts a real run that spends up to $2.00** (recorded in the run's ledger). For spend-free smokes use an unknown tag (`unmatched`) or send neither LinkedIn nor CV (`incomplete`).
 
 Local: `pnpm db:migrate:local`, `pnpm dev` (Next on `http://localhost:3141`, secrets from `.dev.vars`). Production: replace the host with `https://oldboys.asajj.cz` and the secrets with the real ones.
 
@@ -321,17 +321,18 @@ Still manual, per section: Gmail filter and Seznam rule on the mailbox that rece
 | `/apply/<tag>` 404 | Tag not in `intake_tags` or invalid | Create the tag |
 | StartupJobs webhook deleted by StartupJobs | The URL once answered something other than 200/201/202/204/422 (wrong token gives 404) | Re-enter the correct URL in the offer; check the token |
 | Webhook 503 | `STARTUPJOBS_WEBHOOK_TOKEN` not set | `wrangler secret put STARTUPJOBS_WEBHOOK_TOKEN` |
-| Webhook 202 `{received:false}` | The funnel threw; the row, if created, stays `received`. StartupJobs does not redeliver, so the raw body was kept at R2 `intake/dead-letter/startupjobs/<time>-<candidateID>.json` | `wrangler tail oldboys`, fix the cause, then re-POST the kept body to the webhook URL: `pnpm exec wrangler r2 object get oldboys-sources/intake/dead-letter/startupjobs/<file> --file /tmp/dl.json` and `curl -X POST .../api/intake/startupjobs/<token> -H 'content-type: application/json' --data-binary @/tmp/dl.json` (after 5 minutes the `received` row is resumed, see below) |
+| Webhook 202 `{received:false}` | The funnel threw; the row, if created, stays `received`. StartupJobs does not redeliver, so the raw body was kept at R2 `intake/dead-letter/startupjobs/<time>-<candidateID>.json` | `wrangler tail oldboys`, fix the cause, then re-POST the kept body to the webhook URL: `pnpm exec wrangler r2 object get oldboys-sources/intake/dead-letter/startupjobs/<file> --remote --file /tmp/dl.json` and `curl -X POST .../api/intake/startupjobs/<token> -H 'content-type: application/json' --data-binary @/tmp/dl.json` (the funnel marked the row "delivery failed after it was stored", so the re-POST resumes it at once; an unmarked `received` row is resumed only after 5 minutes) |
 | Webhook 422 | Body is not the documented payload | Compare with `specs/intake/startupjobs.md`; StartupJobs stops retrying |
 | `unmatched`, note "unknown tag" | Plus-address, position code or internal position name matches no `intake_tags` row | Create the tag, or correct the address/offer mapping; then re-send the source |
 | `unmatched`, note "sender not allowed" | `INTAKE_FROM_ALLOW` excludes the envelope sender | Add the domain/address or empty the var, deploy, re-send |
 | `unmatched` with no tag (`jobs@`) | Mail sent to the base address | Use `jobs+<tag>@` |
 | `incomplete`, note "PDF has no extractable text" | Scanned PDF | Ask for a text CV or LinkedIn URL; or start the run by hand from the start form |
-| `incomplete`, note "unsupported CV format" | DOCX or other format (stored in R2, not parsed) | Same as above |
+| `incomplete`, note "unsupported CV format" | A file that is not PDF, Word .docx or text (an image, say), or an older Word .doc (note "old Word (.doc) file stored, not read"); both are stored in R2, not parsed. Mail takes only a PDF or text attachment, so a .docx sent by email is ignored and the row is `incomplete` with "no LinkedIn profile URL and no readable CV text" | Same as above |
 | `incomplete`, note "cv download failed <status>" | StartupJobs file URL needs auth or expired | Set `STARTUPJOBS_TOKEN`; or fetch the file from the application's admin page |
+| `incomplete`, note "no PDF among <n> files" | StartupJobs downloads only the first `.pdf` in `files[]`; a Word or image CV is skipped | Fetch the file from the application's admin page and add the candidate by hand, or ask for a LinkedIn URL |
 | `incomplete` for Jobs.cz mails | The notification links the CV instead of attaching it | Put the apply page link in the ad; capture a real mail into the fixture |
 | `capped` | `INTAKE_PER_HOUR_CAP` reached when the application arrived | Nothing: the `*/15 * * * *` cron re-decides capped rows oldest first and starts their runs once the hour has room (a re-delivery does the same at once). Raise the cap if the queue grows |
-| `received` that never moves | R2, D1 or Workflow create threw after the insert | `wrangler tail oldboys`, fix the cause, then re-send the source (forward the mail again, `resendAll` in Apps Script, resubmit the apply page, re-POST the StartupJobs dead letter): a `received` row older than 5 minutes is processed again from the new delivery, and a run the failed attempt had already started is linked, not started twice |
+| `received` that never moves | R2, D1 or Workflow create threw after the insert | `wrangler tail oldboys`, fix the cause, then re-send the source (forward the mail again, `resendAll` in Apps Script, resubmit the apply page, re-POST the StartupJobs dead letter): a `received` row whose note says "delivery failed after it was stored" is processed again at once by the new delivery (an unmarked one only once it is older than 5 minutes), and a run the failed attempt had already started is linked, not started twice |
 | No row for a sent mail | Mail never reached the Worker: wrong address, recipient rejected, destination or rule disabled, over 10 MiB | Email Routing Activity log; rule `jobs@` and catch-all point to Worker `oldboys`; recipient must be `jobs@` or `jobs+<tag>@` |
 | Gmail "forwarding address" confirmation never arrives | `INTAKE_FORWARD_TO` was emptied, or the destination was removed in Email Routing | Restore the var and deploy, check Destination addresses shows `robert@soulfire.cz` verified, resend the confirmation |
 | Log line "forward failed" | Destination removed or unverified | Verify it in Email Routing -> Destination addresses; the application was stored anyway |

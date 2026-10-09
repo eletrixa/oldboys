@@ -1,6 +1,6 @@
 # Oldboys Rules
 
-Project rules for oldboys, the hackathon Social Media Deep Research agent. Next.js 16, React 19, TypeScript 5, Tailwind 4, Cloudflare Workers + Workflows + D1 + R2, OpenNext (@opennextjs/cloudflare), AI SDK + Anthropic, apify-client, Vitest.
+Project rules for oldboys, the hackathon Social Media Deep Research agent. Next.js 16, React 19, TypeScript 6, Tailwind 4, Cloudflare Workers + Workflows + D1 + R2, OpenNext (@opennextjs/cloudflare), AI SDK + Anthropic, Apify REST over fetch, Vitest.
 
 > **Not sure where to start?** See [crossroads.md](crossroads.md) for task-based navigation. Every source file carries the header from [file-headers.md](file-headers.md).
 
@@ -15,7 +15,7 @@ Oldboys invariants (from plans/001-deep-research-arch). They override the generi
 - `Claim.kind` FACT requires quote ⊂ source excerpt and verify passed.
 - Budget is enforced in the runner, never in the LLM.
 - Never export `runtime = "edge"`.
-- Workflow code imports only `src/domain` and `src/recipe`, never `next`.
+- Workflow code never imports `next` or `src/app`; it uses `src/domain`, `src/recipe`, `src/adapters` and `src/workflow`.
 
 ## Categories
 
@@ -96,6 +96,7 @@ Oldboys invariants (from plans/001-deep-research-arch). They override the generi
 
 ### [tools/](tools/)
 - [changelog-workflow.md](tools/changelog-workflow.md) — changelog-workflow.md: Best practices for maintaining the project changelog (versions.md).
+- [docs-sync.md](tools/docs-sync.md) — docs-sync.md: A code change and the docs that describe it land in the same commit; table of changed paths to docs.
 - [environment-config.md](tools/environment-config.md) — environment-config.md: Purpose: Ensure consistent, safe environment variable management.
 - [git-commit-workflow.md](tools/git-commit-workflow.md) — git-commit-workflow.md: After completing major development work (2 phases or more), automatically create a Git com
 - [linting-workflow.md](tools/linting-workflow.md) — linting-workflow.md: Strategy: Fast checks during dev, thorough validation before PR.

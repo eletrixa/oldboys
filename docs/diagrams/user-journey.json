@@ -40,7 +40,7 @@
           "export",
           "delete"
         ],
-        "note": "An unsure identity pauses the run and asks the recruiter. Rejection or 7 days deletes the data."
+        "note": "An unsure identity pauses the run and asks the recruiter; after 1 hour a confirmed run goes on. Rejection or 7 days deletes the data."
       }
     ],
     "locale": "en"
@@ -114,7 +114,7 @@
       "col": 0,
       "type": "frontend",
       "label": "Sign up",
-      "sublabel": "account · IČO via ARES",
+      "sublabel": "account · ARES · /guide",
       "width": 140
     },
     {
@@ -141,7 +141,7 @@
       "col": 4,
       "type": "frontend",
       "label": "Brief",
-      "sublabel": "evidence · gaps · Fit",
+      "sublabel": "scorecard · confidence · gaps",
       "width": 140
     },
     {
@@ -160,7 +160,7 @@
       "type": "backend",
       "label": "Research run",
       "sublabel": "sources · verify · synthesis",
-      "tag": "2–4 min · $0.50",
+      "tag": "6–12 min · $2.00",
       "width": 150
     },
     {
@@ -281,7 +281,7 @@
       "dot": "rose",
       "title": "Exceptions",
       "items": [
-        "Given profile or CV = confirmed identity, no pause",
+        "Given profile or CV = confirmed; a tech role may still ask about GitHub",
         "Budget used up: a gap, not an error",
         "No AI: brief from evidence only, marked NO AI"
       ]

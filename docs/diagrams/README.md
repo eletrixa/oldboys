@@ -21,4 +21,4 @@ The app serves four of them on the public `/architecture` page:
 cp docs/diagrams/data-flow.html public/diagrams/
 ```
 
-`run-sequence.*` is a sequence diagram of one research run (as of 9 Oct): seed, search pool, lineup, collect pool, extract, verify, synthesize. It is not served.
+`run-sequence.*` is a sequence diagram of one research run (as of 9 Oct): seed, search pool, lineup, collect pool, read_pages, extract, verify, synthesize. It is not served.

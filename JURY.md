@@ -85,7 +85,7 @@ Limits you may hit: 6 started runs per hour per company and 20 runs per hour acr
   | Czech translation | verify |
   | Position extraction | primary |
   | Call transcript ingest | primary |
-- **Budget:** the runner enforces it, never the model. Each run gets $0.50 and 18 paid actor runs for collectors. When the budget is used up, the remaining collectors are skipped with "run budget reached" (`src/recipe/runner.ts`, `src/workflow/research-run.ts`).
+- **Budget:** the runner enforces it, never the model. Each run gets $2.00 and 24 paid actor runs for collectors (raised from $0.50 / 18 on 2026-10-09 for the deep-research steps); treg.to calls are USD-gated against the same $2.00. When the budget is used up, the remaining collectors are skipped with "run budget reached" (`src/recipe/runner.ts`, `src/workflow/research-run.ts`).
 - **Ledger:** `ledger_entries` is append-only (`seq` per run). Every step, model call and cost is a row. The UI streams it over SSE.
 - **Calls:** ElevenLabs agent + Twilio, dialled once on operator approval, never from a Workflow step. With `CALL_PROVIDER=mock`, calls are labelled MOCK. Plan: [`plans/005-call-verification/`](plans/005-call-verification/00-SYNTHESIS.md).
 
@@ -162,7 +162,7 @@ Weights from the case brief ([`docs/brief.md`](docs/brief.md)).
 - There is no eval on real people with written ground truth. The eval uses five fictional personas with recorded search results and model answers, so it measures rules and wiring, not the live model's judgement. Its simulated recruiter is always right.
 - Known eval misses: own GitHub profiles found only by name + city stay unused; a CV-only quote shows as "differs"; an overstated claim is downgraded whole.
 - No ATS API write-back, by design. "Copy for ATS" and `.ics` are copy / download only.
-- Facebook profiles are not opened. No reverse image search. LinkedIn needs a public `/in/` URL.
+- Facebook gives only public page fields (title, intro, follower count), no posts. No reverse image search. LinkedIn needs a public `/in/` URL.
 - OpenAlex and Stack Exchange need API keys, or the shared Worker IP gets rate-limited (429 / throttle).
 - "Saved copy" in Show evidence is the stored text around the quote. The raw page in R2 is not served to the browser.
 
@@ -181,7 +181,7 @@ Weights from the case brief ([`docs/brief.md`](docs/brief.md)).
    - Run, audit and export pages open by their unguessable run UUID without login.
    - A run without a company (started by the API or the extension) can be deleted by any logged-in account.
    - The call-approve route does not check the call's company.
-7. **The budget gates paid collectors only.** Model steps after the cap still run, so recorded run totals reach $0.83 against a $0.50 budget.
+7. **The budget gates paid collectors only.** Model steps after the cap still run, so recorded run totals can go above the budget (runs under the old $0.50 budget reached $0.83).
 
 ## 9. How we built it
 

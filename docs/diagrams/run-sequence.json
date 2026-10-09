@@ -6,7 +6,7 @@
     "locale": "en",
     "viewBox": [
       1380,
-      739
+      767
     ],
     "column_fit": "spread",
     "quality_profile": "showcase",
@@ -65,7 +65,7 @@
     {
       "id": "src",
       "type": "external",
-      "label": "Sources: Apify, REST"
+      "label": "Apify, treg.to, REST"
     },
     {
       "id": "llm",
@@ -91,12 +91,12 @@
     },
     {
       "from": 448,
-      "to": 528,
+      "to": 556,
       "label": "Collection"
     },
     {
-      "from": 532,
-      "to": 668,
+      "from": 560,
+      "to": 696,
       "label": "Verify and brief"
     }
   ],
@@ -130,7 +130,7 @@
       "from": "wf",
       "to": "src",
       "y": 292,
-      "label": "search pool: SERP, social SERP, Instagram and Facebook search"
+      "label": "search pool: SERP, social SERP, Instagram, Facebook, GitHub, treg people"
     },
     {
       "from": "wf",
@@ -142,7 +142,7 @@
       "from": "wf",
       "to": "d1",
       "y": 348,
-      "label": "candidates; pause only if nobody is confirmed",
+      "label": "candidates; pause if nobody is confirmed or GitHub is unsure (tech role)",
       "variant": "dashed"
     },
     {
@@ -169,7 +169,7 @@
       "from": "wf",
       "to": "src",
       "y": 460,
-      "label": "collect pool: 21 collectors, 6 at a time, $0.50 / 18 paid calls"
+      "label": "collect pool: 29 collectors, 6 at a time, $2.00 / 24 paid actor runs"
     },
     {
       "from": "src",
@@ -187,33 +187,39 @@
     },
     {
       "from": "wf",
-      "to": "llm",
+      "to": "src",
       "y": 544,
-      "label": "extract: claims with quotes, confirmed sources only"
+      "label": "read_pages: page text of confirmed pages replaces snippets"
     },
     {
       "from": "wf",
       "to": "llm",
       "y": 572,
-      "label": "verify: quote in excerpt, Sonnet, devil’s advocate"
+      "label": "extract: claims with quotes, confirmed sources only"
     },
     {
       "from": "wf",
       "to": "llm",
       "y": 600,
+      "label": "verify: quote in excerpt, Sonnet, devil’s advocate"
+    },
+    {
+      "from": "wf",
+      "to": "llm",
+      "y": 628,
       "label": "synthesize: brief, Art. 9 filter, enriched profile"
     },
     {
       "from": "wf",
       "to": "d1",
-      "y": 628,
+      "y": 656,
       "label": "brief · claims · gaps · status done",
       "variant": "emphasis"
     },
     {
       "from": "api",
       "to": "ui",
-      "y": 656,
+      "y": 684,
       "label": "GET /state: brief, interview kit, audit",
       "variant": "return"
     }
@@ -222,7 +228,7 @@
     {
       "participant": "wf",
       "from": 202,
-      "to": 634,
+      "to": 662,
       "type": "backend"
     },
     {
@@ -237,9 +243,9 @@
       "dot": "cyan",
       "title": "Lineup pause",
       "items": [
-        "The given profile or CV is the confirmed person",
-        "Another profile merges only after a yes",
-        "Max 3 questions, a given profile never pauses"
+        "Given profile or CV = confirmed; others merge only after a yes",
+        "A technical role also pauses for an unsure GitHub account",
+        "Max 3 questions; no answer in 1 hour: a confirmed run goes on"
       ]
     },
     {
