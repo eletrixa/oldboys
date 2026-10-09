@@ -89,6 +89,21 @@ describe("estimateTranslateUsd", () => {
     expect(translationBatches(brief).length).toBe(9);
     expect(estimateTranslateUsd(brief)).toBeLessThan(TRANSLATE_BUDGET_USD);
   });
+
+  it("estimates at or above the billed cost of the three production briefs (2026-10-09)", () => {
+    // run: English characters over all texts, number of texts, billed USD from the translate ledger row (Sonnet)
+    const measured = [
+      { chars: 12757, texts: 151, billed: 0.248 },
+      { chars: 12792, texts: 135, billed: 0.291 },
+      { chars: 14126, texts: 175, billed: 0.257 },
+    ];
+    for (const m of measured) {
+      const brief = Array.from({ length: m.texts }, (_, i) => ({ id: `s:sec-${String(i)}:summary`, text: "x".repeat(Math.round(m.chars / m.texts)) }));
+      const estimate = estimateTranslateUsd(brief);
+      expect(estimate).toBeGreaterThanOrEqual(m.billed);
+      expect(estimate).toBeLessThan(m.billed * 1.5);
+    }
+  });
 });
 
 const text = (id: string, length: number): { id: string; text: string } => ({ id, text: "x".repeat(length) });
