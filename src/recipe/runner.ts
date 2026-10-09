@@ -14,8 +14,11 @@
  * - `collectWith(collector, ...)` is `collect` for an explicit collector: a first wave, then once `collector.followUp(fetched)`
  *   through the same per-request path (budget, calls, error note, dedup), then `collector.digest` into StepOutcome.digest;
  *   both receive the performed request/payload pairs (`Fetched`), recorded right after the request succeeds
- * - Budget: refuse a paid (actor) request once calls or USD are exhausted (note + empty); free REST fetches are not gated
- * - A wave performs consecutive fetch requests up to 6 at a time and applies results (parse, dedup, `Fetched`) in request order;
+ * - Budget: refuse a paid (actor) request once calls or USD are exhausted (note + empty); free REST fetches are not gated;
+ *   a treg request reserves its `maxCostUsd` against the run USD budget before its chunk starts (dropped with "run budget reached"
+ *   when it would not fit) and never counts as a call; with `ports.callTreg === null` (TREG_TOKEN unset) treg requests are dropped
+ *   with the note "TREG_TOKEN not set"
+ * - A wave performs consecutive fetch and treg requests up to 6 at a time and applies results (parse, dedup, `Fetched`) in request order;
  *   stores of a request's hits run up to 6 at a time with parsed order preserved; actor requests run one by one
  * - One source per page: a hit whose canonical URL (no locale / trailing slash) is already in the run is not stored again;
  *   deduped hits add the note "N hits already in the run" and do not make the step empty (no onEmpty gap). A collector
@@ -83,6 +86,10 @@ async function perform(req: CollectorRequest, ports: Ports): Promise<{ payload: 
     });
     return { payload: r.items, cost_usd: r.cost_usd };
   }
+  if (req.via === "treg") {
+    if (ports.callTreg === null) throw new Error("TREG_TOKEN not set");
+    return ports.callTreg({ endpoint: req.endpoint, method: req.method, params: req.params, maxCostUsd: req.maxCostUsd });
+  }
   return { payload: await ports.fetchJson(req.url, req.init), cost_usd: 0 };
 }
 
@@ -93,7 +100,7 @@ async function collect(step: Step, ctx: StepContext, ports: Ports): Promise<Step
 
 /** `collect` for an explicit collector (test seam): first wave, optional followUp wave, optional digest. */
 export async function collectWith(collector: Collector, step: Step, ctx: StepContext, ports: Ports): Promise<StepOutcome> {
-  const requests = collector.requests(ctx, step);
+  let requests = collector.requests(ctx, step);
   const out = emptyOutcome();
   const fetched = collector.alreadyFetched?.(ctx) ?? [];
   if (requests.length === 0 && fetched.length > 0) {
@@ -106,6 +113,11 @@ export async function collectWith(collector: Collector, step: Step, ctx: StepCon
   if (requests.length === 0) {
     out.notes.push(collector.skipReason?.(ctx) ?? "no confirmed handle or id to look up");
     return out;
+  }
+  if (ports.callTreg === null && requests.some((r) => r.via === "treg")) {
+    out.notes.push("TREG_TOKEN not set");
+    requests = requests.filter((r) => r.via !== "treg");
+    if (requests.length === 0) return out;
   }
   // An enriching collector stores its page beside the earlier search hit of the same URL; others keep one source per URL per run
   const seen = new Set(collector.enriches === true ? [] : ctx.sources.map((s) => canonicalUrl(s.url)));
@@ -176,7 +188,18 @@ export async function collectWith(collector: Collector, step: Step, ctx: StepCon
         continue;
       }
       const nextActor = queue.findIndex((r) => r.via === "actor");
-      const chunk = queue.splice(0, Math.min(FETCH_CONCURRENCY, nextActor === -1 ? queue.length : nextActor));
+      const taken = queue.splice(0, Math.min(FETCH_CONCURRENCY, nextActor === -1 ? queue.length : nextActor));
+      // treg spend is only known after the call: reserve each request's cap against the USD budget up front
+      let reserved = 0;
+      const chunk = taken.filter((r) => {
+        if (r.via !== "treg") return true;
+        if (ctx.spent.usd + out.cost_usd + reserved + r.maxCostUsd > ctx.budget.usd) {
+          out.notes.push("run budget reached");
+          return false;
+        }
+        reserved += r.maxCostUsd;
+        return true;
+      });
       for (const { req, res } of await Promise.all(chunk.map(async (req) => ({ req, res: await attempt(req) })))) await apply(req, res);
     }
   };

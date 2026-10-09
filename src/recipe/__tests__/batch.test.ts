@@ -19,6 +19,10 @@ describe("nextToStart", () => {
     expect([paid("a"), free("b"), { id: "c", kind: "ares", actor: "ares/x" } as Step, { id: "d", kind: "serp", actor: "apify/google-search-scraper" } as Step].map(isPaid)).toEqual([true, false, false, true]);
   });
 
+  it("treats treg collectors as free", () => {
+    expect(isPaid({ id: "t", kind: "actor", actor: "treg/person-enrich" })).toBe(false);
+  });
+
   it("returns null when the window is full", () => {
     expect(nextToStart([free("a")], [free("r1"), free("r2")], 5, 2)).toBeNull();
   });

@@ -22,6 +22,9 @@
  * - `personal_site_crawl` (PERSONAL_SITE_ACTOR, src/recipe/sources/personal-site): crawls a site whose domain is the
  *   subject's name (robertvojacek.cz) found among the hits; its pages are the subject's own writing (merged)
  * - `role_sites_serp`: the matched role template's evidence sites (src/domain/role-catalog) as one `site:` search
+ * - treg second source (plans/016): `treg_person_enrich` (Apollo, other accounts linked from the confirmed LinkedIn profile)
+ *   and `treg_people_search` (Exa, LinkedIn profiles for a CV-only run) run before the lineup; `treg_social_verify` reads
+ *   every confirmed account a second time through an independent provider after it (`enriches`, second Source per page)
  * - `cz_registries` (`rest/cz-registries`): Czech public registries for every position (insolvency, ARES, public register
  *   persons, Police wanted list) plus the chamber the role title names (src/domain/cz-registry); free REST / HTML, no Apify
  *
@@ -63,6 +66,8 @@ export const hiringRecipe: Recipe = {
     },
     { id: "instagram_search", kind: "actor", actor: "apify/instagram-scraper", onEmpty: { gap: "Instagram profile search found no account under the candidate's name" } },
     { id: "facebook_search", kind: "actor", actor: "apify/facebook-search-scraper", onEmpty: { gap: "Facebook people search found no profile under the candidate's name" } },
+    { id: "treg_person_enrich", kind: "actor", actor: "treg/person-enrich", onEmpty: { gap: "people enrichment (Apollo via treg) listed no other public account for the confirmed LinkedIn profile" } },
+    { id: "treg_people_search", kind: "actor", actor: "treg/people-search", onEmpty: { gap: "LinkedIn people search (Exa via treg) found no profile under the candidate's name and anchor" } },
     { id: "github_search", kind: "actor", actor: "rest/github-search", onEmpty: { gap: "GitHub user search found no account under the candidate's name (technical roles only)" } },
     { id: "resolve_lineup", kind: "resolve" },
     { id: "linkedin_profile", kind: "actor", actor: "harvestapi/linkedin-profile-scraper", onEmpty: { gap: "no LinkedIn profile URL known or profile not scrapable" } },
@@ -80,6 +85,7 @@ export const hiringRecipe: Recipe = {
     { id: "tiktok_profile", kind: "actor", actor: "clockworks/tiktok-profile-scraper", onEmpty: { gap: "no public TikTok profile found" } },
     { id: "youtube_channel", kind: "actor", actor: "streamers/youtube-scraper", onEmpty: { gap: "no YouTube videos or channel found" } },
     { id: "facebook_page", kind: "actor", actor: "apify/facebook-pages-scraper", onEmpty: { gap: "no public Facebook page or profile under the candidate's name (Facebook search and web search)" } },
+    { id: "treg_social_verify", kind: "actor", actor: "treg/social-verify", onEmpty: { gap: "no confirmed public account could be read a second time by an independent provider (treg)" } },
     { id: "bluesky_profile", kind: "actor", actor: "rest/bluesky", onEmpty: { gap: "no Bluesky account found" } },
     { id: "personal_site_crawl", kind: "actor", actor: PERSONAL_SITE_ACTOR, onEmpty: { gap: "no personal site found" } },
     { id: "role_sites_serp", kind: "serp", actor: "apify/google-search-scraper", query: '"{subject}" {role_sites}', onEmpty: { gap: "no hits on the role's evidence sites (or the role matched no template)" } },

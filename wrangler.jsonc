@@ -56,7 +56,7 @@
   // Intake (plans/008): INTAKE_PER_HOUR_CAP caps runs started from applications per hour; INTAKE_FORWARD_TO is the
   // verified Email Routing destination (robert@soulfire.cz) that gets a copy of every inbound mail (empty = no copy); INTAKE_FROM_ALLOW is a
   // comma list of sender domains or addresses allowed to start runs by email (empty = any sender).
-  // Non-secret config only. Secrets: `wrangler secret put` / .dev.vars (see .dev.vars.example). Optional secrets: GITHUB_TOKEN, STACKEXCHANGE_KEY, OPENALEX_API_KEY, BRAVE_SEARCH_KEY, INTAKE_TOKEN, STARTUPJOBS_WEBHOOK_TOKEN, STARTUPJOBS_TOKEN.
+  // Non-secret config only. Secrets: `wrangler secret put` / .dev.vars (see .dev.vars.example). Optional secrets: GITHUB_TOKEN, STACKEXCHANGE_KEY, OPENALEX_API_KEY, BRAVE_SEARCH_KEY, TREG_TOKEN (treg.to second-source steps, plans/016), INTAKE_TOKEN, STARTUPJOBS_WEBHOOK_TOKEN, STARTUPJOBS_TOKEN.
   // "0 3 * * *": nightly purge of expired raw sources (src/workflow/purge.ts); "*/15 * * * *": capped intake applications
   // start their runs once the hour has room (retryCappedApplications in src/workflow/intake.ts). src/worker.ts dispatches on the cron string.
   "triggers": { "crons": ["0 3 * * *", "*/15 * * * *"] },

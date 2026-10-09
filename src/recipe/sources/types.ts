@@ -18,6 +18,7 @@
  * - namesakeSkipReason(): the profile steps' skip note when the lineup rejected every account found on the platform
  *   ("only people with the same name"), so the gap says the platform was searched
  * - githubHandles(): accepted github handles (deduped case-insensitively, `@` stripped, max 2), shared by the GitHub collectors
+ * - CollectorRequest: `actor` (Apify run), `fetch` (public REST) or `treg` (one treg.to endpoint call, GET or POST, capped by `maxCostUsd`)
  * - identityFor(): "merged" only for urls under a merged candidate (profile url prefix or handle segment), else "unverified"
  *
  * Design constraints:
@@ -52,7 +53,8 @@ export type StepContext = {
 
 export type CollectorRequest =
   | { via: "actor"; actor: string; input: Record<string, unknown>; maxTotalChargeUsd: number; timeoutSecs: number }
-  | { via: "fetch"; url: string; init?: { method?: string; headers?: Record<string, string>; body?: string } };
+  | { via: "fetch"; url: string; init?: { method?: string; headers?: Record<string, string>; body?: string } }
+  | { via: "treg"; endpoint: string; method: "GET" | "POST"; params: Record<string, string | number | boolean | string[]>; maxCostUsd: number };
 
 export type ParsedSource = {
   url: string;

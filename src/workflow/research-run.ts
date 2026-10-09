@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/workflow/research-run.ts
- * Deps:    cloudflare:workers (WorkflowEntrypoint), bindings DB, SOURCES; src/adapters/*, src/recipe/*
+ * Deps:    cloudflare:workers (WorkflowEntrypoint), bindings DB, SOURCES, optional secret TREG_TOKEN (unset = treg steps are "not searched"); src/adapters/*, src/recipe/*
  * Tested:  runner and seams via src/recipe/__tests__ with fake ports; this class n/a (Workers runtime)
  *
  * Key responsibilities:
@@ -44,6 +44,7 @@ import { makeActorCall } from "@/adapters/apify";
 import { applySourceIdentity, loadContext, loadRoleTemplates, makeLedgerAppend, makeSourceStore, persistOutcome, setCandidateDecisions } from "@/adapters/d1";
 import { makeFetchJson } from "@/adapters/fetch";
 import { makeLlmCall } from "@/adapters/llm";
+import { makeTregCall } from "@/adapters/treg";
 import type { Candidate, GoalId } from "@/domain/claim";
 import { isTechnicalRole } from "@/domain/code-profile";
 import type { Ports } from "@/domain/ports";
@@ -102,6 +103,7 @@ export class ResearchRunWorkflow extends WorkflowEntrypoint<CloudflareEnv, Resea
     return {
       callActor: makeActorCall(env.APIFY_TOKEN),
       fetchJson: makeFetchJson({ githubToken: env.GITHUB_TOKEN, stackExchangeKey: env.STACKEXCHANGE_KEY, openAlexKey: env.OPENALEX_API_KEY }),
+      callTreg: env.TREG_TOKEN === undefined || env.TREG_TOKEN === "" ? null : makeTregCall(env.TREG_TOKEN),
       llm: makeLlmCall(env.ANTHROPIC_API_KEY, { primary: env.LLM_MODEL_PRIMARY, verify: env.LLM_MODEL_VERIFY }),
       appendLedger: makeLedgerAppend(env.DB),
       storeSource: makeSourceStore(env.DB, env.SOURCES),

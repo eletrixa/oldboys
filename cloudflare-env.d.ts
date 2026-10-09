@@ -24,6 +24,7 @@ interface __BaseEnv_CloudflareEnv {
 	ELEVENLABS_API_KEY: string;
 	RUN_TOKEN: string;
 	GITHUB_TOKEN?: string;
+	TREG_TOKEN?: string;
 	STACKEXCHANGE_KEY?: string;
 	OPENALEX_API_KEY?: string;
 	BRAVE_SEARCH_KEY?: string;

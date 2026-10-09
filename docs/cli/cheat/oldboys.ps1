@@ -74,6 +74,8 @@ function global:cheatoldboys {
     Write-Host "ElevenLabs API key (verification calls)" -ForegroundColor White
     Write-Host "    wrangler secret put ELEVENLABS_WEBHOOK_SECRET " -NoNewline -ForegroundColor Green
     Write-Host "HMAC secret for POST /api/webhooks/elevenlabs" -ForegroundColor White
+    Write-Host "    wrangler secret put TREG_TOKEN         " -NoNewline -ForegroundColor Green
+    Write-Host "Optional treg.to token: second-source profile reads (docs/ops/treg.md)" -ForegroundColor White
     Write-Host "    pnpm db:migrate:remote                 " -NoNewline -ForegroundColor Green
     Write-Host "Apply migrations to prod D1 (before pnpm deploy)" -ForegroundColor White
     Write-Host "    pnpm cf-typegen                        " -NoNewline -ForegroundColor Green

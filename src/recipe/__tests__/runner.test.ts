@@ -226,3 +226,47 @@ describe("collectWith waves and digest", () => {
     expect(out.sources.map((s) => s.url)).toEqual(hits);
   });
 });
+
+describe("treg requests", () => {
+  const tregStep: Step = { id: "t", kind: "actor", actor: "treg/fake" };
+  const tregReq = (maxCostUsd: number): { via: "treg"; endpoint: string; method: "GET"; params: Record<string, string>; maxCostUsd: number } => ({
+    via: "treg",
+    endpoint: "fake.endpoint",
+    method: "GET",
+    params: { q: "x" },
+    maxCostUsd,
+  });
+  const collectorOf = (reqs: ReturnType<typeof tregReq>[]): Collector => ({
+    id: "treg/fake",
+    requests: () => reqs,
+    parse: () => [{ url: `https://example.com/${String(Math.random())}`, excerpt: "hit", raw: {} }],
+  });
+
+  it("performs a treg request through callTreg, adds its cost, counts no call and stores the source", async () => {
+    const ports = fakePorts({ callTreg: () => Promise.resolve({ payload: { a: 1 }, cost_usd: 0.004 }) });
+    const out = await collectWith(collectorOf([tregReq(0.01)]), tregStep, baseContext(), ports);
+    expect(ports.calls.treg).toEqual(["fake.endpoint"]);
+    expect(out.cost_usd).toBeCloseTo(0.004);
+    expect(out.calls).toBe(0);
+    expect(out.sources).toHaveLength(1);
+    expect(ports.stored).toHaveLength(1);
+  });
+
+  it("notes TREG_TOKEN not set and makes no call when callTreg is null", async () => {
+    const ports = fakePorts({ callTreg: null });
+    const out = await collectWith(collectorOf([tregReq(0.01)]), tregStep, baseContext(), ports);
+    expect(out.notes).toEqual(["TREG_TOKEN not set"]);
+    expect(out.empty).toBe(true);
+    expect(out.calls).toBe(0);
+    expect(ports.calls.treg).toEqual([]);
+  });
+
+  it("drops a treg request whose cap does not fit the remaining USD budget", async () => {
+    const ports = fakePorts();
+    const ctx = baseContext({ budget: { usd: 0.02, calls: 12 }, spent: { usd: 0.015, calls: 0 } });
+    const out = await collectWith(collectorOf([tregReq(0.01), tregReq(0.004)]), tregStep, ctx, ports);
+    expect(out.notes).toContain("run budget reached");
+    expect(ports.calls.treg).toHaveLength(1);
+    expect(out.sources).toHaveLength(1);
+  });
+});

@@ -1,0 +1,130 @@
+/**
+ * Apollo people enrichment via treg: the other social accounts Apollo links to the confirmed LinkedIn profile.
+ *
+ * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
+ * Module:  src/recipe/sources/treg/person-enrich.ts
+ * Deps:    zod, src/recipe/sources/types (acceptedCandidates, clip, identityFor, platformOf)
+ * Tested:  src/recipe/__tests__/treg-search.test.ts
+ *
+ * Key responsibilities:
+ * - Runs before the lineup, only when a LinkedIn profile is merged (the given profile): one `apollo.people.enrich`
+ *   call with that URL (cost $0.026, capped at $0.03)
+ * - One Source per twitter / github / facebook URL Apollo lists: canonical profile URL, excerpt line 1 `<Name> – <headline>`,
+ *   then a line carrying the confirmed LinkedIn URL literally, so the lineup's cross-link rule corroborates the hit
+ * - Digest: provider, LinkedIn URL, accounts found, employer and title
+ *
+ * Design constraints:
+ * - Pure: no fetch; identity stays "unverified" (a provider's link alone never merges)
+ * - Allow-list parse: no emails, phones, personal_* or demographic fields reach `raw`; reveal_* flags are never sent
+ */
+import { z } from "zod";
+import type { Collector, Fetched, ParsedSource, StepContext } from "@/recipe/sources/types";
+import { acceptedCandidates, clip, identityFor, platformOf } from "@/recipe/sources/types";
+
+const Job = z.object({
+  title: z.string().nullish(),
+  organization_name: z.string().nullish(),
+  start_date: z.string().nullish(),
+  end_date: z.string().nullish(),
+});
+const Person = z.object({
+  name: z.string().nullish(),
+  first_name: z.string().nullish(),
+  last_name: z.string().nullish(),
+  headline: z.string().nullish(),
+  title: z.string().nullish(),
+  linkedin_url: z.string().nullish(),
+  twitter_url: z.string().nullish(),
+  github_url: z.string().nullish(),
+  facebook_url: z.string().nullish(),
+  photo_url: z.string().nullish(),
+  city: z.string().nullish(),
+  country: z.string().nullish(),
+  organization: z.object({ name: z.string().nullish() }).nullish(),
+  employment_history: z.array(Job).nullish(),
+});
+const Payload = z.object({ person: Person.nullish() });
+type PersonRecord = z.infer<typeof Person>;
+
+const text = (v: string | null | undefined): string => v?.trim() ?? "";
+
+/** The first linkedin.com/in/ profile URL of a merged LinkedIn candidate, or null. */
+function confirmedLinkedin(ctx: StepContext): string | null {
+  for (const c of acceptedCandidates(ctx)) {
+    if (c.platform !== "linkedin") continue;
+    const url = c.profile_urls.find((u) => /linkedin\.com\/in\//i.test(u));
+    if (url !== undefined) return url;
+  }
+  return null;
+}
+
+/** https, no www for x.com, no query, no trailing slash; twitter.com becomes x.com/<handle>; null when not a URL. */
+export function normaliseSocialUrl(raw: string): string | null {
+  let u: URL;
+  try {
+    u = new URL(raw.trim());
+  } catch {
+    return null;
+  }
+  const host = u.hostname.toLowerCase().replace(/^www\./, "");
+  const segs = u.pathname.split("/").filter((s) => s !== "");
+  if (segs.length === 0) return null;
+  if (host === "twitter.com" || host === "x.com") return `https://x.com/${segs[0] ?? ""}`;
+  return `https://${u.hostname.toLowerCase()}/${segs.join("/")}`;
+}
+
+function personOf(payload: unknown): PersonRecord | null {
+  const r = Payload.safeParse(payload);
+  return r.success ? (r.data.person ?? null) : null;
+}
+
+function socialUrls(p: PersonRecord): string[] {
+  const urls = [p.twitter_url, p.github_url, p.facebook_url].map((u) => normaliseSocialUrl(text(u))).filter((u): u is string => u !== null);
+  return [...new Set(urls)];
+}
+
+function fullName(p: PersonRecord, ctx: StepContext): string {
+  const joined = `${text(p.first_name)} ${text(p.last_name)}`.trim();
+  return text(p.name) || joined || ctx.subject.trim();
+}
+
+export const tregPersonEnrich: Collector = {
+  id: "treg/person-enrich",
+  requests: (ctx) => {
+    const url = confirmedLinkedin(ctx);
+    if (url === null) return [];
+    return [{ via: "treg", endpoint: "apollo.people.enrich", method: "POST", params: { linkedin_url: url }, maxCostUsd: 0.03 }];
+  },
+  skipReason: () => "no confirmed LinkedIn profile to enrich",
+  parse: (payload, ctx) => {
+    const p = personOf(payload);
+    const linkedin = confirmedLinkedin(ctx);
+    if (p === null || linkedin === null) return [];
+    const org = text(p.organization?.name);
+    const title = text(p.title);
+    const headline = text(p.headline) || (title === "" ? "" : org === "" ? title : `${title} @ ${org}`);
+    const place = [text(p.city), text(p.country)].filter((s) => s !== "").join(", ");
+    const history = (p.employment_history ?? [])
+      .filter((j) => text(j.title) !== "" || text(j.organization_name) !== "")
+      .slice(0, 5)
+      .map((j) => `${text(j.title)} @ ${text(j.organization_name)} (${text(j.start_date)}–${text(j.end_date) || "now"})`);
+    const lines = [
+      headline === "" ? fullName(p, ctx) : `${fullName(p, ctx)} – ${headline}`,
+      `Linked from the confirmed LinkedIn profile ${linkedin} by Apollo people enrichment via treg`,
+      title === "" ? "" : `Current: ${title}${org === "" ? "" : ` at ${org}`}`,
+      place === "" ? "" : `Location: ${place}`,
+      ...history,
+    ].filter((l) => l !== "");
+    return socialUrls(p).map((url): ParsedSource => ({ url, excerpt: clip(lines.join("\n")), raw: p, identity: identityFor(ctx, url) }));
+  },
+  digest: (fetched: readonly Fetched[], ctx) => {
+    for (const { payload } of fetched) {
+      const p = personOf(payload);
+      if (p === null) continue;
+      const found = socialUrls(p).map((url) => ({ platform: platformOf(url), url }));
+      if (found.length === 0) continue;
+      return { provider: "apollo", linkedin_url: confirmedLinkedin(ctx), found, employer: text(p.organization?.name) || null, title: text(p.title) || null };
+    }
+    return null;
+  },
+};

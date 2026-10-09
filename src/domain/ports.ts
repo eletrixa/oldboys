@@ -8,6 +8,7 @@
  *
  * Key responsibilities:
  * - Name the seams between pure recipe logic and the outside world
+ * - Name the treg.to seam: one metered endpoint call, null in Ports when TREG_TOKEN is unset
  * - Name the two verification-call seams (plans/005): place a call, fetch its result
  *
  * Design constraints:
@@ -31,6 +32,14 @@ export type JsonFetch = (
   url: string,
   init?: { method?: string; headers?: Record<string, string>; body?: string },
 ) => Promise<unknown>;
+
+/** One treg.to endpoint call (GET query or POST JSON body) with a per-call cost cap; returns the payload (null = empty body) and the real charge. */
+export type TregCall = (req: {
+  endpoint: string;
+  method: "GET" | "POST";
+  params: Record<string, string | number | boolean | string[]>;
+  maxCostUsd: number;
+}) => Promise<{ payload: unknown; cost_usd: number }>;
 
 /** One structured LLM call at a declared seam, validated against the given schema. */
 export type LlmCall = <T>(input: {
@@ -66,6 +75,8 @@ export type FetchCallResult = (providerConversationId: string) => Promise<CallRe
 export type Ports = {
   callActor: ActorCall;
   fetchJson: JsonFetch;
+  /** null when TREG_TOKEN is unset: treg steps record "not searched". */
+  callTreg: TregCall | null;
   llm: LlmCall;
   appendLedger: LedgerAppend;
   storeSource: SourceStore;

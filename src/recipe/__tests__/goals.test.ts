@@ -21,6 +21,7 @@ import { dueDiligenceRecipe } from "@/recipe/goals/due-diligence";
 import { hiringRecipe } from "@/recipe/goals/hiring";
 import { recipeFor } from "@/recipe/goals";
 import { sectionTitle } from "@/recipe/seams/sections";
+import { isPaid } from "@/recipe/batch";
 import { collectorFor } from "@/recipe/sources";
 
 const ids = (steps: readonly { id: string }[]) => steps.map((s) => s.id);
@@ -99,7 +100,7 @@ describe("goal recipes diverge", () => {
   });
 
   it("hiring stays within the 18 paid actor runs per run (seed scrape included)", () => {
-    const paid = hiringRecipe.steps.filter((s) => s.actor !== undefined && !s.actor.startsWith("rest/") && !s.actor.startsWith("ares/"));
+    const paid = hiringRecipe.steps.filter(isPaid); // treg/* steps are USD-only reads, never an Apify run
     expect(paid.length + 1).toBeLessThanOrEqual(18);
   });
 

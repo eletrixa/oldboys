@@ -13,6 +13,8 @@
  * - Every sentence describes an ACCOUNT (one fact per sentence, numbers and dates), never the person; `ask` is a
  *   neutral interview question or null
  * - `PROFILE_SIGNAL_CAVEATS`: fixed honesty lines shown with the card
+ * - `mergeAccounts`: two readings of one account (Apify scrape, treg second source) become one fact set per
+ *   platform + canonical URL; later non-null fields win, a null never erases an earlier number
  *
  * Design constraints:
  * - Pure, no I/O, no model; thresholds are constants in one table, relative to `now`, conjunctive where the
@@ -25,6 +27,7 @@ import type { CodeProfile } from "./code-profile";
 import { FACT_PLATFORMS, PLATFORM_LABEL, type ProfileFacts } from "./profile-facts";
 import { fmtInt } from "./number-text";
 import { nearDuplicate, tokens } from "./similar";
+import { canonicalUrl } from "./url";
 
 export type SignalId =
   | "young-account"
@@ -110,12 +113,33 @@ function parseCreated(raw: string | null): Created | null {
 
 const ageDays = (c: Created, nowMs: number): number => (nowMs - c.ms) / DAY_MS;
 
+/**
+ * One ProfileFacts per account (platform + canonical URL): a later reading (plans/016 treg second source) fills
+ * fields the earlier one left null and overrides the ones it has; it never wipes a number with a null.
+ */
+export function mergeAccounts(all: readonly ProfileFacts[]): ProfileFacts[] {
+  const accounts = new Map<string, ProfileFacts>();
+  for (const f of all) {
+    const key = `${f.platform}|${canonicalUrl(f.url)}`;
+    const prev = accounts.get(key);
+    if (prev === undefined) {
+      accounts.set(key, f);
+      continue;
+    }
+    const merged = { ...prev };
+    for (const k of Object.keys(f) as (keyof ProfileFacts)[]) {
+      const v = f[k];
+      if (v !== null && k !== "url") (merged as Record<keyof ProfileFacts, ProfileFacts[keyof ProfileFacts]>)[k] = v;
+    }
+    accounts.set(key, merged);
+  }
+  return [...accounts.values()];
+}
+
 export function profileSignals(input: ProfileSignalsInput): ProfileSignals {
   const nowMs = Date.parse(input.now);
   const nowYear = new Date(nowMs).getUTCFullYear();
-  const accounts = new Map<string, ProfileFacts>();
-  for (const f of input.facts) accounts.set(`${f.platform}|${f.url}`, f);
-  const facts = [...accounts.values()];
+  const facts = mergeAccounts(input.facts);
   const linkedin = facts.filter((f) => f.platform === "linkedin");
   const careerYears = linkedin.flatMap((f) => (f.earliest_experience_year === null ? [] : [f.earliest_experience_year]));
   const careerStart = careerYears.length > 0 ? Math.min(...careerYears) : null;

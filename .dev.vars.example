@@ -8,6 +8,8 @@ RUN_TOKEN=
 ELEVENLABS_WEBHOOK_SECRET=
 # Optional: GitHub token (no scopes) lifts api.github.com from the shared anonymous limit to 5000 req/h
 GITHUB_TOKEN=
+# Optional: treg.to per-org token (treg login; https://treg.to); without it the treg/* steps record "not searched: TREG_TOKEN not set"
+TREG_TOKEN=
 # Optional: Stack Exchange app key (stackapps.com) lifts the 300 req/day per IP quota
 STACKEXCHANGE_KEY=
 # Optional: OpenAlex free API key (openalex.org/settings/api); anonymous budget is shared and answers 429 from the Worker IP

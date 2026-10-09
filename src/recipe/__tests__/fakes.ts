@@ -38,14 +38,15 @@ export function baseContext(over: Partial<StepContext> = {}): StepContext {
   };
 }
 
-export type FakePorts = Ports & { calls: { actor: string[]; fetch: string[]; llm: string[] }; stored: unknown[] };
+export type FakePorts = Ports & { calls: { actor: string[]; fetch: string[]; llm: string[]; treg: string[] }; stored: unknown[] };
 
 export function fakePorts(over: Partial<Ports> = {}): FakePorts {
   let n = 0;
-  const calls = { actor: [] as string[], fetch: [] as string[], llm: [] as string[] };
+  const calls = { actor: [] as string[], fetch: [] as string[], llm: [] as string[], treg: [] as string[] };
   const stored: unknown[] = [];
   const callActor: Ports["callActor"] = over.callActor ?? (() => Promise.resolve({ items: [], cost_usd: 0.001 }));
   const fetchJson: Ports["fetchJson"] = over.fetchJson ?? (() => Promise.resolve({}));
+  const callTreg: Ports["callTreg"] = "callTreg" in over ? over.callTreg ?? null : () => Promise.resolve({ payload: null, cost_usd: 0.001 });
   const llm: Ports["llm"] = over.llm ?? (() => Promise.reject(new Error("no fake llm configured")));
   return {
     calls,
@@ -58,6 +59,13 @@ export function fakePorts(over: Partial<Ports> = {}): FakePorts {
       calls.fetch.push(url);
       return fetchJson(url, init);
     },
+    callTreg:
+      callTreg === null
+        ? null
+        : (req) => {
+            calls.treg.push(req.endpoint);
+            return callTreg(req);
+          },
     llm: (input) => {
       calls.llm.push(input.model);
       return llm(input);

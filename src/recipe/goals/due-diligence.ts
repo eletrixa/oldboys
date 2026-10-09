@@ -8,6 +8,8 @@
  *
  * Key responsibilities:
  * - Question list and ordered step list for goal "due-diligence"
+ * - treg second source (plans/016): `treg_company_enrich` reads the anchor domain's company record (The Companies API)
+ *   and `treg_social_verify` reads the confirmed accounts a second time through an independent provider
  *
  * Design constraints:
  * - Must call `ares_vr` (Czech registry statutory bodies); must never call `github_profile`
@@ -33,7 +35,9 @@ export const dueDiligenceRecipe: Recipe = {
     { id: "ares_vr", kind: "ares", actor: "ares/ekonomicke-subjekty-vr", onEmpty: { gap: "no public register record for IČO" } },
     { id: "justice_serp", kind: "serp", actor: "apify/google-search-scraper", query: '"{subject}" insolvence OR likvidace OR exekuce OR soud', onEmpty: { gap: "no insolvency or court hits" } },
     { id: "linkedin_company", kind: "actor", actor: "harvestapi/linkedin-company", onEmpty: { fallbackStep: "serp_org" } },
+    { id: "treg_company_enrich", kind: "actor", actor: "treg/company-enrich", onEmpty: { gap: "no company record for the anchor domain (The Companies API via treg)" } },
     { id: "instagram_profile", kind: "actor", actor: "apify/instagram-profile-scraper", onEmpty: { gap: "no public Instagram profile" } },
+    { id: "treg_social_verify", kind: "actor", actor: "treg/social-verify", onEmpty: { gap: "no confirmed public account could be read a second time by an independent provider (treg)" } },
     { id: "company_site_crawl", kind: "actor", actor: "apify/website-content-crawler", onEmpty: { gap: "no company website found" } },
     { id: "news_serp", kind: "serp", actor: "apify/google-search-scraper", query: '"{subject}" {anchor} news OR zprávy OR recenze', onEmpty: { gap: "no news coverage indexed" } },
     { id: "extract_claims", kind: "extract" },

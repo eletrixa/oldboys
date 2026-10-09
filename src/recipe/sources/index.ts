@@ -8,6 +8,7 @@
  *
  * Key responsibilities:
  * - Register collectors; `collectorFor(actorId)` throws on an unknown id so a typo fails loudly in tests
+ * - `treg/*` collectors (plans/016) are paid reads through the treg.to proxy; the runner performs them via `Ports.callTreg`
  *
  * Design constraints:
  * - Every recipe step with an `actor` must resolve here (asserted in goals.test.ts)
@@ -33,6 +34,10 @@ import { orcid } from "@/recipe/sources/orcid";
 import { personalSite } from "@/recipe/sources/personal-site";
 import { stackexchange } from "@/recipe/sources/stackexchange";
 import { tiktok } from "@/recipe/sources/tiktok";
+import { tregCompanyEnrich } from "@/recipe/sources/treg/company-enrich";
+import { tregPeopleSearch } from "@/recipe/sources/treg/people-search";
+import { tregPersonEnrich } from "@/recipe/sources/treg/person-enrich";
+import { tregSocialVerify } from "@/recipe/sources/treg/social-verify";
 import type { Collector } from "@/recipe/sources/types";
 import { websiteCrawler } from "@/recipe/sources/website";
 import { x } from "@/recipe/sources/x";
@@ -65,6 +70,10 @@ const all: readonly Collector[] = [
   linkedinPosts,
   facebookPage,
   facebookSearch,
+  tregPersonEnrich,
+  tregPeopleSearch,
+  tregSocialVerify,
+  tregCompanyEnrich,
 ];
 
 const byId = new Map(all.map((c) => [c.id, c]));

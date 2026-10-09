@@ -218,6 +218,7 @@ export async function runPersona(p: Persona, mode: EvalMode): Promise<PipelineRe
       problems.push(`no recorded answer for actor ${actor}`);
       return Promise.reject(new Error(`no recorded answer for actor ${actor}`));
     },
+    callTreg: null,
     // Any URL the persona did not record answers like a search that found nothing
     fetchJson: (url) => Promise.resolve(url in p.recorded.fetch ? p.recorded.fetch[url] : { items: [] }),
     llm: recordedLlm(p, () => known, runId, problems),

@@ -11,7 +11,7 @@ import type { Candidate } from "@/domain/claim";
 import { JUDGEMENT } from "@/domain/challenge";
 import type { CodeProfile } from "@/domain/code-profile";
 import { facts as makeFacts, type ProfileFacts } from "@/domain/profile-facts";
-import { LINKEDIN_CREATION_NOTE, PROFILE_SIGNAL_CAVEATS, profileSignals, type ProfileSignalsInput } from "@/domain/profile-signals";
+import { LINKEDIN_CREATION_NOTE, mergeAccounts, PROFILE_SIGNAL_CAVEATS, profileSignals, type ProfileSignalsInput } from "@/domain/profile-signals";
 
 const NOW = "2026-10-09T10:00:00.000Z";
 const BANNED = /cheat|plagiar|steal|mislead|misrepresent|pretend|deceiv|exaggerat|bogus|scam|fake|suspicious|fraud/i;
@@ -236,5 +236,23 @@ describe("profileSignals", () => {
       expect(JUDGEMENT.test(s), s).toBe(false);
       expect(BANNED.test(s), s).toBe(false);
     }
+  });
+});
+
+describe("mergeAccounts (plans/016 second source)", () => {
+  const base = (over: Partial<ProfileFacts>): ProfileFacts => ({
+    platform: "instagram", url: "https://www.instagram.com/jana/", handle: "jana", display_name: null, created_at: null,
+    followers: null, following: null, posts: null, connections: null, verified: null, premium: null, open_to_work: null,
+    bio: null, photo_url: null, earliest_experience_year: null, source_url: "https://api.apify.com/x", ...over,
+  });
+  it("fills nulls from the later reading and never erases an earlier number", () => {
+    const apify = base({ followers: 1200, posts: 78, bio: "runner" });
+    const treg = base({ url: "https://www.instagram.com/jana", followers: 1234, posts: null, verified: false, source_url: "https://treg.to/call/tikhub.instagram.user.profile?username=jana" });
+    const [m, ...rest] = mergeAccounts([apify, treg]);
+    expect(rest).toEqual([]);
+    expect(m).toMatchObject({ followers: 1234, posts: 78, bio: "runner", verified: false, url: "https://www.instagram.com/jana/" });
+  });
+  it("keeps different accounts apart", () => {
+    expect(mergeAccounts([base({}), base({ url: "https://www.instagram.com/other/" })])).toHaveLength(2);
   });
 });
