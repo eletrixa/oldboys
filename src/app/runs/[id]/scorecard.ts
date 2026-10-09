@@ -239,4 +239,4 @@ export function scorecard(state: RunState): Scorecard | null {
 }
 
 export const SCORECARD_NOTE =
-  "The figure is the share of the role's must-haves with public evidence, weighted as the role weights them. It is not a prediction of performance and not a judgement of the person. Lines marked “no effect on fit” are points for the interview, not deductions.";
+  "The figure is the share of the role's must-haves with public evidence, weighted as the role weights them. It is not a prediction of performance and not a judgement of the person. Lines under “no effect on fit” are points for the interview, not deductions.";
