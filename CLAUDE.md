@@ -11,7 +11,7 @@ Hackathon Case 01 (Apify): social media deep research. Input (hiring, plans/006)
 | Planner | Declared recipe per goal; branches only via `onEmpty` and pausable `resolve` (lineup); `replan` only at T+7h |
 | Actors | `apify-client` with 45s timeout and `maxTotalChargeUsd`, never Apify MCP |
 | LLM seams | score, extract, verify, synthesize; `Output.array` / `Output.object` |
-| Verify | deterministic quote-in-excerpt and URL-in-ledger first, second model on residue |
+| Verify | deterministic quote-in-excerpt and URL-in-ledger first, second model on residue, then a devil's advocate call (idea #8) that may only downgrade must-have FACTs; its record lives in the verify ledger row (`ref.challenge`) |
 | Identity | merge / `possibly-same-as` / ask below threshold |
 | Claims | claim + references + rank; contradictions via rank, never delete |
 | Budget | enforced in runner, never by the LLM: $0.50 and 16 paid actor runs per run (free REST fetches and LLM calls count USD only) |

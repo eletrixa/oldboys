@@ -1,10 +1,10 @@
 /**
- * Verify seam: deterministic screens (noise, unknown ids, quote-in-excerpt, hedges, alias contradictions, duplicates), then a second model that may only downgrade.
+ * Verify seam: deterministic screens (noise, unknown ids, quote-in-excerpt, hedges, alias contradictions, duplicates), then a second model and a devil's advocate that may only downgrade.
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/recipe/seams/verify.ts
- * Deps:    zod, src/domain/corroborate (fold, hasWord, orgTokens), src/domain/cv-check, src/domain/similar (nearDuplicate), src/recipe/seams/resolve (confirmedSources)
- * Tested:  src/recipe/__tests__/verify.test.ts, src/recipe/__tests__/cv-consistency.test.ts (CV check)
+ * Deps:    zod, src/domain/challenge (JUDGEMENT), src/domain/corroborate (fold, hasWord, orgTokens), src/domain/cv-check, src/domain/similar (nearDuplicate), src/recipe/seams/challenge, src/recipe/seams/resolve (confirmedSources)
+ * Tested:  src/recipe/__tests__/verify.test.ts, src/recipe/__tests__/cv-consistency.test.ts (CV check), src/recipe/__tests__/challenge.test.ts (devil's advocate)
  *
  * Key responsibilities:
  * - Support ids outside confirmedSources (unknown, unverified, under a rejected profile) are dropped; a claim left
@@ -23,6 +23,9 @@
  *   (src/domain/similar) merge into the better-ranked / higher-confidence one, supports unioned, note
  *   "merged duplicate: <id>"
  * - Residue (FACTs that passed) goes to the verify model; "not supported" downgrades to INFERENCE
+ * - Devil's advocate (idea #8, src/recipe/seams/challenge): must-have / CV-match FACTs that survived everything are
+ *   challenged (fork pre-check, then one more `verify` model call); what does not hold becomes INFERENCE and the
+ *   record (checked, held, per claim ground + why) goes to `out.challenge` for the ledger ref
  *
  * Design constraints:
  * - Downgrade or drop only, never promote; an LLM failure keeps the deterministic result
@@ -31,11 +34,13 @@
 import { z } from "zod";
 import type { Claim, Source } from "@/domain/claim";
 import type { Ports } from "@/domain/ports";
+import { JUDGEMENT } from "@/domain/challenge";
 import { fold, hasWord, orgTokens } from "@/domain/corroborate";
 import { CV_QUESTION_ID, isCvSource } from "@/domain/cv-check";
 import { normalizeText, quoteInNormalized } from "@/domain/quote";
 import { nearDuplicate } from "@/domain/similar";
 import { emptyOutcome } from "@/recipe/runner";
+import { challengeClaims } from "@/recipe/seams/challenge";
 import { confirmedSources } from "@/recipe/seams/resolve";
 import type { StepContext, StepOutcome } from "@/recipe/sources/types";
 
@@ -67,8 +72,6 @@ const NOISE = /unrelated content|misattributed|appears to be unrelated/i;
 /** Hedges: speculation is never a FACT. "may" only in lower case, so the month "May 2019" stays a fact. */
 const HEDGE = /(?<!\p{L})(?:likely|probably|possibly|might|appears to|seems|presumably|pravděpodobně|zřejmě|asi)(?!\p{L})/iu;
 const HEDGE_MAY = /(?<!\p{L})may(?!\p{L})/u;
-/** Words that judge the candidate instead of describing a source: never allowed in a CV check claim. */
-const JUDGEMENT = /(?<!\p{L})(?:fake\w*|lie|lies|lied|lying|liar|inflat\w*|dishonest\w*|suspicious\w*|fraud\w*|fabricat\w*|untrustworthy)(?!\p{L})/iu;
 
 export function hedged(text: string): boolean {
   return HEDGE.test(text) || HEDGE_MAY.test(text);
@@ -249,6 +252,10 @@ export async function verifyClaims(ctx: StepContext, ports: Ports): Promise<Step
       out.notes.push(`verify model failed, deterministic result kept: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
+  // Devil's advocate (idea #8): what survived every check above is challenged once more; what fails goes to the interview
+  out.challenge = await challengeClaims(final, ctx.sources, ports, out);
+  const challenged = new Set(out.challenge.challenges.map((ch) => ch.claim_id));
+  final = final.map((c) => (challenged.has(c.id) ? downgrade(c) : c));
   out.claims = final;
   out.empty = final.length === 0;
   return out;

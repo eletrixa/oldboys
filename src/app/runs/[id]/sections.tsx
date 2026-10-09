@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/runs/[id]/sections.tsx
- * Deps:    react, src/domain/claim (types), src/domain/cv-check (type), ./state, ./evidence, ./claim-evidence, ./cv-check, ../../ui (Radar primitives)
+ * Deps:    react, src/domain/claim (types), src/domain/cv-check (type), ./state, ./evidence, ./challenge, ./claim-evidence, ./cv-check, ../../ui (Radar primitives)
  * Tested:  isShown and the claim evidence rendering in __tests__/sections.test.ts; CV outcome pills in __tests__/cv-check.test.ts; ordering and bands in __tests__/state.test.ts
  *
  * Key responsibilities:
@@ -12,6 +12,7 @@
  *   non-empty, and source links that open the page at the quote (quoteLink; tooltip = "Confirmed: <identity_reason>"
  *   and the retrieval date); also used for the per-question fallback
  * - Under each claim a "Show evidence" disclosure (ClaimEvidence, idea #5): quote, sources, retrieval dates, saved copy
+ * - A claim the devil's advocate challenged (idea #8) gets a muted "Challenged: … — ask at the interview" line
  * - Source-only sections (platforms without claims) list their confirmed source links; empty ones are not rendered
  * - SourceLink: the pasted CV renders as "Candidate's CV (pasted)" with no href (its URL is "cv:<runId>")
  * - "CV vs public record" (idea #14): the explainer line and, per claim, an outcome pill above its text (Matches
@@ -24,6 +25,7 @@
 import type { BriefSection, Claim } from "@/domain/claim";
 import type { CvOutcome } from "@/domain/cv-check";
 import { CARD, Pill, SourceLink, type Tone } from "../../ui";
+import { challengeTag } from "./challenge";
 import { ClaimEvidence } from "./claim-evidence";
 import { CV_EXPLAINER, CV_OUTCOME, cvRows, isCvSection } from "./cv-check";
 import { type Evidence, quoteLink, retrievedLabel } from "./evidence";
@@ -60,6 +62,7 @@ export function ClaimList({ claims, evidence, outcomeOf }: { claims: Claim[]; ev
                 Conflicts with another claim
               </Pill>
             )}
+            <ChallengeNote claim={c} evidence={evidence} />
             {c.supports.map((sid) => {
               const info = evidence.sourceOf.get(sid);
               return info !== undefined ? (
@@ -78,6 +81,13 @@ export function ClaimList({ claims, evidence, outcomeOf }: { claims: Claim[]; ev
       ))}
     </ul>
   );
+}
+
+/** Devil's advocate (idea #8): a muted line saying why the finding moved to the interview. */
+function ChallengeNote({ claim, evidence }: { claim: Claim; evidence: Evidence }): React.JSX.Element | null {
+  const ch = evidence.challengeOf.get(claim.id);
+  if (ch === undefined) return null;
+  return <span className="mt-0.5 block text-xs text-muted">{challengeTag(ch.ground)}</span>;
 }
 
 function CvOutcomePill({ outcome }: { outcome: CvOutcome | undefined }): React.JSX.Element | null {

@@ -4,20 +4,22 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/runs/[id]/evidence.ts
- * Deps:    src/domain/quote (QuoteContext type), ./state (RunState, isCvSource)
+ * Deps:    src/domain/quote (QuoteContext type), src/domain/challenge (type), ./challenge (challengesById), ./state (RunState, isCvSource)
  * Tested:  src/app/runs/[id]/__tests__/evidence.test.ts
  *
  * Key responsibilities:
  * - quoteLink: the source URL with a Text Fragment (#:~:text=) so Chromium browsers open the page at the quote;
  *   long quotes use textStart,textEnd; other browsers simply open the page
  * - retrievedLabel / keptUntilLabel: deterministic UTC dates ("Retrieved 9 Oct 2026, 23:14 UTC")
- * - evidenceOf: RunState -> { sourceOf, contextOf } for SectionList / ClaimList
+ * - evidenceOf: RunState -> { sourceOf, contextOf, challengeOf } for SectionList / ClaimList
  *
  * Design constraints:
  * - Pure and server-safe; the pasted CV ("cv:") and non-http(s) URLs are never rewritten
  * - Dates in UTC with a fixed English month list, so server and client render the same text
  */
+import type { Challenge } from "@/domain/challenge";
 import type { QuoteContext } from "@/domain/quote";
+import { challengesById } from "./challenge";
 import { type RunState, isCvSource } from "./state";
 
 /** What the report knows about one source: where it is, when we read it, until when our copy is kept, why it is theirs. */
@@ -27,14 +29,17 @@ export type Evidence = {
   sourceOf: ReadonlyMap<string, SourceInfo>;
   /** Saved text around a claim's quote in one source; key = contextKey(claim id, source id). */
   contextOf: ReadonlyMap<string, QuoteContext>;
+  /** Devil's advocate challenge per claim id (idea #8); empty for older runs. */
+  challengeOf: ReadonlyMap<string, Challenge>;
 };
 
 export function contextKey(claimId: string, sourceId: string): string {
   return `${claimId}\u0000${sourceId}`;
 }
 
-export function evidenceOf(state: Pick<RunState, "sources" | "quote_contexts">): Evidence {
+export function evidenceOf(state: Pick<RunState, "sources" | "quote_contexts" | "challenges">): Evidence {
   return {
+    challengeOf: challengesById(state),
     sourceOf: new Map(state.sources.map((s) => [s.id, s])),
     contextOf: new Map((state.quote_contexts ?? []).map(({ claim_id, source_id, before, match, after }) => [contextKey(claim_id, source_id), { before, match, after }])),
   };
