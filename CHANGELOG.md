@@ -21,6 +21,7 @@ All notable changes to oldboys are documented here. The format follows [Keep a C
 - Czech public registries put the right person first: a record is attributed to the candidate when its city (the LinkedIn location, Czech declensions and the English city name included) or company (a confirmed employer from the LinkedIn experience) matches, shown with the reason ("city: Brno", "company: Snuggs"); records under the same name elsewhere are counted as namesakes and left out of the list and the brief (status "no record at the candidate's city or employers" with the count and the link to repeat the search); without a known city every record stays listed as "namesake possible" as before; the Police wanted list and chambers without a town column never drop a hit
 
 ### Fixed
+- Role picker placeholder counts the catalog roles it was given instead of a fixed "Search 170 roles"
 - Briefs-in-progress panel: the page ends with space as tall as the panel, so on a phone the "Research N candidates" button (and any last button) scrolls above it instead of staying under it
 - Brief: a profile the model could not build reads "Profile not built: the AI step that writes it failed on this run…" instead of the provider's raw error ("The compiled grammar is too large…"); the raw text stays in the ledger notes
 - Brief gap lists name every step in words ("Czech public registries", "GitHub contributions", "GitHub profile page", "Role evidence sites", with Czech labels) instead of `cz_registries`, `github_deep`, `github_apify`
