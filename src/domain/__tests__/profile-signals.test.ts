@@ -22,7 +22,7 @@ const facts = (platform: string, over: Partial<ProfileFacts> = {}): ProfileFacts
 });
 
 const code = (over: Partial<CodeProfile> = {}): CodeProfile =>
-  ({ handle: "me", profile_url: "https://github.com/me", repos_owned: 10, forks_excluded: 2, source_urls: [], ...over }) as CodeProfile;
+  ({ handle: "me", profile_url: "https://github.com/me", repos_owned: 10, forks_excluded: 2, sources: { user: "https://api.github.com/users/me", repos: "https://api.github.com/users/me/repos", search: "https://api.github.com/search/issues", events: "https://api.github.com/users/me/events/public", orgs: "https://api.github.com/users/me/orgs" }, ...over }) as CodeProfile;
 
 const cand = (over: Partial<Candidate>): Candidate => ({
   id: "c1",
@@ -112,7 +112,7 @@ describe("profileSignals", () => {
   });
 
   it("fires forks-only with the GitHub source and profile", () => {
-    const r = track(run({ codeProfile: code({ repos_owned: 10, forks_excluded: 8, source_urls: ["https://api.github.com/users/me/repos"] }) }));
+    const r = track(run({ codeProfile: code({ repos_owned: 10, forks_excluded: 8 }) }));
     expect(r.signals[0]).toMatchObject({
       id: "forks-only",
       platform: "github",
@@ -123,8 +123,8 @@ describe("profileSignals", () => {
     });
   });
 
-  it("falls back to the profile url as forks-only source and needs at least 5 repositories", () => {
-    expect(run({ codeProfile: code({ repos_owned: 5, forks_excluded: 4 }) }).signals[0]?.source_url).toBe("https://github.com/me");
+  it("links the repos listing as the forks-only source and needs at least 5 repositories", () => {
+    expect(run({ codeProfile: code({ repos_owned: 5, forks_excluded: 4 }) }).signals[0]?.source_url).toBe("https://api.github.com/users/me/repos");
     expect(run({ codeProfile: code({ repos_owned: 4, forks_excluded: 4 }) }).signals).toEqual([]);
   });
 

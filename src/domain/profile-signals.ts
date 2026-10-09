@@ -174,7 +174,7 @@ export function profileSignals(input: ProfileSignalsInput): ProfileSignals {
       platform: "github",
       profile_url: cp.profile_url,
       text: `GitHub: ${fmtInt(cp.forks_excluded)} of ${fmtInt(cp.repos_owned)} public repositories are forks.`,
-      source_url: cp.source_urls[0] ?? cp.profile_url,
+      source_url: cp.sources.repos,
       ask: "Which of your GitHub repositories is your own work?",
     });
   }

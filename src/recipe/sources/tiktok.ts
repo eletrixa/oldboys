@@ -65,7 +65,7 @@ export const tiktok: Collector = {
       return [{ url, excerpt, raw: i, identity: identityFor(ctx, url) }];
     });
   },
-  digest: (payloads, ctx) => factsOf(payloads, ctx),
+  digest: (fetched, ctx) => factsOf(fetched.map((f) => f.payload), ctx),
 };
 
 export function factsOf(payloads: readonly unknown[], ctx: StepContext): ProfileFacts[] | null {

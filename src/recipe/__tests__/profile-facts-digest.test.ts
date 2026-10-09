@@ -13,12 +13,13 @@ import { github } from "@/recipe/sources/github";
 import { instagram } from "@/recipe/sources/instagram";
 import { harvestFacts, linkedinProfile } from "@/recipe/sources/linkedin";
 import { x } from "@/recipe/sources/x";
-import type { StepContext } from "@/recipe/sources/types";
+import type { Fetched, StepContext } from "@/recipe/sources/types";
 import { baseContext } from "@/recipe/__tests__/fakes";
 
 function cand(platform: string, url: string, handle: string, decision: Candidate["decision"] = "merge"): Candidate {
   return { id: `c-${handle}`, run_id: "run-1", name: "Jana", profile_urls: [url], anchor_match: null, score: 0.9, decision, platform, handle, snippet: "", reasons: [] };
 }
+const f = (...payloads: unknown[]): Fetched[] => payloads.map((payload) => ({ req: { via: "fetch", url: "https://example.test/payload" }, payload }));
 const merged = (platform: string, url: string, handle: string): StepContext => baseContext({ candidates: [cand(platform, url, handle)] });
 const namesake = (platform: string, url: string, handle: string): StepContext => baseContext({ candidates: [cand(platform, url, handle, "possibly-same-as")] });
 
@@ -29,45 +30,45 @@ const li = { linkedinUrl: "https://www.linkedin.com/in/jd", firstName: "Jana", l
 
 describe("x digest", () => {
   it("records the merged author once with the expected numbers", () => {
-    const out = x.digest?.([[tweet, { ...tweet, url: "https://x.com/jd/status/2" }]], merged("x", "https://x.com/jd", "jd")) as ProfileFacts[];
+    const out = x.digest?.(f([tweet, { ...tweet, url: "https://x.com/jd/status/2" }]), merged("x", "https://x.com/jd", "jd")) as ProfileFacts[];
     expect(out).toHaveLength(1);
     expect(out[0]).toMatchObject({ platform: "x", url: "https://x.com/jd", handle: "jd", followers: 1200, following: 80, created_at: "Mon Mar 02 2015", verified: true, photo_url: "https://img/x.jpg" });
     expect(ProfileFacts.safeParse(out[0]).success).toBe(true);
   });
   it("records nothing for a possibly-same-as candidate", () => {
-    expect(x.digest?.([[tweet]], namesake("x", "https://x.com/jd", "jd"))).toBeNull();
+    expect(x.digest?.(f([tweet]), namesake("x", "https://x.com/jd", "jd"))).toBeNull();
   });
 });
 
 describe("instagram digest", () => {
   it("records followers, following, posts", () => {
-    const out = instagram.digest?.([[ig]], merged("instagram", "https://www.instagram.com/jd/", "jd")) as ProfileFacts[];
+    const out = instagram.digest?.(f([ig]), merged("instagram", "https://www.instagram.com/jd/", "jd")) as ProfileFacts[];
     expect(out[0]).toMatchObject({ platform: "instagram", followers: 5000, following: 300, posts: 42, verified: false, handle: "jd" });
   });
   it("records nothing for a namesake", () => {
-    expect(instagram.digest?.([[ig]], namesake("instagram", "https://www.instagram.com/jd/", "jd"))).toBeNull();
+    expect(instagram.digest?.(f([ig]), namesake("instagram", "https://www.instagram.com/jd/", "jd"))).toBeNull();
   });
 });
 
 describe("github digest", () => {
   it("reads the user payload and ignores repo lists", () => {
-    const out = github.digest?.([ghUser, [{ html_url: "https://github.com/jd/r", name: "r" }]], merged("github", "https://github.com/jd", "jd")) as ProfileFacts[];
+    const out = github.digest?.(f(ghUser, [{ html_url: "https://github.com/jd/r", name: "r" }]), merged("github", "https://github.com/jd", "jd")) as ProfileFacts[];
     expect(out).toHaveLength(1);
     expect(out[0]).toMatchObject({ platform: "github", handle: "jd", followers: 77, following: 5, created_at: "2015-03-02T10:00:00Z", display_name: "Jana D" });
   });
   it("records nothing for a namesake", () => {
-    expect(github.digest?.([ghUser], namesake("github", "https://github.com/jd", "jd"))).toBeNull();
+    expect(github.digest?.(f(ghUser), namesake("github", "https://github.com/jd", "jd"))).toBeNull();
   });
 });
 
 describe("linkedin digest and harvestFacts", () => {
   it("records the merged profile", () => {
-    const out = linkedinProfile.digest?.([[li]], merged("linkedin", "https://www.linkedin.com/in/jd", "jd")) as ProfileFacts[];
+    const out = linkedinProfile.digest?.(f([li]), merged("linkedin", "https://www.linkedin.com/in/jd", "jd")) as ProfileFacts[];
     expect(out).toHaveLength(1);
     expect(out[0]).toMatchObject({ platform: "linkedin", handle: "jd", display_name: "Jana D", bio: "CTO", connections: 500, followers: 900, verified: true, premium: false, earliest_experience_year: 2009 });
   });
   it("records nothing for a namesake", () => {
-    expect(linkedinProfile.digest?.([[li]], namesake("linkedin", "https://www.linkedin.com/in/jd", "jd"))).toBeNull();
+    expect(linkedinProfile.digest?.(f([li]), namesake("linkedin", "https://www.linkedin.com/in/jd", "jd"))).toBeNull();
   });
   it("reads the earliest year from both date styles and leaves absent flags null", () => {
     const f = harvestFacts({ linkedinUrl: "https://www.linkedin.com/in/a", experience: [{ startDate: "Mar 2012" }, { startDate: "2014-03" }], education: [], skills: [] });

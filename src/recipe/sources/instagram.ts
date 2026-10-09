@@ -74,7 +74,7 @@ export const instagram: Collector = {
       return { url, excerpt: clip(lines.join("\n")), raw: p, identity: identityFor(ctx, url) };
     });
   },
-  digest: (payloads, ctx) => factsOf(payloads, ctx),
+  digest: (fetched, ctx) => factsOf(fetched.map((f) => f.payload), ctx),
 };
 
 export function factsOf(payloads: readonly unknown[], ctx: StepContext): ProfileFacts[] | null {

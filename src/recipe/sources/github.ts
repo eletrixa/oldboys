@@ -99,7 +99,7 @@ export const github: Collector = {
     }
     return [];
   },
-  digest: (payloads, ctx) => factsOf(payloads, ctx),
+  digest: (fetched, ctx) => factsOf(fetched.map((f) => f.payload), ctx),
 };
 
 export function factsOf(payloads: readonly unknown[], ctx: StepContext): ProfileFacts[] | null {

@@ -66,7 +66,7 @@ export const youtube: Collector = {
       identity: merged ? ("merged" as const) : identityFor(ctx, v.url),
     }));
   },
-  digest: (payloads, ctx) => factsOf(payloads, ctx),
+  digest: (fetched, ctx) => factsOf(fetched.map((f) => f.payload), ctx),
 };
 
 export function factsOf(payloads: readonly unknown[], ctx: StepContext): ProfileFacts[] | null {

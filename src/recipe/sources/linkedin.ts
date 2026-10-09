@@ -152,7 +152,7 @@ export const linkedinProfile: Collector = {
   },
   alreadyFetched: fetchedSources,
   parse: (payload, ctx) => harvestProfiles(payload).map((p) => ({ url: p.url, excerpt: p.excerpt, raw: p.raw, identity: identityFor(ctx, p.url) })),
-  digest: (payloads, ctx) => factsOf(payloads, ctx),
+  digest: (fetched, ctx) => factsOf(fetched.map((f) => f.payload), ctx),
 };
 
 export function factsOf(payloads: readonly unknown[], ctx: StepContext): ProfileFacts[] | null {
