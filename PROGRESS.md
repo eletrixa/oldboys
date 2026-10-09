@@ -377,3 +377,9 @@ Each agent appends: what it starts, progress, what it finishes. Newest at the bo
 - Checked: pnpm check green (2246 + 21 tests); opennextjs build and wrangler dry-run; next dev + local D1 + Playwright: /guide at 390 px no overflow and all new sentences shown; /onboarding role field placeholder "Search 183 roles or type your own", "Marketing" gives 12 suggestions; register step 2 (foreign) shows placeholder GB and the example line, no overflow at 390 px. No deploy by hand, no migration. CHANGELOG had no stray `|||||||` markers left on 4ccc60e.
 - Files: src/app/onboarding/page.tsx, src/app/guide/guide-content.ts, src/app/register/company-fields.tsx, CHANGELOG.md, docs/usability/first-brief.md, PROGRESS.md.
 - Open: DIČ / Legal form still shown for a foreign company; landing and footer still say "never scores people" while the brief shows a Fit % and scorecard (JURY known issues 1, 2; team decision).
+
+## 2026-10-09 · read-aloud-voice agent (Minas)
+- Started: 06:12. "Read aloud" spoke in a strange voice: the card set only `lang`, and Chrome on macOS picked a novelty voice (Albert …).
+- Finished: 06:20. New `POST /api/runs/:id/speech` (auth like translate) calls ElevenLabs TTS with the call agent's voice (`cjVigY5qzO86Huf0OWal`, read from agent_5401m4etsexkfy5r4p1bam6zaqnz) and `eleven_flash_v2_5` (en + cs); the card plays the MP3 and falls back to the browser voice with novelty voices skipped.
+- Checked: tsc + eslint clean, 6 new handler tests + summary tests green; live ElevenLabs call from .dev.vars key: en 200 audio/mpeg 1.0 s, cs 200 audio/mpeg 0.4 s. Not checked: the `ELEVENLABS_API_KEY` Worker secret in prod (wrangler not logged in here; live calls use it).
+- Files: src/app/api/runs/[id]/speech/{handler,route}.ts + __tests__, src/app/runs/[id]/summary-card.tsx, CLAUDE.md, docs/ops/call-verification.md, docs/design/radar-ui.md, CHANGELOG.md, PROGRESS.md.

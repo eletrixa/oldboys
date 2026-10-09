@@ -47,7 +47,7 @@ Nothing here is done by code; do it once, in this order. Until step 11, everythi
 ## Secrets and Vars
 
 **Wrangler secrets** (`wrangler secret put <name>`):
-- `ELEVENLABS_API_KEY` — workspace API key
+- `ELEVENLABS_API_KEY` — workspace API key (also used by `POST /api/runs/:id/speech`: "Read aloud" on the 30-second card, text to speech in the agent's voice `cjVigY5qzO86Huf0OWal`, `eleven_flash_v2_5`; if you change the agent's voice, change `SPEECH_VOICE_ID` in `src/app/api/runs/[id]/speech/handler.ts` too)
 - `ELEVENLABS_WEBHOOK_SECRET` — from the webhook above
 - `ANTHROPIC_API_KEY`, `APIFY_TOKEN`, `RUN_TOKEN` — existing
 
