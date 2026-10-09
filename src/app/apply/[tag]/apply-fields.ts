@@ -10,8 +10,10 @@
  * - Limits are the domain's (CV 10 MiB, pasted CV, name, email, LinkedIn URL, message); sentences come from apply-copy
  * - `checkApplyAll`: every problem in a draft, one per field in form order; `checkApply`: the first, or null; the
  *   server runs the same check, the email is validated once here with z.email()
- * - `cvFileProblem` / `cvRefusal`: the instant check when a file is picked, worded around a file that stays attached
+ * - `cvFileProblem` / `cvRefusal`: the instant check when a file is picked, naming the refused file (and the one that
+ *   stays attached, if any)
  * - `isCvFile` (PDF / DOCX / TXT read, older .doc stored only), `formatSize`, `attachedLine`, `replyOutcome`
+ * - The bot traps both sides share: the honeypot field `HONEYPOT` and the fill time `FILL_MS` (`MIN_FILL_MS`)
  *
  * Design constraints:
  * - Pure: no DOM; the client bundle takes zod and the domain constants, never unpdf or mammoth (cv-kind, not cv-text)
@@ -19,6 +21,8 @@
  * - A file wins over pasted text: the text is neither checked nor sent when a file is attached
  * - A .doc is unreadable, so it counts as a CV only beside a LinkedIn profile
  * - Never a rate-limit sentence: every status the candidate cannot fix themselves is "try again"
+ * - Only 201 is "Received": the 200 the handler gives a bot (honeypot filled, sent too fast) is "try again" on our
+ *   page, so a candidate whose browser autofilled the trap is never told an unstored application arrived
  */
 import { z } from "zod";
 import { COVER_LETTER_MAX, CV_MAX, CV_MAX_BYTES, EMAIL_MAX, LINKEDIN_MAX, NAME_MAX } from "@/domain/application";
@@ -27,6 +31,12 @@ import { normalizeLinkedinProfile } from "@/domain/profile-url";
 import { COPY, type ApplyMessages, type Lang } from "./apply-copy";
 
 export const MESSAGE_MAX = COVER_LETTER_MAX;
+
+/** The honeypot: a name no autofill heuristic maps to a person's data (a "website" field gets filled by browsers). */
+export const HONEYPOT = "hp_contact";
+/** Milliseconds from the form's first render to Send, set by the page; missing or under MIN_FILL_MS is a bot. */
+export const FILL_MS = "fill_ms";
+export const MIN_FILL_MS = 3000;
 
 const Email = z.email().max(EMAIL_MAX);
 
@@ -59,18 +69,26 @@ export function isCvFile(file: PickedFile): boolean {
   return fileKind(file) !== null;
 }
 
-/** Type, then size: why the form would refuse a file, or null. */
-export function cvFileProblem(file: PickedFile & Pick<File, "size">): "type" | "size" | null {
+export type FileProblem = "type" | "size" | "empty";
+
+/** Type, then size (over the cap, or 0 bytes): why the form would refuse a file, or null. */
+export function cvFileProblem(file: PickedFile & Pick<File, "size">): FileProblem | null {
   if (!isCvFile(file)) return "type";
   if (file.size > CV_MAX_BYTES) return "size";
+  if (file.size === 0) return "empty";
   return null;
 }
 
-/** The sentence for a refused pick: plain when nothing is attached, naming both files when a good one stays. */
-export function cvRefusal(problem: "type" | "size", picked: string, kept: string | null, lang: Lang = "en"): string {
+/** The sentence for a refused pick: it names the picked file, and the good one that stays attached, if any. */
+export function cvRefusal(problem: FileProblem, picked: string, kept: string | null = null, lang: Lang = "en"): string {
   const m = COPY[lang].messages;
-  if (kept === null) return problem === "type" ? m.cvType : m.cvSize;
-  return problem === "type" ? m.refusedType(picked, kept) : m.refusedSize(picked, kept);
+  const refused = { type: m.refusedType, size: m.refusedSize, empty: m.refusedEmpty }[problem](picked);
+  return kept === null ? refused : `${refused} ${m.stillAttached(kept)}`;
+}
+
+/** Of several dropped files, the first the form takes, else the first (its refusal names why). */
+export function pickDropped<F extends PickedFile & Pick<File, "size">>(files: readonly F[]): F | undefined {
+  return files.find((f) => cvFileProblem(f) === null) ?? files[0];
 }
 
 /** Every problem with the draft, at most one per field, in form order; empty when it can be sent. */
@@ -90,7 +108,7 @@ export function checkApplyAll(draft: ApplyDraft, lang: Lang = "en"): ApplyProble
         ? { field: "linkedinUrl", message: m.linkedinOrCv }
         : null,
     fileProblem !== null
-      ? { field: "cv", message: fileProblem === "type" ? m.cvType : m.cvSize }
+      ? { field: "cv", message: { type: m.cvType, size: m.cvSize, empty: m.cvEmpty }[fileProblem] }
       : draft.cv !== null && fileKind(draft.cv) === "doc" && linkedinUrl === ""
         ? { field: "cv", message: m.cvDoc }
         : null,
@@ -121,18 +139,22 @@ export function attachedLine(sent: { cvName: string | null; pastedCv: boolean; l
   return sent.linkedin ? `${cv}${d.andLinkedin}` : cv;
 }
 
-export type ReplyOutcome = { kind: "done" } | { kind: "error"; message: string; retry: boolean };
+/** A send that did not arrive: the sentence, whether to offer Try again, and `field: "cv"` when it belongs under the CV. */
+export type SendFailure = { message: string; retry: boolean; field?: "cv" };
+export type ReplyOutcome = { kind: "done" } | ({ kind: "error" } & SendFailure);
 
 /**
- * What the candidate sees for a response: the handler's 400 sentences as they are, never any other body. Anything
- * else (5xx, the in-flight 503, a platform 429) asks to try again: the candidate never sees our own limits.
+ * What the candidate sees for a response: 201 is the only "Received"; the handler's 400 sentences as they are (with
+ * `field: "cv"` when the handler names the CV), never any other body. Anything else (5xx, the in-flight 503, a 429,
+ * the 200 a trapped send gets) asks to try again: the candidate never sees our own limits.
  */
 export function replyOutcome(status: number, body: unknown, lang: Lang = "en"): ReplyOutcome {
   const m = COPY[lang].messages;
-  if (status === 200 || status === 201) return { kind: "done" };
+  if (status === 201) return { kind: "done" };
   if (status === 400) {
-    const error = typeof body === "object" && body !== null && "error" in body ? body.error : null;
-    return { kind: "error", message: typeof error === "string" ? error : m.check, retry: false };
+    const reply = typeof body === "object" && body !== null ? (body as { error?: unknown; field?: unknown }) : {};
+    const message = typeof reply.error === "string" ? reply.error : m.check;
+    return reply.field === "cv" ? { kind: "error", message, retry: false, field: "cv" } : { kind: "error", message, retry: false };
   }
   return { kind: "error", message: m.server, retry: true };
 }

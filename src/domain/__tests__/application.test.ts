@@ -134,8 +134,14 @@ describe("safeFilename", () => {
     expect(safeFilename("C:\\Users\\me\\CV.pdf")).toBe("CV.pdf");
   });
 
-  it("replaces odd characters", () => {
-    expect(safeFilename("Životopis Josef (1).pdf")).toBe("ivotopis_Josef_1_.pdf");
+  it("folds diacritics and replaces odd characters", () => {
+    expect(safeFilename("Životopis Josef (1).pdf")).toBe("Zivotopis_Josef_1.pdf");
+  });
+
+  it("keeps the extension of a name with no readable characters", () => {
+    expect(safeFilename("资料.pdf")).toBe("cv.pdf");
+    expect(safeFilename("履歴書.docx")).toBe("cv.docx");
+    expect(safeFilename(".pdf")).toBe("cv.pdf");
   });
 
   it("caps length at 80", () => {

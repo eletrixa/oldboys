@@ -10,7 +10,7 @@ type: research
 
 **Goal:** decide how oldboys detects and reports fake, impersonating or bot-like social profiles around a candidate (and fabrication signals on the confirmed profile) as a sourced red flag in the hiring report.
 
-**Status:** Draft — dossier complete, decision pending Robert's acceptance (flip to `active` when accepted). Implementation in progress on branch `fake` (worktree oldboys-fake).
+**Status:** Draft — dossier complete; v1 implemented and live on main (2026-10-09, commits 90e199d, 4e2d466, e6e7add). Flip to `active` when the decision is accepted; E2 calibration on three demo subjects still to run.
 
 **Trigger:** Robert, 2026-10-09: "fake account detection, that would be a red flag at the profile".
 

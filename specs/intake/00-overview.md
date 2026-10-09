@@ -5,7 +5,7 @@
 ```
 jobs+<tag>@asajj.cz (Gmail fwd, Seznam copy, Jobs.cz / LinkedIn notifications) ─► worker.email() ──┐
 POST /api/intake/form   (Google Forms via Apps Script, bearer INTAKE_TOKEN) ───────────────────────┤
-POST /api/apply         (hosted /apply/<tag> page, same-origin + honeypot) ─────────────────────────┤──► ingestApplication() ──► applications ──► startRun() ──► investigations (via='intake', application_id)
+POST /api/apply         (hosted /apply/<tag> page, same-origin, honeypot, IP cap) ──────────────────┤──► ingestApplication() ──► applications ──► startRun() ──► investigations (via='intake', application_id)
 POST /api/intake/startupjobs/<token> (webhook carries the full application; CV from files[0]) ──┘
 ```
 
@@ -19,7 +19,7 @@ POST /api/intake/startupjobs/<token> (webhook carries the full application; CV f
 ## Rules every unit obeys
 
 1. The funnel is the only place that writes `applications` or starts a run. Connectors parse and call `ingestApplication`; they never touch `investigations`.
-2. Idempotent: the same `(source, externalId)` twice returns the first row (`duplicate: true`), no second run.
+2. Idempotent: the same `(source, externalId)` twice returns the first row (`duplicate: true`), no second run; a repeat with other details keeps the first and leaves a `resent ...` note on the row for the operator.
 3. Spend brake: a run starts only for a known tag; `INTAKE_PER_HOUR_CAP` (var, default 10) counts `investigations.via = 'intake'` in the last hour. The existing `RUNS_PER_HOUR_CAP` (20) still applies on top. A capped application is stored and acknowledged like any other and queued: the `*/15 * * * *` cron (`retryCappedApplications`) starts its run once the hour has room. A candidate never sees a rate-limit message.
 4. The candidate never learns a run exists. The apply page answers "received"; no run id leaves the funnel except to operator routes.
 5. CV bytes go to R2 `intake/<applicationId>/<safe-filename>` only when the tag is known and the sender allowed (an unmatched delivery stores no file); text extracted from PDF (`unpdf`), Word `.docx` (`mammoth`) and plain text; an older `.doc` and anything else is stored and noted, not parsed.

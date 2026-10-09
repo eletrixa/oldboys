@@ -79,6 +79,8 @@ export const IntakeInput = z.object({
   linkedinUrl: z.string().max(LINKEDIN_MAX).optional(),
   cvText: z.string().trim().min(1).max(CV_MAX).optional(),
   cv: CvFile.optional(),
+  /** The connector already read `cv` and found no text: why. The funnel then stores this note and does not parse again. */
+  cvNote: z.string().max(NOTE_MAX).optional(),
   coverLetter: z.string().trim().min(1).max(COVER_LETTER_MAX).optional(),
   note: z.string().max(NOTE_MAX).optional(),
   /** The position whose pool a manual add goes into (plans/010); a manual add without one is `unmatched` (the funnel decides, so callers can still `.omit()` this schema). */
@@ -144,13 +146,17 @@ export function decideStatus(args: {
 
 const FILENAME_MAX = 80;
 
-/** Basename with only [A-Za-z0-9._-], no leading dot or underscore, at most 80 chars (extension kept); "cv.pdf" when empty. */
+/**
+ * Basename with only [A-Za-z0-9._-] (diacritics folded: "Životopis" -> "Zivotopis"), no leading dot or underscore in
+ * the name part, at most 80 chars, extension kept: "资料.pdf" -> "cv.pdf", never an extensionless "pdf"; "cv.pdf" when empty.
+ */
 export function safeFilename(name: string): string {
-  const base = (name.split(/[\\/]/).pop() ?? "").replace(/[^A-Za-z0-9._-]+/g, "_").replace(/^[._]+/, "");
-  if (base === "") return "cv.pdf";
-  if (base.length <= FILENAME_MAX) return base;
-  const ext = /\.[A-Za-z0-9]{1,10}$/.exec(base)?.[0] ?? "";
-  return base.slice(0, FILENAME_MAX - ext.length) + ext;
+  const folded = (name.split(/[\\/]/).pop() ?? "").normalize("NFKD").replace(/[\u0300-\u036f]/g, "");
+  const cleaned = folded.replace(/[^A-Za-z0-9._-]+/g, "_");
+  const ext = /\.[A-Za-z0-9]{1,10}$/.exec(cleaned)?.[0] ?? "";
+  const stem = cleaned.slice(0, cleaned.length - ext.length).replace(/^[._]+/, "").replace(/_+$/, "");
+  if (stem === "") return ext === "" ? "cv.pdf" : `cv${ext}`;
+  return stem.slice(0, FILENAME_MAX - ext.length) + ext;
 }
 
 export function cvR2Key(applicationId: string, filename: string): string {
