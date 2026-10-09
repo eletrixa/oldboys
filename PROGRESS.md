@@ -350,3 +350,4 @@ Each agent appends: what it starts, progress, what it finishes. Newest at the bo
 
 ## 2026-10-09 · positions-org-scope agent (Minas)
 - Started: 05:08. Positions scoped to the organization: migration 0017 (applied by hand) + filtering in list/read/edit/start.
+- Part A pushed: migrations/0017_positions_organization.sql (nullable positions.organization_id + index, backfill from runs of exactly one organization). Not applied remotely; a person runs pnpm db:migrate:remote before the scoping code (branch positions-org-scope) is merged.
