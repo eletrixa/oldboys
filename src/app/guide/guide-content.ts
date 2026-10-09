@@ -55,7 +55,7 @@ export const STEPS: readonly Step[] = [
     id: "step-position",
     title: "Pick the position",
     body: [
-      ["Click ", L("New brief"), ". Under ", L("Position"), ", use ", L("Find a position"), " to pick one your team already has. You can also use ", L("Or create one from the role catalog"), ", or ", L("From a posting"), " and paste the job link."],
+      ["Click ", L("New brief"), " (on a phone: ", L("New"), "). Under ", L("Position"), ", use ", L("Find a position"), " to pick one your team already has. You can also use ", L("Or create one from the role catalog"), ", or ", L("From a posting"), " and paste the job link."],
       ["Each position has must-haves: the few things the job really needs. You can change them with ", L("Edit must-haves on the position"), "."],
     ],
   },
@@ -65,7 +65,7 @@ export const STEPS: readonly Step[] = [
     body: [
       ["Choose ", L("LinkedIn"), ", ", L("Paste CV"), " or ", L("CV file"), ". To add more people for the same position, click ", L("Add another candidate"), "."],
       ["Then click ", { label: "Research 1 candidate", literal: false }, ". The number follows how many people you add."],
-      ["On your first visit, the welcome page has a shorter form: ", L("Role you are hiring for"), ", then the candidate, then ", L("Create brief"), "."],
+      ["On your first visit, the welcome page has a shorter form: type the job title in ", L("Role you are hiring for"), ", add the candidate, then click ", L("Create brief"), ". To pick from the list of positions instead, click ", L("New brief"), " at the top."],
     ],
   },
   {
@@ -84,7 +84,8 @@ export const STEPS: readonly Step[] = [
     body: [
       ["Read ", L("In 30 seconds"), " first, then ", L("Before the interview"), ". These two parts show what matters and what to check."],
       ["Below them are four tabs: ", L("Interview plan"), ", ", L("Evidence"), ", ", L("Phone screen"), " and ", L("Sources and gaps"), "."],
-      ["Click ", L("Show evidence"), " next to a point to see the exact quote and where it comes from."],
+      ["To see which must-haves have public evidence, look at ", L("Role criteria with public evidence"), " in ", L("In 30 seconds"), ". The brief calls must-haves role criteria."],
+      ["To see the exact quote behind a point, open the ", L("Evidence"), " tab and click a topic, for example Writing and publications. Each quote has a link to its source."],
     ],
   },
   {
@@ -102,10 +103,10 @@ export const STEPS: readonly Step[] = [
 export const WORDS: readonly { readonly term: string; readonly text: Rich }[] = [
   { term: "Brief", text: ["One page about one candidate for one position. Every point links to its source."] },
   { term: "Position", text: ["The job you are hiring for. The welcome page calls it the role."] },
-  { term: "Must-have", text: ["Something the position really needs. Radar looks for public evidence of each one."] },
+  { term: "Must-have", text: ["Something the position really needs. Radar looks for public evidence of each one. The brief calls them role criteria."] },
   { term: "Evidence", text: ["A public source that backs up a point, with the exact quote."] },
   { term: "Fact", text: ["A source says it. Radar found the quote in that source."] },
-  { term: "Inference", text: ["Radar's reading of several sources, with no direct quote. Check it yourself."] },
+  { term: "Inference", text: ["Radar's reading of the sources. A quote may be shown with it, but the quote does not say the point directly. Check it yourself."] },
   { term: "Statement", text: ["Something the candidate said, for example in the phone screen. It is not public evidence."] },
   { term: "Strong, Some or Thin evidence", text: ["How much public evidence the research found for a part of the brief. It is about the research, not the person."] },
   { term: "Gap", text: ["Nothing public was found for a point. That is normal for many people and says nothing about them. Ask about it in the interview."] },
@@ -113,7 +114,7 @@ export const WORDS: readonly { readonly term: string; readonly text: Rich }[] = 
   { term: "Possibly the same person", text: ["A profile with the same name that nobody confirmed. Radar never uses it as a fact."] },
   {
     term: "Fit",
-    text: ["The column in ", L("My briefs"), ": the share of the position's must-haves for which the research found public evidence, with a partial match counted as half. It shows what is public, not how good the person is."],
+    text: ["The column in ", L("My briefs"), ": the share of the position's must-haves for which the research found public evidence, with a partial match counted as half. It shows what is public, not how good the person is. The ", L("Evidence"), " tab shows the same share at the top, as a percentage."],
   },
   {
     term: "Confidence in this brief",
