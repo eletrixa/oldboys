@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/runs/[id]/scorecard-text.ts
- * Deps:    ./scorecard (Scorecard, ScoreItem, SCORECARD_NOTE), ./scorecard-card (pointsLabel, checkedLabel), ./state (CV_SOURCE_TEXT, isCvSource)
+ * Deps:    ./scorecard (Scorecard, ScoreItem, labels, hasScorecard, SCORECARD_NOTE), ./state (CV_SOURCE_TEXT, isCvSource)
  * Tested:  src/app/runs/[id]/__tests__/scorecard-text.test.ts
  *
  * Key responsibilities:
@@ -13,21 +13,20 @@
  * Design constraints:
  * - Pure; English only; the caller escapes Markdown and turns URLs into links
  */
-import { SCORECARD_NOTE, type ScoreItem, type Scorecard } from "./scorecard";
-import { checkedLabel, pointsLabel } from "./scorecard-card";
+import { askLine, checkedLabel, hasScorecard, pointsLabel, SCORECARD_NOTE, type ScoreItem, type Scorecard } from "./scorecard";
 import { CV_SOURCE_TEXT, isCvSource } from "./state";
 
 export type ScoreLine = { text: string; urls: string[] };
 
 function itemLine(item: ScoreItem, urlOf: (sourceId: string) => string | null): ScoreLine {
-  const urls = [...item.source_ids.flatMap((id) => { const u = urlOf(id); return u === null ? [] : [u]; }), ...item.urls];
+  const urls = [...item.source_ids.map(urlOf).filter((u): u is string => u !== null), ...item.urls];
   const cv = urls.some(isCvSource) ? ` (${CV_SOURCE_TEXT})` : "";
-  const ask = item.ask === null ? "" : ` ${item.ask.startsWith("Check:") ? item.ask : `Ask: ${item.ask}`}`;
+  const ask = item.ask === null ? "" : ` ${askLine(item.ask)}`;
   return { text: `${item.side === "plus" ? "+" : "−"} ${item.text} [${item.kind}, ${pointsLabel(item.points)}]${cv}${ask}`, urls: urls.filter((u) => !isCvSource(u)) };
 }
 
 export function scorecardLines(card: Scorecard | null, urlOf: (sourceId: string) => string | null): ScoreLine[] {
-  if (card === null || (card.fit === null && card.pluses.length === 0 && card.minuses.length === 0)) return [];
+  if (!hasScorecard(card)) return [];
   const fit = card.fit === null ? "no must-haves to score" : `${String(card.fit)}% (${checkedLabel(card.checked)})`;
   return [
     { text: `Fit, ${card.role ?? "the role"}: ${fit}`, urls: [] },

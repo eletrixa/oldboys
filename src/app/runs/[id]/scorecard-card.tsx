@@ -4,14 +4,15 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/runs/[id]/scorecard-card.tsx
- * Deps:    react, ./scorecard (Scorecard, ScoreItem, SCORECARD_NOTE), ./evidence (Evidence), ./state (host, isCvSource, CV_SOURCE_TEXT), src/domain/url (httpUrl), ../../ui (CARD, Eyebrow, Pill, LINK, SUMMARY_COMPACT, Chevron)
+ * Deps:    react (Fragment), ./scorecard (Scorecard, ScoreItem, labels, hasScorecard, SCORECARD_NOTE), ./evidence (Evidence), ./state (host, isCvSource, CV_SOURCE_TEXT), src/domain/url (httpUrl), ../../ui (CARD, Eyebrow, KEY, LINK, SUMMARY_COMPACT, Chevron)
  * Tested:  src/app/runs/[id]/__tests__/scorecard-card.test.ts
  *
  * Key responsibilities:
  * - ScorecardCard: nothing when the scorecard is null or has neither a figure nor a line; figure "n%" (or "—" with "no
  *   must-haves to score"), bar, "a of b must-haves evidenced, c partly"; Pluses / Minuses columns, VISIBLE lines each and the
  *   rest behind "Show all"; notes; the fixed honesty line
- * - Line: FACT / INFERENCE / CHECK label, "+14 pts" / "−14 pts" / "no effect on fit", sources as "[host]" links (CV as text),
+ * - Line: FACT / INFERENCE / CHECK label, "+14 pts" / "−14 pts" on must-have lines; open points (0) sit under one group label
+ *   (OPEN_POINTS_LABEL) instead of a label per line; sources as "[host]" links (CV as text),
  *   direct URLs for registry and signal lines (http(s) only), "Ask:" or "Check:" line in muted type
  *
  * Design constraints:
@@ -20,9 +21,10 @@
  * - Words rate the evidence, never the candidate
  */
 import { httpUrl } from "@/domain/url";
-import { CARD, Chevron, Eyebrow, LINK, SUMMARY_COMPACT } from "../../ui";
+import { Fragment } from "react";
+import { CARD, Chevron, Eyebrow, KEY, LINK, SUMMARY_COMPACT } from "../../ui";
 import type { Evidence } from "./evidence";
-import { SCORECARD_NOTE, type ScoreItem, type Scorecard } from "./scorecard";
+import { askLine, checkedLabel, hasScorecard, pointsLabel, SCORECARD_NOTE, type ScoreItem, type Scorecard } from "./scorecard";
 import { CV_SOURCE_TEXT, host, isCvSource } from "./state";
 
 const NOTE = "text-xs text-muted";
@@ -30,19 +32,6 @@ const NOTE = "text-xs text-muted";
 export const VISIBLE = 6;
 
 const KIND_CLASS: Record<ScoreItem["kind"], string> = { FACT: "text-ok", INFERENCE: "text-inference", CHECK: "text-muted" };
-
-/** "+14 pts", "−14 pts" or "no effect on fit". */
-export function pointsLabel(points: number): string {
-  if (points === 0) return "no effect on fit";
-  return `${points > 0 ? "+" : "−"}${String(Math.abs(points))} pts`;
-}
-
-/** "3 of 5 must-haves evidenced, 1 partly" / "no must-haves to score". */
-export function checkedLabel(c: Scorecard["checked"]): string {
-  if (c.total === 0) return "no must-haves to score";
-  const partly = c.partial > 0 ? `, ${String(c.partial)} partly` : "";
-  return `${String(c.evidenced)} of ${String(c.total)} must-have${c.total === 1 ? "" : "s"} evidenced${partly}`;
-}
 
 function Bar({ pct }: { pct: number }): React.JSX.Element {
   return (
@@ -66,9 +55,8 @@ function Sources({ item, evidence }: { item: ScoreItem; evidence: Evidence }): R
       {links.map(({ key, url }) => {
         if (isCvSource(url)) return <span key={key}>{CV_SOURCE_TEXT}</span>;
         const safe = httpUrl(url);
-        return safe === null ? (
-          <span key={key}>{host(url)}</span>
-        ) : (
+        // An unparseable or non-http URL (never expected from the run) is dropped rather than printed.
+        return safe === null ? null : (
           <a key={key} href={safe} target="_blank" rel="noreferrer" className={LINK}>
             {host(url)}
           </a>
@@ -78,8 +66,11 @@ function Sources({ item, evidence }: { item: ScoreItem; evidence: Evidence }): R
   );
 }
 
+/** Group label between the must-have lines (points) and the open points (0); the lines under it drop the per-line label. */
+export const OPEN_POINTS_LABEL = "No effect on fit, for the interview";
+
 function Line({ item, evidence }: { item: ScoreItem; evidence: Evidence }): React.JSX.Element {
-  const sign = item.side === "plus" ? "+" : "−";
+  const sign = item.side === "plus" ? "+" : "\u2212";
   return (
     <li className="grid grid-cols-[1.25rem_minmax(0,1fr)] gap-x-2 border-t border-divider py-2.5 first:border-t-0">
       <span aria-hidden="true" className={`font-serif text-lg leading-6 ${item.side === "plus" ? "text-ok" : "text-conflict"}`}>
@@ -89,44 +80,49 @@ function Line({ item, evidence }: { item: ScoreItem; evidence: Evidence }): Reac
         <span className="block text-sm text-ink">{item.text}</span>
         <span className={`mt-1 flex flex-wrap items-baseline gap-x-2 gap-y-0.5 ${NOTE}`}>
           <span className={`font-semibold tracking-wide ${KIND_CLASS[item.kind]}`}>{item.kind}</span>
-          <span className={item.points === 0 ? "" : "font-semibold text-ink tabular-nums"}>{pointsLabel(item.points)}</span>
+          {item.points !== 0 && <span className="font-semibold text-ink tabular-nums">{pointsLabel(item.points)}</span>}
           <Sources item={item} evidence={evidence} />
         </span>
-        {item.ask !== null && <span className={`mt-1 block ${NOTE}`}>{item.ask.startsWith("Check:") ? item.ask : `Ask: ${item.ask}`}</span>}
+        {item.ask !== null && <span className={`mt-1 block ${NOTE}`}>{askLine(item.ask)}</span>}
       </span>
     </li>
+  );
+}
+
+/** Lines in order, with the group label once, before the first open point. */
+function Lines({ items, evidence, labelled }: { items: ScoreItem[]; evidence: Evidence; labelled: boolean }): React.JSX.Element {
+  const first = items.findIndex((i) => i.points === 0);
+  return (
+    <ul>
+      {items.map((i, n) => (
+        <Fragment key={i.id}>
+          {labelled && n === first && <li className={`${KEY} border-t border-divider pt-3 pb-1`}>{OPEN_POINTS_LABEL}</li>}
+          <Line item={i} evidence={evidence} />
+        </Fragment>
+      ))}
+    </ul>
   );
 }
 
 function Column({ title, items, evidence, empty }: { title: string; items: ScoreItem[]; evidence: Evidence; empty: string }): React.JSX.Element {
   const head = items.slice(0, VISIBLE);
   const rest = items.slice(VISIBLE);
+  // The label belongs to the first list that holds an open point; the rest never repeats it.
+  const labelRest = head.every((i) => i.points !== 0);
   return (
     <div className="min-w-0">
       <h3 className="flex items-baseline justify-between border-b-2 border-ink pb-2 font-serif text-lg">
         {title}
         <span className={`${NOTE} tabular-nums`}>{String(items.length)}</span>
       </h3>
-      {items.length === 0 ? (
-        <p className={`mt-3 ${NOTE}`}>{empty}</p>
-      ) : (
-        <ul>
-          {head.map((i) => (
-            <Line key={i.id} item={i} evidence={evidence} />
-          ))}
-        </ul>
-      )}
+      {items.length === 0 ? <p className={`mt-3 ${NOTE}`}>{empty}</p> : <Lines items={head} evidence={evidence} labelled />}
       {rest.length > 0 && (
         <details className="group border-t border-divider pt-2">
           <summary className={SUMMARY_COMPACT}>
             <Chevron />
             <span>{`Show all (${String(rest.length)} more)`}</span>
           </summary>
-          <ul>
-            {rest.map((i) => (
-              <Line key={i.id} item={i} evidence={evidence} />
-            ))}
-          </ul>
+          <Lines items={rest} evidence={evidence} labelled={labelRest} />
         </details>
       )}
     </div>
@@ -134,7 +130,7 @@ function Column({ title, items, evidence, empty }: { title: string; items: Score
 }
 
 export function ScorecardCard({ card, evidence }: { card: Scorecard | null; evidence: Evidence }): React.JSX.Element | null {
-  if (card === null || (card.fit === null && card.pluses.length === 0 && card.minuses.length === 0)) return null;
+  if (!hasScorecard(card)) return null;
   return (
     <section className={`profile ${CARD}`} aria-labelledby="scorecard">
       <Eyebrow>Pluses and minuses, with evidence</Eyebrow>

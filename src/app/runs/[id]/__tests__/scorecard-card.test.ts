@@ -9,7 +9,7 @@
  *
  * Key responsibilities:
  * - Renders nothing for null or an empty card; "—" with "no must-haves to score" when only lines exist
- * - pointsLabel / checkedLabel wording
+ * - pointsLabel / checkedLabel wording; open points sit under OPEN_POINTS_LABEL once, with no per-line label
  *
  * Design constraints:
  * - Static markup only; no hooks in the card
@@ -18,8 +18,8 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { Evidence } from "../evidence";
-import { SCORECARD_NOTE, type ScoreItem, type Scorecard } from "../scorecard";
-import { checkedLabel, pointsLabel, ScorecardCard, VISIBLE } from "../scorecard-card";
+import { checkedLabel, pointsLabel, SCORECARD_NOTE, type ScoreItem, type Scorecard } from "../scorecard";
+import { OPEN_POINTS_LABEL, ScorecardCard, VISIBLE } from "../scorecard-card";
 
 const evidence: Evidence = {
   sourceOf: new Map([
@@ -61,7 +61,8 @@ describe("ScorecardCard", () => {
     expect(out).toContain("2 of 4 must-haves evidenced, 1 partly");
     expect(out).toContain("+38 pts");
     expect(out).toContain("−13 pts");
-    expect(out).toContain("no effect on fit");
+    expect(out).not.toContain(">no effect on fit<");
+    expect(out.split(OPEN_POINTS_LABEL).length).toBe(3);
     expect(out).toContain('href="https://github.com/jnovak"');
     expect(out).toContain('href="https://ares.gov.cz/r/1"');
     expect(out).not.toContain("javascript:");

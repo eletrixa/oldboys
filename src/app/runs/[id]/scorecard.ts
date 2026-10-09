@@ -15,7 +15,8 @@
  *   must-haves, achievements with an independent line, CV matches), minuses (must-haves without evidence, risks, CV
  *   differences, challenged claims, registry records attributed to the candidate, account signals with a question),
  *   notes (steps not searched or empty, AI off)
- * - Points: a must-have's share of 100, signed; every other line carries 0 and the card says "no effect on fit"
+ * - Points: a must-have's share of 100, signed; every other line carries 0 ("no effect on fit")
+ * - Shared wording for the card and the text export: askLine, pointsLabel, checkedLabel, hasScorecard, SCORECARD_NOTE
  *
  * Design constraints:
  * - Pure and deterministic; the only number is evidence coverage of the role profile, never a score of the person:
@@ -30,8 +31,8 @@ import { challengeReason } from "./challenge";
 import { cvRows, isCvSection } from "./cv-check";
 import { hiringFor, type RunState } from "./state";
 
-export type ScoreSide = "plus" | "minus";
-export type ScoreArea = "must-have" | "achievement" | "risk" | "cv" | "challenge" | "registry" | "signal";
+type ScoreSide = "plus" | "minus";
+type ScoreArea = "must-have" | "achievement" | "risk" | "cv" | "challenge" | "registry" | "signal";
 /** FACT / INFERENCE as the evidence says; CHECK = a script result (CV comparison, registry search, account facts). */
 export type ScoreKind = "FACT" | "INFERENCE" | "CHECK";
 
@@ -61,10 +62,10 @@ export type Scorecard = {
   notes: string[];
 };
 
-export const STATUS_SCORE: Record<"has" | "partial" | "none", number> = { has: 1, partial: 0.5, none: 0 };
+const STATUS_SCORE: Record<"has" | "partial" | "none", number> = { has: 1, partial: 0.5, none: 0 };
 
 /** Σ(weight × status) ÷ Σ(weight), as a whole %; the stored fit_pct when no capability carries weight. */
-export function fitPct(f: PositionFit): number {
+export function fitPct(f: Pick<PositionFit, "traits" | "fit_pct">): number {
   const total = f.traits.reduce((s, t) => s + t.weight, 0);
   if (total === 0) return f.fit_pct;
   return Math.round((f.traits.reduce((s, t) => s + t.weight * STATUS_SCORE[t.status], 0) / total) * 100);
@@ -94,9 +95,32 @@ const supporting = (lines: readonly ProfileEvidence[]): ProfileEvidence[] => lin
 const kindOf = (lines: readonly ProfileEvidence[]): ScoreKind => (lines.some((e) => e.kind === "FACT") ? "FACT" : "INFERENCE");
 const sourceIds = (lines: readonly ProfileEvidence[]): string[] => [...new Set(lines.map((e) => e.source_id))];
 
-/** Whole points of 100 the trait carries; the unrounded share is what the fit figure sums. */
+/** Whole points of 100 a weight carries (a partial passes half its weight); the unrounded shares are what the fit figure sums. */
 function share(weight: number, total: number): number {
   return total === 0 ? 0 : Math.round((weight / total) * 100);
+}
+
+/** "Ask: …" unless the producer already wrote a "Check: …" line. */
+export function askLine(ask: string): string {
+  return ask.startsWith("Check:") ? ask : `Ask: ${ask}`;
+}
+
+/** "+14 pts", "−14 pts" or "no effect on fit". */
+export function pointsLabel(points: number): string {
+  if (points === 0) return "no effect on fit";
+  return `${points > 0 ? "+" : "\u2212"}${String(Math.abs(points))} pts`;
+}
+
+/** "3 of 5 must-haves evidenced, 1 partly" / "no must-haves to score". */
+export function checkedLabel(c: Scorecard["checked"]): string {
+  if (c.total === 0) return "no must-haves to score";
+  const partly = c.partial > 0 ? `, ${String(c.partial)} partly` : "";
+  return `${String(c.evidenced)} of ${String(c.total)} must-have${c.total === 1 ? "" : "s"} evidenced${partly}`;
+}
+
+/** A card worth showing: a figure or at least one line. */
+export function hasScorecard(card: Scorecard | null): card is Scorecard {
+  return card !== null && (card.fit !== null || card.pluses.length > 0 || card.minuses.length > 0);
 }
 
 function mustHaveItems(traits: readonly Trait[], fromCoverage: boolean): ScoreItem[] {
@@ -107,7 +131,7 @@ function mustHaveItems(traits: readonly Trait[], fromCoverage: boolean): ScoreIt
     const base = { id: `mh-${String(i)}`, area: "must-have" as const, source_ids: sourceIds(lines), urls: [], ask: null };
     const kind: ScoreKind = fromCoverage ? "CHECK" : t.evidence.length === 0 ? "INFERENCE" : kindOf(lines);
     if (t.status === "has") return { ...base, side: "plus", text: t.trait, kind, points: pts };
-    if (t.status === "partial") return { ...base, side: "plus", text: `${t.trait}, partly evidenced`, kind, points: Math.round(pts / 2) };
+    if (t.status === "partial") return { ...base, side: "plus", text: `${t.trait}, partly evidenced`, kind, points: share(t.weight / 2, total) };
     return { ...base, side: "minus", text: `${t.trait}: no public evidence`, kind: "CHECK", points: -pts };
   });
 }
@@ -220,11 +244,8 @@ export function scorecard(state: RunState): Scorecard | null {
     ...registryItems(state),
     ...signalItems(state),
   ];
-  const total = traits.reduce((s, t) => s + t.weight, 0);
-  const fitValue =
-    traits.length === 0 ? null : fit !== null ? fitPct(fit) : Math.round((traits.reduce((s, t) => s + t.weight * STATUS_SCORE[t.status], 0) / Math.max(1, total)) * 100);
   return {
-    fit: fitValue,
+    fit: traits.length === 0 ? null : fitPct(fit ?? { traits, fit_pct: 0 }),
     role: fit?.role ?? role,
     checked: {
       evidenced: traits.filter((t) => t.status === "has").length,
@@ -239,4 +260,4 @@ export function scorecard(state: RunState): Scorecard | null {
 }
 
 export const SCORECARD_NOTE =
-  "The figure is the share of the role's must-haves with public evidence, weighted as the role weights them. It is not a prediction of performance and not a judgement of the person. Lines marked “no effect on fit” are points for the interview, not deductions.";
+  "The figure is the share of the role's must-haves with public evidence, weighted as the role weights them. It is not a prediction of performance and not a judgement of the person. Lines under “no effect on fit” are points for the interview, not deductions.";
