@@ -241,7 +241,7 @@ export function interviewKit(state: RunState, generatedAt: string, calls: readon
     ...section(t.searched(namesakeOnly(empty)), empty.map((g, i) => gapItem(g, tid.searchedEmpty(i), kit))),
     ...section(t.notSearched, brief.not_searched.map((g, i) => gapItem(g, tid.notSearched(i), kit))),
     ...section(d.kit.codeProfile, codeProfileLines(state.code_profile ?? null).map((l) => (l.startsWith("- ") ? l : `- ${escapeMd(l)}`))),
-    ...section(d.kit.profileSignals, signalLines(state.profile_signals ?? null).map((l) => `- ${escapeMd(l)}`)),
+    ...section(d.kit.profileSignals, signalLines(state.profile_signals ?? null).map((l) => (l.href === null ? `- ${escapeMd(l.text)}` : `- ${escapeMd(l.text)} <${l.href}>`))),
     ...section(d.kit.phone, phoneLines(calls, kit)),
   ];
   const lines = [...header(state, brief, generatedAt, kit), ...body, "---", "", footer.join("  \n")];

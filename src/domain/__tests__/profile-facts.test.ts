@@ -45,6 +45,7 @@ describe("readProfileFacts", () => {
 describe("experienceYear", () => {
   it("picks the earliest year from mixed strings, numbers and null", () => {
     expect(experienceYear(["Head @ Acme (2015–2019)", 2011, null, undefined, "Intern 2013", {}])).toBe(2011);
+    expect(experienceYear([{ text: "Mar 2021" }, { year: 2009 }, { text: "" }])).toBe(2009);
   });
 
   it("returns null when nothing parses", () => {
