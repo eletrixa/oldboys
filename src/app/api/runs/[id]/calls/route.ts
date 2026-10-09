@@ -10,7 +10,8 @@
  * - POST: session or bearer auth (requireSessionOrBearer); `{language?, questions?}`. With `questions` (operator-edited) the brief is built from
  *   them (an invalid one is 400 `{error, index}`); without them from the stored brief, gaps and weak claims.
  *   Inserts a calls row in status 'drafted' (nothing is dialed here)
- * - GET: `{provider, max, used, proposal, calls}`; the proposal is computed, never stored
+ * - GET: `{provider, max, used, proposal, calls}`; the proposal is computed, never stored; `used` counts the calls
+ *   that use a RUN_CALL_MAX slot (countsTowardCallLimit), the same rule the approve route enforces
  *
  * Design constraints:
  * - No runtime = "edge"; no phone number is accepted or stored at this stage
@@ -23,7 +24,7 @@ import { z } from "zod";
 import { parseJsonBody } from "@/app/api/_lib/body";
 import { requireSessionOrBearer } from "@/app/api/_lib/session-or-bearer";
 import type { RunCalls } from "@/app/runs/[id]/call-panel";
-import type { CallBrief } from "@/domain/call";
+import { type CallBrief, countsTowardCallLimit } from "@/domain/call";
 import { briefFromHrQuestions, buildCallBrief } from "@/domain/call-brief";
 import { selectCallProvider } from "@/workflow/calls";
 import { type CallInputs, loadCallInputs, loadRunCallViews } from "./load";
@@ -52,7 +53,7 @@ export async function GET(
   const body: RunCalls = {
     provider: selectCallProvider(env),
     max: Number(env.RUN_CALL_MAX) || 2,
-    used: calls.filter((c) => c.status !== "drafted").length,
+    used: calls.filter((c) => countsTowardCallLimit(c.status)).length,
     proposal: proposal(inputs),
     calls,
   };

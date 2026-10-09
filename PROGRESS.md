@@ -213,3 +213,10 @@ Each agent appends: what it starts, progress, what it finishes. Newest at the bo
 
 ## 2026-10-09 · eval-set agent (Minas)
 - Started: 02:13. Idea #12 "Small eval set and a simulated label": synthetic personas with written ground truth run through the real pipeline seams, one score with the list of misses, a Validation page with what is real / simulated / incomplete, and simulated labels where they are missing.
+
+## 2026-10-09 · phone-verify polish (Minas)
+- Started/finished: three fixes after the live test calls to Robert (2026-10-09).
+- Opener: `first_message` is now "Hi, this is an AI assistant calling for the hiring team about the <role> role. This call is recorded. Do you have three minutes for a few questions?" (no role: "about a role you applied for"; due-diligence equally short), at most `FIRST_MESSAGE_MAX` = 220 chars (spoken role = title part before the first comma, names cut at 60). The skip/stop sentence moved into `agent_prompt` step 1, said right after consent and before the identity question.
+- Wording: new pure `src/domain/call-wording.ts` (+ test): must-have third-person questions to second person ("Does the candidate have …?" → "Do you have …?", name / first name / "the candidate's" → you/your, falls back when a he/she/they is left), else "Can you tell me (a bit more) about your <title>?"; to-verify items "We read that <first clause, name → you/your>. Is that right?" or the whole text + "Is that right?" when it cannot be cut cleanly. No "We could not find public evidence" / "Our research suggests:" text; `why` unchanged. Due-diligence keeps names.
+- Limit: `COUNTED_CALL_STATUSES` (`dialing`, `done`, `refused`), `countsTowardCallLimit` and `COUNTED_CALL_SQL` in `src/domain/call.ts`; used by the approve route's atomic conditional UPDATE and by `used` in GET /api/runs/:id/calls. `failed` and `no_answer` no longer use a slot.
+- Docs: docs/ops/call-verification.md, plans/005-call-verification/06-elevenlabs-contract.md, CHANGELOG.md. pnpm check green, opennextjs build + wrangler dry-run bundle. No deploy, no secrets, no D1 change.

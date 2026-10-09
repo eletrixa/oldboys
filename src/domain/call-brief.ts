@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/domain/call-brief.ts
- * Deps:    src/domain/art9, src/domain/scrub (types from call.ts, claim.ts and recipe/step.ts)
+ * Deps:    src/domain/art9, src/domain/scrub, src/domain/call-wording (types from call.ts, claim.ts and recipe/step.ts)
  * Tested:  src/domain/__tests__/call-brief.test.ts
  *
  * Key responsibilities:
@@ -11,8 +11,11 @@
  *   then the brief's "to verify" items, then gaps, then low-confidence or contradicted claims
  * - A gap keyed by a recipe question asks that question; a gap keyed by a source step asks about its reason only
  *   when it is a plain "no … found" statement (scrubbed); tool failures, budget, fallback and namesake gaps are skipped
- * - composeCallBrief: the script (display), the agent's first message (AI disclosure, purpose, recording,
- *   skip/stop, consent question) and the agent system prompt (steps, questions in order, rules)
+ * - Proposed questions are spoken second-person English (call-wording.ts): "Do you have …?", "Can you tell me
+ *   about your <title>?", "We read that you … Is that right?"; the `why` chip tells HR what evidence is missing
+ * - composeCallBrief: the script (display), the agent's short first message (AI disclosure, who for and why,
+ *   recording, consent question; at most FIRST_MESSAGE_MAX characters) and the agent system prompt (steps with the
+ *   skip/stop sentence right after consent, questions in order, rules)
  * - briefFromHrQuestions: the operator's edited questions, validated (1–5, 5–300 chars, no Art. 9 topic)
  * - Drop anything that touches a GDPR Art. 9 topic before it can be asked
  *
@@ -25,6 +28,7 @@
  */
 import { containsArt9Topic } from "@/domain/art9";
 import type { CallBrief, CallQuestion } from "@/domain/call";
+import { mustHaveQuestion, subjectRefs, toVerifyQuestion } from "@/domain/call-wording";
 import type { Brief, Claim, Gap, GoalId } from "@/domain/claim";
 import { scrubReason } from "@/domain/scrub";
 import type { Question } from "@/recipe/step";
@@ -32,14 +36,18 @@ import type { Question } from "@/recipe/step";
 export const MAX_CALL_QUESTIONS = 5;
 export const HR_QUESTION_MIN = 5;
 export const HR_QUESTION_MAX = 300;
+/** Callees talk over a long opener: the first message stays one breath (about 9 seconds of speech). */
+export const FIRST_MESSAGE_MAX = 220;
+/** Names spoken in the first message are cut to this many characters so the opener stays under FIRST_MESSAGE_MAX. */
+const SPOKEN_NAME_MAX = 60;
 
 const PURPOSE: Record<GoalId, string> = {
   hiring: "I would like to confirm a few facts for a hiring check.",
   "due-diligence": "I would like to confirm a few public facts for a due-diligence check.",
 };
 
-const CONSENT_CLOSE =
-  "it takes about three minutes. This call is recorded and transcribed, and you can skip any question or stop at any time. Is now a good time, and do you agree to continue?";
+const CONSENT_CLOSE = "This call is recorded. Do you have three minutes for a few questions?";
+const SKIP_STOP = "You can skip any question or stop at any time.";
 
 /** One line, at most `max` characters: operator-entered text must not add structure to the agent prompt. */
 function oneLine(text: string, max: number): string {
@@ -63,12 +71,21 @@ function identityQuestion(goal: GoalId, subject: string): string {
     : `Am I speaking with someone authorised to confirm public facts about ${subject}?`;
 }
 
+/** A name as spoken in the opener: the role's title part ("Senior Data Engineer, Prague" -> "Senior Data Engineer"), cut at a word. */
+function spoken(name: string): string {
+  const head = (name.split(",")[0] ?? name).trim() || name;
+  if (head.length <= SPOKEN_NAME_MAX) return head;
+  const cut = head.slice(0, SPOKEN_NAME_MAX);
+  const space = cut.lastIndexOf(" ");
+  return (space > 0 ? cut.slice(0, space) : cut).trim();
+}
+
 function firstMessage(goal: GoalId, subject: string, role: string | null): string {
   if (goal === "due-diligence") {
-    return `Hello, this is an automated AI assistant calling on behalf of a researcher. I would like to confirm a few public facts about ${subject} for a due-diligence check, ${CONSENT_CLOSE}`;
+    return `Hi, this is an AI assistant calling for a researcher to confirm a few public facts about ${spoken(subject).replace(/\.+$/, "")}. ${CONSENT_CLOSE}`;
   }
-  const team = role === null ? "a hiring team" : `the hiring team for the ${role} role`;
-  return `Hello, this is an automated AI assistant calling on behalf of ${team}. I would like to check a few points from our research of public information about you, ${CONSENT_CLOSE}`;
+  const about = role === null ? "a role you applied for" : `the ${spoken(role)} role`;
+  return `Hi, this is an AI assistant calling for the hiring team about ${about}. ${CONSENT_CLOSE}`;
 }
 
 function agentPrompt(goal: GoalId, subject: string, role: string | null, identity: string, questions: readonly CallQuestion[]): string {
@@ -82,10 +99,11 @@ function agentPrompt(goal: GoalId, subject: string, role: string | null, identit
     "",
     "# Context",
     `You are calling ${callee}. Public information was researched and a few points need to be checked directly.`,
-    "Your first message already said that you are an AI, why you call, that the call is recorded and transcribed, and asked for consent.",
+    "Your first message already said that you are an AI, who you call for and why, that the call is recorded, and asked for consent (whether they have three minutes).",
     "",
     "# Steps",
     "1. Wait for the answer to your first message. If the callee does not agree, or says it is a bad time, thank them, say goodbye and use the end_call tool.",
+    `   If they agree, say in one short sentence: "${SKIP_STOP}" Then go on with step 2.`,
     `2. Ask: "${identity}" If the answer is no, apologise, share nothing about the research, say goodbye and use the end_call tool.`,
     "3. Ask the questions below one at a time, in this order, and wait for each answer. Ask at most one short follow-up per question when the answer is unclear. If the callee does not want to answer, say \"No problem\" and move to the next question.",
     `4. After the last question, thank them, say that ${reviewer} will review the answers, say goodbye and use the end_call tool.`,
@@ -136,16 +154,17 @@ export function composeCallBrief(input: {
 }
 
 /** Must-haves (ids "mh-") the brief found no or only partial evidence for, none first. */
-function coverageQuestions(brief: Brief, questions: readonly Question[]): CallQuestion[] {
-  const titleOf = new Map(questions.map((q) => [q.id, q.title ?? q.text]));
+function coverageQuestions(brief: Brief, questions: readonly Question[], refs: readonly string[]): CallQuestion[] {
+  const byId = new Map(questions.map((q) => [q.id, q]));
   const pick = (coverage: "none" | "partial"): CallQuestion[] =>
     brief.per_question.flatMap((p) => {
-      const title = titleOf.get(p.question_id);
-      if (!p.question_id.startsWith("mh-") || p.coverage !== coverage || title === undefined) return [];
-      const name = oneLine(title, 200).replace(/[.?!]+$/, "");
-      return coverage === "none"
-        ? [{ question_id: p.question_id, text: `Can you tell me about your experience with ${name}? We could not find public evidence for it.`, expected: "", why: `No public evidence: ${name}` }]
-        : [{ question_id: p.question_id, text: `Can you tell me more about ${name}? We found only partial public evidence.`, expected: "", why: `Partial evidence: ${name}` }];
+      const q = byId.get(p.question_id);
+      if (!p.question_id.startsWith("mh-") || p.coverage !== coverage || q === undefined) return [];
+      const title = q.title === undefined ? undefined : oneLine(q.title, 200);
+      const name = oneLine(q.title ?? q.text, 200).replace(/[.?!]+$/, "");
+      const text = mustHaveQuestion({ title, text: oneLine(q.text, 250), coverage, refs });
+      const why = coverage === "none" ? `No public evidence: ${name}` : `Partial evidence: ${name}`;
+      return [{ question_id: p.question_id, text, expected: "", why }];
     });
   return [...pick("none"), ...pick("partial")];
 }
@@ -156,10 +175,10 @@ function plainNothingFound(reason: string): boolean {
   return r.startsWith("no ") && !r.includes("request failed") && !r.includes("not searched") && !r.includes("fallback");
 }
 
-function toVerifyQuestions(brief: Brief): CallQuestion[] {
+function toVerifyQuestions(brief: Brief, refs: readonly string[]): CallQuestion[] {
   return brief.to_verify.map((text, i) => {
     const point = oneLine(text, 250).replace(/[.?!]+$/, "");
-    return { question_id: `tv-${String(i + 1)}`, text: `Our research suggests: ${point}. Is that correct?`, expected: point, why: "To verify" };
+    return { question_id: `tv-${String(i + 1)}`, text: toVerifyQuestion(point, refs), expected: point, why: "To verify" };
   });
 }
 
@@ -183,8 +202,10 @@ export function buildCallBrief(input: {
   };
 
   if (input.brief) {
-    coverageQuestions(input.brief, input.questions).forEach(add);
-    toVerifyQuestions(input.brief).forEach(add);
+    // Only a hiring call speaks to the subject; a due-diligence callee is someone else, so names stay names.
+    const refs = input.goal === "hiring" ? subjectRefs(input.subject) : [];
+    coverageQuestions(input.brief, input.questions, refs).forEach(add);
+    toVerifyQuestions(input.brief, refs).forEach(add);
   }
   const byId = new Map(input.questions.map((q) => [q.id, q]));
   for (const gap of input.gaps) {

@@ -8,6 +8,7 @@
  *
  * Key responsibilities:
  * - Session or bearer auth (requireSessionOrBearer); validate consent; one conditional UPDATE enforces drafted-only and RUN_CALL_MAX
+ *   (only calls in COUNTED_CALL_SQL use a slot: a call that never connected does not)
  * - placeCall exactly once here (never from a retried Workflow step); a mock result is persisted at once
  *
  * Design constraints:
@@ -20,7 +21,7 @@ import { z } from "zod";
 import { makeLedgerAppend } from "@/adapters/d1";
 import { parseJsonBody } from "@/app/api/_lib/body";
 import { requireSessionOrBearer } from "@/app/api/_lib/session-or-bearer";
-import { type CallStatus, maskNumber } from "@/domain/call";
+import { COUNTED_CALL_SQL, type CallStatus, maskNumber } from "@/domain/call";
 import { applyCallEvent, callResultR2Key, failCall, loadCall, providerFor, recordCallResult } from "@/workflow/calls";
 
 const ApproveBody = z.object({
@@ -58,7 +59,7 @@ export async function POST(
       approved_at: new Date().toISOString(),
     },
     {
-      sql: " AND (SELECT COUNT(*) FROM calls WHERE run_id = ? AND status NOT IN ('drafted', 'skipped')) < ?",
+      sql: ` AND (SELECT COUNT(*) FROM calls WHERE run_id = ? AND ${COUNTED_CALL_SQL}) < ?`,
       binds: [call.run_id, callMax],
     },
   ).run();
