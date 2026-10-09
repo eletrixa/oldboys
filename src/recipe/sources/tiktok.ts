@@ -18,7 +18,7 @@ import { z } from "zod";
 import { clipBio, count, facts } from "@/domain/profile-facts";
 import { dedupeBy, digestOf, parsedAll } from "@/recipe/sources/facts";
 import type { Collector } from "@/recipe/sources/types";
-import { clip, identityFor } from "@/recipe/sources/types";
+import { clip, identityFor, namesakeSkipReason } from "@/recipe/sources/types";
 
 const Item = z.object({
   webVideoUrl: z.string().nullish(),
@@ -48,10 +48,11 @@ export const tiktok: Collector = {
         actor: "clockworks/tiktok-profile-scraper",
         input: { profiles: [handle], resultsPerPage: 5 },
         maxTotalChargeUsd: 0.02,
-        timeoutSecs: 45,
+        timeoutSecs: 90,
       },
     ];
   },
+  skipReason: (ctx) => namesakeSkipReason(ctx, "tiktok", "TikTok", "no confirmed handle or id to look up"),
   parse: (payload, ctx) => {
     const items = z.array(Item).safeParse(payload);
     if (!items.success) return [];

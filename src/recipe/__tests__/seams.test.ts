@@ -515,12 +515,6 @@ describe("review 005: unconfirmed gaps, one question per platform, location note
     expect(brief?.evidence.map((e) => e.excerpt)).toEqual([`${text} ...Read more`, "Other post"]);
   });
 
-  it("adds a Facebook line under not_searched only when a Facebook candidate exists", async () => {
-    const fb = { ...cand("f", "https://www.facebook.com/josefburyan", "possibly-same-as", "facebook", "josefburyan"), snippet: "Josef Buryan | Facebook" };
-    const brief = (await synthesizeBrief(baseContext({ candidates: [fb] }), fakePorts())).brief;
-    expect(brief?.not_searched).toContainEqual({ source: "facebook_profile", reason: "profile not opened (login needed); only search snippets were read" });
-    expect((await synthesizeBrief(baseContext(), fakePorts())).brief?.not_searched).toEqual([]);
-  });
 });
 
 describe("Buryan fact check: extract prompt, interview questions, to_verify, also_found", () => {

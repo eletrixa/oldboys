@@ -54,8 +54,14 @@ describe("instagram", () => {
       ],
     });
     expect(instagram.requests(ctx, step)).toEqual([
-      { via: "actor", actor: "apify/instagram-profile-scraper", input: { usernames: ["jana", "jana2"] }, maxTotalChargeUsd: 0.03, timeoutSecs: 45 },
+      { via: "actor", actor: "apify/instagram-profile-scraper", input: { usernames: ["jana", "jana2"] }, maxTotalChargeUsd: 0.03, timeoutSecs: 90 },
     ]);
+  });
+  it("names the rejected namesakes in its skip note, so the gap says Instagram was searched", () => {
+    const rejected = baseContext({ candidates: [cand({ platform: "instagram", handle: "jana", decision: "rejected" }), cand({ id: "c2", platform: "instagram", handle: "jana2", decision: "rejected" })] });
+    expect(instagram.skipReason?.(rejected)).toBe("2 accounts with the same name on Instagram, none confirmed as the candidate by the identity lineup; not scraped");
+    expect(instagram.skipReason?.(baseContext())).toMatch(/found none\)$/);
+    expect(x.skipReason?.(baseContext({ candidates: [cand({ platform: "x", handle: "jd", decision: "rejected" })] }))).toMatch(/^1 account with the same name on X/);
   });
   it("parses a profile with 6 captions", () => {
     const out = instagram.parse(
@@ -79,7 +85,7 @@ describe("x", () => {
     expect(x.requests(baseContext(), step)).toEqual([]);
     const r = x.requests(baseContext({ candidates: [cand({ platform: "x", handle: "@jana" })] }), step);
     expect(r).toEqual([
-      { via: "actor", actor: "apidojo/tweet-scraper", input: { twitterHandles: ["jana"], maxItems: 20, sort: "Latest" }, maxTotalChargeUsd: 0.03, timeoutSecs: 45 },
+      { via: "actor", actor: "apidojo/tweet-scraper", input: { twitterHandles: ["jana"], maxItems: 20, sort: "Latest" }, maxTotalChargeUsd: 0.03, timeoutSecs: 90 },
     ]);
   });
   it("parses an author profile plus tweets", () => {

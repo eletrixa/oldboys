@@ -12,7 +12,11 @@
  *   optional `alreadyFetched()` names sources an earlier step (seed) fetched, so the step does not scrape them twice;
  *   optional `followUp()` computes a second wave of requests from the first wave's request/payload pairs (`Fetched`); optional
  *   `digest()` summarises every pair into StepOutcome.digest; optional `skipReason()` names why `requests()` is empty when the
- *   default "no confirmed handle or id to look up" would be untrue (e.g. role not technical)
+ *   default "no confirmed handle or id to look up" would be untrue (e.g. role not technical); `enriches: true` marks a
+ *   profile scraper whose page is richer than the search hit of the same URL, so the runner stores it even when a search
+ *   step already listed that URL (otherwise one source per URL per run)
+ * - namesakeSkipReason(): the profile steps' skip note when the lineup rejected every account found on the platform
+ *   ("only people with the same name"), so the gap says the platform was searched
  * - githubHandles(): accepted github handles (deduped case-insensitively, `@` stripped, max 2), shared by the GitHub collectors
  * - identityFor(): "merged" only for urls under a merged candidate (profile url prefix or handle segment), else "unverified"
  *
@@ -75,7 +79,19 @@ export type Collector = {
   followUp?: (ctx: StepContext, step: Step, fetched: readonly Fetched[]) => CollectorRequest[];
   /** Pure summary of all request/payload pairs of both waves (null = nothing). */
   digest?: (fetched: readonly Fetched[], ctx: StepContext) => unknown;
+  /** The scraped page is richer than a search hit of the same URL: store it even when an earlier step listed the URL. */
+  enriches?: true;
 };
+
+/**
+ * Skip note of a profile step with nothing usable: when the lineup rejected accounts found under the name on this
+ * platform, say so (they were searched, judged other people, not scraped); otherwise `fallback`.
+ */
+export function namesakeSkipReason(ctx: StepContext, platform: string, label: string, fallback: string): string {
+  const rejected = ctx.candidates.filter((c) => c.platform === platform && c.decision === "rejected").length;
+  if (rejected === 0) return fallback;
+  return `${String(rejected)} ${rejected === 1 ? "account" : "accounts"} with the same name on ${label}, none confirmed as the candidate by the identity lineup; not scraped`;
+}
 
 export type StepOutcome = {
   sources: Source[];

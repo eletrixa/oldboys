@@ -39,8 +39,6 @@ const REASON_CS: Record<string, string> = {
   "run budget reached": "vyčerpal se rozpočet průzkumu",
   "no reason recorded": "důvod nebyl zaznamenán",
   "already fetched at seed": "profil jsme načetli už na začátku průzkumu",
-  "profile not opened (login needed); only search snippets were read":
-    "profil jsme neotevřeli (vyžaduje přihlášení); četli jsme jen úryvky z výsledků vyhledávání",
 };
 
 const REFUSED = /^the service refused our request \(HTTP (\d{3})\)$/;

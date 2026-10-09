@@ -40,7 +40,7 @@ const cand = (over: Partial<Candidate>): Candidate => ({
 describe("instagramSearch", () => {
   it("searches the name unless an Instagram account is already confirmed", () => {
     expect(instagramSearch.requests(baseContext(), step)).toEqual([
-      { via: "actor", actor: "apify/instagram-scraper", input: { search: "Jana Dvořáková", searchType: "profile", searchLimit: 5, resultsLimit: 1 }, maxTotalChargeUsd: 0.03, timeoutSecs: 90 },
+      { via: "actor", actor: "apify/instagram-scraper", input: { search: "Jana Dvořáková", searchType: "profile", searchLimit: 5, resultsLimit: 1 }, maxTotalChargeUsd: 0.03, timeoutSecs: 150 },
     ]);
     expect(instagramSearch.requests(baseContext({ candidates: [cand({ decision: "possibly-same-as" })] }), step)).toHaveLength(1);
     expect(instagramSearch.requests(baseContext({ candidates: [cand({})] }), step)).toEqual([]);

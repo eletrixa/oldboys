@@ -8,7 +8,8 @@
  *
  * Key responsibilities:
  * - Request profiles for candidates with platform instagram and a handle (merge or possibly-same-as: the given profile,
- *   the CV, the Instagram name search or the web search found them); one Source per profile, six latest captions
+ *   the CV, the Instagram name search or the web search found them); one Source per profile, six latest captions;
+ *   `enriches`: the profile is stored even though the name search already listed its URL (that hit has no bio or posts)
  * - `digest`: merged profiles' ProfileFacts (followers, following, posts, verified, bio, photo)
  *
  * Design constraints:
@@ -20,7 +21,7 @@ import type { Candidate } from "@/domain/claim";
 import { clipBio, count, facts } from "@/domain/profile-facts";
 import { digestOf, parsedAll } from "@/recipe/sources/facts";
 import type { Collector } from "@/recipe/sources/types";
-import { clip, identityFor } from "@/recipe/sources/types";
+import { clip, identityFor, namesakeSkipReason } from "@/recipe/sources/types";
 
 const Profile = z.object({
   username: z.string(),
@@ -51,11 +52,12 @@ export const instagram: Collector = {
         actor: "apify/instagram-profile-scraper",
         input: { usernames: [...new Set(usernames)] },
         maxTotalChargeUsd: 0.03,
-        timeoutSecs: 45,
+        timeoutSecs: 90,
       },
     ];
   },
-  skipReason: () => "no Instagram account under the candidate's name (Instagram profile search and web search found none, or the lineup rejected them)",
+  enriches: true,
+  skipReason: (ctx) => namesakeSkipReason(ctx, "instagram", "Instagram", "no Instagram account under the candidate's name (Instagram profile search and web search found none)"),
   parse: (payload, ctx) => {
     const items = z.array(Profile).safeParse(payload);
     if (!items.success) return [];
