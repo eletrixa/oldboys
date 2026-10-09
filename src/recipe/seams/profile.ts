@@ -1,5 +1,5 @@
 /**
- * Profile seam: two LLM calls turn confirmed sources and kept claims into the enriched hiring profile.
+ * Profile seam: three LLM calls turn confirmed sources and kept claims into the enriched hiring profile.
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/recipe/seams/profile.ts
@@ -8,8 +8,8 @@
  *
  * Key responsibilities:
  * - Call 1: achievements, risks, history (jobs, education, projects, volunteering with dates)
- * - Call 2: personality (DISC, MBTI, working-style read from the person's own writing), status per must-have of the run's
- *   role, up to 10 interview questions with priority 1-3 and the risk they close
+ * - Call 2: status per must-have of the run's role, up to 10 interview questions with priority 1-3 and the risk they close
+ * - Call 3: personality (DISC, MBTI, Big Five, working-style read) via personality.ts `personalityCall`, same prompt head
  * - Evidence gate: a line survives only when its quote is inside the excerpt of the source it names (as verify.ts);
  *   an item left with no evidence is dropped; dropped lines are counted per section for the report footer
  * - Strength per surviving line set in code (evidence-strength.ts): weak = the person wrote it, strong = independent
@@ -27,7 +27,7 @@
 import { z } from "zod";
 import { type Claim, HistoryEntry, type Profile, ProfileEvidence, ProfileItem, type Source, TraitFit } from "@/domain/claim";
 import type { Ports } from "@/domain/ports";
-import { gatePersonality, PERSONALITY_PROMPT, PersonalityReading, TOO_LITTLE_WRITING } from "@/recipe/seams/personality";
+import { personalityCall, TOO_LITTLE_WRITING } from "@/recipe/seams/personality";
 import { type FitTrait, fitTraits, topQuestions } from "@/recipe/seams/profile-fit";
 import { rankSources, sourceBlock, validEvidence } from "@/recipe/seams/profile-gate";
 import { confirmedSources } from "@/recipe/seams/resolve";
@@ -41,7 +41,6 @@ const ASK_QUESTIONS = 10;
 
 const Facts = z.object({ achievements: z.array(ProfileItem), risks: z.array(ProfileItem), history: z.array(HistoryEntry) });
 const Reading = z.object({
-  personality: PersonalityReading,
   // Status per trait id from the fixed list; role, labels and weights stay in code
   position_fit: z.object({ rationale: z.string().default(""), traits: z.array(z.object({ id: z.string(), status: TraitFit.shape.status, evidence: z.array(ProfileEvidence) })) }).nullable().default(null),
   // Priority loose here, clamped to 1..3 in code: an out-of-range value must not fail the whole parse
@@ -85,7 +84,7 @@ function fitCard(
   return { role, traits: rows, fit_pct: fitPct(rows), rationale: fit?.rationale ?? "" };
 }
 
-/** Two model calls over `sources`; cost and calls go into `out` once a call validates. Throws on model or parse failure. */
+/** Three model calls over `sources` (facts; fit and questions; personality); cost and calls go into `out` once a call validates. Throws on model or parse failure. */
 async function attempt(ctx: StepContext, kept: readonly Claim[], sources: readonly Source[], ports: Ports, out: { calls: number; cost_usd: number }): Promise<Profile> {
   const head = `Subject: ${ctx.subject}\nAnchor: ${ctx.anchor}\nRole: ${ctx.role ?? "(none)"}\n\nResearch questions:\n${ctx.questions.map((q) => `- ${q.id}: ${q.text}`).join("\n")}\n\n${sourceBlock(sources, kept)}`;
   const merged = acceptedCandidates(ctx);
@@ -118,7 +117,6 @@ async function attempt(ctx: StepContext, kept: readonly Claim[], sources: readon
     model: "primary",
     system: [
       "Read the candidate for a hiring manager.",
-      PERSONALITY_PROMPT,
       traits.length === 0
         ? "`position_fit`: null."
         : `\`position_fit\`: for the role ${ctx.role ?? ""} only, one row per listed must-have id, nothing else: \`id\` copied exactly, status has/partial/none and evidence, plus a one-sentence \`rationale\`. Do not compute a percentage.`,
@@ -132,7 +130,10 @@ async function attempt(ctx: StepContext, kept: readonly Claim[], sources: readon
   out.calls += 1;
   out.cost_usd += b.cost_usd;
 
-  const personality = gatePersonality(reading.personality, sources, merged);
+  const c = await personalityCall(head, sources, merged, ports.llm);
+  out.calls += 1;
+  out.cost_usd += c.cost_usd;
+  const personality = c.personality;
   const position_fit = traits.length === 0 || ctx.role === null ? [] : [fitCard(ctx.role, traits, reading.position_fit, (e) => gate(e, "fit"))];
   const riskEvidence = (q: { risk: string | null }): number => risks[Number(/^R(\d+)$/i.exec(q.risk?.trim() ?? "")?.[1] ?? 0) - 1]?.evidence.length ?? 0;
   const questions = topQuestions(
@@ -156,7 +157,7 @@ async function attempt(ctx: StepContext, kept: readonly Claim[], sources: readon
 
 const message = (error: unknown): string => (error instanceof Error ? error.message : String(error)).slice(0, 120);
 
-/** Two model calls, retried once over the 40 highest-value sources (truncated output); cost and calls go into `out`. Never throws. */
+/** Three model calls, retried once over the 40 highest-value sources (truncated output); cost and calls go into `out`. Never throws. */
 export async function buildProfile(
   ctx: StepContext,
   kept: readonly Claim[],

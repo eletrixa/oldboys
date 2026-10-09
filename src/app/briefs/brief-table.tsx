@@ -25,7 +25,7 @@ function Fit({ status, fitPct }: { status: string; fitPct: number | null }): Rea
 
 export function BriefTable({ group }: { group: BriefGroup }): React.JSX.Element {
   return (
-    <div role="region" aria-label={group.title} tabIndex={0} className="overflow-x-auto">
+    <div role="region" aria-label={group.title} tabIndex={0} className="relative overflow-x-auto">
       <table className="w-full text-left text-sm">
         <caption className="sr-only">Briefs for {group.title}, newest first</caption>
         <thead className="text-xs font-semibold tracking-[0.08em] text-muted uppercase">

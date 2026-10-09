@@ -17,12 +17,14 @@
  * - Prompt forbids score/rating/trust/culture-fit wording and Art. 9 content
  *
  * Design constraints:
- * - Fake llm port only; prompts are routed by their system text
+ * - Fake llm port only; prompts are routed by their system text to three answers: facts, reading (fit and questions),
+ *   personality (model-shaped, normalised and gated by the personality seam)
  */
 import { describe, expect, it } from "vitest";
 import { Brief, type Claim, type Source } from "@/domain/claim";
 import { quoteInExcerpt } from "@/domain/quote";
 import type { Ports } from "@/domain/ports";
+import { PERSONALITY_SYSTEM } from "@/recipe/seams/personality";
 import { buildProfile, fitPct, rankSources, TOO_LITTLE_WRITING, validEvidence } from "@/recipe/seams/profile";
 import { fitTraits, topQuestions } from "@/recipe/seams/profile-fit";
 import { synthesizeBrief } from "@/recipe/seams/synthesize";
@@ -42,8 +44,10 @@ const facts = {
   risks: [],
   history: [{ organization: "Kiwi.com", title: "Data Engineer", from: "2021", to: null, kind: "job", summary: "", evidence: [good] }],
 };
-const reading = (personalityEvidence: unknown[]) => ({
-  personality: { disc: { type: "C", confidence: "low" }, mbti: null, read: "Prefers small, frequent changes.", evidence: personalityEvidence },
+/** Model-side evidence line: `direction` and `note` are required nullable keys in ModelPersonality. */
+const mline = (l: object) => ({ direction: null, note: null, ...l });
+const reading = (personalityEvidence: object[]) => ({
+  personality: { disc: { type: "C", confidence: "low" }, mbti: null, big5: null, read: "Prefers small, frequent changes.", traits: [], evidence: personalityEvidence.map(mline) },
   position_fit: { rationale: "r", traits: [
     { id: "mh-pipelines", status: "has", evidence: [good] },
     { id: "mh-leadership", status: "has", evidence: [fake] },
@@ -53,9 +57,13 @@ const reading = (personalityEvidence: unknown[]) => ({
   questions: [{ text: "Which pipelines did you own?", closes: "scope of work", priority: 3 }],
 });
 
-const llmFor = (r: unknown): Ports["llm"] =>
+/** Routes the three profile calls by system prefix: facts, reading (fit and questions), personality. */
+const llmFor = (r: { personality: unknown }, f: unknown = facts): Ports["llm"] =>
   ((input: { system: string }) =>
-    Promise.resolve({ value: input.system.startsWith("Build the candidate") ? facts : input.system.startsWith("Read the candidate") ? r : [], cost_usd: 0.01 })) as Ports["llm"];
+    Promise.resolve({
+      value: input.system.startsWith("Build the candidate") ? f : input.system.startsWith(PERSONALITY_SYSTEM) ? { personality: r.personality } : input.system.startsWith("Read the candidate") ? r : [],
+      cost_usd: 0.01,
+    })) as Ports["llm"];
 const mustHaves = [
   { id: "current-role", text: "Current role and employer?" },
   { id: "mh-pipelines", title: "Production data pipelines", text: "Built production pipelines?" },
@@ -81,8 +89,8 @@ describe("profile seam", () => {
     expect(p.achievements[0]?.evidence).toHaveLength(1);
     expect(p.history).toHaveLength(1);
     expect(p.degraded).toBeNull();
-    expect(o.calls).toBe(2);
-    expect(o.cost_usd).toBeCloseTo(0.02);
+    expect(o.calls).toBe(3);
+    expect(o.cost_usd).toBeCloseTo(0.03);
   });
 
   it("computes fit_pct: has 1, partial 0.5, unsupported trait counts as none", async () => {
@@ -137,9 +145,7 @@ describe("profile seam", () => {
     const asked = { ...r, questions: [
       q("gap a", 3), q("gap b", 3), q("thin", 1, "R1"), q("overlap", 1, "r2"), q("self", 2), q("odd", 7), q("gap c", 3), q("low", -4, "R9"),
     ] };
-    const llm = ((input: { system: string }) =>
-      Promise.resolve({ value: input.system.startsWith("Build the candidate") ? risky : asked, cost_usd: 0 })) as Ports["llm"];
-    const p = await buildProfile(ctx, [fact], fakePorts({ llm }), out());
+    const p = await buildProfile(ctx, [fact], fakePorts({ llm: llmFor(asked, risky) }), out());
     // R3 has no surviving evidence and is dropped, so the model sees R1 and R2 only; "low" clamps to 1 with no risk evidence
     expect(p.risks.map((x) => x.text)).toEqual(["Thin claim", "Overlapping jobs"]);
     expect(p.questions.map((x) => x.text)).toEqual(["overlap", "thin", "low", "self", "gap a"]);
@@ -159,20 +165,22 @@ describe("profile seam", () => {
     const repost: Source = { ...src, id: "s4", actor: "harvestapi/linkedin-profile-posts", url: "https://www.linkedin.com/posts/other-1", excerpt: "Culture eats strategy.", identity: "unverified" };
     const c = baseContext({ sources: [src, post, press, repost], claims: [fact] });
     const line = (quote: string, source_id: string) => ({ quote, source_id, kind: "INFERENCE", supports: true });
-    const ownLines = [line("Shipping beats planning", "s2"), line("Small PRs, every day", "s2"), line("We rebuilt the pipeline in a week", "s3")];
-    const others = [line("She is a calm leader", "s3"), line("Culture eats strategy", "s4")];
+    const [own1, own2, own3] = [line("Shipping beats planning", "s2"), line("Small PRs, every day", "s2"), line("We rebuilt the pipeline in a week", "s3")];
+    const [calm, culture] = [line("She is a calm leader", "s3"), line("Culture eats strategy", "s4")];
+    const ownLines = [own1, own2, own3];
+    const others = [calm, culture];
     const rich = await buildProfile(c, [fact], fakePorts({ llm: llmFor(reading([...ownLines, ...others])) }), out());
     expect(rich.personality.evidence.map((e) => e.quote)).toEqual(ownLines.map((e) => e.quote));
     expect(rich.personality.evidence_dropped).toBe(2);
     expect(rich.personality.disc).toEqual({ type: "C", confidence: "low" });
     expect(rich.personality.read).not.toContain(TOO_LITTLE_WRITING);
-    const thin = await buildProfile(c, [fact], fakePorts({ llm: llmFor(reading([ownLines[0], ...others, fake])) }), out());
+    const thin = await buildProfile(c, [fact], fakePorts({ llm: llmFor(reading([own1, ...others, fake])) }), out());
     expect(thin.personality.evidence).toHaveLength(1);
     expect(thin.personality.evidence_dropped).toBe(3);
     expect([thin.personality.disc, thin.personality.mbti]).toEqual([null, null]);
     expect(thin.personality.read).toBe(`Prefers small, frequent changes. ${TOO_LITTLE_WRITING}`);
     const r = reading([]);
-    const withTraits = { ...r, personality: { ...r.personality, traits: [{ text: "Ships in small steps", evidence: ownLines }, { text: "Calm", evidence: [others[0]] }] } };
+    const withTraits = { ...r, personality: { ...r.personality, traits: [{ text: "Ships in small steps", detail: null, evidence: ownLines.map(mline) }, { text: "Calm", detail: null, evidence: [mline(calm)] }] } };
     const rows = await buildProfile(c, [fact], fakePorts({ llm: llmFor(withTraits) }), out());
     expect(rows.personality.traits.map((x) => x.text)).toEqual(["Ships in small steps"]);
     expect(rows.personality.evidence_dropped).toBe(1);
@@ -184,10 +192,11 @@ describe("profile seam", () => {
     const press: Source = { ...src, id: "s3", actor: "apify/google-search-scraper", url: "https://news.example/jd", excerpt: "She is a calm leader." };
     const c = baseContext({ sources: [src, post, press], claims: [fact] });
     const line = (quote: string, source_id: string) => ({ quote, source_id, kind: "INFERENCE", supports: true });
-    const own = [line("Shipping beats planning", "s2"), line("Small PRs, every day", "s2"), style];
-    const trait = (evidence: unknown[]) => ({ dimension: "conscientiousness", lean: "high", position: 80, confidence: "medium", summary: "Ships small.", evidence });
+    const first = line("Shipping beats planning", "s2");
+    const own = [first, line("Small PRs, every day", "s2"), style];
+    const trait = (evidence: object[]) => ({ dimension: "conscientiousness", lean: "high", position: 80, confidence: "medium", summary: "Ships small.", evidence: evidence.map(mline) });
     const r = reading(own);
-    const withBig5 = { ...r, personality: { ...r.personality, big5: { traits: [trait([own[0]])], recommendations: [{ text: "Scope tasks small.", dimension: "conscientiousness" }] } } };
+    const withBig5 = { ...r, personality: { ...r.personality, big5: { traits: [trait([first])], recommendations: [{ text: "Scope tasks small.", dimension: "conscientiousness" }] } } };
     const p = await buildProfile(c, [fact], fakePorts({ llm: llmFor(withBig5) }), out());
     expect(p.personality.big5?.traits).toHaveLength(1);
     expect(p.personality.big5?.recommendations[0]?.text).toBe("Scope tasks small.");
@@ -214,7 +223,7 @@ describe("profile seam", () => {
     const o = out();
     const p = await buildProfile({ ...c, sources: [{ ...src, actor: "harvestapi/linkedin-profile-scraper" }, ...press] }, [fact], fakePorts({ llm }), o);
     expect(p.degraded).toBeNull();
-    expect(o.calls).toBe(2);
+    expect(o.calls).toBe(3);
     expect(o.notes[0]).toContain("profile retry with top 40 sources");
     const retry = prompts[1] ?? "";
     expect(retry).toContain("[s1]");
@@ -233,7 +242,9 @@ describe("profile seam", () => {
       expect(s).toContain("Never use the words score, rating, trust or culture fit");
       expect(s).toContain("health, politics, religion, ethnicity, sexuality");
     }
-    expect(systems[1]).toContain("working-style inference from the person's own public writing");
+    expect(systems).toHaveLength(3);
+    expect(systems[1]).not.toContain("personality");
+    expect(systems[2]).toContain("working-style inference from the person's own public writing");
   });
 
   it("degrades on model failure and skips the model with no verified claims", async () => {
@@ -252,7 +263,7 @@ describe("profile seam", () => {
     const r = await synthesizeBrief(ctx, fakePorts({ llm: llmFor(reading([style])) }));
     const parsed = Brief.parse(JSON.parse(JSON.stringify(r.brief)));
     expect(parsed.profile?.achievements).toHaveLength(1);
-    expect(r.calls).toBe(4);
+    expect(r.calls).toBe(5);
     expect(Brief.parse({ ...parsed, profile: undefined }).profile).toBeNull();
   });
 });

@@ -165,6 +165,10 @@ const LABEL_CS: Record<string, string> = {
   CV: "Životopis",
   "LinkedIn posts": "Příspěvky na LinkedInu",
   "Employer company page": "Stránka zaměstnavatele",
+  "Role evidence sites": "Weby s doklady k pozici",
+  "GitHub contributions": "Příspěvky na GitHubu",
+  "GitHub profile page": "Stránka profilu na GitHubu",
+  "Czech public registries": "České veřejné rejstříky",
 };
 
 const CS: ReportDict = {

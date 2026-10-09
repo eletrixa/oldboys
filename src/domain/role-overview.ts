@@ -11,6 +11,7 @@
  * - roleOverview: groups rows by roleKey; columns = union of the runs' must-have (mh-) questions matched by text;
  *   cell = coverage label from the stored brief ("not checked" when the brief is missing, degraded or silent)
  * - sources_confirmed = count of identity-merged sources only (namesake hits never counted)
+ * - subject: NO_NAME_YET while a profile-first run has not read the name yet (the person cell is never blank)
  *
  * Design constraints:
  * - Pure: JSON columns are parsed defensively here, no I/O
@@ -55,6 +56,9 @@ export type RoleGroup = {
   questions: string[];
   runs: RoleOverviewRun[];
 };
+
+/** Person cell text before a profile-first run has read the candidate's name from the profile. */
+export const NO_NAME_YET = "Name not read yet";
 
 const LABEL_BY_COVERAGE: Readonly<Record<string, CoverageLabel>> = {
   evidenced: "documented",
@@ -128,7 +132,7 @@ export function buildGroup(key: string, rows: RoleRunRow[]): RoleGroup {
     const idByText = new Map(mustHaves(row.questions_json).map((q) => [normalize(q.text), q.id]));
     return {
       id: row.id,
-      subject: row.subject,
+      subject: row.subject.trim() === "" ? NO_NAME_YET : row.subject,
       status: row.status,
       created_at: row.created_at,
       sources_confirmed: Math.max(0, Math.trunc(row.sources_confirmed)),

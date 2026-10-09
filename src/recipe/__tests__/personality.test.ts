@@ -10,7 +10,8 @@
  * - gatePersonality keeps only quote-checked lines from own-writing sources or first-person quotes elsewhere
  * - A Big Five dimension without a surviving quote is dropped; big5 is null under MIN_PERSONALITY_LINES
  * - evidence_dropped counts model lines minus kept lines across evidence, traits and big5
- * - readPersonality makes one `primary` call carrying PERSONALITY_PROMPT and throws on a parse failure
+ * - normalisePersonality clamps the model's loose shape: unknown dimension dropped, bad lean balanced, position 0..100, confidence low
+ * - readPersonality makes one `primary` call carrying PERSONALITY_PROMPT over a model-shaped answer and throws on a parse failure
  *
  * Design constraints:
  * - Fake llm port only; no I/O
@@ -18,7 +19,7 @@
 import { describe, expect, it } from "vitest";
 import type { Candidate, Source } from "@/domain/claim";
 import type { Ports } from "@/domain/ports";
-import { gatePersonality, MIN_PERSONALITY_LINES, PERSONALITY_PROMPT, PersonalityReading, readPersonality, TOO_LITTLE_WRITING } from "@/recipe/seams/personality";
+import { gatePersonality, MIN_PERSONALITY_LINES, type ModelPersonality, normalisePersonality, PERSONALITY_PROMPT, PersonalityReading, readPersonality, TOO_LITTLE_WRITING } from "@/recipe/seams/personality";
 import { fakeLlm } from "@/recipe/__tests__/fakes";
 
 const base = { run_id: "run-1", fetched_at: "t", r2_key: "k", expires_at: "e", identity: "merged" as const };
@@ -79,14 +80,40 @@ describe("gatePersonality", () => {
   });
 });
 
+/** Model-side line: `direction` and `note` are required nullable keys, `detail` on rows too. */
+const mline = (l: { quote: string; source_id: string }): ModelPersonality["evidence"][number] => ({ ...l, kind: "INFERENCE", supports: true, direction: null, note: null });
+const model = (over: Partial<ModelPersonality> = {}): ModelPersonality => ({
+  disc: { type: "C", confidence: "low" }, mbti: null, big5: null, read: "Prefers small, frequent changes.", traits: [], evidence: [], ...over,
+});
+
+describe("normalisePersonality", () => {
+  it("drops an unknown dimension, clamps lean, position and confidence, and fills detail and note", () => {
+    const humour = { dimension: "humour", lean: "high", position: -3, confidence: "medium", summary: "s", evidence: [] };
+    const big5 = {
+      traits: [{ dimension: "conscientiousness", lean: "very", position: 140, confidence: "sure", summary: "s", evidence: [mline(own1)] }, humour],
+      recommendations: [{ text: "r", dimension: "humour" }, { text: "r2", dimension: "openness" }],
+    };
+    const n = normalisePersonality(model({ big5, traits: [{ text: "t", detail: null, evidence: [mline(own2)] }], evidence: [{ ...mline(own3), direction: "contradicts", note: "post" }] }));
+    expect(n.big5?.traits).toMatchObject([{ dimension: "conscientiousness", lean: "balanced", position: 100, confidence: "low" }]);
+    expect(n.big5?.recommendations.map((r) => r.dimension)).toEqual([null, "openness"]);
+    expect(n.traits[0]).toMatchObject({ detail: "", evidence: [{ direction: "supports", note: "", strength: "weak" }] });
+    expect(n.evidence[0]).toMatchObject({ direction: "contradicts", note: "post" });
+    expect(normalisePersonality(model({ big5: { traits: [{ ...humour, dimension: "openness" }], recommendations: [] } })).big5?.traits[0]?.position).toBe(0);
+  });
+});
+
 describe("readPersonality", () => {
   const input = { subject: "Jana Dvořáková", anchor: "Brno", role: "Senior Data Engineer", sources: [press, post], merged };
 
   it("calls the primary model once with the shared prompt and returns the gated read with its cost", async () => {
     const calls: { model: string; system: string; prompt: string }[] = [];
+    const answer = model({
+      evidence: [own1, own2, thirdPerson].map(mline),
+      big5: { traits: [{ dimension: "conscientiousness", lean: "high", position: 80, confidence: "medium", summary: "Ships small and often.", evidence: [mline(own3)] }], recommendations: [] },
+    });
     const llm = ((i: { model: string; system: string; prompt: string }) => {
       calls.push(i);
-      return fakeLlm(() => ({ personality: reading({ evidence: [own1, own2, thirdPerson], big5: { traits: [big5Trait([own3])], recommendations: [] } }) }))(i as never);
+      return fakeLlm(() => ({ personality: answer }))(i as never);
     }) as Ports["llm"];
     const r = await readPersonality(input, llm);
     expect(calls).toHaveLength(1);

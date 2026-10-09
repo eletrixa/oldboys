@@ -94,6 +94,8 @@ describe("gapText", () => {
     expect(gapText("no confirmed handle or id to look up")).toBe("no confirmed profile to look up");
     expect(gapText("no public repositories")).toBe("no public repositories");
     expect(gapLine({ source: "stackexchange_profile", reason: "request failed: https://a.b/c: HTTP 429 x" })).toBe("Stack Exchange: the service refused our request (HTTP 429)");
+    expect(gapLine({ source: "cz_registries", reason: "hits found, none confirmed" })).toBe("Czech public registries: hits found, none confirmed");
+    expect(gapLine({ source: "github_deep", reason: "role family \"marketing\" is not technical" })).toBe("GitHub contributions: role family \"marketing\" is not technical");
   });
 });
 
