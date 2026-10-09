@@ -170,4 +170,12 @@ describe("lineupNeedsAnswer", () => {
     expect(lineupNeedsAnswer([{ decision: "rejected" }])).toBe(true);
     expect(lineupNeedsAnswer([])).toBe(false);
   });
+
+  it("asks next to a seed merge only for an asked platform whose account is possibly-same-as and unconfirmed", () => {
+    const seed = { decision: "merge" as const, platform: "linkedin" as const };
+    expect(lineupNeedsAnswer([seed, { decision: "possibly-same-as", platform: "github" }], ["github"])).toBe(true);
+    expect(lineupNeedsAnswer([seed, { decision: "possibly-same-as", platform: "github" }, { decision: "merge", platform: "github" }], ["github"])).toBe(false);
+    expect(lineupNeedsAnswer([seed, { decision: "possibly-same-as", platform: "instagram" }], ["github"])).toBe(false);
+    expect(lineupNeedsAnswer([seed, { decision: "rejected", platform: "github" }], ["github"])).toBe(false);
+  });
 });

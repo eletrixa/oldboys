@@ -33,6 +33,17 @@ describe("REPORT_DICT", () => {
     }
   });
 
+  it("has the same layout labels (ui) in English and Czech, and no verdict words in them", () => {
+    expect(Object.keys(REPORT_DICT.cs.ui).sort()).toEqual(Object.keys(REPORT_DICT.en.ui).sort());
+    for (const lang of ["en", "cs"] as const) {
+      const ui = REPORT_DICT[lang].ui;
+      const words = [ui.noEvidenceTitle(4, 4), ui.gapNotPerson, ui.saidByCandidate, ui.compare, ui.sourcesDisagree, ui.decisionByPerson, ...Object.values(ui.gapGroup)].join(" ");
+      expect(words).not.toMatch(/good fit|bad fit|recommend|score|red flag|suitable|unsuitable|vhodn|doporuč|skóre/i);
+    }
+    expect(REPORT_DICT.en.ui.saidByCandidate).toBe("Said by the candidate. Not public evidence.");
+    expect(REPORT_DICT.cs.ui.noEvidenceTitle(0, 4)).toBe("Bez veřejného dokladu: 0 ze 4 kritérií pozice");
+  });
+
   it("keeps the English labels the page always had", () => {
     const { en } = REPORT_DICT;
     expect(en.band).toEqual({ strong: "Strong evidence", fair: "Some evidence", weak: "Thin evidence" });

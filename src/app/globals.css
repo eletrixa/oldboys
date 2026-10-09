@@ -170,6 +170,39 @@
   .profile .pf-link {
     transition: text-decoration-thickness 150ms ease-out, text-decoration-color 150ms ease-out;
   }
+  /* Confidence card (trust-box-card.tsx): bar segments grow one after another, the legend fades in after them, then the
+     identity line and each check row rise in. */
+  .profile .tb-seg:nth-child(2) {
+    animation-delay: 220ms;
+  }
+  .profile .tb-seg:nth-child(3) {
+    animation-delay: 440ms;
+  }
+  .profile .tb-legend {
+    animation: pf-fade 240ms ease-out both;
+    animation-delay: 360ms;
+  }
+  .profile .tb-row {
+    animation: pf-rise 240ms ease-out both;
+  }
+  .profile .tb-rows > :nth-child(2) {
+    animation-delay: 240ms;
+  }
+  .profile .tb-rows > :nth-child(3) {
+    animation-delay: 300ms;
+  }
+  .profile .tb-rows > :nth-child(4) {
+    animation-delay: 360ms;
+  }
+  .profile .tb-rows > :nth-child(5) {
+    animation-delay: 420ms;
+  }
+  .profile .tb-rows > :nth-child(6) {
+    animation-delay: 480ms;
+  }
+  .profile .tb-rows > :nth-child(7) {
+    animation-delay: 540ms;
+  }
 }
 @keyframes pf-rise {
   from {
@@ -217,5 +250,25 @@
   .profile .pf-big5 {
     print-color-adjust: exact;
     -webkit-print-color-adjust: exact;
+  }
+}
+
+/*
+ * Finished brief (src/app/runs/[id]/brief-tabs.tsx, brief-plan.tsx): every tab panel prints, the tab bar does not; a plan
+ * question reached from "Before the interview" flashes once (motion only without reduced motion).
+ */
+@media print {
+  .tab-inactive {
+    display: flex !important;
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .plan-flash {
+    animation: plan-flash 1.6s ease-out;
+  }
+}
+@keyframes plan-flash {
+  from {
+    background-color: var(--color-peach);
   }
 }

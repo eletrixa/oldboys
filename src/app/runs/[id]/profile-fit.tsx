@@ -16,18 +16,15 @@ import { CARD, Chevron, Pill, SUMMARY_COMPACT, type Tone } from "../../ui";
 import { type Ctx, MEASURE, NOTE } from "./evidence-line";
 import { Dropped, EvidenceList, FIGURE, Head, INTRO } from "./profile-evidence";
 
-const STATUS: Record<"has" | "partial" | "none", { text: string; tone: Tone; score: number }> = {
-  has: { text: "Has", tone: "ok", score: 1 },
-  partial: { text: "Partial", tone: "unsure", score: 0.5 },
-  none: { text: "No evidence", tone: "neutral", score: 0 },
-};
+import { fitPct } from "./scorecard";
 
-/** Σ(weight × status) ÷ Σ(weight), as a whole %; the stored fit_pct when no capability carries weight. */
-export function fitPct(f: PositionFit): number {
-  const total = f.traits.reduce((s, t) => s + t.weight, 0);
-  if (total === 0) return f.fit_pct;
-  return Math.round((f.traits.reduce((s, t) => s + t.weight * STATUS[t.status].score, 0) / total) * 100);
-}
+export { fitPct };
+
+const STATUS: Record<"has" | "partial" | "none", { text: string; tone: Tone }> = {
+  has: { text: "Has", tone: "ok" },
+  partial: { text: "Partial", tone: "unsure" },
+  none: { text: "No evidence", tone: "neutral" },
+};
 
 export const evidenced = (f: PositionFit): string =>
   `${String(f.traits.filter((t) => t.status === "has").length)} of ${String(f.traits.length)} must-haves evidenced`;

@@ -41,6 +41,8 @@ Limits you may hit: 6 started runs per hour per company and 20 runs per hour acr
    - **CV vs public record** on CV runs: "Matches public record" / "Differs, ask, don't assume" / "Not found publicly".
    - **Devil's advocate**: a second check tries to break each confirmed must-have (about someone else, a fork, a course exercise, outdated). What fails moves to "To verify".
    - **Profile signals** (deterministic sentences about the confirmed accounts).
+   - **Role fit scorecard**: the share of must-haves with public evidence, with every plus and minus listed under it, each with its evidence and its effect on the figure; open points (risks, CV differences, registry records, account signals) carry "no effect on fit" and a question. Never a score of the person.
+   - **Confidence in this brief**: how far to trust the brief, measured on the brief: the share of its findings that are verified facts (with a facts / inferences / said-in-a-call bar and sources by origin), the identity line (confirmed / open / none, with the reasons) and one row per check made (registries, CV, accounts, gaps) with what each leaves open. The brief forbids a trustworthiness score of a person; this card never computes one (plans/014).
    - **Code contributions** from a deep GitHub scrape, for engineering and data roles only.
    - **Public registries** (Czech, name search).
    - The **EN | CZ** switch translates the brief; quotes stay in the original language.
@@ -197,6 +199,7 @@ Three people, each with several Claude Code agents running in parallel sessions 
 - [`plans/008-intake-connectors/00-SYNTHESIS.md`](plans/008-intake-connectors/00-SYNTHESIS.md): intake
 - [`plans/012-brief-flow/00-SYNTHESIS.md`](plans/012-brief-flow/00-SYNTHESIS.md): recruiter flow
 - [`plans/012-fake-profile-signals/00-SYNTHESIS.md`](plans/012-fake-profile-signals/00-SYNTHESIS.md): profile signals
+- [`plans/014-trust-box/00-SYNTHESIS.md`](plans/014-trust-box/00-SYNTHESIS.md): confidence in this brief (evidence, identity, checks; no trust score of a person)
 - [`eval/RESULTS.md`](eval/RESULTS.md) and https://oldboys.asajj.cz/validation: validation
 - [`docs/ops/call-verification.md`](docs/ops/call-verification.md), [`docs/ops/intake.md`](docs/ops/intake.md): runbooks
 - [`CHANGELOG.md`](CHANGELOG.md): every user-visible change

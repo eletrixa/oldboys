@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/runs/[id]/i18n.ts
- * Deps:    src/domain/{challenge,claim,cv-check} (types), ./evidence (English date labels), ./challenge (English challenge words), ./cv-check (English CV labels), ./report-text, ./state (types)
+ * Deps:    src/domain/{challenge,claim,cv-check} (types), ./brief-ui-text (layout labels), ./evidence (English date labels), ./challenge (English challenge words), ./cv-check (English CV labels), ./report-text, ./state (types)
  * Tested:  src/app/runs/[id]/__tests__/i18n.test.ts
  *
  * Key responsibilities:
@@ -25,6 +25,7 @@ import type { CvOutcome } from "@/domain/cv-check";
 import { type ChallengeSummary, challengeLine, challengeReason, challengeTag } from "./challenge";
 import { CV_EXPLAINER, CV_OUTCOME } from "./cv-check";
 import { keptUntilLabel, retrievedLabel } from "./evidence";
+import { type BriefUi, UI_CS, UI_EN } from "./brief-ui-text";
 import type { SummaryLead } from "./report-text";
 import type { ConfidenceBand } from "./state";
 
@@ -79,6 +80,8 @@ export type ReportDict = {
   degraded: (reason: string) => string;
   showMore: (n: number) => string;
   label: (english: string) => string;
+  /** Finished brief layout: header, steps, numbers, "Before the interview", tabs, plan, gap groups (brief-ui-text.ts). */
+  ui: BriefUi;
 };
 
 const EN: ReportDict = {
@@ -132,6 +135,7 @@ const EN: ReportDict = {
   degraded: (reason) => `AI summary unavailable (${reason.replace(/\.$/, "")}). This brief lists only what we confirmed.`,
   showMore: (n) => `Show ${String(n)} more`,
   label: (english) => english,
+  ui: UI_EN,
 };
 
 function parse(iso: string | null | undefined): Date | null {
@@ -231,6 +235,7 @@ const CS: ReportDict = {
   degraded: (reason) => `Shrnutí od AI není k dispozici (${reason.replace(/\.$/, "")}). Podklad uvádí jen to, co jsme potvrdili.`,
   showMore: (n) => `Zobrazit další (${String(n)})`,
   label: (english) => LABEL_CS[english] ?? english,
+  ui: UI_CS,
 };
 
 export const REPORT_DICT: Readonly<Record<ReportLang, ReportDict>> = { en: EN, cs: CS };

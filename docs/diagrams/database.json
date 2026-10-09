@@ -1,0 +1,469 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Oldboys: D1 database",
+    "quality_profile": "showcase",
+    "views": [
+      {
+        "id": "run",
+        "label": "Run data",
+        "focus": [
+          "investigations",
+          "ledger_entries",
+          "candidates",
+          "sources",
+          "claims",
+          "gaps",
+          "briefs",
+          "calls",
+          "webhook_events"
+        ],
+        "note": "Everything about one run hangs on run_id = investigations.id and is deleted together."
+      },
+      {
+        "id": "intake",
+        "label": "Positions and intake",
+        "focus": [
+          "positions",
+          "intake_tags",
+          "applications",
+          "role_templates",
+          "investigations"
+        ],
+        "note": "An application arrives through a tag, the position gives the must-haves, the run points back via run_id."
+      },
+      {
+        "id": "accounts",
+        "label": "Accounts",
+        "focus": [
+          "organizations",
+          "accounts",
+          "sessions",
+          "auth_attempts",
+          "ares_cache",
+          "investigations"
+        ],
+        "note": "Company from ARES, account with a PBKDF2 password, cookie session. Only that company sees its briefs."
+      }
+    ],
+    "locale": "en"
+  },
+  "components": [
+    {
+      "id": "organizations",
+      "type": "database",
+      "label": "organizations",
+      "sublabel": "company · IČO · ARES",
+      "pos": [
+        40,
+        240
+      ],
+      "size": [
+        180,
+        58
+      ]
+    },
+    {
+      "id": "sessions",
+      "type": "database",
+      "label": "sessions",
+      "sublabel": "token_hash · 30 days",
+      "pos": [
+        40,
+        100
+      ],
+      "size": [
+        180,
+        58
+      ]
+    },
+    {
+      "id": "auth_attempts",
+      "type": "database",
+      "label": "auth_attempts",
+      "sublabel": "rate limit · 24 h",
+      "pos": [
+        40,
+        520
+      ],
+      "size": [
+        180,
+        58
+      ]
+    },
+    {
+      "id": "ares_cache",
+      "type": "database",
+      "label": "ares_cache",
+      "sublabel": "IČO · cache 24 h",
+      "pos": [
+        40,
+        380
+      ],
+      "size": [
+        180,
+        58
+      ]
+    },
+    {
+      "id": "accounts",
+      "type": "database",
+      "label": "accounts",
+      "sublabel": "email · PBKDF2 password",
+      "pos": [
+        280,
+        240
+      ],
+      "size": [
+        180,
+        58
+      ]
+    },
+    {
+      "id": "positions",
+      "type": "database",
+      "label": "positions",
+      "sublabel": "must_haves · expires_at",
+      "pos": [
+        280,
+        380
+      ],
+      "size": [
+        180,
+        58
+      ]
+    },
+    {
+      "id": "intake_tags",
+      "type": "database",
+      "label": "intake_tags",
+      "sublabel": "tag · offer_id",
+      "pos": [
+        280,
+        520
+      ],
+      "size": [
+        180,
+        58
+      ]
+    },
+    {
+      "id": "briefs",
+      "type": "database",
+      "label": "briefs",
+      "sublabel": "brief_json · 1:1",
+      "pos": [
+        520,
+        100
+      ],
+      "size": [
+        180,
+        58
+      ]
+    },
+    {
+      "id": "investigations",
+      "type": "database",
+      "label": "investigations",
+      "sublabel": "run · goal · status · budget",
+      "pos": [
+        520,
+        240
+      ],
+      "size": [
+        180,
+        58
+      ]
+    },
+    {
+      "id": "applications",
+      "type": "database",
+      "label": "applications",
+      "sublabel": "application · cv_key · status",
+      "pos": [
+        520,
+        380
+      ],
+      "size": [
+        180,
+        58
+      ]
+    },
+    {
+      "id": "role_templates",
+      "type": "database",
+      "label": "role_templates",
+      "sublabel": "183 roles · sites",
+      "pos": [
+        280,
+        100
+      ],
+      "size": [
+        180,
+        58
+      ]
+    },
+    {
+      "id": "candidates",
+      "type": "database",
+      "label": "candidates",
+      "sublabel": "profile · decision · score",
+      "pos": [
+        760,
+        240
+      ],
+      "size": [
+        180,
+        58
+      ]
+    },
+    {
+      "id": "sources",
+      "type": "database",
+      "label": "sources",
+      "sublabel": "url · excerpt · r2_key",
+      "pos": [
+        760,
+        380
+      ],
+      "size": [
+        180,
+        58
+      ]
+    },
+    {
+      "id": "ledger_entries",
+      "type": "database",
+      "label": "ledger_entries",
+      "sublabel": "seq · kind · cost_usd",
+      "pos": [
+        1000,
+        100
+      ],
+      "size": [
+        180,
+        58
+      ]
+    },
+    {
+      "id": "claims",
+      "type": "database",
+      "label": "claims",
+      "sublabel": "FACT · INFERENCE · STATEMENT",
+      "pos": [
+        1000,
+        240
+      ],
+      "size": [
+        180,
+        58
+      ]
+    },
+    {
+      "id": "gaps",
+      "type": "database",
+      "label": "gaps",
+      "sublabel": "question_id · reason",
+      "pos": [
+        760,
+        100
+      ],
+      "size": [
+        180,
+        58
+      ]
+    },
+    {
+      "id": "calls",
+      "type": "database",
+      "label": "calls",
+      "sublabel": "call · consent · status",
+      "pos": [
+        760,
+        520
+      ],
+      "size": [
+        180,
+        58
+      ]
+    },
+    {
+      "id": "webhook_events",
+      "type": "database",
+      "label": "webhook_events",
+      "sublabel": "conversation_id",
+      "pos": [
+        520,
+        520
+      ],
+      "size": [
+        180,
+        58
+      ]
+    }
+  ],
+  "boundaries": [],
+  "connections": [
+    {
+      "id": "acc-org",
+      "from": "accounts",
+      "to": "organizations"
+    },
+    {
+      "id": "ses-acc",
+      "from": "sessions",
+      "to": "accounts"
+    },
+    {
+      "id": "inv-acc",
+      "from": "investigations",
+      "to": "accounts"
+    },
+    {
+      "id": "inv-pos",
+      "from": "investigations",
+      "to": "positions",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "id": "app-inv",
+      "from": "applications",
+      "to": "investigations"
+    },
+    {
+      "id": "app-pos",
+      "from": "applications",
+      "to": "positions"
+    },
+    {
+      "id": "tag-pos",
+      "from": "intake_tags",
+      "to": "positions"
+    },
+    {
+      "id": "brief-inv",
+      "from": "briefs",
+      "to": "investigations"
+    },
+    {
+      "id": "cand-inv",
+      "from": "candidates",
+      "to": "investigations"
+    },
+    {
+      "id": "inv-role",
+      "from": "investigations",
+      "to": "role_templates",
+      "fromSide": "top",
+      "toSide": "bottom"
+    },
+    {
+      "id": "src-inv",
+      "from": "sources",
+      "to": "investigations",
+      "fromSide": "left",
+      "toSide": "right"
+    },
+    {
+      "id": "claim-cand",
+      "from": "claims",
+      "to": "candidates"
+    },
+    {
+      "id": "claim-src",
+      "from": "claims",
+      "to": "sources",
+      "label": "supports_json",
+      "variant": "dashed",
+      "fromSide": "bottom",
+      "toSide": "right"
+    },
+    {
+      "id": "hook-call",
+      "from": "webhook_events",
+      "to": "calls",
+      "label": "conversation_id",
+      "variant": "dashed",
+      "labelAt": [
+        730,
+        592
+      ]
+    },
+    {
+      "id": "gap-inv",
+      "from": "gaps",
+      "to": "investigations",
+      "fromSide": "left",
+      "toSide": "right"
+    },
+    {
+      "id": "call-inv",
+      "from": "calls",
+      "to": "investigations"
+    },
+    {
+      "id": "led-inv",
+      "from": "ledger_entries",
+      "to": "investigations",
+      "fromSide": "bottom",
+      "toSide": "right"
+    },
+    {
+      "id": "claim-inv",
+      "from": "claims",
+      "to": "investigations",
+      "fromSide": "bottom",
+      "toSide": "right"
+    },
+    {
+      "id": "app-tag",
+      "from": "applications",
+      "to": "intake_tags",
+      "label": "tag",
+      "variant": "dashed"
+    },
+    {
+      "id": "org-ares",
+      "from": "organizations",
+      "to": "ares_cache",
+      "label": "ico",
+      "variant": "dashed",
+      "labelAt": [
+        130,
+        339
+      ]
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "How to read",
+      "items": [
+        "Arrow = foreign key, from child to parent",
+        "Arrow into investigations = run_id",
+        "Dashed = link without REFERENCES",
+        "investigations.organization_id has no arrow"
+      ]
+    },
+    {
+      "dot": "violet",
+      "title": "Outside D1",
+      "items": [
+        "R2: raw JSON, CV, call transcript, Czech brief",
+        "Workflow state lives in Cloudflare, not in D1",
+        "No KV and no Durable Objects"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Deletion",
+      "items": [
+        "Cron at 03:00 deletes runs older than 7 days",
+        "Delete on rejection runs the same function at once",
+        "Positions go at their own expires_at"
+      ]
+    }
+  ]
+}

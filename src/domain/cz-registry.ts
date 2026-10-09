@@ -16,6 +16,8 @@
  * - `RegistryCheck` / `RegistryChecks`: one row per registry queried (clear / hits / namesakes / unavailable), what was searched,
  *   hits with the registry's own wording, a link and `match` (why the record is the candidate's: city or company), the count of
  *   records under the name set aside as namesakes; the digest the collector writes into its ledger ref and `readRegistryChecks` reads back
+ * - `townOf`, `redactHitLabel`, `redactRegistryExcerpt`: a registry address shrinks to its town (no street, house number, postcode);
+ *   collectors use `townOf` when they build hit lines, the readers redact digests and excerpts stored before that
  * - `REGISTRY_CAVEATS`: the fixed honesty lines (name-only search, namesakes, a hit is never a judgment)
  *
  * Design constraints:
@@ -151,8 +153,61 @@ export type RegistryChecks = z.infer<typeof RegistryChecks>;
 
 export const REGISTRY_STEP = "cz_registries";
 
+/** Czech postcode ("186 00", "18600", "PSČ 186 00"); never inside an 8-digit IČO. */
+const POSTCODE = /(?:PSČ\s*)?(?<!\d)\d{3} ?\d{2}(?!\d)/u;
+/** Trailing house number ("77", "620/3", "č. p. 12") after a street or village name. */
+const HOUSE_NUMBER = /(?:^|\s+)(?:č\.\s?p\.\s*)?\d+[a-z]?(?:\/\d+[a-z]?)?$/iu;
+
+/**
+ * The municipality of a registry address, never the street, house number or postcode: "Hrachov 77, 262 56 Svatý Jan" -> "Svatý Jan",
+ * "Dlouhá 12/4, 110 00 Praha 1" -> "Praha 1", "Ostrožská Lhota 120" -> "Ostrožská Lhota", "Svatý Jan - Hrachov 77, okres Příbram, PSČ 26256" -> "Svatý Jan". null when no town can be told apart.
+ */
+export function townOf(address: string | null | undefined): string | null {
+  const parts = (address ?? "").split(",").map((p) => p.replace(/\s+/g, " ").trim()).filter((p) => p !== "");
+  for (const p of [...parts].reverse()) {
+    const m = POSTCODE.exec(p);
+    const after = m === null ? "" : p.slice(m.index + m[0].length).trim();
+    if (after !== "") return after;
+  }
+  // Older public-register form "Svatý Jan - Hrachov 77, okres Příbram, PSČ 26256": the town leads, before " - "
+  const first = parts[0] ?? "";
+  const dash = first.indexOf(" - ");
+  const pick = dash > 0 ? first.slice(0, dash) : (parts.filter((p) => !POSTCODE.test(p) && !/^okres\b/iu.test(p)).at(-1) ?? "");
+  const town = pick.replace(HOUSE_NUMBER, "").trim();
+  return town === "" || /\d/.test(town) ? null : town;
+}
+
+const NO_TOWN = "town not listed";
+
+/**
+ * A hit line with any third person's address cut to the town (stored digests from before the collectors did it themselves).
+ * ARES "— IČO …, <seat>, since", public register "<name>, <address> — …", dental chamber "…, <workplace address>", notaries and
+ * health-care providers ", <postcode> <town>".
+ */
+export function redactHitLabel(registry: RegistryId, label: string): string {
+  let out = label;
+  if (registry === "ares") out = out.replace(/^(.*? — IČO [^,]*, )(.*?)(, since .*)$/u, (_m, a: string, addr: string, b: string) => `${a}${townOf(addr) ?? NO_TOWN}${b}`);
+  if (registry === "justice-or") out = out.replace(/^([^—,]*), (.*?)( — .*)$/u, (_m, a: string, addr: string, b: string) => `${a}, ${townOf(addr) ?? NO_TOWN}${b}`);
+  if (registry === "csk") out = out.replace(/^(.*?member of the Czech Dental Chamber), (.*)$/u, (_m, a: string, addr: string) => `${a}, ${townOf(addr) ?? NO_TOWN}`);
+  // Notaries and health-care providers list "<postcode> <town>" (file numbers elsewhere look like postcodes, so only here)
+  return registry === "nkcr" || registry === "nrpzs" ? out.replace(new RegExp(`${POSTCODE.source}\\s+(?=\\p{L})`, "gu"), "") : out;
+}
+
+/** A `rest/cz-registries` source excerpt with every listed hit line redacted like `redactHitLabel` (other excerpts unchanged). */
+export function redactRegistryExcerpt(excerpt: string): string {
+  const r = REGISTRIES.find((x) => excerpt.startsWith(`${x.name} (${x.name_cs})`));
+  if (r === undefined) return excerpt;
+  return excerpt
+    .split("\n")
+    .map((line) => (line.startsWith("- ") ? `- ${redactHitLabel(r.id, line.slice(2))}` : line))
+    .join("\n");
+}
+
+/** The latest digest, hit lines without street, house number or postcode (a namesake's home address never leaves the server). */
 export function readRegistryChecks(rows: readonly LedgerRow[]): RegistryChecks | null {
-  return readDigest(rows, REGISTRY_STEP, RegistryChecks);
+  const d = readDigest(rows, REGISTRY_STEP, RegistryChecks);
+  if (d === null) return null;
+  return { ...d, checks: d.checks.map((c) => ({ ...c, hits: c.hits.map((h) => ({ ...h, label: redactHitLabel(c.registry, h.label) })) })) };
 }
 
 export const REGISTRY_CAVEATS: readonly string[] = [

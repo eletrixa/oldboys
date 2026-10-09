@@ -18,9 +18,14 @@
  * - a collector's `digest` (StepOutcome.digest) lands in the step's ledger ref as `digest`
  * - `onEmpty`: run the declared fallback step once, or record a Gap (ledger decision with ref.gap)
  * - resolve: persist candidates; pause with `step.waitForEvent('lineup-answer')` only when candidates exist and none is
- *   merged (lineupNeedsAnswer, seed merges count, so a given profile/CV never pauses); apply the manager's decisions on resume
- * - Budget (RUN_BUDGET_USD / RUN_BUDGET_CALLS) enforced here for collector steps, never by the LLM; parallel
- *   batches run at most (budget - spent) paid actor steps at once (planBatch), free REST steps always run
+ *   merged (lineupNeedsAnswer, seed merges count), or when a technical role has a GitHub account that is only possibly-same-as;
+ *   apply the manager's decisions on resume; after the 1 hour timeout a run with a confirmed identity carries on unanswered
+ * - Budget (RUN_BUDGET_USD / RUN_BUDGET_CALLS) enforced here for collector steps, never by the LLM; collectors run
+ *   in one sliding-window pool (runPool): the paid allowance (budget - spent) is read once per pool, a paid step
+ *   starts only while allowance is left or no paid step runs (nextToStart), free REST steps always start
+ * - Two pools: the "search" pool runs the collectors before `resolve` (they read only subject/anchor) and the
+ *   "collect" pool runs those after it; at most PARALLEL run at once because Workers allow 6 simultaneous outbound
+ *   connections waiting for headers and a collector's own fetch fan-out shares that cap
  * - Source identity re-marked after the lineup and before extract (applySourceIdentity), so only SERP hits on
  *   a merged profile count as confirmed
  * - Truthful gaps: a collector that made no request, or whose requests all failed, records "not searched: <why>", not its onEmpty text; a
@@ -34,16 +39,17 @@
  * - Imports only src/domain, src/recipe and src/adapters, never Next.js
  * - Step return values stay tiny (counts); payloads live in D1/R2
  */
-import { WorkflowEntrypoint, type WorkflowEvent, type WorkflowStep } from "cloudflare:workers";
+import { WorkflowEntrypoint, type WorkflowEvent, type WorkflowStep, type WorkflowStepEvent } from "cloudflare:workers";
 import { makeActorCall } from "@/adapters/apify";
 import { applySourceIdentity, loadContext, loadRoleTemplates, makeLedgerAppend, makeSourceStore, persistOutcome, setCandidateDecisions } from "@/adapters/d1";
 import { makeFetchJson } from "@/adapters/fetch";
 import { makeLlmCall } from "@/adapters/llm";
 import type { Candidate, GoalId } from "@/domain/claim";
+import { isTechnicalRole } from "@/domain/code-profile";
 import type { Ports } from "@/domain/ports";
 import { matchRoleTemplate } from "@/domain/role-catalog";
 import { missingSecrets } from "@/domain/secrets";
-import { planBatch } from "@/recipe/batch";
+import { isPaid, nextToStart } from "@/recipe/batch";
 import { recipeFor } from "@/recipe/goals";
 import { executeStep } from "@/recipe/runner";
 import { lineupNeedsAnswer, noneConfirmed, UNCONFIRMED_GAP } from "@/recipe/seams/resolve";
@@ -69,8 +75,12 @@ type Head = {
 };
 
 const COLLECTOR_KINDS = new Set<Step["kind"]>(["serp", "actor", "ares"]);
-/** Collector steps run concurrently after the lineup; Apify + REST calls are I/O bound and independent. */
-const PARALLEL = 5;
+/**
+ * Collector steps run in a sliding window of this size; Apify + REST calls are I/O bound and independent. Workers allow
+ * 6 simultaneous outbound connections waiting for headers; a collector's own fetch fan-out shares that cap, so more
+ * would only queue.
+ */
+const PARALLEL = 6;
 
 export class ResearchRunWorkflow extends WorkflowEntrypoint<CloudflareEnv, ResearchRunParams> {
   async run(event: Readonly<WorkflowEvent<ResearchRunParams>>, step: WorkflowStep): Promise<void> {
@@ -173,43 +183,64 @@ export class ResearchRunWorkflow extends WorkflowEntrypoint<CloudflareEnv, Resea
       }
     };
 
-    // Before the lineup every step feeds the next (SERP -> candidates), so they run in order. After it the
-    // collectors are independent: run them in batches of PARALLEL so a full recipe stays inside the 2-4 minute promise.
-    // Each batch reads the spent calls once and starts no more paid steps than the budget has left.
-    let batch: Step[] = [];
-    let batchNo = 0;
-    const flush = async (): Promise<void> => {
-      while (batch.length > 0) {
-        const remaining = await step.do(`batch-${String(++batchNo)}`, async () => {
-          const ctx = await loadContext(this.env.DB, runId, recipe.questions);
-          return ctx.budget.calls - ctx.spent.calls;
-        });
-        const { now, later } = planBatch(batch, remaining, PARALLEL);
-        await Promise.all(now.map(runOne));
-        batch = later;
-      }
+    // Collectors are independent of each other: before the lineup they read only subject/anchor ("search" pool), after
+    // it the merged identity ("collect" pool). Each pool is a sliding window of PARALLEL; the paid allowance is read once.
+    let pool: Step[] = [];
+    const flush = async (phase: "search" | "collect"): Promise<void> => {
+      if (pool.length === 0) return;
+      const steps = pool;
+      pool = [];
+      await this.runPool(runId, steps, phase, recipe.questions, step, runOne);
     };
     for (const recipeStep of recipe.steps) {
       // The seed step already ran above (or was skipped without a profile / CV); executeStep rejects it.
       if (recipeStep.kind === "seed") continue;
       if (recipeStep.kind === "resolve") {
+        await flush("search");
         await this.resolveWithPause(runId, recipeStep, recipe.questions, step);
         afterResolve = true;
         continue;
       }
-      if (afterResolve && COLLECTOR_KINDS.has(recipeStep.kind)) {
-        batch.push(recipeStep);
+      if (COLLECTOR_KINDS.has(recipeStep.kind)) {
+        pool.push(recipeStep);
         continue;
       }
-      await flush();
+      await flush(afterResolve ? "collect" : "search");
       await runOne(recipeStep);
     }
-    await flush();
+    await flush(afterResolve ? "collect" : "search");
 
     await step.do("finish", async () => {
       await this.setStatus(runId, "done");
       return { runId, status: "done" };
     });
+  }
+
+  /** Sliding window: keeps up to PARALLEL `runOne` promises in flight; any error propagates and fails the run. */
+  private async runPool(
+    runId: string,
+    steps: readonly Step[],
+    phase: "search" | "collect",
+    questions: ReturnType<typeof recipeFor>["questions"],
+    step: WorkflowStep,
+    runOne: (s: Step) => Promise<void>,
+  ): Promise<void> {
+    let paidLeft = await step.do(`budget-${phase}`, async () => {
+      const ctx = await loadContext(this.env.DB, runId, questions);
+      return ctx.budget.calls - ctx.spent.calls;
+    });
+    const pending = [...steps];
+    const running: { step: Step; done: Promise<Step> }[] = [];
+    while (pending.length > 0 || running.length > 0) {
+      for (let next = nextToStart(pending, running.map((r) => r.step), paidLeft, PARALLEL); next !== null; next = nextToStart(pending, running.map((r) => r.step), paidLeft, PARALLEL)) {
+        const started = next;
+        pending.splice(pending.indexOf(started), 1);
+        if (isPaid(started)) paidLeft = Math.max(0, paidLeft - 1);
+        running.push({ step: started, done: runOne(started).then(() => started) });
+      }
+      const finished = await Promise.race(running.map((r) => r.done));
+      running.splice(running.findIndex((r) => r.step === finished), 1);
+    }
   }
 
   /**
@@ -274,20 +305,22 @@ export class ResearchRunWorkflow extends WorkflowEntrypoint<CloudflareEnv, Resea
   }
 
   private async resolveWithPause(runId: string, recipeStep: Step, questions: ReturnType<typeof recipeFor>["questions"], step: WorkflowStep): Promise<void> {
-    const needsAnswer = await step.do(recipeStep.id, async () => {
+    const { ask: needsAnswer, confirmed } = await step.do(recipeStep.id, async () => {
       const started = Date.now();
       const ctx = await loadContext(this.env.DB, runId, questions);
       const out = await executeStep(recipeStep, ctx, this.ports());
       await persistOutcome(this.env.DB, runId, out);
       const all = [...ctx.candidates, ...out.candidates];
-      const ask = lineupNeedsAnswer(all);
+      // A technical role also waits for the manager on a GitHub account that is only possibly-same-as: the deep
+      // statistics need a confirmed handle, and name + city alone never confirms one
+      const ask = lineupNeedsAnswer(all, isTechnicalRole(ctx) ? ["github"] : []);
       await this.ledger(runId, recipeStep.id, "llm", out.cost_usd, Date.now() - started, {
         candidates: out.candidates.map((c) => ({ id: c.id, platform: c.platform, url: c.profile_urls[0], score: c.score, decision: c.decision, snippet: c.snippet, reasons: c.reasons })),
         calls: out.calls,
         notes: out.notes,
         ask,
       });
-      return ask;
+      return { ask, confirmed: all.some((c) => c.decision === "merge") };
     });
     if (!needsAnswer) return;
 
@@ -295,7 +328,19 @@ export class ResearchRunWorkflow extends WorkflowEntrypoint<CloudflareEnv, Resea
       await this.setStatus(runId, "paused");
       await this.ledger(runId, recipeStep.id, "pause", 0, 0, { waitingFor: "lineup-answer" });
     });
-    const answer = await step.waitForEvent<LineupAnswer>("lineup-answer", { type: "lineup-answer", timeout: "1 hour" });
+    let answer: WorkflowStepEvent<LineupAnswer>;
+    try {
+      answer = await step.waitForEvent<LineupAnswer>("lineup-answer", { type: "lineup-answer", timeout: "1 hour" });
+    } catch (e) {
+      // Nobody answered within the hour: an identity already confirmed by the given profile or CV carries the run on
+      // with the server's decisions (unattended intake runs); without one the run still fails as before
+      if (!confirmed) throw e;
+      await step.do(`${recipeStep.id}:unanswered`, async () => {
+        await this.setStatus(runId, "running");
+        await this.ledger(runId, recipeStep.id, "decision", 0, 0, { unanswered: true, note: "no lineup answer within 1 hour; the possibly-same-as accounts stay unconfirmed" });
+      });
+      return;
+    }
     await step.do(`${recipeStep.id}:answered`, async () => {
       await setCandidateDecisions(this.env.DB, runId, answer.payload.decisions);
       await this.setStatus(runId, "running");

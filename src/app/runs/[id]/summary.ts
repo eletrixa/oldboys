@@ -81,7 +81,7 @@ export function aiOff(brief: Brief): boolean {
 export type CriteriaKind = "role criteria" | "research questions";
 
 /** Per-question rows that are role must-haves (mh-); all rows but the CV check when the run has no role criteria. */
-function criteriaRows(brief: Brief): { rows: Brief["per_question"]; noun: CriteriaKind } {
+export function criteriaRows(brief: Brief): { rows: Brief["per_question"]; noun: CriteriaKind } {
   const mh = brief.per_question.filter((q) => q.question_id.startsWith("mh-"));
   return mh.length > 0 ? { rows: mh, noun: "role criteria" } : { rows: brief.per_question.filter((q) => !isCvSection(q.question_id)), noun: "research questions" };
 }

@@ -14,7 +14,8 @@
  *
  * Design constraints:
  * - Hidden when the tray is empty, on candidate pages (/apply/<tag>) and on the run page of the only run it holds
- * - Never blocks the page: fixed, narrow, scrolls inside itself; keyboard reachable (buttons and links only)
+ * - Never blocks the page: fixed, narrow, scrolls inside itself; keyboard reachable (buttons and links only); an in-flow
+ *   spacer as tall as the tray ends the page, so the last button (e.g. "Research N candidates" on a phone) scrolls above it
  * - Shows progress and status, never a verdict on a person
  */
 "use client";
@@ -143,47 +144,58 @@ export function RunTray(): React.JSX.Element | null {
   const dock = side === "right" ? "right-4" : "left-4";
   if (!open) {
     return (
-      <button
-        type="button"
-        onClick={() => {
-          setOpen(true);
-        }}
-        className={`fixed bottom-4 ${dock} z-40 rounded-full border border-line bg-surface px-4 py-2 text-sm shadow-lg hover:border-ink`}
-      >
-        Briefs in progress ({ids.length})
-      </button>
+      <>
+        <TraySpacer height="4.5rem" />
+        <button
+          type="button"
+          onClick={() => {
+            setOpen(true);
+          }}
+          className={`fixed bottom-4 ${dock} z-40 rounded-full border border-line bg-surface px-4 py-2 text-sm shadow-lg hover:border-ink`}
+        >
+          Briefs in progress ({ids.length})
+        </button>
+      </>
     );
   }
   return (
-    <aside aria-label="Briefs in progress" className={`fixed bottom-4 ${dock} z-40 w-[22rem] max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-line bg-surface shadow-lg`}>
-      <div className="flex h-11 items-center justify-between gap-2 border-b border-divider bg-canvas pl-4 pr-2">
-        <p className="text-xs font-semibold tracking-[0.08em] text-muted uppercase">Briefs in progress</p>
-        <div className="flex items-center text-xs">
-          <button type="button" onClick={flip} className="min-h-11 px-2 text-muted hover:text-ink">
-            {side === "right" ? "Move left" : "Move right"}
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setOpen(false);
-            }}
-            className="min-h-11 px-2 text-muted hover:text-ink"
-          >
-            Hide
-          </button>
+    <>
+      <TraySpacer height={`min(calc(50vh + 4rem), ${String(4 + 6 * ids.length)}rem)`} />
+      <aside aria-label="Briefs in progress" className={`fixed bottom-4 ${dock} z-40 w-[22rem] max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-line bg-surface shadow-lg`}>
+        <div className="flex h-11 items-center justify-between gap-2 border-b border-divider bg-canvas pl-4 pr-2">
+          <p className="text-xs font-semibold tracking-[0.08em] text-muted uppercase">Briefs in progress</p>
+          <div className="flex items-center text-xs">
+            <button type="button" onClick={flip} className="min-h-11 px-2 text-muted hover:text-ink">
+              {side === "right" ? "Move left" : "Move right"}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+              }}
+              className="min-h-11 px-2 text-muted hover:text-ink"
+            >
+              Hide
+            </button>
+          </div>
         </div>
-      </div>
-      <ul className="max-h-[50vh] overflow-y-auto">
-        {ids.map((id) => (
-          <TrayItem
-            key={id}
-            id={id}
-            onClose={() => {
-              untrackRun(id);
-            }}
-          />
-        ))}
-      </ul>
-    </aside>
+        <ul className="max-h-[50vh] overflow-y-auto">
+          {ids.map((id) => (
+            <TrayItem
+              key={id}
+              id={id}
+              onClose={() => {
+                untrackRun(id);
+              }}
+            />
+          ))}
+        </ul>
+      </aside>
+    </>
   );
+}
+
+/** In-flow space at the end of the page as tall as the docked tray, so the last button on a page can scroll above it. */
+function TraySpacer({ height }: { height: string }): React.JSX.Element {
+  return <div aria-hidden="true" className="shrink-0" style={{ height }} />;
 }

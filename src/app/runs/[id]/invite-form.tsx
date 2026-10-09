@@ -9,6 +9,7 @@
  * Key responsibilities:
  * - InviteForm: disclosure with labelled date, time (local, default next working day 10:00) and duration (30/45/60/90,
  *   default 60) fields and a "Download .ics" button that builds the invite at click time with this page as the brief link
+ * - `asButton` + `id`: the kit card's "Add interview to calendar" secondary button; the phone bar opens it by id
  * - The invite is in the report language (`language`, idea #24 follow-up); a Czech one downloads as interview-<id>-cs.ics
  *
  * Design constraints:
@@ -56,7 +57,8 @@ function downloadIcs(text: string, fileName: string): void {
   }, 0);
 }
 
-export function InviteForm({ state, language }: { state: RunState; language: Report }): React.JSX.Element {
+/** `asButton`: the summary reads as a secondary button ("Add interview to calendar"), for the kit card in the sidebar. */
+export function InviteForm({ state, language, id: anchor, asButton = false }: { state: RunState; language: Report; id?: string; asButton?: boolean }): React.JSX.Element {
   const [date, setDate] = useState(() => nextWorkingDay(new Date()));
   const [time, setTime] = useState("10:00");
   const [minutes, setMinutes] = useState<number>(60);
@@ -70,10 +72,10 @@ export function InviteForm({ state, language }: { state: RunState; language: Rep
   };
 
   return (
-    <details className="group">
-      <summary className={SUMMARY}>
+    <details className="group" id={anchor}>
+      <summary className={asButton ? `${BTN_SECONDARY} w-full cursor-pointer list-none [&::-webkit-details-marker]:hidden` : SUMMARY}>
         <Chevron />
-        Add interview to calendar (.ics)
+        Add interview to calendar{asButton ? "" : " (.ics)"}
       </summary>
       <div className="mt-3 flex flex-col gap-3">
         <div className="flex flex-wrap items-end gap-3">

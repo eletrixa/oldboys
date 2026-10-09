@@ -20,6 +20,7 @@ import { facebookSearch } from "@/recipe/sources/facebook-search";
 import { github } from "@/recipe/sources/github";
 import { githubApify } from "@/recipe/sources/github-apify";
 import { githubDeep } from "@/recipe/sources/github-deep";
+import { githubSearch } from "@/recipe/sources/github-search";
 import { googleSearch } from "@/recipe/sources/google-search";
 import { huggingface } from "@/recipe/sources/huggingface";
 import { instagram } from "@/recipe/sources/instagram";
@@ -44,6 +45,7 @@ const all: readonly Collector[] = [
   github,
   githubDeep,
   githubApify,
+  githubSearch,
   stackexchange,
   huggingface,
   orcid,
