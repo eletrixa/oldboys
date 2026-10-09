@@ -9,7 +9,7 @@
  * Key responsibilities:
  * - finishAnswers: null without a row, [] for old rows or junk, parsed answers otherwise
  * - normalizeNumber / validNumber; formProblems lists every reason the call button is disabled
- * - draftsFromProposal / toHrQuestions round trip; callPhase per status; formatAt; usageLine; placedCalls
+ * - draftsFromProposal / toHrQuestions round trip (follow-up and listen-for kept through an edit); callPhase per status; formatAt; usageLine; placedCalls
  *
  * Design constraints:
  * - Pure: no React, no fetch
@@ -111,6 +111,17 @@ describe("drafts", () => {
     expect(toHrQuestions([...drafts, { key: "new-1", text: " New one? " }])).toEqual([
       { question_id: "mh-1", text: "Go?", why: "No public evidence: Go" },
       { text: "New one?" },
+    ]);
+  });
+
+  it("keeps an AI draft's follow-up and listen-for through an edit of the text", () => {
+    const [draft] = draftsFromProposal({
+      questions: [{ question_id: "ai-1", text: "Which part of the DAGs is yours?", expected: "", follow_up: "Which operators?", listen_for: "Own part, scale." }],
+    });
+    if (draft === undefined) throw new Error("no draft");
+    const edited = { ...draft, text: " Which part of the Airflow DAGs did you build? " };
+    expect(toHrQuestions([edited])).toEqual([
+      { question_id: "ai-1", text: "Which part of the Airflow DAGs did you build?", follow_up: "Which operators?", listen_for: "Own part, scale." },
     ]);
   });
 });

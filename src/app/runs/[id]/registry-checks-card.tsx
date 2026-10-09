@@ -81,11 +81,11 @@ export function RegistryChecksCard({ checks }: { checks: RegistryChecks | null |
   const clear = checks.checks.filter((c) => c.status === "clear");
   const shown = checks.checks.filter((c) => c.status !== "clear");
   return (
-    <section aria-labelledby="registry-checks">
+    <section aria-labelledby="registry-checks" className="border-t border-divider pt-6">
       <Eyebrow>Czech public registries · name search</Eyebrow>
-      <h3 id="registry-checks" className="mt-1 font-sans text-base font-semibold">
+      <h2 id="registry-checks" className="mt-1 font-sans text-base font-semibold">
         Public registries
-      </h3>
+      </h2>
       <p className="mt-1 text-sm text-muted">
         {String(checks.checks.length)} of {String(REGISTRIES.length)} registries searched for {checks.subject}
         {checks.role !== null && ` (role: ${checks.role})`}.
@@ -112,7 +112,7 @@ export function RegistryChecksCard({ checks }: { checks: RegistryChecks | null |
       )}
       {manual.length > 0 && (
         <div className="mt-4">
-          <h4 className="text-xs font-semibold text-muted">Check by hand</h4>
+          <h3 className="text-xs font-semibold text-muted">Check by hand</h3>
           <p className="mt-1 text-xs text-muted">The role also needs these registries, which allow no automated query (CAPTCHA or signed access).</p>
           <ul className="mt-1 divide-y divide-divider border-y border-divider text-sm">
             {manual.map((r) => (

@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/recipe/goals/hiring.ts
- * Deps:    none
+ * Deps:    src/recipe/sources/personal-site (PERSONAL_SITE_ACTOR)
  * Tested:  src/recipe/__tests__/goals.test.ts
  *
  * Key responsibilities:
@@ -19,6 +19,8 @@
  *   the manager when the account found is only possibly-same-as, so the deep steps get a confirmed handle
  * - `github_deep` (technical roles only: engineering, data; src/domain/code-profile TECHNICAL_FAMILIES) scrapes every confirmed GitHub account in depth;
  *   `github_apify` then adds the profile page's own numbers (saswave/github-profile-scraper)
+ * - `personal_site_crawl` (PERSONAL_SITE_ACTOR, src/recipe/sources/personal-site): crawls a site whose domain is the
+ *   subject's name (robertvojacek.cz) found among the hits; its pages are the subject's own writing (merged)
  * - `role_sites_serp`: the matched role template's evidence sites (src/domain/role-catalog) as one `site:` search
  * - Depth (plans/013): free REST collectors `sec_edgar` (SEC EDGAR full-text search), `wikipedia` (en + cs), `podcast_episodes`
  *   (Apple Podcasts index); four more packed SERP steps (regulatory_serp, legal_serp, business_press_serp, boards_serp); and
@@ -32,6 +34,7 @@
  *   in `cz_registries` is a different question (records under the candidate's name)
  * - Shares fewer than half of its step ids with due-diligence (goal switch must change substance)
  */
+import { PERSONAL_SITE_ACTOR } from "@/recipe/sources/personal-site";
 import type { Recipe } from "@/recipe/step";
 
 export const hiringRecipe: Recipe = {
@@ -87,7 +90,7 @@ export const hiringRecipe: Recipe = {
     { id: "youtube_channel", kind: "actor", actor: "streamers/youtube-scraper", onEmpty: { gap: "no YouTube videos or channel found" } },
     { id: "facebook_page", kind: "actor", actor: "apify/facebook-pages-scraper", onEmpty: { gap: "no public Facebook page or profile under the candidate's name (Facebook search and web search)" } },
     { id: "bluesky_profile", kind: "actor", actor: "rest/bluesky", onEmpty: { gap: "no Bluesky account found" } },
-    { id: "personal_site_crawl", kind: "actor", actor: "apify/website-content-crawler", onEmpty: { gap: "no personal site found" } },
+    { id: "personal_site_crawl", kind: "actor", actor: PERSONAL_SITE_ACTOR, onEmpty: { gap: "no personal site found" } },
     { id: "role_sites_serp", kind: "serp", actor: "apify/google-search-scraper", query: '"{subject}" {role_sites}', onEmpty: { gap: "no hits on the role's evidence sites (or the role matched no template)" } },
     { id: "cz_registries", kind: "actor", actor: "rest/cz-registries", onEmpty: { gap: "Czech public registries not checked (name could not be split into given name and surname)" } },
     { id: "talks_serp", kind: "serp", actor: "apify/google-search-scraper", query: '"{subject}" talk OR podcast OR conference OR webinar OR přednáška\n"{subject}" blog OR article OR medium.com OR substack.com', onEmpty: { gap: "no talks, podcasts or articles found in web search" } },

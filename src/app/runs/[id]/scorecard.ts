@@ -13,11 +13,12 @@
  * - scorecard(state): null without a brief; fit from the hiring role's position_fit traits, else from per_question
  *   `mh-*` coverage (weight 1), null when there are no must-haves; pluses (must-haves with evidence, partly evidenced
  *   must-haves, achievements with an independent line, CV matches), minuses (must-haves without evidence, risks, CV
- *   differences, challenged claims, registry records: attributed ones listed (REGISTRY_LISTED per registry), name-only ones as one
- *   summary line per registry; account signals with a question),
+ *   differences, challenged claims), checks (registry records: attributed ones listed (REGISTRY_LISTED per registry), name-only
+ *   ones as one summary line per registry; account signals with a question; counted in neither column),
  *   notes (steps not searched or empty, AI off)
- * - Points: a must-have's share of 100, signed; every other line carries 0 ("no effect on fit"); a must-have whose only
- *   evidence is the CV carries CV_ONLY in its text
+ * - Points: a must-have's share of 100, signed, with the role weight; every other line carries 0 ("no effect on fit"); a
+ *   must-have whose only evidence is the CV carries CV_ONLY in its text and the kind CLAIMED; every must-have without full
+ *   evidence carries mustHaveAsk as its interview move
  * - Shared wording for the card and the text export: askLine, pointsLabel, checkedLabel, hasScorecard, SCORECARD_NOTE
  *
  * Design constraints:
@@ -33,10 +34,12 @@ import { challengeReason } from "./challenge";
 import { cvRows, isCvSection } from "./cv-check";
 import { hiringFor, isCvSource, type RunState } from "./state";
 
-type ScoreSide = "plus" | "minus";
+/** plus / minus sit in the two columns; check = a public record or account fact to resolve at the interview, counted in neither. */
+type ScoreSide = "plus" | "minus" | "check";
 type ScoreArea = "must-have" | "achievement" | "risk" | "cv" | "challenge" | "registry" | "signal";
 /** FACT / INFERENCE as the evidence says; CHECK = a script result (CV comparison, registry search, account facts). */
-export type ScoreKind = "FACT" | "INFERENCE" | "CHECK";
+/** FACT / INFERENCE as the evidence says; CLAIMED = the only evidence is the candidate's own CV; CHECK = a script result. */
+export type ScoreKind = "FACT" | "INFERENCE" | "CLAIMED" | "CHECK";
 
 export type ScoreItem = {
   id: string;
@@ -44,6 +47,8 @@ export type ScoreItem = {
   area: ScoreArea;
   text: string;
   kind: ScoreKind;
+  /** Role weight 0..3 of a must-have line; null elsewhere. */
+  weight: number | null;
   /** Effect on the fit figure in points of 100, signed; 0 outside the must-haves. */
   points: number;
   /** Source ids of the evidence lines (profile evidence, claim supports); resolved to links by the card. */
@@ -61,6 +66,8 @@ export type Scorecard = {
   checked: { evidenced: number; partial: number; none: number; total: number };
   pluses: ScoreItem[];
   minuses: ScoreItem[];
+  /** Public records and account facts to resolve at the interview; never counted as a minus. */
+  checks: ScoreItem[];
   notes: string[];
 };
 
@@ -102,9 +109,9 @@ function share(weight: number, total: number): number {
   return total === 0 ? 0 : Math.round((weight / total) * 100);
 }
 
-/** "Ask: …" unless the producer already wrote a "Check: …" line. */
+/** "Ask: …" unless the producer already wrote a "Check: …" or "Challenged: …" line. */
 export function askLine(ask: string): string {
-  return ask.startsWith("Check:") ? ask : `Ask: ${ask}`;
+  return /^(?:Check|Challenged):/.test(ask) ? ask : `Ask: ${ask}`;
 }
 
 /** "+14 pts", "−14 pts" or "no effect on fit". */
@@ -122,7 +129,22 @@ export function checkedLabel(c: Scorecard["checked"]): string {
 
 /** A card worth showing: a figure or at least one line. */
 export function hasScorecard(card: Scorecard | null): card is Scorecard {
-  return card !== null && (card.fit !== null || card.pluses.length > 0 || card.minuses.length > 0);
+  return card !== null && (card.fit !== null || card.pluses.length > 0 || card.minuses.length > 0 || card.checks.length > 0);
+}
+
+/**
+ * The record's substance without the person line: registry labels read "<name>, <address> — <role> at <company> …", and
+ * the address belongs in the registry card, not in a scorecard line. Labels without the separator are kept whole.
+ */
+function recordText(label: string): string {
+  const i = label.indexOf(" \u2014 ");
+  return i === -1 ? label : label.slice(i + 3);
+}
+
+/** The interview move for a must-have the sources did not show: one case, one number, one person who can confirm it. */
+export function mustHaveAsk(trait: string): string {
+  const t = trait.trim().replace(/[.:;,]+$/, "");
+  return `Where would we see ${t.charAt(0).toLowerCase()}${t.slice(1)} in your work? Name one case, one number and one person who can confirm it.`;
 }
 
 /** Suffix of a must-have line whose only evidence is the candidate's own CV. */
@@ -134,13 +156,14 @@ function mustHaveItems(traits: readonly Trait[], fromCoverage: boolean, isCv: (s
     const pts = share(t.weight, total);
     const lines = supporting(t.evidence);
     const ids = sourceIds(lines);
-    const base = { id: `mh-${String(i)}`, area: "must-have" as const, source_ids: ids, urls: [], ask: null };
-    const kind: ScoreKind = fromCoverage ? "CHECK" : t.evidence.length === 0 ? "INFERENCE" : kindOf(lines);
-    // A must-have resting on the CV alone is self-reported: said so in the line, never hidden behind "FACT".
-    const cvOnly = ids.length > 0 && ids.every(isCv) ? `, ${CV_ONLY}` : "";
-    if (t.status === "has") return { ...base, side: "plus", text: `${t.trait}${cvOnly}`, kind, points: pts };
-    if (t.status === "partial") return { ...base, side: "plus", text: `${t.trait}, partly evidenced${cvOnly}`, kind, points: share(t.weight / 2, total) };
-    return { ...base, side: "minus", text: `${t.trait}: no public evidence`, kind: "CHECK", points: -pts };
+    const base = { id: `mh-${String(i)}`, area: "must-have" as const, weight: t.weight, source_ids: ids, urls: [], ask: null };
+    // A must-have resting on the CV alone is self-reported: the line says so and carries CLAIMED, never FACT.
+    const cvOnly = ids.length > 0 && ids.every(isCv);
+    const kind: ScoreKind = fromCoverage ? "CHECK" : cvOnly ? "CLAIMED" : t.evidence.length === 0 ? "INFERENCE" : kindOf(lines);
+    const suffix = cvOnly ? `, ${CV_ONLY}` : "";
+    if (t.status === "has") return { ...base, side: "plus", text: `${t.trait}${suffix}`, kind, points: pts };
+    if (t.status === "partial") return { ...base, side: "plus", text: `${t.trait}, partly evidenced${suffix}`, kind, points: share(t.weight / 2, total), ask: mustHaveAsk(t.trait) };
+    return { ...base, side: "minus", text: `${t.trait}: no public evidence`, kind: "CHECK", points: -pts, ask: mustHaveAsk(t.trait) };
   });
 }
 
@@ -149,7 +172,7 @@ function achievementItems(items: readonly ProfileItem[]): ScoreItem[] {
   return items.flatMap((a, i) => {
     const strong = supporting(a.evidence).filter((e) => e.strength === "strong");
     if (strong.length === 0) return [];
-    return [{ id: `ach-${String(i)}`, side: "plus" as const, area: "achievement" as const, text: a.text, kind: kindOf(strong), points: 0, source_ids: sourceIds(strong), urls: [], ask: null }];
+    return [{ id: `ach-${String(i)}`, side: "plus" as const, area: "achievement" as const, weight: null, text: a.text, kind: kindOf(strong), points: 0, source_ids: sourceIds(strong), urls: [], ask: null }];
   });
 }
 
@@ -157,7 +180,7 @@ function riskItems(profile: Profile): ScoreItem[] {
   return profile.risks.map((r, i) => {
     const lines = r.evidence;
     const closes = profile.questions.find((q) => q.closes.trim().toLowerCase() === r.text.trim().toLowerCase());
-    return { id: `risk-${String(i)}`, side: "minus", area: "risk", text: r.text, kind: lines.length === 0 ? "INFERENCE" : kindOf(lines), points: 0, source_ids: sourceIds(lines), urls: [], ask: closes?.text ?? null };
+    return { id: `risk-${String(i)}`, side: "minus", area: "risk", weight: null, text: r.text, kind: lines.length === 0 ? "INFERENCE" : kindOf(lines), points: 0, source_ids: sourceIds(lines), urls: [], ask: closes?.text ?? null };
   });
 }
 
@@ -172,6 +195,7 @@ function cvItems(state: RunState): ScoreItem[] {
     id: `cv-${String(i)}`,
     side: "minus",
     area: "cv",
+    weight: null,
     text: r.claim.text,
     kind: "CHECK",
     points: 0,
@@ -184,6 +208,7 @@ function cvItems(state: RunState): ScoreItem[] {
       id: "cv-matches",
       side: "plus",
       area: "cv",
+      weight: null,
       text: `${String(matches)} CV ${matches === 1 ? "statement matches" : "statements match"} the public record`,
       kind: "CHECK",
       points: 0,
@@ -200,7 +225,7 @@ function challengeItems(state: RunState): ScoreItem[] {
   return (state.challenges ?? []).flatMap((ch, i) => {
     const claim = byId.get(ch.claim_id);
     if (claim === undefined) return [];
-    return [{ id: `ch-${String(i)}`, side: "minus" as const, area: "challenge" as const, text: claim.text, kind: "INFERENCE" as const, points: 0, source_ids: claim.supports, urls: [], ask: challengeReason(ch) }];
+    return [{ id: `ch-${String(i)}`, side: "minus" as const, area: "challenge" as const, weight: null, text: claim.text, kind: "INFERENCE" as const, points: 0, source_ids: claim.supports, urls: [], ask: challengeReason(ch) }];
   });
 }
 
@@ -215,9 +240,10 @@ function registryItems(state: RunState): ScoreItem[] {
     const nameOnly = check.hits.length - matched.length;
     const listed = matched.slice(0, REGISTRY_LISTED).map((h, i) => ({
       id: `reg-${check.registry}-${String(i)}`,
-      side: "minus" as const,
+      side: "check" as const,
       area: "registry" as const,
-      text: `${name}: ${h.label}`,
+      weight: null,
+      text: `${name}: ${recordText(h.label)}`,
       kind: "CHECK" as const,
       points: 0,
       source_ids: [],
@@ -232,8 +258,9 @@ function registryItems(state: RunState): ScoreItem[] {
       ...listed,
       {
         id: `reg-${check.registry}-rest`,
-        side: "minus" as const,
+        side: "check" as const,
         area: "registry" as const,
+        weight: null,
         text: `${name}: ${what}`,
         kind: "CHECK" as const,
         points: 0,
@@ -247,7 +274,7 @@ function registryItems(state: RunState): ScoreItem[] {
 
 function signalItems(state: RunState): ScoreItem[] {
   return (state.profile_signals?.signals ?? []).flatMap((s, i) =>
-    s.ask === null ? [] : [{ id: `sig-${String(i)}`, side: "minus" as const, area: "signal" as const, text: s.text, kind: "CHECK" as const, points: 0, source_ids: [], urls: [s.source_url], ask: s.ask }],
+    s.ask === null ? [] : [{ id: `sig-${String(i)}`, side: "check" as const, area: "signal" as const, weight: null, text: s.text, kind: "CHECK" as const, points: 0, source_ids: [], urls: [s.source_url], ask: s.ask }],
   );
 }
 
@@ -287,9 +314,10 @@ export function scorecard(state: RunState): Scorecard | null {
     },
     pluses: items.filter((i) => i.side === "plus"),
     minuses: items.filter((i) => i.side === "minus"),
+    checks: items.filter((i) => i.side === "check"),
     notes: notes(brief),
   };
 }
 
 export const SCORECARD_NOTE =
-  "The figure is the share of the role's must-haves with evidence, weighted as the role weights them; a line resting on the CV alone says so. It is not a prediction of performance and not a judgement of the person. Lines under “no effect on fit” are points for the interview, not deductions.";
+  "The figure is the share of the role's must-haves with evidence, weighted as the role weights them (weight 0 to 3 is printed on each line); a line resting on the CV alone is marked CLAIMED. It is not a prediction of performance and not a judgement of the person. Lines under “no effect on fit” and “Checked, unresolved” are points for the interview, not deductions.";

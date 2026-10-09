@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/runs/[id]/brief-ui-text.ts
- * Deps:    src/domain/call (type), ./brief-layout (types)
+ * Deps:    src/app/_lib/plural, src/domain/{call,application} (types), src/app/intake/intake-rows (intakeLine, RunIntake), ./brief-layout (types)
  * Tested:  src/app/runs/[id]/__tests__/i18n.test.ts (both languages have the same keys, no verdict words)
  *
  * Key responsibilities:
@@ -11,10 +11,13 @@
  * - Czech: formal, gender-neutral; the words describe the research and the process, never the person
  *
  * Design constraints:
- * - Pure data; the phone panel and the kit sidebar stay English (lang="en") like before
+ * - Pure data; the phone panel and the kit sidebar labels live in phone-kit-text.ts (`report.t.call`, `report.t.kit`)
  */
+import { intakeLine, type RunIntake } from "@/app/intake/intake-rows";
+import type { ApplicationSource } from "@/domain/application";
+import { plural } from "@/app/_lib/plural";
 import type { CallAnswerStatus } from "@/domain/call";
-import type { GapGroup, HiringStep } from "./brief-layout";
+import { type GapGroup, type HiringStep, shortDay } from "./brief-layout";
 
 export type BriefUi = {
   eyebrow: string;
@@ -94,9 +97,19 @@ export type BriefUi = {
   gapsTitle: string;
   gapsIntro: string;
   gapGroup: Record<GapGroup, string>;
+  /** Header line of a run an application started: "From Email · tag · 2026-10-09" / "Added by hand · 2026-10-09". */
+  intakeLine: (intake: RunIntake) => string;
+  /** CACHED pill detail: "run from 2026-10-09 02:46 UTC". */
+  cachedFrom: (at: string) => string;
+  about: string;
+  aboutRows: { run: string; time: string; sourceCalls: string; aiCalls: string; cost: string };
+  costValue: (usd: number) => string;
+  auditRecord: string;
+  /** Short day for the steps and the phone pill: "9 Oct" / "9. 10."; "" when it does not parse. */
+  day: (iso: string) => string;
+  /** Screen-reader suffix of a finished step. */
+  doneSr: string;
 };
-
-const plural = (n: number, one: string, many: string): string => `${String(n)} ${n === 1 ? one : many}`;
 
 export const UI_EN: BriefUi = {
   eyebrow: "Candidate brief",
@@ -185,7 +198,29 @@ export const UI_EN: BriefUi = {
     login: "Not searched: needs a login",
     other: "Not searched, other reasons",
   },
+  intakeLine,
+  cachedFrom: (at) => `run from ${at} UTC`,
+  about: "About this research",
+  aboutRows: { run: "Run", time: "Research time", sourceCalls: "Source calls", aiCalls: "AI calls", cost: "Cost" },
+  costValue: (usd) => `$${usd.toFixed(2)}`,
+  auditRecord: "Audit record",
+  day: (iso) => shortDay(iso),
+  doneSr: " (done)",
 };
+
+const INTAKE_FROM_CS: Readonly<Record<ApplicationSource, string>> = {
+  email: "Z e-mailu",
+  form: "Z Google Formuláře",
+  "apply-page": "Z přihlašovací stránky",
+  startupjobs: "Ze StartupJobs",
+  manual: "Přidáno ručně",
+};
+
+/** "9. 10. 2026" (UTC day); the raw string when it does not parse. */
+function czDay(iso: string): string {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? iso : `${String(d.getUTCDate())}. ${String(d.getUTCMonth() + 1)}. ${String(d.getUTCFullYear())}`;
+}
 
 /** Czech plural for counts: 1 / 2–4 / 5+. */
 const cz = (n: number, one: string, few: string, many: string): string => `${String(n)} ${n === 1 ? one : n >= 2 && n <= 4 ? few : many}`;
@@ -277,4 +312,15 @@ export const UI_CS: BriefUi = {
     login: "Neprohledáno: vyžaduje přihlášení",
     other: "Neprohledáno, jiné důvody",
   },
+  intakeLine: (intake) => [INTAKE_FROM_CS[intake.source], ...(intake.tag === null ? [] : [intake.tag]), czDay(intake.receivedAt)].join(" · "),
+  cachedFrom: (at) => `běh z ${at} UTC`,
+  about: "O tomto výzkumu",
+  aboutRows: { run: "Běh", time: "Doba výzkumu", sourceCalls: "Volání zdrojů", aiCalls: "Volání AI", cost: "Náklady" },
+  costValue: (usd) => `${usd.toFixed(2).replace(".", ",")} USD`,
+  auditRecord: "Záznam pro audit",
+  day: (iso) => {
+    const d = new Date(iso);
+    return Number.isNaN(d.getTime()) ? "" : `${String(d.getUTCDate())}. ${String(d.getUTCMonth() + 1)}.`;
+  },
+  doneSr: " (hotovo)",
 };

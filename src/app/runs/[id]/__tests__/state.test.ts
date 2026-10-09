@@ -147,12 +147,12 @@ describe("stalled run helpers", () => {
   const base = { status: "running" as const, created_at: "2026-10-09T10:00:00.000Z", position: null };
   it("retryHref goes to the position's form or the plain one", () => {
     expect(retryHref({ id: "p 1", title: "T" })).toBe("/briefs/new?positionId=p%201");
-    expect(retryHref(null)).toBe("/briefs/new");
-    expect(retryHref(undefined)).toBe("/briefs/new");
+    expect(retryHref(null)).toBe("/");
+    expect(retryHref(undefined)).toBe("/");
   });
   it("stalledNotice shows after 30 idle minutes, from last_at else created_at", () => {
     expect(stalledNotice(base, "2026-10-09T10:20:00.000Z")).toBeNull();
-    expect(stalledNotice(base, "2026-10-09T10:31:00.000Z")).toEqual({ href: "/briefs/new" });
+    expect(stalledNotice(base, "2026-10-09T10:31:00.000Z")).toEqual({ href: "/" });
     expect(stalledNotice({ ...base, last_at: "2026-10-09T10:30:00.000Z" }, "2026-10-09T10:31:00.000Z")).toBeNull();
     expect(stalledNotice({ ...base, position: { id: "p1", title: "T" } }, "2026-10-09T12:00:00.000Z")).toEqual({ href: "/briefs/new?positionId=p1" });
     expect(stalledNotice({ ...base, status: "done" }, "2026-10-09T12:00:00.000Z")).toBeNull();

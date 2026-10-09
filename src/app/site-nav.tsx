@@ -3,11 +3,11 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/site-nav.tsx
- * Deps:    next/link, @/domain/session (SessionUser type), ./logout-button
+ * Deps:    next/link, @/domain/session (SessionUser type), ./logout-button, ./nav-menu
  * Tested:  n/a
  *
  * Key responsibilities:
- * - Logged out: landing anchors (The brief, How it works, Trust, FAQ; md and up), Log in, Create account, always on one row beside the mark. Logged in: Positions and Roles (sm and up), My briefs, organization name (md and up), Log out (md and up), New brief (secondary, always visible, "New" under sm); one row at 390px
+ * - Logged out: landing anchors (The brief, How it works, Trust, FAQ; md and up), Log in, Create account, always on one row beside the mark. Logged in: My briefs and New brief (secondary, "New" under sm) at every width; Positions, Roles, organization name and Log out inline from md, in the "Menu" overflow under md; one row at 390px
  *
  * Design constraints:
  * - Server component; rendered inside the layout's header next to the Radar mark
@@ -17,6 +17,7 @@ import Link from "next/link";
 import type { SessionUser } from "@/domain/session";
 import { LogoutButton } from "./logout-button";
 import { NavLink } from "./nav-link";
+import { NavMenu } from "./nav-menu";
 import { BTN_QUIET, BTN_SECONDARY } from "./ui";
 
 /** Landing section anchors for logged-out visitors; hidden on phones where the header has room for the two actions only. */
@@ -36,7 +37,7 @@ export function SiteNav({ user }: { user: SessionUser | null }): React.JSX.Eleme
         </>
       ) : (
         <>
-          <span className="hidden sm:contents">
+          <span className="hidden md:contents">
             <NavLink href="/positions">Positions</NavLink>
             <NavLink href="/roles">Roles</NavLink>
           </span>
@@ -49,6 +50,12 @@ export function SiteNav({ user }: { user: SessionUser | null }): React.JSX.Eleme
             <span className="sm:hidden">New</span>
             <span className="hidden sm:inline">New brief</span>
           </Link>
+          <NavMenu>
+            <NavLink href="/positions">Positions</NavLink>
+            <NavLink href="/roles">Roles</NavLink>
+            <span className="truncate px-3 py-1 text-sm text-muted">{user.organizationName}</span>
+            <LogoutButton />
+          </NavMenu>
         </>
       )}
     </nav>

@@ -10,7 +10,7 @@
  * - titleChoices: the selector's rows = the team's ingested positions (newest first) plus every catalog title not
  *   already ingested; a title only, never the company
  * - groupByFamily / indexTitles / filterTitles for the list
- * - ingestLabel for the ingest method chip
+ * - ingestLabel for the ingest method chip; positionOrigin: "From the role catalog" vs the ingest label, and "edited" only after a real edit
  * - addMustHave / removeMustHave for the inline editor
  *
  * Design constraints:
@@ -18,7 +18,7 @@
  * - Must-have ids start with mh- and stay unique; the list stays within 1..5 items
  */
 import { fold } from "@/domain/corroborate";
-import { FAMILIES, type Family, kebab, MAX_MUST_HAVES, type MustHave, type PositionListItem } from "@/domain/position";
+import { FAMILIES, type Family, kebab, MAX_MUST_HAVES, type MustHave, type Position, type PositionListItem } from "@/domain/position";
 import type { RoleOption } from "@/domain/role-catalog";
 
 const INGEST_LABELS: Readonly<Record<string, string>> = {
@@ -35,6 +35,24 @@ const INGEST_LABELS: Readonly<Record<string, string>> = {
 /** Human label for how the posting came in; unknown values pass through. */
 export function ingestLabel(method: string): string {
   return INGEST_LABELS[method] ?? method;
+}
+
+/** Field by field, never key order (the stored must-haves come back through the Zod schema in its own key order). */
+const mustHaveKey = (m: MustHave): string => JSON.stringify([m.id, m.title ?? null, m.text, m.accepted_evidence]);
+const sameMustHaves = (a: readonly MustHave[], b: readonly MustHave[]): boolean =>
+  a.length === b.length && a.every((m, i) => b[i] !== undefined && mustHaveKey(m) === mustHaveKey(b[i]));
+
+/**
+ * Where a position came from and whether a person changed its must-haves since. `catalog` = the role-catalog template's
+ * must-haves when the position was created from that catalog title (null otherwise): such a position reads "From the role
+ * catalog", "edited" only once its must-haves differ from the template (ingest stores catalog must-haves as `edited`).
+ */
+export function positionOrigin(
+  position: Pick<Position, "ingest_method" | "extraction" | "must_haves">,
+  catalog: readonly MustHave[] | null,
+): { label: string; edited: boolean } {
+  if (catalog !== null) return { label: "From the role catalog", edited: !sameMustHaves(position.must_haves, catalog) };
+  return { label: ingestLabel(position.ingest_method), edited: position.extraction === "edited" };
 }
 
 /** One selectable title: an ingested position (its page, run count) or a preselected catalog role (the start form). */

@@ -7,7 +7,8 @@
  * Tested:  n/a (this is the test)
  *
  * Key responsibilities:
- * - Every key exists in both languages with a non-empty value (quotesNote may be empty in English only)
+ * - Every key exists in both languages with a non-empty value (quotesNote may be empty in English only); the nested
+ *   phone panel (call) and kit sidebar (kit) labels have the same shape in both languages and no empty Czech string
  * - English labels match the page's existing words; Czech ones are the agreed terms
  * - makeReport: translated text by id, English per missing id, English everywhere for "en"
  * - The kind markers the translation writes into section summaries (KIND_MARKERS_CS) are the cs kind pills, uppercase
@@ -42,6 +43,33 @@ describe("REPORT_DICT", () => {
     }
     expect(REPORT_DICT.en.ui.saidByCandidate).toBe("Said by the candidate. Not public evidence.");
     expect(REPORT_DICT.cs.ui.noEvidenceTitle(0, 4)).toBe("Bez veřejného dokladu: 0 ze 4 kritérií pozice");
+  });
+
+  it("translates the header intake line, the CACHED detail and the research numbers of the Czech brief", () => {
+    const intake = { source: "manual" as const, tag: null, receivedAt: "2026-10-09T02:46:39Z" };
+    expect(REPORT_DICT.en.ui.intakeLine(intake)).toBe("Added by hand · 2026-10-09");
+    expect(REPORT_DICT.cs.ui.intakeLine(intake)).toBe("Přidáno ručně · 9. 10. 2026");
+    expect(REPORT_DICT.cs.ui.intakeLine({ source: "email", tag: "cmo", receivedAt: "2026-10-09T02:46:39Z" })).toBe("Z e-mailu · cmo · 9. 10. 2026");
+    expect(REPORT_DICT.en.ui.costValue(0.784)).toBe("$0.78");
+    expect(REPORT_DICT.cs.ui.costValue(0.784)).toBe("0,78 USD");
+    expect(REPORT_DICT.cs.ui.cachedFrom("2026-10-09 02:46")).toBe("běh z 2026-10-09 02:46 UTC");
+    expect(Object.keys(REPORT_DICT.cs.ui.aboutRows)).toEqual(Object.keys(REPORT_DICT.en.ui.aboutRows));
+    expect(REPORT_DICT.en.ui.day("2026-10-09T02:46:39Z")).toBe("9 Oct");
+    expect(REPORT_DICT.cs.ui.day("2026-10-09T02:46:39Z")).toBe("9. 10.");
+    expect(REPORT_DICT.cs.ui.day("nope")).toBe("");
+  });
+
+  it("has the same phone panel (call) and kit sidebar (kit) labels in English and Czech, all filled", () => {
+    const shape = (o: unknown): unknown =>
+      typeof o === "object" && o !== null ? Object.fromEntries(Object.entries(o).map(([k, v]) => [k, shape(v)]).sort(([x], [y]) => String(x).localeCompare(String(y)))) : typeof o;
+    for (const part of ["call", "kit"] as const) {
+      expect(shape(REPORT_DICT.cs[part]), part).toEqual(shape(REPORT_DICT.en[part]));
+      const walk = (o: unknown, path: string): void => {
+        if (typeof o === "string") expect(o, path).not.toBe("");
+        else if (typeof o === "object" && o !== null) for (const [k, v] of Object.entries(o)) walk(v, `${path}.${k}`);
+      };
+      walk(REPORT_DICT.cs[part], part);
+    }
   });
 
   it("keeps the English labels the page always had", () => {

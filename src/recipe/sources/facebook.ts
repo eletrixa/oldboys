@@ -8,7 +8,8 @@
  *
  * Key responsibilities:
  * - Request the facebook.com URLs of merged and possibly-same-as facebook candidates (at most 3; the lineup or the
- *   Facebook people search found them); one Source per page, "merged" identity only under a merged candidate
+ *   Facebook people search found them); one Source per page, "merged" identity only under a merged candidate;
+ *   `enriches`: the page is stored even though the people search already listed its URL (that hit has no intro or counts)
  *
  * Design constraints:
  * - Pure: no network; the runner performs the actor call. Parsing is lenient (unknown fields ignored)
@@ -19,7 +20,7 @@
 import { z } from "zod";
 import { lines, txt } from "@/recipe/sources/text";
 import type { Collector } from "@/recipe/sources/types";
-import { clip, identityFor, platformOf } from "@/recipe/sources/types";
+import { clip, identityFor, namesakeSkipReason, platformOf } from "@/recipe/sources/types";
 
 const Page = z.object({
   facebookUrl: z.string(),
@@ -39,9 +40,10 @@ export const facebookPage: Collector = {
       .flatMap((c) => c.profile_urls.filter((u) => platformOf(u) === "facebook"));
     const start = [...new Set(urls)].slice(0, 3);
     if (start.length === 0) return [];
-    return [{ via: "actor", actor: "apify/facebook-pages-scraper", input: { startUrls: start.map((url) => ({ url })) }, maxTotalChargeUsd: 0.04, timeoutSecs: 45 }];
+    return [{ via: "actor", actor: "apify/facebook-pages-scraper", input: { startUrls: start.map((url) => ({ url })) }, maxTotalChargeUsd: 0.04, timeoutSecs: 90 }];
   },
-  skipReason: () => "no Facebook profile under the candidate's name (Facebook people search and web search found none, or the lineup rejected them)",
+  enriches: true,
+  skipReason: (ctx) => namesakeSkipReason(ctx, "facebook", "Facebook", "no Facebook profile under the candidate's name (Facebook people search and web search found none)"),
   parse: (payload, ctx) => {
     const items = z.array(Page).safeParse(payload);
     if (!items.success) return [];

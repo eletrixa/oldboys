@@ -11,8 +11,10 @@
  * - ScorecardCard: nothing when the scorecard is null or has neither a figure nor a line; figure "n%" (or "—" with "no
  *   must-haves to score"), bar, "a of b must-haves evidenced, c partly"; Pluses / Minuses columns, VISIBLE lines each and the
  *   rest behind "Show all"; notes; the fixed honesty line
- * - Line: FACT / INFERENCE / CHECK label, "+14 pts" / "−14 pts" on must-have lines; open points (0) sit under one group label
- *   (OPEN_POINTS_LABEL) instead of a label per line; sources as "[host]" links (CV as text),
+ * - Line: FACT / INFERENCE / CLAIMED / CHECK label, "+14 pts" / "−14 pts" and "weight n" on must-have lines; open points (0)
+ *   sit under one group label (OPEN_POINTS_LABEL) instead of a label per line; sources
+ * - Checks block (CHECKS_TITLE): registry records and account facts under the columns with a "?" glyph, counted in neither column
+ * - Header: the evidence sentence ("2 of 4 must-haves evidenced, 1 partly") leads in serif, the weighted % stands beside it smaller as "[host]" links (CV as text),
  *   direct URLs for registry and signal lines (http(s) only), "Ask:" or "Check:" line in muted type
  *
  * Design constraints:
@@ -30,8 +32,13 @@ import { CV_SOURCE_TEXT, host, isCvSource } from "./state";
 const NOTE = "text-xs text-muted";
 /** Lines per column before the rest folds behind "Show all". */
 export const VISIBLE = 6;
+/** Heading of the records block under the two columns. */
+export const CHECKS_TITLE = "Checked, unresolved";
 
-const KIND_CLASS: Record<ScoreItem["kind"], string> = { FACT: "text-ok", INFERENCE: "text-inference", CHECK: "text-muted" };
+const KIND_CLASS: Record<ScoreItem["kind"], string> = { FACT: "text-ok", INFERENCE: "text-inference", CLAIMED: "text-unsure", CHECK: "text-muted" };
+
+/** "weight 2" for a must-have line. */
+export const weightLabel = (w: number): string => `weight ${String(w)}`;
 
 function Bar({ pct }: { pct: number }): React.JSX.Element {
   return (
@@ -70,17 +77,19 @@ function Sources({ item, evidence }: { item: ScoreItem; evidence: Evidence }): R
 export const OPEN_POINTS_LABEL = "No effect on fit, for the interview";
 
 function Line({ item, evidence }: { item: ScoreItem; evidence: Evidence }): React.JSX.Element {
-  const sign = item.side === "plus" ? "+" : "\u2212";
+  const glyph = item.side === "plus" ? "+" : item.side === "minus" ? "\u2212" : "?";
+  const tone = item.side === "plus" ? "text-ok" : item.side === "minus" ? "text-conflict" : "text-muted";
   return (
     <li className="grid grid-cols-[1.25rem_minmax(0,1fr)] gap-x-2 border-t border-divider py-2.5 first:border-t-0">
-      <span aria-hidden="true" className={`font-serif text-lg leading-6 ${item.side === "plus" ? "text-ok" : "text-conflict"}`}>
-        {sign}
+      <span aria-hidden="true" className={`font-serif text-lg leading-6 ${tone}`}>
+        {glyph}
       </span>
       <span className="min-w-0">
         <span className="block text-sm text-ink">{item.text}</span>
         <span className={`mt-1 flex flex-wrap items-baseline gap-x-2 gap-y-0.5 ${NOTE}`}>
           <span className={`font-semibold tracking-wide ${KIND_CLASS[item.kind]}`}>{item.kind}</span>
           {item.points !== 0 && <span className="font-semibold text-ink tabular-nums">{pointsLabel(item.points)}</span>}
+          {item.weight !== null && <span className="tabular-nums">{weightLabel(item.weight)}</span>}
           <Sources item={item} evidence={evidence} />
         </span>
         {item.ask !== null && <span className={`mt-1 block ${NOTE}`}>{askLine(item.ask)}</span>}
@@ -137,15 +146,16 @@ export function ScorecardCard({ card, evidence }: { card: Scorecard | null; evid
       <h2 id="scorecard" className="mt-1 font-serif text-2xl">
         Role fit scorecard
       </h2>
-      <div className="pf-verdict mt-4 grid grid-cols-[auto_minmax(0,1fr)] items-end gap-x-5 gap-y-2">
-        <p className="font-serif text-5xl leading-none text-ink tabular-nums">{card.fit === null ? "—" : `${String(card.fit)}%`}</p>
-        <div className="min-w-0 pb-1">
-          <p className="text-sm text-ink">
-            <span className="text-muted">Fit, </span>
-            {card.role ?? "the role"}
+      {/* The evidence sentence leads; the weighted figure stands beside it, smaller, so the page reads as a count, not a grade. */}
+      <div className="pf-verdict mt-4 grid grid-cols-[minmax(0,1fr)_auto] items-end gap-x-5 gap-y-2">
+        <div className="min-w-0">
+          <p className="font-serif text-2xl leading-tight text-ink">{checkedLabel(card.checked)}</p>
+          <p className={`mt-1 ${NOTE}`}>
+            <span>{card.role ?? "the role"}</span>
+            {card.fit !== null && <span>{" · weighted fit, see each line's points and weight"}</span>}
           </p>
-          <p className={`mt-1 ${NOTE}`}>{checkedLabel(card.checked)}</p>
         </div>
+        <p className="font-serif text-3xl leading-none text-ink tabular-nums">{card.fit === null ? "\u2014" : `${String(card.fit)}%`}</p>
         <div className="col-span-2">
           <Bar pct={card.fit ?? 0} />
         </div>
@@ -154,6 +164,16 @@ export function ScorecardCard({ card, evidence }: { card: Scorecard | null; evid
         <Column title="Pluses" items={card.pluses} evidence={evidence} empty="No must-have has public evidence yet." />
         <Column title="Minuses" items={card.minuses} evidence={evidence} empty="No open point found in public data." />
       </div>
+      {card.checks.length > 0 && (
+        <div className="mt-6">
+          <h3 className="flex items-baseline justify-between border-b border-divider pb-2 font-serif text-lg">
+            {CHECKS_TITLE}
+            <span className={`${NOTE} tabular-nums`}>{String(card.checks.length)}</span>
+          </h3>
+          <p className={`mt-2 ${NOTE}`}>Public records and account facts found under the name. Not a minus: each is a question with its link.</p>
+          <Lines items={card.checks} evidence={evidence} labelled={false} />
+        </div>
+      )}
       {card.notes.length > 0 && (
         <ul className={`mt-4 space-y-1 ${NOTE}`}>
           {card.notes.map((n) => (

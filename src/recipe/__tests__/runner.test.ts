@@ -72,6 +72,24 @@ describe("executeStep collection", () => {
     expect(out.notes).toEqual(["no confirmed handle or id to look up"]);
   });
 
+  it("stores an enriching collector's page even when a search step already listed its URL (only its own repeats are skipped)", async () => {
+    const url = "https://www.instagram.com/jana/";
+    const collector: Collector = {
+      id: "fake/profile",
+      enriches: true,
+      requests: () => [{ via: "actor", actor: "fake/profile", input: {}, maxTotalChargeUsd: 0.01, timeoutSecs: 10 }],
+      parse: () => [
+        { url, excerpt: "Bio: data\nPost 1: hello", raw: {} },
+        { url, excerpt: "again", raw: {} },
+      ],
+    };
+    const ctx = baseContext();
+    const earlier = { ...ctx, sources: [{ id: "s0", run_id: ctx.runId, url, actor: "apify/instagram-scraper", fetched_at: "t", excerpt: "Jana\n@jana", r2_key: "k", expires_at: "t", identity: "unverified" as const }] };
+    const out = await collectWith(collector, { id: "ig", kind: "actor", actor: "fake/profile" }, earlier, fakePorts({ callActor: () => Promise.resolve({ items: [{}], cost_usd: 0 }) }));
+    expect(out.sources.map((s) => s.excerpt)).toEqual(["Bio: data\nPost 1: hello"]);
+    expect(out.notes).toContain("1 hits already in the run");
+  });
+
   it("lets the collector name why it made no request (skipReason)", async () => {
     const collector: Collector = { id: "fake/skip", requests: () => [], parse: () => [], skipReason: () => "role family \"sales\" is not technical" };
     const out = await collectWith(collector, { id: "gh", kind: "actor", actor: "fake/skip" }, baseContext(), fakePorts());

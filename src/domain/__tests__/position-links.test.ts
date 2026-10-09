@@ -19,6 +19,7 @@ import {
   groupByFamily,
   indexTitles,
   ingestLabel,
+  positionOrigin,
   removeMustHave,
   titleChoices,
 } from "@/domain/position-links";
@@ -94,5 +95,23 @@ describe("ingestLabel", () => {
     expect(ingestLabel("jsonld")).toBe("Posting page");
     expect(ingestLabel("pasted")).toBe("Pasted");
     expect(ingestLabel("zzz")).toBe("zzz");
+  });
+});
+
+describe("positionOrigin", () => {
+  const mh = (id: string): MustHave => ({ id, text: id, accepted_evidence: [] });
+  const catalog = [mh("mh-a"), mh("mh-b")];
+  it("a catalog position reads 'From the role catalog' and 'edited' only once its must-haves differ", () => {
+    expect(positionOrigin({ ingest_method: "manual", extraction: "edited", must_haves: [mh("mh-a"), mh("mh-b")] }, catalog)).toEqual({ label: "From the role catalog", edited: false });
+    expect(positionOrigin({ ingest_method: "manual", extraction: "edited", must_haves: [mh("mh-a")] }, catalog)).toEqual({ label: "From the role catalog", edited: true });
+    // The catalog writes title before text; the stored copy comes back through the schema in its own key order
+    const template = [{ id: "mh-x", title: "X", text: "Did x", accepted_evidence: ["talk"] }];
+    const stored = [{ id: "mh-x", text: "Did x", title: "X", accepted_evidence: ["talk"] }];
+    expect(positionOrigin({ ingest_method: "manual", extraction: "edited", must_haves: stored }, template).edited).toBe(false);
+    expect(positionOrigin({ ingest_method: "manual", extraction: "edited", must_haves: [{ id: "mh-x", text: "Did y", title: "X", accepted_evidence: ["talk"] }] }, template).edited).toBe(true);
+  });
+  it("other positions keep the ingest label and the stored edited flag", () => {
+    expect(positionOrigin({ ingest_method: "manual", extraction: "fallback", must_haves: [] }, null)).toEqual({ label: "Entered by hand", edited: false });
+    expect(positionOrigin({ ingest_method: "jsonld", extraction: "edited", must_haves: [] }, null)).toEqual({ label: "Posting page", edited: true });
   });
 });

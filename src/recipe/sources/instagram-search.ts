@@ -57,7 +57,7 @@ export const instagramSearch: Collector = {
         actor: "apify/instagram-scraper",
         input: { search: ctx.subject.trim(), searchType: "profile", searchLimit: 5, resultsLimit: 1 },
         maxTotalChargeUsd: 0.03,
-        timeoutSecs: 90,
+        timeoutSecs: 150,
       },
     ];
   },

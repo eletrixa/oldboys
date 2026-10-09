@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/api/positions/handler.ts
- * Deps:    src/app/api/_lib/{position-body,role-rows}, src/domain/{application (types),position,profile-stats,profile-url,role-overview}, src/recipe/goals, src/app/runs/[id]/source-labels, src/app/intake/intake-rows (TagRow type)
+ * Deps:    src/app/api/_lib/{position-body,role-rows}, src/domain/{application (types),position,role-catalog,profile-stats,profile-url,role-overview}, src/recipe/goals, src/app/runs/[id]/source-labels, src/app/intake/intake-rows (TagRow type)
  * Tested:  src/app/api/positions/__tests__/handler.test.ts
  *
  * Key responsibilities:
@@ -24,7 +24,8 @@ import type { PatchPositionBody } from "@/app/api/_lib/position-body";
 import type { TagRow } from "@/app/intake/intake-rows";
 import { STEP_LABEL } from "@/app/runs/[id]/source-labels";
 import type { ApplicationSource, ApplicationStatus } from "@/domain/application";
-import { parseMustHaves, POSITION_ID, type Position, type PositionListItem } from "@/domain/position";
+import { type MustHave, parseMustHaves, POSITION_ID, type Position, type PositionListItem } from "@/domain/position";
+import { ROLE_CATALOG } from "@/domain/role-catalog";
 import { isStalled } from "@/domain/run-status";
 import { briefStats } from "@/domain/profile-stats";
 import { nameFromHandle } from "@/domain/profile-url";
@@ -53,7 +54,8 @@ export type PoolRow = {
   run: PoolRun | null;
 };
 type PoolDbRow = Omit<PoolRow, "handle" | "run"> & { linkedin_url: string | null };
-export type PositionDetail = { position: Position; runs: PositionRun[]; group: RoleGroup | null; candidates: PoolRow[]; tags: TagRow[] };
+/** `catalog_must_haves`: the role-catalog template's must-haves when the position was created from that catalog title (manual entry), else null. */
+export type PositionDetail = { position: Position; runs: PositionRun[]; group: RoleGroup | null; candidates: PoolRow[]; tags: TagRow[]; catalog_must_haves: MustHave[] | null };
 
 const MAX_LIST = 500;
 const MAX_POOL = 200;
@@ -119,7 +121,7 @@ function poolRun(row: RoleRunRow): PoolRun {
   const next = HIRING_STEPS[done];
   const actor = next !== undefined && "actor" in next ? next.actor : undefined;
   const active = row.status === "queued" || row.status === "running";
-  const step = !active || next === undefined ? null : (actor === undefined ? undefined : STEP_LABEL[actor]) ?? KIND_LABEL[next.kind] ?? "Web search";
+  const step = !active || next === undefined ? null : (actor === undefined ? undefined : STEP_LABEL[actor]) ?? KIND_LABEL[next.kind] ?? "Reading a source";
   const pct = row.status === "done" ? 100 : Math.min(99, Math.round((done / HIRING_STEPS.length) * 100));
   const stalled = isStalled(row.status, row.last_at ?? row.created_at, new Date().toISOString());
   return { status: row.status, subject: row.subject, step, pct, stalled, ...briefStats(row.brief_json) };
@@ -153,6 +155,7 @@ export async function getPosition(db: D1Database, id: string): Promise<PositionD
       return { ...c, handle: linkedin_url === null ? null : nameFromHandle(linkedin_url) || null, run: run === undefined ? null : poolRun(run) };
     }),
     tags: tags.results,
+    catalog_must_haves: position.ingest_method === "manual" ? (ROLE_CATALOG.find((t) => t.title === position.title)?.must_haves ?? null) : null,
   };
 }
 

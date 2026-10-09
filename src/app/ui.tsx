@@ -3,12 +3,13 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/ui.tsx
- * Deps:    react
+ * Deps:    react, next/link
  * Tested:  n/a (visual; docs/design/radar-ui.md is the spec)
  *
  * Key responsibilities:
  * - Class strings for cards (plain, flush, muted, peach, sage, conflict, unsure), tiles, fragments and key labels (landing v9 idioms),
  *   buttons (primary, secondary, quiet, danger), fields and links so pages do not drift
+ * - LINK_TARGET (44px link), Notice + NoticeLine (error / info status line)
  * - Eyebrow, Pill (semantic tone), SourceLink, and the SUMMARY + Chevron disclosure pattern
  * - SimulatedPill: the one label for anything not live (MOCK call, CACHED stored run, NO AI brief); /validation lists them
  *
@@ -16,6 +17,7 @@
  * - Semantic tokens only (canvas, surface, paper, ink, muted, action, sage, peach, divider, ok, unsure, conflict, inference)
  * - Server-safe: no hooks, no browser APIs
  */
+import Link from "next/link";
 import { CV_SOURCE_TEXT, host, isCvSource } from "./runs/[id]/state";
 
 const SHADOW = "shadow-[0_8px_30px_rgba(40,45,43,0.06)]";
@@ -49,6 +51,29 @@ export const BTN_DANGER = `${BTN} bg-conflict px-5 font-semibold text-white hove
 export const FIELD = "w-full rounded-lg border border-line bg-surface px-4 py-3 text-ink placeholder:text-muted";
 
 export const LINK = "font-medium whitespace-nowrap text-action underline decoration-action/40 underline-offset-4 hover:decoration-action";
+/** A link that is a 44px touch target (anchors in "On this page" lists and section menus). */
+export const LINK_TARGET = `${LINK} inline-flex min-h-11 items-center`;
+
+/** A status line under a form: an error (announced at once) or plain information (announced politely). */
+/** `runs`: existing runs to link after the text ("Open the existing brief"). */
+export type Notice = { kind: "error" | "info"; text: string; runs?: readonly string[] };
+
+export function NoticeLine({ notice, className = "" }: { notice: Notice | null; className?: string }): React.JSX.Element | null {
+  if (notice === null) return null;
+  if (notice.kind === "error") return <p role="alert" className={`text-sm text-conflict ${className}`.trim()}>{notice.text}</p>;
+  const runs = notice.runs ?? [];
+  return (
+    <p role="status" className={`text-sm text-muted ${className}`.trim()}>
+      {notice.text}
+      {runs.map((id, i) => (
+        <span key={id}>
+          {" · "}
+          <Link href={`/runs/${encodeURIComponent(id)}`} className={LINK}>{runs.length === 1 ? "Open the existing brief" : `Open existing brief ${String(i + 1)}`}</Link>
+        </span>
+      ))}
+    </p>
+  );
+}
 
 /** `<details className="group">` + `<summary className={SUMMARY}><Chevron />…</summary>`: 44px target, native marker hidden; rounded so the global focus ring reads as a control. */
 export const SUMMARY =

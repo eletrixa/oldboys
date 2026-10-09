@@ -74,7 +74,7 @@ Finished brief (`brief-page.tsx`, `max-w-6xl`, root `id="brief"` with the report
 6. Sidebar: `CARD` "Interview kit" (`BTN_PRIMARY` copy = the page's one rust action, `BTN_SECONDARY` calendar disclosure, "More exports"), `CARD` "About this research" (`dl`, Audit record link), the delete disclosure in a conflict hairline box ("Do this when the candidate is rejected."), `CARD_SAGE` "Radar prepares evidence and never scores people. A person makes every decision.", "All briefs" link.
 
 ### Start form (home card)
-Fields with `FIELD`; labels `text-sm font-semibold`; helper `text-xs text-muted`; CV in a `details` with a hairline; privacy note in `CARD_SAGE`; submit `BTN_PRIMARY` with the "2 to 4 minutes" note beside it; error in `text-conflict`.
+Fields with `FIELD`; labels `text-sm font-semibold`; helper `text-xs text-muted`; CV in a `details` with a hairline; privacy note in `CARD_SAGE`; submit `BTN_PRIMARY` with the "6 to 12 minutes" note beside it; error in `text-conflict`.
 
 ### Roles (`/roles`, `/roles/[key]`)
 Header per the rhythm. Token form as the start form. Role list = hairline rows with serif role name and muted count. Role table: `CARD` wrapper, th uppercase xs tracked muted, coverage cells = a 8px dot + label (ok / unsure / muted / muted italic), person link `LINK`.

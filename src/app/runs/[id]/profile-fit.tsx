@@ -3,20 +3,19 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/runs/[id]/profile-fit.tsx
- * Deps:    react, src/domain/claim (types), ../../ui, ./profile-evidence
+ * Deps:    react, src/domain/claim (types), ../../ui, ./evidence-line, ./profile-evidence
  * Tested:  src/app/runs/[id]/__tests__/profile-sections.test.ts
  *
  * Key responsibilities:
  * - Fit % = Σ(weight × status) ÷ Σ(weight), computed here; neutral bar, never a colour scale
- * - Table stacks under 640px; each capability's evidence sits in a full-width row below it
+ * - Table stacks under 640px; each capability's evidence sits in a full-width row below it; explicit table / rowgroup /
+ *   row / rowheader / cell roles keep the table semantics when the display changes
  */
 import type { PositionFit } from "@/domain/claim";
 import { CARD, Chevron, Pill, SUMMARY_COMPACT, type Tone } from "../../ui";
-import { type Ctx, Dropped, EvidenceList, FIGURE, Head, INTRO, MEASURE, NOTE } from "./profile-evidence";
-
+import { type Ctx, MEASURE, NOTE } from "./evidence-line";
+import { Dropped, EvidenceList, FIGURE, Head, INTRO } from "./profile-evidence";
 import { fitPct } from "./scorecard";
-
-export { fitPct };
 
 const STATUS: Record<"has" | "partial" | "none", { text: string; tone: Tone }> = {
   has: { text: "Has", tone: "ok" },
@@ -24,7 +23,7 @@ const STATUS: Record<"has" | "partial" | "none", { text: string; tone: Tone }> =
   none: { text: "No evidence", tone: "neutral" },
 };
 
-export const evidenced = (f: PositionFit): string =>
+const evidenced = (f: PositionFit): string =>
   `${String(f.traits.filter((t) => t.status === "has").length)} of ${String(f.traits.length)} must-haves evidenced`;
 
 /** Thin neutral bar; never a colour scale. */
@@ -80,17 +79,17 @@ export function Fit({ fits, dropped, ctx }: { fits: PositionFit[]; dropped: numb
       {/* From sm up a table (scrolls sideways past three roles); under 640px each capability stacks: name, status and
           labelled weights, then its evidence. Evidence sits in its own full-width row below the capability, never in a cell. */}
       <div className="mt-4 sm:overflow-x-auto">
-        <table className={`w-full border-collapse text-left text-sm max-sm:block ${fits.length > 1 ? "sm:min-w-[32rem]" : ""}`}>
-          <thead className={`${NOTE} max-sm:sr-only`}>
-            <tr className="border-b border-divider">
-              <th scope="col" className="py-2 pr-4 font-semibold">
+        <table role="table" className={`w-full border-collapse text-left text-sm max-sm:block ${fits.length > 1 ? "sm:min-w-[32rem]" : ""}`}>
+          <thead role="rowgroup" className={`${NOTE} max-sm:sr-only`}>
+            <tr role="row" className="border-b border-divider">
+              <th scope="col" role="columnheader" className="py-2 pr-4 font-semibold">
                 Capability
               </th>
-              <th scope="col" className="py-2 pr-4 font-semibold">
+              <th scope="col" role="columnheader" className="py-2 pr-4 font-semibold">
                 Evidence
               </th>
               {fits.map((f) => (
-                <th key={f.role} scope="col" className="py-2 text-right font-semibold">
+                <th key={f.role} scope="col" role="columnheader" className="py-2 text-right font-semibold">
                   {fits.length > 1 ? f.role : "Weight"}
                   {fits.length > 1 && <span className="block font-normal">weight</span>}
                 </th>
@@ -100,22 +99,22 @@ export function Fit({ fits, dropped, ctx }: { fits: PositionFit[]; dropped: numb
           {rows.map(({ name, per }) => {
             const t = per.find((x) => x !== undefined);
             return (
-              <tbody key={name} className="border-t border-divider max-sm:block max-sm:py-2 max-sm:first-of-type:border-t-0">
-                <tr className="align-top max-sm:flex max-sm:flex-wrap max-sm:items-center max-sm:gap-x-3 max-sm:gap-y-1">
-                  <th scope="row" className="py-2 pr-4 font-normal text-ink max-sm:w-full max-sm:p-0">
+              <tbody key={name} role="rowgroup" className="border-t border-divider max-sm:block max-sm:py-2 max-sm:first-of-type:border-t-0">
+                <tr role="row" className="align-top max-sm:flex max-sm:flex-wrap max-sm:items-center max-sm:gap-x-3 max-sm:gap-y-1">
+                  <th scope="row" role="rowheader" className="py-2 pr-4 font-normal text-ink max-sm:w-full max-sm:p-0">
                     {name}
                   </th>
-                  <td className="py-2 pr-4 max-sm:p-0">{t !== undefined && <Pill tone={STATUS[t.status].tone} className="whitespace-nowrap">{STATUS[t.status].text}</Pill>}</td>
+                  <td role="cell" className="py-2 pr-4 max-sm:p-0">{t !== undefined && <Pill tone={STATUS[t.status].tone} className="whitespace-nowrap">{STATUS[t.status].text}</Pill>}</td>
                   {per.map((x, i) => (
-                    <td key={fits[i]?.role ?? i} className="py-2 text-right text-muted tabular-nums max-sm:p-0 max-sm:text-xs">
+                    <td key={fits[i]?.role ?? i} role="cell" className="py-2 text-right text-muted tabular-nums max-sm:p-0 max-sm:text-xs">
                       <span className="sm:hidden">{fits.length > 1 ? `${fits[i]?.role ?? ""} weight ` : "weight "}</span>
                       {x === undefined ? "–" : String(x.weight)}
                     </td>
                   ))}
                 </tr>
                 {t !== undefined && t.evidence.length > 0 && (
-                  <tr className="max-sm:block">
-                    <td colSpan={2 + fits.length} className="pb-2 max-sm:block max-sm:p-0">
+                  <tr role="row" className="max-sm:block">
+                    <td colSpan={2 + fits.length} role="cell" className="pb-2 max-sm:block max-sm:p-0">
                       <EvidenceList items={t.evidence} ctx={ctx} about={name} />
                     </td>
                   </tr>

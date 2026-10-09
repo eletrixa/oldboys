@@ -18,7 +18,9 @@
  * - A wave performs consecutive fetch requests up to 6 at a time and applies results (parse, dedup, `Fetched`) in request order;
  *   stores of a request's hits run up to 6 at a time with parsed order preserved; actor requests run one by one
  * - One source per page: a hit whose canonical URL (no locale / trailing slash) is already in the run is not stored again;
- *   deduped hits add the note "N hits already in the run" and do not make the step empty (no onEmpty gap)
+ *   deduped hits add the note "N hits already in the run" and do not make the step empty (no onEmpty gap). A collector
+ *   with `enriches` (profile scrapers) skips only URLs it stored itself in this step: its page (bio, counts, posts) is
+ *   richer than the search hit that first listed the URL
  * - A parsed source with `replaces: true` whose canonical URL is already in ctx.sources is stored under the existing
  *   source's id, url, identity, actor and fetched_at with the new excerpt and raw (the D1 upsert rewrites that row), lands
  *   in outcome.sources, and adds the note "replaced excerpts of N pages"; a `replaces` source for a new URL is stored normally
@@ -108,7 +110,8 @@ export async function collectWith(collector: Collector, step: Step, ctx: StepCon
     out.notes.push(collector.skipReason?.(ctx) ?? "no confirmed handle or id to look up");
     return out;
   }
-  const seen = new Set(ctx.sources.map((s) => canonicalUrl(s.url)));
+  // An enriching collector stores its page beside the earlier search hit of the same URL; others keep one source per URL per run
+  const seen = new Set(collector.enriches === true ? [] : ctx.sources.map((s) => canonicalUrl(s.url)));
   const existing = new Map(ctx.sources.map((s) => [canonicalUrl(s.url), s]));
   const done: Fetched[] = [];
   let parsedHits = 0;

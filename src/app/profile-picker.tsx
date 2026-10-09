@@ -160,7 +160,7 @@ export function ProfilePicker({ invalid = false, onUrl }: Props): React.JSX.Elem
             />
             {!isProfileUrl(text) && (
               <button type="button" onClick={() => void find()} disabled={lookup.kind === "looking"} className={BTN_SECONDARY}>
-                {lookup.kind === "looking" ? "Looking..." : "Find profiles"}
+                {lookup.kind === "looking" ? "Looking…" : "Find profiles"}
               </button>
             )}
           </div>

@@ -3,12 +3,13 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/positions/candidate-pool.tsx
- * Deps:    react, next/link, src/app/ui, src/app/_components/{token (postJson), run-tray-store (trackRun)}, ./pool-rows
+ * Deps:    react, next/link, src/app/ui (NoticeLine), src/app/briefs/new/brief-rows (failText), src/app/_components/{token (postJson), run-tray-store (trackRun)}, ./pool-rows
  * Tested:  shaping in src/app/positions/__tests__/pool-rows.test.ts; view by e2e/positions.spec.ts
  *
  * Key responsibilities:
  * - POST /api/positions/:id/candidates from the add form (needs a LinkedIn URL or CV text)
  * - Results table in added order (anchor #candidates) with a checkbox only for rows that can start; POST /api/positions/:id/enrich
+ * - Table sits in a focusable labelled region with a swipe hint under md; errors announce as alerts, confirmations as status
  * - Report started runs and skipped reasons, follow them in the run tray, then ask the page to reload the detail
  * - While any row is researching, re-GET the position detail every 5 s through onReload (one request for all rows)
  *
@@ -23,27 +24,20 @@ import { useEffect, useMemo, useState } from "react";
 import { trackRun } from "@/app/_components/run-tray-store";
 import { postJson } from "@/app/_components/token";
 import type { PoolRow } from "@/app/api/positions/handler";
-import { BTN_PRIMARY, BTN_SECONDARY, CARD, FIELD, LINK, Pill } from "@/app/ui";
+import { failText } from "@/app/briefs/new/brief-rows";
+import { BTN_PRIMARY, BTN_SECONDARY, CARD, FIELD, LINK, type Notice, NoticeLine, Pill } from "@/app/ui";
 import { enrichSummary, type EnrichResponse, shapePool } from "./pool-rows";
 
 const POLL_MS = 5000;
 
 type Props = { positionId: string; rows: PoolRow[]; onReload: () => Promise<void> };
-type Notice = { kind: "ok" | "error"; text: string } | null;
-
-function failText(status: number, fallback: string): string {
-  if (status === 401) return "You are logged out. Reload the page to log in again.";
-  if (status === 429) return "The hourly run limit is reached. Try again later.";
-  return fallback;
-}
-
 function AddCandidate({ positionId, onReload }: Pick<Props, "positionId" | "onReload">): React.JSX.Element {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [linkedin, setLinkedin] = useState("");
   const [cv, setCv] = useState("");
   const [busy, setBusy] = useState(false);
-  const [notice, setNotice] = useState<Notice>(null);
+  const [notice, setNotice] = useState<Notice | null>(null);
   const ready = linkedin.trim() !== "" || cv.trim() !== "";
 
   async function submit(e: React.SyntheticEvent): Promise<void> {
@@ -64,7 +58,7 @@ function AddCandidate({ positionId, onReload }: Pick<Props, "positionId" | "onRe
       }
       const out = await res.json<{ duplicate?: boolean; status?: string; note?: string | null }>();
       const text = out.duplicate === true ? "Already in the pool." : out.status === "incomplete" ? (out.note ?? "Added, but the LinkedIn URL or CV could not be read.") : "Added to the pool.";
-      setNotice({ kind: "ok", text });
+      setNotice({ kind: "info", text });
       if (out.duplicate !== true) {
         setName("");
         setEmail("");
@@ -102,7 +96,7 @@ function AddCandidate({ positionId, onReload }: Pick<Props, "positionId" | "onRe
       </label>
       <div className="flex flex-wrap items-center gap-3">
         <button type="submit" className={BTN_SECONDARY} disabled={!ready || busy}>Add to pool</button>
-        <span role="status" className={`text-sm ${notice?.kind === "error" ? "text-conflict" : "text-muted"}`}>{notice?.text}</span>
+        <NoticeLine notice={notice} />
       </div>
     </form>
   );
@@ -112,7 +106,7 @@ export function CandidatePool({ positionId, rows, onReload }: Props): React.JSX.
   const views = useMemo(() => shapePool(rows), [rows]);
   const [picked, setPicked] = useState<ReadonlySet<string>>(new Set());
   const [busy, setBusy] = useState(false);
-  const [notice, setNotice] = useState<Notice>(null);
+  const [notice, setNotice] = useState<Notice | null>(null);
   const chosen = views.filter((v) => v.selectable && picked.has(v.id)).map((v) => v.id);
   const researching = views.some((v) => v.researching);
 
@@ -141,7 +135,7 @@ export function CandidatePool({ positionId, rows, onReload }: Props): React.JSX.
       }
       const out = await res.json<EnrichResponse>();
       for (const run of out.started) trackRun(run.runId);
-      setNotice({ kind: "ok", text: enrichSummary(out) });
+      setNotice({ kind: "info", text: enrichSummary(out) });
       setPicked(new Set());
       await onReload();
     } catch {
@@ -156,10 +150,12 @@ export function CandidatePool({ positionId, rows, onReload }: Props): React.JSX.
       <h2 id="pool-heading" className="font-serif text-2xl">Candidates</h2>
       <AddCandidate positionId={positionId} onReload={onReload} />
       {views.length === 0 ? (
-        <p className="text-muted">No candidates yet. Add one below, or bind an intake channel so applications land here.</p>
+        <p className="text-muted">No candidates yet. Add one above, or bind an intake channel so applications land here.</p>
       ) : (
         <>
-          <div className="relative overflow-x-auto rounded-xl border border-divider bg-surface">
+          <div className="rounded-xl border border-divider bg-surface">
+            <p className="px-4 pt-3 text-xs text-muted md:hidden">Swipe sideways to see every column.</p>
+            <div role="region" aria-label="Candidates" tabIndex={0} className="relative overflow-x-auto">
             <table className="w-full min-w-[40rem] text-left text-sm">
               <caption className="sr-only">Candidates in the order they were added; fit is the evidence share of this position&apos;s must-haves</caption>
               <thead className="bg-sage/50 text-xs text-muted">
@@ -200,12 +196,13 @@ export function CandidatePool({ positionId, rows, onReload }: Props): React.JSX.
                 ))}
               </tbody>
             </table>
+            </div>
           </div>
           <div className="flex flex-wrap items-center gap-3">
             <button type="button" className={BTN_PRIMARY} disabled={chosen.length === 0 || busy} onClick={() => void enrich()}>
               Research selected ({chosen.length})
             </button>
-            <span role="status" className={`text-sm ${notice?.kind === "error" ? "text-conflict" : "text-muted"}`}>{notice?.text}</span>
+            <NoticeLine notice={notice} />
           </div>
         </>
       )}

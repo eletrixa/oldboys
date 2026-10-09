@@ -71,7 +71,7 @@ export function SampleBrief(): React.JSX.Element {
             <Pill tone="ok">evidenced</Pill>
           </div>
           <p className="mt-2 flex items-start gap-2">
-            <Pill tone="ok" className="mt-0.5">FACT</Pill>
+            <Pill tone="neutral" className="mt-0.5">FACT</Pill>
             <span>Owns the SQL for Acme&apos;s nightly reporting pipelines.</span>
           </p>
           <p className="mt-2 font-serif leading-snug">

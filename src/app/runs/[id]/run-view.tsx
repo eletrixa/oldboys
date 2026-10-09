@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/runs/[id]/run-view.tsx
- * Deps:    react, next/link, ../../ui, ./parts, ./brief-page, ./state, ./identity-map-card, ./delete-card
+ * Deps:    react, next/link, ../../ui, ./parts, ./brief-page, ./state, ./identity-map-card, ./delete-card, ./issues-card
  * Tested:  n/a
  *
  * Key responsibilities:
@@ -13,13 +13,15 @@
  * - "Researched for: <position title>" link to /positions/<id> under the name when the run came from a position
  * - When done with a brief, the whole page is BriefPage (brief-page.tsx: header with hiring steps, tabs, kit sidebar); the
  *   confirmation steps (progress, identity map, profile list) go into its "How we confirmed it" disclosure (Sources tab)
- * - One footer closes the page: running hint (not done), then "All briefs" and "Audit record" links, then the
+ * - One footer closes the page: running hint (not done), then "Home" and "Audit record" links, then the
  *   "Delete candidate data" disclosure (any status); after a delete the whole page becomes the deletion receipt
  * - Not-found view: eyebrow, heading, muted sentence and a primary back link on the header rhythm
  * - Stalled notice above the progress when no ledger activity for 30 minutes (stalledNotice); "Started N min ago" under the steps while running
  * - Show the run cost and research time line (ledger projection) while running and when done
  * - Identity map above the profile list (same live decisions)
  * - On failure keep the progress rows, mark the failed one, show the reason, sources so far and a retry link
+ * - "Issues so far" (IssuesCard) under the progress while the run is not done: failed requests, skipped sources,
+ *   empty searches and AI off, with counts, so a problem shows as it happens and not only when the run dies
  * - Show one question at a time (at most LINEUP_MAX_QUESTIONS) above the lineup, so it is never below the fold; send every
  *   decision in one answer event
  *
@@ -30,6 +32,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { trackRun } from "@/app/_components/run-tray-store";
 import { intakeLine } from "@/app/intake/intake-rows";
 import type { Candidate, CandidateDecision } from "@/domain/claim";
 import { BTN_SECONDARY, CARD_CONFLICT, CARD_UNSURE, Eyebrow, LINK, SimulatedPill } from "../../ui";
@@ -37,6 +40,7 @@ import type { DeletionReceipt } from "@/domain/deletion";
 import { BriefPage, BriefView } from "./brief-page";
 import { DeleteCard, DeletedView } from "./delete-card";
 import { IdentityMapCard } from "./identity-map-card";
+import { IssuesCard } from "./issues-card";
 import { type Answer, CostLine, ProfileList, ProgressSteps, QuestionCard } from "./parts";
 import { LINEUP_MAX_QUESTIONS, type RunState, firstName, headerText, questionsToAsk, retryHref, sortLineup, startedAgo, stalledNotice, stepRows } from "./state";
 
@@ -78,6 +82,7 @@ export function RunView({ id }: { id: string }): React.JSX.Element {
   const [sent, setSent] = useState(false);
   const [sendFailed, setSendFailed] = useState(false);
   const [deleted, setDeleted] = useState<DeletionReceipt | null>(null);
+  const thanksRef = useRef<HTMLParagraphElement>(null);
 
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -92,6 +97,7 @@ export function RunView({ id }: { id: string }): React.JSX.Element {
         } else if (res.ok) {
           const s = await res.json<RunState>();
           setState(s);
+          if (s.status !== "done" && s.status !== "failed") trackRun(id);
           setPolledAt(Date.now());
           next = s.status !== "done" && s.status !== "failed";
         }
@@ -136,6 +142,11 @@ export function RunView({ id }: { id: string }): React.JSX.Element {
     });
   }, [state, pending.length, local, id]);
 
+  // After the last answer the question card disappears; move focus to the confirmation so keyboard users are not dropped.
+  useEffect(() => {
+    if (question === undefined && sent) thanksRef.current?.focus();
+  }, [question, sent]);
+
   const answer = useCallback((cid: string, decision: Answer) => {
     if (decision === "possibly-same-as") {
       setUnsure((u) => ({ ...u, [cid]: true }));
@@ -151,7 +162,7 @@ export function RunView({ id }: { id: string }): React.JSX.Element {
         <Eyebrow>Brief</Eyebrow>
         <h1 className="font-serif text-4xl leading-[1.05] md:text-5xl">We could not find this brief</h1>
         <p className="text-muted">The link may be mistyped, or the run is no longer available.</p>
-        <Link href="/briefs" className={LINK}>All briefs</Link>
+        <Link href="/" className={LINK}>Home</Link>
       </main>
     );
   }
@@ -218,7 +229,7 @@ export function RunView({ id }: { id: string }): React.JSX.Element {
           </button>
         </p>
       )}
-      {sent && !sendFailed && state.status === "paused" && <p className="text-sm text-muted">Thanks, continuing...</p>}
+      {sent && !sendFailed && state.status === "paused" && <p ref={thanksRef} tabIndex={-1} role="status" className="text-sm text-muted">Thanks, continuing…</p>}
     </>
   );
   if (state.status === "done" && state.brief !== null) {
@@ -257,7 +268,7 @@ export function RunView({ id }: { id: string }): React.JSX.Element {
           </p>
         )}
         {state.status !== "done" && (
-          <p className="text-sm text-muted">Usually 5 to 10 minutes. You can leave; the brief waits in My briefs and the tray at the bottom follows it.</p>
+          <p className="text-sm text-muted">Usually 6 to 12 minutes. You can leave; the brief waits in My briefs and the tray at the bottom follows it.</p>
         )}
         {cached && (
           <SimulatedPill kind="cached" detail={`run from ${state.created_at.slice(0, 16).replace("T", " ")} UTC`} className="w-fit" />
@@ -272,12 +283,13 @@ export function RunView({ id }: { id: string }): React.JSX.Element {
       )}
       {progress}
       {failed}
+      <IssuesCard issues={state.issues ?? []} />
       {identity}
       {sendRows}
       <BriefView state={state} />
       {running && <p className="text-sm text-muted">The brief appears here when the research is done.</p>}
       <div className="flex items-center gap-6 border-t border-divider pt-6 text-sm">
-        <Link href="/briefs" className={LINK}>All briefs</Link>
+        <Link href="/" className={LINK}>Home</Link>
         <Link href={`/runs/${id}/audit`} className={LINK}>Audit record</Link>
       </div>
       <DeleteCard runId={id} onDeleted={setDeleted} />

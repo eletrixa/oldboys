@@ -21,6 +21,7 @@
  * - Phone bar (layout "bar", lg:hidden): copy + a calendar button that opens the sidebar's calendar disclosure
  * - The filled-kit review (KitReviewCard, idea #23) sits at the end of the interview plan, not here
  * - One sr-only role="status" span reports "Copied" / "Copy failed" for the last copy that ran; that button's label shows it too for 2 s
+ * - The card's own labels follow the page's report language (`useReport().t.kit`), so they switch with the rest of the page
  * - EN/CZ buttons are 44px targets (LANG_BTN, shared with the report language switch)
  * - The kit fetches GET /api/runs/:id/calls at click time for the phone verification section; on any error
  *   the kit is built without it
@@ -40,12 +41,13 @@ import { candidateCopy, noticeFileName, type NoticeLang } from "./candidate-copy
 import { atsNote } from "./ats-note";
 import { referenceQuestions } from "./reference-check";
 import { InviteForm } from "./invite-form";
-import { LANG_BTN } from "./report-lang";
+import { LANG_BTN, useReport } from "./report-lang";
 import type { Report } from "./i18n";
+import type { KitUi } from "./phone-kit-text";
 
-const LANGS: readonly { lang: NoticeLang; label: string; title: string }[] = [
-  { lang: "en", label: "EN", title: "Candidate notice in English" },
-  { lang: "cs", label: "CZ", title: "Candidate notice in Czech" },
+const LANGS: readonly { lang: NoticeLang; label: string }[] = [
+  { lang: "en", label: "EN" },
+  { lang: "cs", label: "CZ" },
 ];
 
 type CopyStatus = "idle" | "copied" | "failed";
@@ -60,10 +62,7 @@ async function runCalls(runId: string): Promise<CallView[]> {
   }
 }
 
-const STATUS_LABEL: Record<Exclude<CopyStatus, "idle">, string> = { copied: "Copied", failed: "Copy failed" };
-
-/** Button label: swaps to the outcome for 2 s after this button's own copy ran. */
-const labelFor = (active: boolean, status: CopyStatus, label: string): string => (active && status !== "idle" ? STATUS_LABEL[status] : label);
+const statusLabel = (t: KitUi, status: Exclude<CopyStatus, "idle">): string => (status === "copied" ? t.copied : t.copyFailed);
 
 /** Copies `text` (or what the promise resolves to) and reports the outcome, then resets to idle after 2 s. */
 async function copyText(text: string | null | Promise<string | null>, setStatus: (s: CopyStatus) => void): Promise<void> {
@@ -120,7 +119,10 @@ export function KitActions({ state, language, layout = "sidebar" }: { state: Run
   // null until the recruiter picks a notice language: it then follows the report language.
   const [pickedNoticeLang, setNoticeLang] = useState<NoticeLang | null>(null);
   const noticeLang = pickedNoticeLang ?? language.lang;
+  const t = useReport().t.kit;
   if (state.brief === null) return null;
+  /** Button label: swaps to the outcome for 2 s after this button's own copy ran. */
+  const labelFor = (active: boolean, label: string): string => (active && status !== "idle" ? statusLabel(t, status) : label);
 
   const kit = async (): Promise<string | null> => interviewKit(state, new Date().toISOString(), await runCalls(state.id), language);
   const notice = (): string | null => candidateCopy(state, noticeLang);
@@ -128,7 +130,7 @@ export function KitActions({ state, language, layout = "sidebar" }: { state: Run
   const refs = (): string | null => referenceQuestions(state, language);
   const statusSpan = (
     <span role="status" className="sr-only">
-      {status === "idle" ? "" : STATUS_LABEL[status]}
+      {status === "idle" ? "" : statusLabel(t, status)}
     </span>
   );
 
@@ -136,10 +138,10 @@ export function KitActions({ state, language, layout = "sidebar" }: { state: Run
     return (
       <div className="fixed inset-x-0 bottom-0 z-20 flex gap-2 border-t border-divider bg-surface px-4 py-3 print:hidden lg:hidden">
         <button type="button" className={`${BTN_PRIMARY} flex-1`} onClick={() => void copyText(kit(), setCopy("kit"))}>
-          {labelFor(last === "kit", status, "Copy interview kit")}
+          {labelFor(last === "kit", t.copyKit)}
         </button>
         <button type="button" className={BTN_SECONDARY} onClick={openCalendar}>
-          Calendar
+          {t.calendar}
         </button>
         {statusSpan}
       </div>
@@ -150,49 +152,49 @@ export function KitActions({ state, language, layout = "sidebar" }: { state: Run
   const exportBtn = `${BTN_QUIET} ${item}`;
   return (
     <section className={`${CARD} flex flex-col gap-3 print:hidden`} aria-labelledby="kit-heading">
-      <h2 id="kit-heading" className="font-sans text-base font-semibold">Interview kit</h2>
-      <p className="text-xs text-muted">The plan, the evidence and the gaps as one document for the interview.</p>
+      <h2 id="kit-heading" className="font-sans text-base font-semibold">{t.heading}</h2>
+      <p className="text-xs text-muted">{t.intro}</p>
       <button type="button" className={`${BTN_PRIMARY} w-full`} onClick={() => void copyText(kit(), setCopy("kit"))}>
-        {labelFor(last === "kit", status, "Copy interview kit")}
+        {labelFor(last === "kit", t.copyKit)}
       </button>
       <InviteForm state={state} language={language} id={CALENDAR_ID} asButton />
       <details className="group">
         <summary className={SUMMARY}>
           <Chevron />
-          More exports
+          {t.moreExports}
         </summary>
         <div className="mt-2 flex flex-col divide-y divide-divider rounded-lg border border-divider bg-surface">
           <button type="button" className={exportBtn} onClick={() => void kit().then((text) => { downloadText(text, kitFileName(state, language.lang)); })}>
-            Download .md
+            {t.downloadMd}
           </button>
           <div className="flex flex-wrap items-center gap-2 px-3 py-1">
-            <div className="flex gap-1" role="group" aria-label="Candidate notice language">
+            <div className="flex gap-1" role="group" aria-label={t.noticeLanguage}>
               {LANGS.map((l) => (
                 <button
                   key={l.lang}
                   type="button"
                   className={LANG_BTN}
                   aria-pressed={noticeLang === l.lang}
-                  title={l.title}
+                  title={t.noticeIn[l.lang]}
                   onClick={() => { setNoticeLang(l.lang); }}
                 >
                   {l.label}
                 </button>
               ))}
             </div>
-            <span className="text-xs text-muted">Candidate notice language</span>
+            <span className="text-xs text-muted">{t.noticeLanguage}</span>
           </div>
           <button type="button" className={exportBtn} onClick={() => void copyText(notice(), setCopy("notice"))}>
-            {labelFor(last === "notice", status, "Copy candidate notice")}
+            {labelFor(last === "notice", t.copyNotice)}
           </button>
           <button type="button" className={exportBtn} onClick={() => { downloadText(notice(), noticeFileName(state, noticeLang)); }}>
-            Download candidate notice (.md)
+            {t.downloadNotice}
           </button>
           <button type="button" className={exportBtn} onClick={() => void copyText(ats(), setCopy("ats"))}>
-            {labelFor(last === "ats", status, "Copy for ATS")}
+            {labelFor(last === "ats", t.copyAts)}
           </button>
           <button type="button" className={exportBtn} onClick={() => void copyText(refs(), setCopy("refs"))}>
-            {labelFor(last === "refs", status, "Copy reference questions")}
+            {labelFor(last === "refs", t.copyRefs)}
           </button>
         </div>
       </details>

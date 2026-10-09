@@ -24,16 +24,16 @@
  *
  * Design constraints:
  * - Describes the research and the process, never scores the candidate; phone answers are always "not public evidence"
- * - The phone panel and the kit sidebar stay English (lang="en"); everything else follows the report language
+ * - Everything follows the report language, the phone panel and the kit sidebar too (`report.t.call`, `report.t.kit`);
+ *   DeleteCard is shared with the running / failed views and stays English (lang="en")
  */
 "use client";
 
 import Link from "next/link";
 import { formatDuration } from "@/domain/run-cost";
 import type { Brief } from "@/domain/claim";
-import { intakeLine } from "@/app/intake/intake-rows";
 import { CARD, CARD_SAGE, Chevron, Eyebrow, KEY, LINK, Pill, SUMMARY, SimulatedPill } from "../../ui";
-import { type HiringStep, backgroundCounts, hiringSteps, latestAnswered, phoneNumbers, planItems, shortDay, tabCounts } from "./brief-layout";
+import { type HiringStep, backgroundCounts, hiringSteps, latestAnswered, phoneNumbers, planItems, tabCounts } from "./brief-layout";
 import { CareerTimeline, ConfirmedProfiles, CriteriaTable, GapGroups } from "./brief-evidence";
 import { BeforeInterview, PlanPanel } from "./brief-plan";
 import { BriefNavContext, TabBar, TabPanel, useBriefNav } from "./brief-tabs";
@@ -80,7 +80,7 @@ function Steps({ steps }: { steps: HiringStep[] }): React.JSX.Element {
           <span className={`font-semibold ${STEP_TONE[s.state].text}`}>
             {s.state === "done" && <span aria-hidden="true">✓ </span>}
             {ui.step[s.key]}
-            {s.state === "done" && <span className="sr-only"> (done)</span>}
+            {s.state === "done" && <span className="sr-only">{ui.doneSr}</span>}
           </span>
           <span className="text-xs text-muted">{detail(s)}</span>
         </li>
@@ -125,7 +125,7 @@ function BriefMain({ state, brief, calls, confirmation, first }: { state: RunSta
   return (
     <div className="flex min-w-0 flex-col gap-8">
       {brief.degraded !== null && <DegradedNotice reason={brief.degraded} />}
-      <SummaryCard state={state} answers={answers} callDay={call === null ? "" : shortDay(call.approved_at ?? call.created_at)} />
+      <SummaryCard state={state} answers={answers} callDay={call === null ? "" : t.ui.day(call.approved_at ?? call.created_at)} />
       <BeforeInterview plan={plan} claims={state.claims} brief={brief} evidence={evidence} devilsAdvocate={t.devilsAdvocate(state.challenge_summary)} criteria={criteria} />
       <div>
         <TabBar tabs={tabs} label={t.ui.tabsLabel} />
@@ -151,9 +151,7 @@ function BriefMain({ state, brief, calls, confirmation, first }: { state: RunSta
           <RegistryChecksCard checks={state.registry_checks} />
         </TabPanel>
         <TabPanel k="call">
-          <div lang={english}>
-            <CallPanel state={state} onChanged={calls.reload} />
-          </div>
+          <CallPanel state={state} onChanged={calls.reload} />
         </TabPanel>
         <TabPanel k="sources">
           <ConfirmedProfiles candidates={state.candidates} />
@@ -178,16 +176,18 @@ function BriefMain({ state, brief, calls, confirmation, first }: { state: RunSta
 
 function AboutResearch({ state, id }: { state: RunState; id: string }): React.JSX.Element {
   const { cost } = state;
+  const report = useReport();
+  const { ui } = report.t;
   const rows: [string, string][] = [
-    ["Run", state.created_at.slice(0, 16).replace("T", " ") + " UTC"],
-    ["Research time", formatDuration(cost.duration_ms)],
-    ["Source calls", String(cost.source_calls)],
-    ["AI calls", String(cost.llm_calls)],
-    ["Cost", `$${cost.usd.toFixed(2)}`],
+    [ui.aboutRows.run, state.created_at.slice(0, 16).replace("T", " ") + " UTC"],
+    [ui.aboutRows.time, formatDuration(cost.duration_ms)],
+    [ui.aboutRows.sourceCalls, String(cost.source_calls)],
+    [ui.aboutRows.aiCalls, String(cost.llm_calls)],
+    [ui.aboutRows.cost, ui.costValue(cost.usd)],
   ];
   return (
-    <section className="flex flex-col gap-3" aria-labelledby="about-h" lang="en">
-      <h2 id="about-h" className={KEY}>About this research</h2>
+    <section className="flex flex-col gap-3" aria-labelledby="about-h" lang={report.lang}>
+      <h2 id="about-h" className={KEY}>{ui.about}</h2>
       <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1.5 text-sm">
         {rows.map(([k, v]) => (
           <div key={k} className="contents">
@@ -196,7 +196,7 @@ function AboutResearch({ state, id }: { state: RunState; id: string }): React.JS
           </div>
         ))}
       </dl>
-      <Link href={`/runs/${id}/audit`} className={`${LINK} w-fit text-sm`}>Audit record</Link>
+      <Link href={`/runs/${id}/audit`} className={`${LINK} w-fit text-sm`}>{ui.auditRecord}</Link>
     </section>
   );
 }
@@ -246,12 +246,12 @@ function BriefShell({
   language: ReturnType<typeof useReportLanguage>;
 }): React.JSX.Element {
   const report = useReport();
-  const { ui } = report.t;
+  const { ui, kit } = report.t;
   const calls = useRunCalls(state.id, true);
   const call = calls.data === null ? null : latestAnswered(calls.data.calls);
   const merged = state.candidates.filter((c) => c.decision === "merge").length;
   const role = hiringFor(state);
-  const steps = hiringSteps(state, formatDuration(state.cost.duration_ms), call);
+  const steps = hiringSteps(state, formatDuration(state.cost.duration_ms), call, ui.day);
   return (
     <div id="brief" lang={report.lang === "en" ? undefined : report.lang} className="flex scroll-mt-6 flex-col gap-8">
       <header className="flex flex-col gap-6 border-b border-divider pb-8">
@@ -274,11 +274,11 @@ function BriefShell({
             </Eyebrow>
             <h1 className="font-serif text-4xl leading-[1.05] [overflow-wrap:anywhere] md:text-5xl">{state.subject.trim() === "" ? headerText(state.subject, true) : state.subject}</h1>
             {state.headline !== null && <p className="text-lg text-muted">{state.headline}</p>}
-            {state.intake !== null && <p className="text-sm text-muted" lang="en">{intakeLine(state.intake)}</p>}
+            {state.intake !== null && <p className="text-sm text-muted">{ui.intakeLine(state.intake)}</p>}
             <div className="flex flex-wrap gap-2">
               <Pill tone={merged > 0 ? "ok" : "neutral"}>{merged > 0 ? ui.identityPill(merged) : ui.noIdentity}</Pill>
-              {call !== null && <Pill tone="ok">{ui.phonePill(shortDay(call.approved_at ?? call.created_at))}</Pill>}
-              {cached && <SimulatedPill kind="cached" detail={`run from ${state.created_at.slice(0, 16).replace("T", " ")} UTC`} />}
+              {call !== null && <Pill tone="ok">{ui.phonePill(ui.day(call.approved_at ?? call.created_at))}</Pill>}
+              {cached && <SimulatedPill kind="cached" detail={ui.cachedFrom(state.created_at.slice(0, 16).replace("T", " "))} />}
             </div>
           </div>
           <div className="print:hidden sm:shrink-0">
@@ -289,17 +289,19 @@ function BriefShell({
       </header>
       <div className="flex flex-col gap-10 lg:grid lg:grid-cols-[minmax(0,1fr)_300px] lg:items-start lg:gap-10">
         <BriefMain state={state} brief={brief} calls={calls} confirmation={confirmation} first={first} />
-        <aside className="flex flex-col gap-6 lg:sticky lg:top-6" lang="en" aria-label="Interview kit and research details">
+        <aside className="flex flex-col gap-6 lg:sticky lg:top-6" aria-label={kit.asideLabel}>
           <KitActions state={state} language={language.exports} />
           <section className={`${CARD} flex flex-col gap-6`}>
             <AboutResearch state={state} id={state.id} />
           </section>
           <section className="rounded-2xl border border-conflict/40 px-5 pb-4 print:hidden">
-            <DeleteCard runId={state.id} onDeleted={onDeleted} />
-            <p className="text-xs text-muted">Do this when the candidate is rejected.</p>
+            <div lang={report.lang === "en" ? undefined : "en"}>
+              <DeleteCard runId={state.id} onDeleted={onDeleted} />
+            </div>
+            <p className="text-xs text-muted">{kit.deleteWhen}</p>
           </section>
-          <p className={`${CARD_SAGE} text-sm text-ink`}>Radar prepares evidence and never scores people. A person makes every decision.</p>
-          <Link href="/briefs" className={`${LINK} w-fit text-sm print:hidden`}>All briefs</Link>
+          <p className={`${CARD_SAGE} text-sm text-ink`}>{kit.neverScores}</p>
+          <Link href="/briefs" className={`${LINK} w-fit text-sm print:hidden`}>{kit.allBriefs}</Link>
         </aside>
       </div>
       <KitActions state={state} language={language.exports} layout="bar" />
@@ -320,9 +322,7 @@ export function BriefView({ state }: { state: RunState }): React.JSX.Element | n
         <div id="brief" lang={language.report.lang === "en" ? undefined : language.report.lang} className="flex scroll-mt-6 flex-col gap-6">
           <LangSwitch runId={state.id} language={language} />
           <BriefMain state={state} brief={brief} calls={calls} confirmation={null} first="" />
-          <div lang="en">
-            <KitActions state={state} language={language.exports} />
-          </div>
+          <KitActions state={state} language={language.exports} />
         </div>
       </BriefNavContext>
     </ReportContext>

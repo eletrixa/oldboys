@@ -111,7 +111,8 @@
 }
 
 /*
- * Candidate profile (src/app/runs/[id]/profile-sections.tsx), design round 3: motion and print.
+ * Candidate profile (src/app/runs/[id]/profile-sections.tsx, big-five.tsx, big-five-chart.tsx), design round 3: motion and print.
+ * Big Five hooks: pf-big5-shape, pf-big5-stub, pf-big5-dot, pf-big5-marker, pf-big5-row, pf-big5-track, pf-big5-figure.
  * Motion runs once on first paint or on open, never loops and never follows scroll; every animation and transition rule
  * sits inside the no-preference block (a test greps this file for strays).
  */
@@ -140,6 +141,31 @@
   }
   .profile .pf-verdict > :nth-child(4) {
     animation-delay: 180ms;
+  }
+  .profile .pf-big5-shape,
+  .profile .pf-big5-stub {
+    transform-box: view-box;
+    transform-origin: 50% 50%;
+    animation: pf-big5-draw 400ms ease-out both;
+  }
+  .profile .pf-big5-dot {
+    animation: pf-fade 240ms ease-out both;
+    animation-delay: 300ms;
+  }
+  .profile .pf-big5-marker {
+    animation: pf-fade 240ms ease-out both;
+  }
+  .profile .pf-big5-row:nth-child(2) .pf-big5-marker {
+    animation-delay: 60ms;
+  }
+  .profile .pf-big5-row:nth-child(3) .pf-big5-marker {
+    animation-delay: 120ms;
+  }
+  .profile .pf-big5-row:nth-child(4) .pf-big5-marker {
+    animation-delay: 180ms;
+  }
+  .profile .pf-big5-row:nth-child(5) .pf-big5-marker {
+    animation-delay: 240ms;
   }
   .profile .pf-link {
     transition: text-decoration-thickness 150ms ease-out, text-decoration-color 150ms ease-out;
@@ -194,8 +220,15 @@
     opacity: 0;
   }
 }
+@keyframes pf-big5-draw {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+}
 @media print {
-  .profile details::details-content {
+  /* Every disclosure on the page prints open (profile, identity, registries), so the rule is scoped to main. */
+  main details::details-content {
     content-visibility: visible;
     display: contents;
   }
@@ -203,13 +236,20 @@
     box-shadow: none !important;
   }
   /* Every disclosure prints open, so a closed chevron would misreport it. */
-  .profile summary > [aria-hidden="true"] {
+  main summary > [aria-hidden="true"] {
     display: none;
   }
   .profile li,
   .profile tbody,
-  .profile .pf-verdict > * {
+  .profile .pf-verdict > *,
+  .profile .pf-big5-figure {
     break-inside: avoid;
+  }
+  .profile .pf-big5-track,
+  .profile .pf-big5-marker,
+  .profile .pf-big5 {
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
   }
 }
 

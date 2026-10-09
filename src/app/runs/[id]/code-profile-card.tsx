@@ -42,11 +42,11 @@ export function CodeProfileCard({ profile }: { profile: CodeProfile | null | und
   if (profile === null || profile === undefined) return null;
   const apify = profile.apify;
   return (
-    <section aria-labelledby="code-contributions">
+    <section aria-labelledby="code-contributions" className="border-t border-divider pt-6">
       <Eyebrow>Public GitHub work only</Eyebrow>
-      <h3 id="code-contributions" className="mt-1 font-sans text-base font-semibold">
+      <h2 id="code-contributions" className="mt-1 font-sans text-base font-semibold">
         GitHub contributions
-      </h3>
+      </h2>
       <p className="mt-1 text-sm text-muted">
         <Ext url={profile.profile_url}>{profile.handle}</Ext>
       </p>
@@ -77,7 +77,7 @@ export function CodeProfileCard({ profile }: { profile: CodeProfile | null | und
 
       {profile.repos.length > 0 && (
         <div className="mt-4">
-          <h4 className="text-xs font-semibold text-muted">Repositories</h4>
+          <h3 className="text-xs font-semibold text-muted">Repositories</h3>
           <ul className="mt-1 divide-y divide-divider border-y border-divider text-sm">
             {profile.repos.map((r) => {
               const n = repoNumbers(r);
@@ -99,7 +99,7 @@ export function CodeProfileCard({ profile }: { profile: CodeProfile | null | und
 
       {profile.merged_prs_sample.length > 0 && (
         <div className="mt-4">
-          <h4 className="text-xs font-semibold text-muted">Merged pull requests in other repositories</h4>
+          <h3 className="text-xs font-semibold text-muted">Merged pull requests in other repositories</h3>
           <ul className="mt-1 divide-y divide-divider border-y border-divider text-sm">
             {profile.merged_prs_sample.map((pr) => (
               <li key={pr.url} className="py-2 break-words">
@@ -120,10 +120,10 @@ export function CodeProfileCard({ profile }: { profile: CodeProfile | null | und
 
       {apify !== null && (
         <div className="mt-4 text-sm">
-          <h4 className="text-xs font-semibold text-muted">
+          <h3 className="text-xs font-semibold text-muted">
             From the GitHub profile page (via Apify)
             <Src url={httpUrl(apify.source_url)} />
-          </h4>
+          </h3>
           <p className="mt-1 text-ink">
             {[
               apify.last_year_contributions === null ? null : `${fmtInt(apify.last_year_contributions)} contributions in the last year`,
@@ -167,7 +167,7 @@ export function CodeProfileCard({ profile }: { profile: CodeProfile | null | und
       )}
 
       <div className="mt-4 text-sm text-muted">
-        <h4 className="text-xs font-semibold">What these numbers cannot tell you</h4>
+        <h3 className="text-xs font-semibold">What these numbers cannot tell you</h3>
         <ul className="mt-1 list-disc pl-5">
           {CODE_PROFILE_CAVEATS.map((c) => (
             <li key={c}>{c}</li>

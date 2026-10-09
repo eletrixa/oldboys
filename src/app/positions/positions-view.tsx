@@ -77,7 +77,7 @@ function TitleSections({ rows }: { rows: TitleChoice[] }): React.JSX.Element {
       )}
       {groups.length > 0 && (
         <details key={String(open)} className="group" open={open}>
-          <summary className={SUMMARY}><Chevron />Preselected roles ({String(catalogCount)})</summary>
+          <summary className={SUMMARY}><Chevron /><h2>Preselected roles ({String(catalogCount)})</h2></summary>
           <div className="mt-2 flex flex-col gap-6">
             {groups.map((g) => (
               <section key={g.family} aria-labelledby={`fam-${g.family}`} className="flex flex-col gap-2">

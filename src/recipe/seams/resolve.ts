@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/recipe/seams/resolve.ts
- * Deps:    zod, src/domain/corroborate, src/domain/cv-check (isCvSource), src/recipe/sources/linkedin (experienceCompanies)
+ * Deps:    zod, src/domain/corroborate, src/domain/cv-check (isCvSource), src/recipe/sources/linkedin (experienceCompanies), src/recipe/sources/personal-site (PERSONAL_SITE_ACTOR, PERSONAL_SITE_REASON)
  * Tested:  src/recipe/__tests__/seams.test.ts, src/recipe/__tests__/identity-corroboration.test.ts
  *
  * Key responsibilities:
@@ -43,6 +43,7 @@ import type { Ports } from "@/domain/ports";
 import { isCvSource } from "@/domain/cv-check";
 import { corroborationReason, employerHit, fold, mentionsPlace, orgTokens, placeOf, professionalReasons, professionalSnippet, type OrgToken } from "@/domain/corroborate";
 import { experienceCompanies, LINKEDIN_PROFILE_ACTORS } from "@/recipe/sources/linkedin";
+import { PERSONAL_SITE_ACTOR, PERSONAL_SITE_REASON } from "@/recipe/sources/personal-site";
 import { clip, emptyOutcome, platformOf, type StepContext, type StepOutcome } from "@/recipe/sources/types";
 
 export const MERGE_FLOOR = 0.8;
@@ -160,6 +161,8 @@ export function mergedProfileOrgs(sources: readonly IdentitySource[]): string[] 
 
 /**
  * Identity changes after the lineup.
+ * Rule 0 (own website): a merged source of the personal-site collector gets PERSONAL_SITE_REASON (the collector
+ * cannot write identity_reason itself); re-applied on every pass, same values.
  * Rule 1 (profile key): under a merged candidate -> merged, under a rejected one -> unverified (reason null).
  * Rule 2 (name + employer, only with `corroboration`): a source still unverified and not on a rejected profile
  * becomes merged when it names the subject in full AND carries a distinctive token of a confirmed organisation:
@@ -177,7 +180,8 @@ export function sourceIdentityUpdates(
   const after = sources.map((s) => {
     const k = profileKey(s.url);
     const next: SourceIdentity | null = k === null ? null : rejected.has(k) ? "unverified" : merged.has(k) ? "merged" : null;
-    if (next !== null && next !== s.identity) out.push({ id: s.id, identity: next, reason: null });
+    if (s.actor === PERSONAL_SITE_ACTOR && s.identity === "merged" && next !== "unverified") out.push({ id: s.id, identity: "merged", reason: PERSONAL_SITE_REASON });
+    else if (next !== null && next !== s.identity) out.push({ id: s.id, identity: next, reason: null });
     return { ...s, identity: next ?? s.identity, rejected: k !== null && rejected.has(k) };
   });
   if (corroboration === undefined) return out;

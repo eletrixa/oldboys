@@ -69,7 +69,7 @@ describe("facebookPage", () => {
     expect(facebookPage.requests(baseContext({ candidates: [{ ...fb, decision: "rejected" }] }), step)).toEqual([]);
     expect(facebookPage.requests(baseContext({ candidates: [{ ...fb, decision: "possibly-same-as" }] }), step)).toHaveLength(1);
     expect(facebookPage.requests(baseContext({ candidates: [fb] }), step)).toEqual([
-      { via: "actor", actor: "apify/facebook-pages-scraper", input: { startUrls: [{ url: "https://www.facebook.com/janadata" }] }, maxTotalChargeUsd: 0.04, timeoutSecs: 45 },
+      { via: "actor", actor: "apify/facebook-pages-scraper", input: { startUrls: [{ url: "https://www.facebook.com/janadata" }] }, maxTotalChargeUsd: 0.04, timeoutSecs: 90 },
     ]);
   });
 

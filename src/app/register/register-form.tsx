@@ -112,7 +112,7 @@ export function RegisterForm(): React.JSX.Element {
       >
         <div className="flex flex-col gap-1.5">
           <p className={KEY}>Step 1 of 2 · About you</p>
-          <h2 className="text-lg font-semibold">Who is signing up?</h2>
+          <h3 className="font-sans text-base font-semibold">Who is signing up?</h3>
         </div>
         <label className="flex flex-col gap-1.5 text-sm font-semibold">
           Your name
@@ -150,7 +150,7 @@ export function RegisterForm(): React.JSX.Element {
     >
       <div className="flex flex-col gap-1.5">
         <p className={KEY}>Step 2 of 2 · Your company</p>
-        <h2 className="text-lg font-semibold">Which company do you hire for?</h2>
+        <h3 className="font-sans text-base font-semibold">Which company do you hire for?</h3>
         <p className="text-sm text-muted">Briefs are shared with everyone at the company, so the company is your team.</p>
       </div>
       <CompanyFields value={company} onChange={setCompany} />

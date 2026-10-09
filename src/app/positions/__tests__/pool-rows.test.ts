@@ -15,7 +15,7 @@
  */
 import { describe, expect, it } from "vitest";
 import type { PoolRow } from "@/app/api/positions/handler";
-import { candidateName, candidateSource, candidateStatus, channelsFor, defaultTag, enrichSummary, shapePool } from "../pool-rows";
+import { candidateName, candidateSource, candidateStatus, channelsFor, defaultTag, enrichSummary, existingRuns, shapePool } from "../pool-rows";
 
 const base: PoolRow = {
   id: "a1", source: "manual", name: "Ada", email: null, status: "pooled", run_id: null, note: null,
@@ -108,5 +108,10 @@ describe("defaultTag and enrichSummary", () => {
     expect(enrichSummary({ started: [{ applicationId: "a", runId: "r" }], skipped: [] })).toBe("Started 1 run");
     expect(enrichSummary({ started: [], skipped: [{ applicationId: "a", reason: "already started" }, { applicationId: "b", reason: "already started" }] }))
       .toBe("Started 0 runs. Skipped 2: already started");
+  });
+  it("lists the runs already-started rows have, once each", () => {
+    const skipped = [{ applicationId: "a", reason: "already started", runId: "r1" }, { applicationId: "b", reason: "already started", runId: "r1" }, { applicationId: "c", reason: "not ready" }];
+    expect(existingRuns({ started: [], skipped })).toEqual(["r1"]);
+    expect(existingRuns({ started: [], skipped: [] })).toEqual([]);
   });
 });

@@ -4,9 +4,9 @@ Team **Old Boys** (Josef Buryan, Minas Arustamyan, Robert Vojacek). From Dusk Ti
 
 ## 1. Pitch
 
-Radar is a research assistant for recruiters and hiring managers. You give it a position and a candidate (a LinkedIn link or a CV). In about 2 to 4 minutes it returns a brief built from public sources: what the candidate has done, what backs each must-have of the position, what does not match, and what to ask at the interview. The rule is **"it researches, it never judges"**. Every line of the brief links to its source. A line is a FACT only when its quote is found word for word in the saved source text. Everything else is an INFERENCE or an open question. The recruiter makes the decision, not the tool.
+Radar is a research assistant for recruiters and hiring managers. You give it a position and a candidate (a LinkedIn link or a CV). In about 6 to 12 minutes it returns a brief built from public sources: what the candidate has done, what backs each must-have of the position, what does not match, and what to ask at the interview. The rule is **"it researches, it never judges"**. Every line of the brief links to its source. A line is a FACT only when its quote is found word for word in the saved source text. Everything else is an INFERENCE or an open question. The recruiter makes the decision, not the tool.
 
-## 2. Try it in 3 minutes
+## 2. Try it
 
 | Step | What to do |
 |---|---|
@@ -14,7 +14,7 @@ Radar is a research assistant for recruiters and hiring managers. You give it a 
 | 2. Get in | **Create account** (`/register`). Any e-mail address works. For the company, tick **"Company outside the Czech Republic (no IČO)"**, or leave the IČO empty and type the name by hand. An ARES lookup is optional. Limit: 10 sign-ups per hour per IP. |
 | 3. Pick a position | **New brief** (`/briefs/new`): choose a title from the role catalog (183 roles with must-haves), or open **Positions → Add a position from a posting** and paste a job-ad link (StartupJobs, Jobs.cz incl. company career sites, Greenhouse, Lever, Ashby, any page with JobPosting data). You can also type a position by hand. |
 | 4. Add a candidate | One row per person: a public LinkedIn profile URL, a pasted CV, or a PDF / text CV file. Then click **Research N candidates**. |
-| 5. Read the brief | The position's results table shows the progress. Open the brief when the status is done (usually 2 to 4 minutes). |
+| 5. Read the brief | The position's results table shows the progress. Open the brief when the status is done (usually 6 to 12 minutes). |
 | 6. See how we test it | `/validation` (public, linked in the footer): eval results, and what is real, simulated or unfinished. |
 
 Limits you may hit: 6 started runs per hour per company and 20 runs per hour across the whole site (`src/domain/run-status.ts`). Each run spends real Apify and Anthropic credit.
@@ -111,17 +111,17 @@ Weights from the case brief ([`docs/brief.md`](docs/brief.md)).
 | Value and track relevance | 35 | A recruiter flow from position to interview to deletion. The brief answers the position's must-haves, not a generic summary. Exports go into the tools a recruiter already uses (ATS paste, calendar, kit). | `/briefs/new`, `/runs/<id>`, [`plans/012-brief-flow/`](plans/012-brief-flow/00-SYNTHESIS.md), commits `0b1e9ed` (ATS), `177df41` (.ics), `629f5a9` (kit review) |
 | Originality | 25 | Positions come first: catalog or job-ad link → must-haves → research per must-have. Identity is settled before anything reaches the model. A devil's advocate may only weaken findings. CV vs public record. An AI phone call with consent whose answers stay STATEMENTs. Czech registries by role. | `src/domain/role-catalog/`, `src/recipe/seams/challenge.ts`, `src/app/runs/[id]/cv-check.ts`, `src/domain/call-ingest.ts`, `src/domain/cz-registry.ts`; commits `f903bf1`, `236d2ba`, `e36e4aa` |
 | Working end-to-end | 20 | Live on production: sign-up → position → candidate → run → brief → exports → delete. Six intake channels. A degraded path when the AI is down (evidence-only brief, labelled NO AI). | https://oldboys.asajj.cz, live runs in [`docs/ops/llm-manual-runs.md`](docs/ops/llm-manual-runs.md), `src/workflow/intake-email.ts`, `src/app/apply/` |
-| Technical execution | 10 | Durable Workflow with a pause, append-only ledger, budget in the runner, deterministic quote check before any model verify, Zod contracts, strict TypeScript + ESLint, 1,873 + 21 tests, an eval that `pnpm check` guards. | `src/recipe/runner.ts`, `src/recipe/seams/verify.ts`, `migrations/0001_init.sql`, `pnpm check` |
+| Technical execution | 10 | Durable Workflow with a pause, append-only ledger, budget in the runner, deterministic quote check before any model verify, Zod contracts, strict TypeScript + ESLint, 2,037 + 21 tests, an eval that `pnpm check` guards. | `src/recipe/runner.ts`, `src/recipe/seams/verify.ts`, `migrations/0001_init.sql`, `pnpm check` |
 | Validation and honest limitations | 10 | An eval set with ground truth and traps, scored in two modes. A public `/validation` page generated from the eval results. Simulated parts carry a pill in the app. Known misses and issues are listed (section 8). | [`eval/RESULTS.md`](eval/RESULTS.md), `/validation`, [`src/app/validation/page.tsx`](src/app/validation/page.tsx), [`eval/reviews/`](eval/reviews/) |
 
 ## 6. Numbers
 
 | What | Value | Source |
 |---|---|---|
-| Tests | **1,873 app tests passed (2 skipped) + 21 extension tests**, all green | `pnpm check` at 03:35 |
+| Tests | **2,037 app tests passed (2 skipped) + 21 extension tests**, all green | `pnpm check` at 05:05 |
 | Eval | **84 of 95 checks, 0 unsafe misses, 11 conservative**, the same in strict mode; 0 lineup questions | [`eval/RESULTS.md`](eval/RESULTS.md) |
-| Run time (16-source runs on Josef Buryan, a consenting team member) | 2 min 56 s to 4 min 35 s | runs a0ec24b1, c43ddbf4, d994339e, 597867c5 in [`docs/ops/llm-manual-runs.md`](docs/ops/llm-manual-runs.md) |
-| Cost per run | $0.19 to $0.28 for those runs; $0.55 to $0.83 for full-profile runs (enriched profile, 20+ sources) | same file, from the ledger `cost_usd` |
+| Run time on production (full hiring runs on Josef Buryan, a consenting team member) | **6 min 40 s** with parallel collectors (run a79b1d1b, CMO, 04:46); 8 min 37 s and 11 min 30 s before them (dff2cfdb, c9c2a2b6); the UI says "usually 6 to 12 minutes" | run state `cost.duration_ms`; [`docs/ops/llm-manual-runs.md`](docs/ops/llm-manual-runs.md) |
+| Cost per run | $0.78 to $0.84 for those three production runs (enriched profile, 26 source calls); $0.19 to $0.28 for the early 16-source runs | same file, from the ledger `cost_usd` |
 | Position from a job-ad link | $0.011 to $0.027 per extraction | same file |
 | Collectors | 22 (12 Apify actors, 10 public REST APIs) | `src/recipe/sources/index.ts` |
 | Role catalog | 183 roles in 10 families | `src/domain/role-catalog/` |
@@ -173,13 +173,14 @@ Weights from the case brief ([`docs/brief.md`](docs/brief.md)).
 2. **The "Working style" section** of the enriched profile shows DISC and MBTI types with a confidence level. They are inferred only from the person's own public writing and labelled "Inference from public writing, not an assessment of the person" (`src/app/runs/[id]/profile-sections.tsx`). This sits uneasily with the case's out-of-bounds list and with our own start-form line "we do not judge personality".
 3. **The Czech registry step runs for every position**, by name only:
    - It searches the insolvency register, ARES, or.justice.cz persons and the Police wanted and missing persons list (`src/domain/cz-registry.ts`).
-   - Hits are labelled "namesake possible" and the card says to confirm at the interview. Still, a namesake's record can appear on a candidate's brief.
+   - Hits are labelled "namesake possible" and the card says to confirm at the interview. Still, a namesake's record can appear on a candidate's brief. Its address is cut to the town (no street, house number or postcode) since 05:00.
 4. **Art. 9 claims are filtered on output** but stay in the D1 `claims` table until the run is deleted or purged.
 5. **Sending the candidate notice is not recorded.** The audit record says "Not recorded by this tool".
 6. **Access control is thin:**
    - Run, audit and export pages open by their unguessable run UUID without login.
    - A run without a company (started by the API or the extension) can be deleted by any logged-in account.
    - The call-approve route does not check the call's company.
+   - Positions are not scoped to the company: every account sees and can open every team's positions in `/positions` and `/briefs/new` (the `positions` table has no organization column; fixing it needs a D1 migration).
 7. **The budget gates paid collectors only.** Model steps after the cap still run, so recorded run totals reach $0.83 against a $0.50 budget.
 
 ## 9. How we built it

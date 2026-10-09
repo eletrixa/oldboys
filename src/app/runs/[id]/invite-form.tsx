@@ -3,14 +3,14 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/runs/[id]/invite-form.tsx
- * Deps:    react, ../../ui (Radar tokens), ./state (types), ./interview-invite, ./i18n (Report)
+ * Deps:    react, ../../ui (Radar tokens), ./state (types), ./interview-invite, ./i18n (Report), ./report-lang (useReport)
  * Tested:  n/a (the invite text is tested in __tests__/interview-invite.test.ts)
  *
  * Key responsibilities:
  * - InviteForm: disclosure with labelled date, time (local, default next working day 10:00) and duration (30/45/60/90,
  *   default 60) fields and a "Download .ics" button that builds the invite at click time with this page as the brief link
  * - `asButton` + `id`: the kit card's "Add interview to calendar" secondary button; the phone bar opens it by id
- * - The invite is in the report language (`language`, idea #24 follow-up); a Czech one downloads as interview-<id>-cs.ics
+ * - The form's labels follow the page's report language (`useReport().t.kit`); the invite is in the report language (`language`, idea #24 follow-up); a Czech one downloads as interview-<id>-cs.ics
  *
  * Design constraints:
  * - Client only; no fetch, no storage; the recruiter imports the file and adds the interviewers in the calendar
@@ -22,6 +22,7 @@ import { BTN_SECONDARY, Chevron, FIELD, SUMMARY } from "../../ui";
 import type { RunState } from "./state";
 import { interviewInvite, inviteFileName } from "./interview-invite";
 import type { Report } from "./i18n";
+import { useReport } from "./report-lang";
 
 const DURATIONS = [30, 45, 60, 90] as const;
 
@@ -64,6 +65,7 @@ export function InviteForm({ state, language, id: anchor, asButton = false }: { 
   const [minutes, setMinutes] = useState<number>(60);
   const id = useId();
   const start = localStart(date, time);
+  const t = useReport().t.kit;
 
   const download = (): void => {
     if (start === null) return;
@@ -75,13 +77,13 @@ export function InviteForm({ state, language, id: anchor, asButton = false }: { 
     <details className="group" id={anchor}>
       <summary className={asButton ? `${BTN_SECONDARY} w-full cursor-pointer list-none [&::-webkit-details-marker]:hidden` : SUMMARY}>
         <Chevron />
-        Add interview to calendar{asButton ? "" : " (.ics)"}
+        {t.addToCalendar}{asButton ? "" : t.ics}
       </summary>
       <div className="mt-3 flex flex-col gap-3">
         <div className="flex flex-wrap items-end gap-3">
           <div className="flex flex-col gap-1">
             <label htmlFor={`${id}-date`} className="text-sm font-medium text-ink">
-              Date
+              {t.date}
             </label>
             <input
               id={`${id}-date`}
@@ -95,7 +97,7 @@ export function InviteForm({ state, language, id: anchor, asButton = false }: { 
           </div>
           <div className="flex flex-col gap-1">
             <label htmlFor={`${id}-time`} className="text-sm font-medium text-ink">
-              Time (your local time)
+              {t.time}
             </label>
             <input
               id={`${id}-time`}
@@ -109,7 +111,7 @@ export function InviteForm({ state, language, id: anchor, asButton = false }: { 
           </div>
           <div className="flex flex-col gap-1">
             <label htmlFor={`${id}-minutes`} className="text-sm font-medium text-ink">
-              Duration
+              {t.duration}
             </label>
             <select
               id={`${id}-minutes`}
@@ -127,13 +129,10 @@ export function InviteForm({ state, language, id: anchor, asButton = false }: { 
             </select>
           </div>
           <button type="button" className={BTN_SECONDARY} disabled={start === null} onClick={download}>
-            Download .ics
+            {t.downloadIcs}
           </button>
         </div>
-        <p className="text-xs text-muted">
-          Import it into Google Calendar or Outlook and add the interviewers there. The invite carries the summary, the interview
-          questions and a link to this brief.
-        </p>
+        <p className="text-xs text-muted">{t.icsHint}</p>
       </div>
     </details>
   );

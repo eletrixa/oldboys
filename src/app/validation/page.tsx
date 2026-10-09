@@ -22,7 +22,7 @@ import results from "../../../eval/results.json";
 import type { EvalReport } from "../../../eval/score";
 import { CARD, CARD_FLUSH, Eyebrow, LINK, Pill, SimulatedPill, TILE } from "../ui";
 
-export const metadata: Metadata = { title: "What is real" };
+export const metadata: Metadata = { title: "Validation" };
 
 const report = results as EvalReport;
 

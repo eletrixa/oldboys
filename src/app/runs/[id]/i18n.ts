@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/runs/[id]/i18n.ts
- * Deps:    src/domain/{challenge,claim,cv-check} (types), ./brief-ui-text (layout labels), ./evidence (English date labels), ./challenge (English challenge words), ./cv-check (English CV labels), ./report-text, ./state (types)
+ * Deps:    src/domain/{challenge,claim,cv-check} (types), ./brief-ui-text (layout labels), ./phone-kit-text (phone panel and kit sidebar labels), ./evidence (English date labels), ./challenge (English challenge words), ./cv-check (English CV labels), ./report-text, ./state (types)
  * Tested:  src/app/runs/[id]/__tests__/i18n.test.ts
  *
  * Key responsibilities:
@@ -16,7 +16,7 @@
  *
  * Design constraints:
  * - Pure data and functions, no React (the context lives in report-lang.tsx)
- * - The rest of the app (start form, roles, audit, call panel) stays English; the exports take a Report too (kit and
+ * - The rest of the app (start form, roles, audit) stays English; the phone panel and the kit sidebar follow the report language (call, kit); the exports take a Report too (kit and
  *   invite wording in export-text.ts, ATS note and reference questions next to their builders)
  */
 import type { ChallengeGround } from "@/domain/challenge";
@@ -26,6 +26,7 @@ import { type ChallengeSummary, challengeLine, challengeReason, challengeTag } f
 import { CV_EXPLAINER, CV_OUTCOME } from "./cv-check";
 import { keptUntilLabel, retrievedLabel } from "./evidence";
 import { type BriefUi, UI_CS, UI_EN } from "./brief-ui-text";
+import { CALL_CS, CALL_EN, type CallUi, KIT_CS, KIT_EN, type KitUi } from "./phone-kit-text";
 import type { SummaryLead } from "./report-text";
 import type { ConfidenceBand } from "./state";
 
@@ -82,6 +83,10 @@ export type ReportDict = {
   label: (english: string) => string;
   /** Finished brief layout: header, steps, numbers, "Before the interview", tabs, plan, gap groups (brief-ui-text.ts). */
   ui: BriefUi;
+  /** Phone panel: status lines, results, setup form, validation (phone-kit-text.ts). */
+  call: CallUi;
+  /** Interview-kit sidebar and phone bar: exports, calendar invite, filled-kit review, About this research (phone-kit-text.ts). */
+  kit: KitUi;
 };
 
 const EN: ReportDict = {
@@ -136,6 +141,8 @@ const EN: ReportDict = {
   showMore: (n) => `Show ${String(n)} more`,
   label: (english) => english,
   ui: UI_EN,
+  call: CALL_EN,
+  kit: KIT_EN,
 };
 
 function parse(iso: string | null | undefined): Date | null {
@@ -244,6 +251,8 @@ const CS: ReportDict = {
   showMore: (n) => `Zobrazit další (${String(n)})`,
   label: (english) => LABEL_CS[english] ?? english,
   ui: UI_CS,
+  call: CALL_CS,
+  kit: KIT_CS,
 };
 
 export const REPORT_DICT: Readonly<Record<ReportLang, ReportDict>> = { en: EN, cs: CS };

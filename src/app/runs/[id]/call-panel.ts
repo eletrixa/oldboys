@@ -3,15 +3,17 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/runs/[id]/call-panel.ts
- * Deps:    zod, src/domain/call, src/domain/call-brief (limits)
+ * Deps:    zod, src/domain/call, src/domain/call-brief (limits), ./phone-kit-text (CALL_EN)
  * Tested:  src/app/runs/[id]/__tests__/call-panel.test.ts
  *
  * Key responsibilities:
- * - CallView / RunCalls: the GET /api/calls/:id and GET /api/runs/:id/calls contract (shared with the routes)
+ * - CallView / RunCalls / CallProposal: the GET /api/calls/:id, GET /api/runs/:id/calls and
+ *   POST /api/runs/:id/calls/proposal contracts (shared with the routes)
  * - finishAnswers: the per-question results stored in a `call:finish` ledger row's ref
  * - Phone number normalisation and validation, form validation, editable question drafts
  * - callPhase: call status + answers → what the panel shows and whether polling goes on
- * - formatAt, ANSWER_BADGE, usageLine: display texts
+ * - formatAt, ANSWER_BADGE, usageLine: display texts; formProblems and callPhase take the report language's
+ *   CallUi texts (phone-kit-text.ts), English by default
  *
  * Design constraints:
  * - Pure (no React, no fetch) so the routes and the client component can both import it
@@ -20,6 +22,7 @@
 import { z } from "zod";
 import { type Call, CallAnswer, type CallAnswerStatus, type CallBrief, type CallProvider } from "@/domain/call";
 import { HR_QUESTION_MAX, HR_QUESTION_MIN, MAX_CALL_QUESTIONS } from "@/domain/call-brief";
+import { CALL_EN, type CallUi } from "./phone-kit-text";
 
 /** One call as the public routes return it: no consent note, operator, R2 key or transcript. */
 export type CallView = Omit<Call, "consent_note" | "operator" | "result_r2_key" | "consent_ack"> & {
@@ -27,14 +30,29 @@ export type CallView = Omit<Call, "consent_note" | "operator" | "result_r2_key" 
   answers: CallAnswer[] | null;
 };
 
-/** GET /api/runs/:id/calls. `proposal` is computed on every request and never stored. */
+/**
+ * GET /api/runs/:id/calls. `proposal` (rule-based) is computed on every request and never stored; `ai_proposal` is
+ * the cached AI draft for the current research, null when none was drafted yet (the GET never calls the model).
+ */
 export type RunCalls = {
   provider: CallProvider;
   max: number;
   used: number;
   proposal: CallBrief;
+  ai_proposal: CallBrief | null;
   calls: CallView[];
 };
+
+/** POST /api/runs/:id/calls/proposal: the AI draft, or the rule-based questions with a short note why. */
+export type CallProposal = {
+  source: "ai" | "rules";
+  cached: boolean;
+  note: string | null;
+  proposal: CallBrief;
+};
+
+/** The AI draft in the panel: being drafted, drafted, or not available (rule-based questions with a note). */
+export type AiDraft = { kind: "drafting" } | { kind: "ai"; proposal: CallBrief } | { kind: "rules"; note: string | null };
 
 const FinishRef = z.object({ answers: z.array(CallAnswer).optional() }).loose();
 
@@ -63,15 +81,27 @@ export function validNumber(raw: string): boolean {
   return E164.test(normalizeNumber(raw));
 }
 
-/** A question in the editor; `key` is local (React list key), `question_id` only for proposed or saved ones. */
-export type DraftQuestion = { key: string; question_id?: string; text: string; why?: string };
+/**
+ * A question in the editor; `key` is local (React list key), `question_id` only for proposed or saved ones.
+ * `listen_for` / `follow_up` come with an AI draft and stay when HR edits the text.
+ */
+export type DraftQuestion = { key: string; question_id?: string; text: string; why?: string; listen_for?: string; follow_up?: string };
 
 export function draftsFromProposal(brief: Pick<CallBrief, "questions">): DraftQuestion[] {
-  return brief.questions.map((q) => ({ key: q.question_id, question_id: q.question_id, text: q.text, ...(q.why === undefined ? {} : { why: q.why }) }));
+  return brief.questions.map((q) => ({
+    key: q.question_id,
+    question_id: q.question_id,
+    text: q.text,
+    ...(q.why === undefined ? {} : { why: q.why }),
+    ...(q.listen_for === undefined ? {} : { listen_for: q.listen_for }),
+    ...(q.follow_up === undefined ? {} : { follow_up: q.follow_up }),
+  }));
 }
 
 /** Body questions for POST /api/runs/:id/calls. */
-export function toHrQuestions(drafts: readonly DraftQuestion[]): { question_id?: string; text: string; why?: string }[] {
+export function toHrQuestions(
+  drafts: readonly DraftQuestion[],
+): { question_id?: string; text: string; why?: string; listen_for?: string; follow_up?: string }[] {
   return drafts.map(({ key: _key, ...q }) => ({ ...q, text: q.text.trim() }));
 }
 
@@ -83,19 +113,19 @@ export type CallForm = {
   questions: readonly DraftQuestion[];
 };
 
-/** Why "Call candidate now" is disabled; empty when the call may be placed. */
-export function formProblems(form: CallForm, used: number, max: number): string[] {
+/** Why "Call candidate now" is disabled; empty when the call may be placed. `t`: the texts in the report language. */
+export function formProblems(form: CallForm, used: number, max: number, t: CallUi["problem"] = CALL_EN.problem): string[] {
   const problems: string[] = [];
-  if (used >= max) problems.push(`This run already used all ${String(max)} calls.`);
-  if (form.questions.length === 0) problems.push("Add at least one question.");
-  if (form.questions.length > MAX_CALL_QUESTIONS) problems.push(`At most ${String(MAX_CALL_QUESTIONS)} questions.`);
+  if (used >= max) problems.push(t.allUsed(max));
+  if (form.questions.length === 0) problems.push(t.addOne);
+  if (form.questions.length > MAX_CALL_QUESTIONS) problems.push(t.atMost(MAX_CALL_QUESTIONS));
   if (form.questions.some((q) => q.text.trim().length < HR_QUESTION_MIN || q.text.trim().length > HR_QUESTION_MAX)) {
-    problems.push(`Each question needs ${String(HR_QUESTION_MIN)} to ${String(HR_QUESTION_MAX)} characters.`);
+    problems.push(t.length(HR_QUESTION_MIN, HR_QUESTION_MAX));
   }
-  if (!validNumber(form.number)) problems.push("Enter the phone number in international format, e.g. +420 777 123 456.");
-  if (!form.consent) problems.push("Confirm that the candidate agreed to the call and the recording.");
-  if (form.note.trim() === "") problems.push("Note how the candidate agreed.");
-  if (form.operator.trim() === "") problems.push("Enter your name.");
+  if (!validNumber(form.number)) problems.push(t.number);
+  if (!form.consent) problems.push(t.consent);
+  if (form.note.trim() === "") problems.push(t.note);
+  if (form.operator.trim() === "") problems.push(t.operator);
   return problems;
 }
 
@@ -105,25 +135,28 @@ export type CallPhase =
   | { kind: "finished"; text: string }
   | { kind: "ended"; text: string };
 
-/** What the panel says about a call; `ended` and `finished` stop the polling. */
-export function callPhase(call: Pick<CallView, "status" | "answers" | "to_number_masked" | "failure_reason" | "last_error">): CallPhase {
+/** What the panel says about a call; `ended` and `finished` stop the polling. `t`: the texts in the report language. */
+export function callPhase(
+  call: Pick<CallView, "status" | "answers" | "to_number_masked" | "failure_reason" | "last_error">,
+  t: CallUi["phase"] = CALL_EN.phase,
+): CallPhase {
   switch (call.status) {
     case "drafted":
-      return { kind: "ended", text: "Not placed." };
+      return { kind: "ended", text: t.notPlaced };
     case "skipped":
-      return { kind: "ended", text: "Skipped." };
+      return { kind: "ended", text: t.skipped };
     case "dialing":
-      return { kind: "calling", text: `Calling ${call.to_number_masked ?? "the candidate"}…` };
+      return { kind: "calling", text: t.calling(call.to_number_masked) };
     case "no_answer":
-      return { kind: "ended", text: "No answer." };
+      return { kind: "ended", text: t.noAnswer };
     case "refused":
-      return { kind: "ended", text: "The candidate declined the call." };
+      return { kind: "ended", text: t.refused };
     case "failed":
-      return { kind: "ended", text: `Call failed: ${call.failure_reason ?? call.last_error ?? "unknown reason"}` };
+      return { kind: "ended", text: t.failed(call.failure_reason ?? call.last_error) };
     case "done":
-      if (call.answers !== null) return { kind: "finished", text: "Call finished." };
-      if (call.last_error !== null) return { kind: "ended", text: `Call finished, but the answers could not be read: ${call.last_error}` };
-      return { kind: "reading", text: "Call finished, reading the answers…" };
+      if (call.answers !== null) return { kind: "finished", text: t.finished };
+      if (call.last_error !== null) return { kind: "ended", text: t.readFailed(call.last_error) };
+      return { kind: "reading", text: t.reading };
   }
 }
 
@@ -146,7 +179,7 @@ export const ANSWER_BADGE: Readonly<Record<CallAnswerStatus, { label: string; cl
 };
 
 export function usageLine(used: number, max: number): string {
-  return `${String(used)} of ${String(max)} ${max === 1 ? "call" : "calls"} used for this run`;
+  return CALL_EN.usage(used, max);
 }
 
 /** Calls worth showing: placed ones (not drafted, not skipped), newest first as the route returns them. */

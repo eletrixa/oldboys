@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/runs/[id]/profile-history.tsx
- * Deps:    react, src/domain/claim (types), ../../ui, ./profile-evidence
+ * Deps:    react, src/domain/claim (types), ../../ui, ./evidence-line, ./profile-evidence
  * Tested:  src/app/runs/[id]/__tests__/profile-sections.test.ts
  *
  * Key responsibilities:
@@ -12,7 +12,8 @@
  */
 import type { HistoryEntry } from "@/domain/claim";
 import { CARD, Pill } from "../../ui";
-import { type Ctx, Dropped, EvidenceList, Head, INTRO, MEASURE, More, NOTE, NoQuote } from "./profile-evidence";
+import { type Ctx, MEASURE, NOTE, NoQuote } from "./evidence-line";
+import { Dropped, EvidenceList, Head, INTRO, More } from "./profile-evidence";
 
 const dates = (h: HistoryEntry): string => (h.from === null && h.to === null ? "" : `${h.from ?? "?"} – ${h.to ?? "Present"}`);
 
