@@ -9,7 +9,7 @@
  * Key responsibilities:
  * - SiteHeader: Echo r mark + wordmark and the nav the layout passes in (SiteNav, a server component)
  * - SiteFooter: the short honesty line and a link to /validation (what is real, simulated, incomplete), with an
- *   "Architecture" link to /architecture on its own line below it (the landing page uses this footer too)
+ *   "Guide · Architecture" links to /guide and /architecture on their own line below it (the landing page uses this footer too)
  * - Both render nothing under /apply/<tag> (plans/008: the candidate sees "received", never the research product)
  *
  * Design constraints:
@@ -61,6 +61,8 @@ export function SiteFooter(): React.JSX.Element | null {
           <Link href="/validation" className={FOOTER_LINK}>What is real, simulated or unfinished</Link>
         </p>
         <p>
+          <Link href="/guide" className={FOOTER_LINK}>Guide</Link>
+          {" · "}
           <Link href="/architecture" className={FOOTER_LINK}>Architecture</Link>
         </p>
       </div>

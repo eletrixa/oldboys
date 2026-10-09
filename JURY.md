@@ -10,7 +10,7 @@ Radar is a research assistant for recruiters and hiring managers. You give it a 
 
 | Step | What to do |
 |---|---|
-| 1. Look without an account | Open https://oldboys.asajj.cz. The landing page has a sample brief and an interactive evidence example. Both show a **fictional** candidate and are marked as such. |
+| 1. Look without an account | Open https://oldboys.asajj.cz. The landing page has a sample brief and an interactive evidence example. Both show a **fictional** candidate and are marked as such. New to Radar? `/guide` explains the whole flow in plain words (public, no account). |
 | 2. Get in | **Create account** (`/register`). Any e-mail address works. For the company, tick **"Company outside the Czech Republic (no IČO)"**, or leave the IČO empty and type the name by hand. An ARES lookup is optional. Limit: 10 sign-ups per hour per IP. |
 | 3. Pick a position | **New brief** (`/briefs/new`): choose a title from the role catalog (183 roles with must-haves), or open **Positions → Add a position from a posting** and paste a job-ad link (StartupJobs, Jobs.cz incl. company career sites, Greenhouse, Lever, Ashby, any page with JobPosting data). You can also type a position by hand. |
 | 4. Add a candidate | One row per person: a public LinkedIn profile URL, a pasted CV, or a PDF / text CV file. Then click **Research N candidates**. |

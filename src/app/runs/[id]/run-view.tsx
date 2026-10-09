@@ -13,7 +13,7 @@
  * - "Researched for: <position title>" link to /positions/<id> under the name when the run came from a position
  * - When done with a brief, the whole page is BriefPage (brief-page.tsx: header with hiring steps, tabs, kit sidebar); the
  *   confirmation steps (progress, identity map, profile list) go into its "How we confirmed it" disclosure (Sources tab)
- * - One footer closes the page: running hint (not done), then "Home" and "Audit record" links, then the
+ * - One footer closes the page: running hint (not done, with a /guide#read link), then "Home" and "Audit record" links, then the
  *   "Delete candidate data" disclosure (any status); after a delete the whole page becomes the deletion receipt
  * - Not-found view: eyebrow, heading, muted sentence and a primary back link on the header rhythm
  * - Stalled notice above the progress when no ledger activity for 30 minutes (stalledNotice); the progress panel
@@ -256,7 +256,7 @@ export function RunView({ id }: { id: string }): React.JSX.Element {
           </p>
         )}
         {state.status !== "done" && (
-          <p className="text-sm text-muted">The steps below say how much is left. You can leave this page; the panel at the bottom follows the research and the brief waits in My briefs.</p>
+          <p className="text-sm text-muted">The steps below say how much is left. You can leave this page; the panel at the bottom follows the research and the brief waits in My briefs. <Link href="/guide#read" className={LINK}>How to read your brief</Link></p>
         )}
         {cached && (
           <SimulatedPill kind="cached" detail={`run from ${state.created_at.slice(0, 16).replace("T", " ")} UTC`} className="w-fit" />
