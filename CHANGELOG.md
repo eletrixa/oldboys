@@ -5,6 +5,7 @@ All notable changes to oldboys are documented here. The format follows [Keep a C
 ## [Unreleased]
 
 ### Changed
+- "Copy for ATS" and "Copy reference questions" follow the run page's EN | CZ report language: with CZ the note and the questions are in formal, gender-neutral Czech, with the brief's translated summary, criteria and to-verify texts (English where no translation exists), a Czech date and the role title as typed; English output is unchanged (idea #24)
 - `/positions` is a title-only selector: the team's own postings (newest first, run count, no company or location) followed by every preselected catalog role not yet ingested, 170+ titles grouped by family and searched by title only; a catalog title opens the start form with the role prefilled (`/?role=<title>`, kept through login), an own posting opens its page as before
 
 ### Added

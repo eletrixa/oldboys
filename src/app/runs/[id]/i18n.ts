@@ -16,7 +16,7 @@
  *
  * Design constraints:
  * - Pure data and functions, no React (the context lives in report-lang.tsx)
- * - The rest of the app (start form, roles, audit, call panel, exports) stays English
+ * - The rest of the app (start form, roles, audit, call panel, exports but the ATS note and reference questions) stays English
  */
 import type { ChallengeGround } from "@/domain/challenge";
 import type { Claim, Coverage } from "@/domain/claim";

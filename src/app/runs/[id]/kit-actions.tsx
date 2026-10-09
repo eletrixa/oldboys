@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/runs/[id]/kit-actions.tsx
- * Deps:    react, ../../ui (Radar tokens), ./call-panel (types), ./interview-kit, ./candidate-copy, ./ats-note, ./reference-check, ./kit-review-card, ./invite-form, ./report-lang (LANG_BTN)
+ * Deps:    react, ../../ui (Radar tokens), ./call-panel (types), ./interview-kit, ./candidate-copy, ./ats-note, ./reference-check, ./kit-review-card, ./invite-form, ./report-lang (LANG_BTN, useReport)
  * Tested:  n/a (the texts are tested in __tests__/{interview-kit,candidate-copy,ats-note,reference-check}.test.ts)
  *
  * Key responsibilities:
@@ -16,7 +16,8 @@
  * - One top-aligned row: primary copy button + "More exports" disclosure (group/chevron from ui.tsx); opening it never moves the button
  * - One sr-only role="status" span reports "Copied" / "Copy failed" for the last copy that ran; that button's label shows it too for 2 s
  * - EN/CZ buttons are 44px targets (LANG_BTN, shared with the report language switch); the row carries the brief tail's divider
- * - The exports stay English when the brief is shown in Czech (idea #24 covers the page only)
+ * - Copy for ATS and Copy reference questions follow the report language (useReport, EN | CZ above the brief); the
+ *   interview kit, its download and the invite stay English
  * - The kit fetches GET /api/runs/:id/calls at click time for the phone verification section; on any error
  *   the kit is built without it
  *
@@ -36,7 +37,7 @@ import { atsNote } from "./ats-note";
 import { referenceQuestions } from "./reference-check";
 import { KitReviewCard } from "./kit-review-card";
 import { InviteForm } from "./invite-form";
-import { LANG_BTN } from "./report-lang";
+import { LANG_BTN, useReport } from "./report-lang";
 
 const LANGS: readonly { lang: NoticeLang; label: string; title: string }[] = [
   { lang: "en", label: "EN", title: "Candidate notice in English" },
@@ -98,12 +99,13 @@ export function KitActions({ state }: { state: RunState }): React.JSX.Element | 
     setStatus(s);
   };
   const [noticeLang, setNoticeLang] = useState<NoticeLang>("en");
+  const report = useReport();
   if (state.brief === null) return null;
 
   const kit = async (): Promise<string | null> => interviewKit(state, new Date().toISOString(), await runCalls(state.id));
   const notice = (): string | null => candidateCopy(state, noticeLang);
-  const ats = (): string | null => atsNote(state, `${window.location.origin}/runs/${state.id}`);
-  const refs = (): string | null => referenceQuestions(state);
+  const ats = (): string | null => atsNote(state, `${window.location.origin}/runs/${state.id}`, report);
+  const refs = (): string | null => referenceQuestions(state, report);
 
   const item = "w-full justify-start";
   const exportBtn = `${BTN_QUIET} ${item}`;

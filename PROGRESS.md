@@ -234,7 +234,10 @@ Each agent appends: what it starts, progress, what it finishes. Newest at the bo
 - Docs: docs/ops/call-verification.md, plans/005-call-verification/06-elevenlabs-contract.md, CHANGELOG.md. pnpm check green, opennextjs build + wrangler dry-run bundle. No deploy, no secrets, no D1 change.
 
 ## 2026-10-09 · exports-cs agent (Minas)
-- Started: 02:45. Idea #24 follow-up: Czech exports (interview kit, ATS note, reference questions, calendar invite) follow the report language chosen with the brief's EN | CZ switch.
+- Started: 02:45. Idea #24 follow-up: Czech exports (scoped down to the two short ones: ATS note, reference questions) follow the report language chosen with the brief's EN | CZ switch.
+- Finished: 03:00. `atsNote(state, url, report?)` and `referenceQuestions(state, report?)` take the page's Report (default English, output byte-for-byte unchanged); with CZ: Czech fixed strings (formal "Vy", gender-neutral, no name in the questions so no declension), summary sentences / criteria / to-verify items through `report.text(tid.summary|question|toVerify, english)` (English when not translated), Czech lead words, date "15. 10. 2026"; subject, role / position title and URLs as typed. Art. 9 filter now checks the English source and the copied wording; also_found, claims and interview questions still never go in. `KitActions` (inside `ReportContext` in parts.tsx) passes `useReport()`; while the translation loads the Report is English, so the copy matches the page. Interview kit, its download and the calendar invite stay English.
+- Checked: pnpm check green (1562 + 21 tests, 15 new), opennextjs build and wrangler dry-run bundle. No deploy, no D1, no secrets.
+- Files: src/app/runs/[id]/{ats-note.ts,reference-check.ts,kit-actions.tsx,i18n.ts (header line)}, src/app/runs/[id]/__tests__/{ats-note,reference-check}.test.ts, CHANGELOG.md, PROGRESS.md.
 
 ## 2026-10-09 · identity-city agent (Minas)
 - Started: 02:47. Eval miss (p2-frontend): a same-name profile in the same city was merged on name + city alone and its repo became a FACT. Name + city alone becomes "possibly the same person" (asked in the lineup), a merge needs a second link: anchor link, confirmed employer or a cross-link.
