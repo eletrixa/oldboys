@@ -15,13 +15,20 @@
  * - A recorded claim citing a page the persona records but the run never collected (identity kept it out) drops that
  *   source, and the claim when none is left: the live model only sees collected pages. Any other unknown URL is a problem
  * - Gaps follow the Workflow's rule (src/workflow/research-run.ts doStep): not searched / unconfirmed / onEmpty gap
+ * - Lineup (`EvalMode`, `lineup`): where the Workflow would pause (`lineupNeedsAnswer`) the run page asks `questionsToAsk`
+ *   (at most LINEUP_MAX_QUESTIONS). "recruiter": a simulated recruiter answers from the ground truth (own profile: yes,
+ *   namesake: no, a profile the truth does not list: not sure) and the answer goes through the same path as a real one
+ *   (every candidate's decision sent, then setCandidateDecisions + applySourceIdentity). "strict": nobody answers,
+ *   possibly-same-as stays unmerged. Both modes record the questions in `lineup`
  *
  * Design constraints:
  * - Never imports src/workflow (Workers runtime); the few lines of Workflow glue are mirrored here and named as such
- * - No manager in the loop: a lineup that would pause keeps the model's decisions (possibly-same-as stays unmerged)
+ * - The simulated recruiter only answers what the product asks: an auto `merge` or `rejected` is never overridden,
+ *   so an auto-merged namesake stays an unsafe miss. It is always right; a real recruiter can be wrong
  * - Deterministic: fixed clock, counter ids
  */
-import type { Brief, Candidate, Claim, Gap, Source } from "@/domain/claim";
+import { LINEUP_MAX_QUESTIONS, questionsToAsk } from "@/app/runs/[id]/state";
+import type { Brief, Candidate, CandidateDecision, Claim, Gap, Source } from "@/domain/claim";
 import type { ChallengeRecord } from "@/domain/challenge";
 import { headlineOrgs } from "@/domain/corroborate";
 import { withCvQuestion } from "@/domain/cv-check";
@@ -31,7 +38,7 @@ import { hiringRecipe } from "@/recipe/goals/hiring";
 import { executeStep } from "@/recipe/runner";
 import { familyOf } from "@/domain/position";
 import { CHALLENGE_SYSTEM } from "@/recipe/seams/challenge";
-import { noneConfirmed, profileKey, sourceIdentityUpdates, UNCONFIRMED_GAP } from "@/recipe/seams/resolve";
+import { lineupNeedsAnswer, noneConfirmed, profileKey, sourceIdentityUpdates, UNCONFIRMED_GAP } from "@/recipe/seams/resolve";
 import { seedProfile } from "@/recipe/seams/seed";
 import { HARVEST_ACTOR } from "@/recipe/sources/linkedin";
 import type { StepContext, StepOutcome } from "@/recipe/sources/types";
@@ -44,6 +51,21 @@ const NOW = "2026-10-09T00:00:00.000Z";
 const COLLECTORS = new Set(["serp", "actor", "ares"]);
 const SERP_ACTOR = "apify/google-search-scraper";
 
+/** "recruiter": a simulated recruiter answers the lineup from the ground truth; "strict": nobody answers. */
+export type EvalMode = "recruiter" | "strict";
+
+/** One lineup question the run page shows; `answer` is the simulated recruiter's reply (null in strict mode). */
+export type LineupQuestion = {
+  url: string;
+  platform: Candidate["platform"];
+  truth: "own" | "namesake" | "unknown";
+  note: string;
+  answer: CandidateDecision | null;
+};
+
+/** `paused`: the Workflow would wait for an answer. `leftOpen`: possibly-same-as profiles beyond the question cap. */
+export type LineupRecord = { paused: boolean; questions: LineupQuestion[]; leftOpen: string[] };
+
 export type PipelineResult = {
   subject: string;
   anchor: string;
@@ -54,6 +76,7 @@ export type PipelineResult = {
   gaps: Gap[];
   brief: Brief | null;
   challenge: ChallengeRecord | null;
+  lineup: LineupRecord;
   /** Step notes, in order, prefixed with the step id. */
   notes: string[];
   /** Harness errors: a model call or source the persona has no recorded answer for. */
@@ -145,7 +168,39 @@ function recordedLlm(p: Persona, sources: () => readonly Source[], runId: string
   }) as LlmCall;
 }
 
-export async function runPersona(p: Persona): Promise<PipelineResult> {
+/** Source identity re-marked by profile key, then name + employer: mirrors applySourceIdentity (src/adapters/d1.ts). */
+function withSourceIdentity(ctx: StepContext, orgs: readonly string[]): StepContext {
+  const updates = new Map(sourceIdentityUpdates(ctx.candidates, ctx.sources, { subject: ctx.subject, orgs }).map((u) => [u.id, u.identity]));
+  return { ...ctx, sources: ctx.sources.map((s) => ({ ...s, identity: updates.get(s.id) ?? s.identity })) };
+}
+
+/**
+ * The lineup after resolve. Mirrors ResearchRunWorkflow.resolveWithPause (pause when lineupNeedsAnswer), the run page
+ * (questionsToAsk with LINEUP_MAX_QUESTIONS; one send with every candidate's decision, answered ones replaced) and
+ * setCandidateDecisions (store the decisions, then applySourceIdentity). The answer comes from the ground truth.
+ */
+export function lineup(p: Persona, ctx: StepContext, orgs: readonly string[], mode: EvalMode): { ctx: StepContext; record: LineupRecord } {
+  if (!lineupNeedsAnswer(ctx.candidates)) return { ctx, record: { paused: false, questions: [], leftOpen: [] } };
+  const asked = questionsToAsk(ctx.candidates, LINEUP_MAX_QUESTIONS);
+  const answers = new Map<string, CandidateDecision>();
+  const questions = asked.map((c): LineupQuestion => {
+    const keys = new Set(c.profile_urls.map(profileKey).filter((k) => k !== null));
+    const t = p.truth.profiles.find((x) => keys.has(profileKey(x.url) ?? ""));
+    const truth = t === undefined ? "unknown" : t.person ? "own" : "namesake";
+    // Yes / No / Not sure, the three buttons of the run page's question card
+    const answer: CandidateDecision | null = mode === "strict" ? null : truth === "own" ? "merge" : truth === "namesake" ? "rejected" : "possibly-same-as";
+    if (answer !== null) answers.set(c.id, answer);
+    return { url: c.profile_urls[0] ?? "", platform: c.platform, truth, note: t?.note ?? "not in the ground truth", answer };
+  });
+  const askedIds = new Set(asked.map((c) => c.id));
+  const leftOpen = ctx.candidates.filter((c) => c.decision === "possibly-same-as" && !askedIds.has(c.id)).map((c) => c.profile_urls[0] ?? c.id);
+  const record = { paused: true, questions, leftOpen };
+  if (mode === "strict") return { ctx, record };
+  const candidates = ctx.candidates.map((c) => ({ ...c, decision: answers.get(c.id) ?? c.decision }));
+  return { ctx: withSourceIdentity({ ...ctx, candidates }, orgs), record };
+}
+
+export async function runPersona(p: Persona, mode: EvalMode): Promise<PipelineResult> {
   const runId = `eval-${p.id}`;
   const problems: string[] = [];
   const notes: string[] = [];
@@ -194,16 +249,14 @@ export async function runPersona(p: Persona): Promise<PipelineResult> {
   let brief: Brief | null = null;
   let challenge: ChallengeRecord | null = null;
   let afterResolve = false;
+  let asked: LineupRecord = { paused: false, questions: [], leftOpen: [] };
 
   for (const id of EVAL_STEPS) {
     const step = hiringRecipe.steps.find((s) => s.id === id);
     if (step === undefined) throw new Error(`hiring recipe has no step ${id}`);
     current = id;
     // Mirrors applySourceIdentity (src/adapters/d1.ts) before extract: profile keys, then name + employer corroboration
-    if (step.kind === "extract") {
-      const updates = new Map(sourceIdentityUpdates(ctx.candidates, ctx.sources, { subject: ctx.subject, orgs }).map((u) => [u.id, u.identity]));
-      ctx = { ...ctx, sources: ctx.sources.map((s) => ({ ...s, identity: updates.get(s.id) ?? s.identity })) };
-    }
+    if (step.kind === "extract") ctx = withSourceIdentity(ctx, orgs);
     known = ctx.sources;
     const out: StepOutcome = await executeStep(step, ctx, ports);
     notes.push(...out.notes.map((x) => `${id}: ${x}`));
@@ -218,7 +271,10 @@ export async function runPersona(p: Persona): Promise<PipelineResult> {
     };
     if (out.brief !== null) brief = out.brief;
     if (out.challenge !== undefined) challenge = out.challenge;
-    if (step.kind === "resolve") afterResolve = true;
+    if (step.kind === "resolve") {
+      afterResolve = true;
+      ({ ctx, record: asked } = lineup(p, ctx, orgs, mode));
+    }
     if (!COLLECTORS.has(step.kind)) continue;
     // Mirrors ResearchRunWorkflow.doStep + runOne: a skip says why, namesake-only hits say so, else the onEmpty gap
     const allFailed = out.notes.length > 0 && out.notes.every((x) => x.startsWith("request failed") || x === "run budget reached");
@@ -229,5 +285,5 @@ export async function runPersona(p: Persona): Promise<PipelineResult> {
     else if (out.empty && step.onEmpty !== undefined && "gap" in step.onEmpty) reason = step.onEmpty.gap;
     if (reason !== null) ctx = { ...ctx, gaps: [...ctx.gaps, { run_id: runId, question_id: id, reason }] };
   }
-  return { subject: ctx.subject, anchor: ctx.anchor, questions: ctx.questions, candidates: [...ctx.candidates], sources: [...ctx.sources], claims: [...ctx.claims], gaps: [...ctx.gaps], brief, challenge, notes, problems };
+  return { subject: ctx.subject, anchor: ctx.anchor, questions: ctx.questions, candidates: [...ctx.candidates], sources: [...ctx.sources], claims: [...ctx.claims], gaps: [...ctx.gaps], brief, challenge, lineup: asked, notes, problems };
 }

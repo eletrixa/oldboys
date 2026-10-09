@@ -18,7 +18,7 @@
  * - Show the run cost and research time line (ledger projection) while running and when done
  * - Identity map above the profile list (same live decisions)
  * - On failure keep the progress rows, mark the failed one, show the reason, sources so far and a retry link
- * - Show one question at a time (at most MAX_QUESTIONS) above the lineup, so it is never below the fold; send every
+ * - Show one question at a time (at most LINEUP_MAX_QUESTIONS) above the lineup, so it is never below the fold; send every
  *   decision in one answer event
  *
  * Design constraints:
@@ -38,11 +38,9 @@ import { RegistryChecksCard } from "./registry-checks-card";
 import { DeleteCard, DeletedView } from "./delete-card";
 import { IdentityMapCard } from "./identity-map-card";
 import { type Answer, BriefView, CostLine, ProfileList, ProgressSteps, QuestionCard } from "./parts";
-import { type RunState, firstName, headerText, questionsToAsk, sortLineup, stepRows } from "./state";
+import { LINEUP_MAX_QUESTIONS, type RunState, firstName, headerText, questionsToAsk, sortLineup, stepRows } from "./state";
 
 const POLL_MS = 2000;
-/** Wireframe: one easy question at a time, and never more than a few; the rest keep the server's decision. */
-const MAX_QUESTIONS = 3;
 /** A finished run older than this is shown as a replay of an earlier run. */
 const CACHED_AFTER_MS = 30 * 60_000;
 
@@ -110,7 +108,7 @@ export function RunView({ id }: { id: string }): React.JSX.Element {
   const decisionOf = useCallback((c: Candidate): CandidateDecision => local[c.id] ?? c.decision, [local]);
 
   // The set to ask is stable (derived from server decisions); answered ones drop out of it.
-  const pending = questionsToAsk(state?.candidates ?? [], MAX_QUESTIONS).filter((c) => !(c.id in local) && !(c.id in unsure));
+  const pending = questionsToAsk(state?.candidates ?? [], LINEUP_MAX_QUESTIONS).filter((c) => !(c.id in local) && !(c.id in unsure));
   // Only while the Workflow actually waits; after the answers went out the remaining lineup keeps the server's decision
   const question = state?.status === "paused" && !sent && !sendFailed ? pending[0] : undefined;
 
