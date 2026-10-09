@@ -11,7 +11,8 @@
  * - One normalisation (lowercase, Unicode letters/digits only, collapsed whitespace) so FACT and
  *   STATEMENT can never disagree on what "the quote is in the source" means
  * - quoteContext: where that same normalised match sits in the raw excerpt, as original characters before / match /
- *   after (clipped at word boundaries with "…"), for the report's evidence panel (idea #5)
+ *   after (clipped at word boundaries with "…"), for the report's evidence panel (idea #5); the match also takes the
+ *   punctuation the quote itself starts or ends with ("(", ")", quotes, a period) when the excerpt has the same characters
  * - quoteContexts: one context per (claim with a quote, source it cites); a context that touches an Art. 9 topic is
  *   dropped whole (no before, match or after: dropped, never masked)
  *
@@ -74,6 +75,22 @@ function normalizeWithMap(raw: string): { text: string; start: number[]; end: nu
   return { text, start, end };
 }
 
+const sameChar = (a: string, b: string): boolean => a.toLowerCase() === b.toLowerCase();
+
+/** `to` moved over the quote's trailing punctuation, as far as the excerpt has the same characters. */
+function extendForward(excerpt: string, to: number, tail: string): number {
+  let n = 0;
+  while (n < tail.length && to + n < excerpt.length && sameChar(tail.charAt(n), excerpt.charAt(to + n))) n += 1;
+  return to + n;
+}
+
+/** `from` moved back over the quote's leading punctuation, as far as the excerpt has the same characters. */
+function extendBack(excerpt: string, from: number, lead: string): number {
+  let n = 0;
+  while (n < lead.length && from - n > 0 && sameChar(lead.charAt(lead.length - 1 - n), excerpt.charAt(from - 1 - n))) n += 1;
+  return from - n;
+}
+
 /**
  * The quote inside the raw excerpt (normalizeText rules) as original characters: up to `radius` characters before and
  * after the match, cut at a word boundary with "…" when clipped. Null when the quote is empty or not in the excerpt.
@@ -84,8 +101,11 @@ export function quoteContext(quote: string, excerpt: string, radius = 160): Quot
   const map = normalizeWithMap(excerpt);
   const at = map.text.indexOf(q);
   if (at === -1) return null;
-  const from = map.start[at] ?? 0;
-  const to = map.end[at + q.length - 1] ?? excerpt.length;
+  const inner = quote.trim();
+  const lead = /^[^\p{L}\p{N}]*/u.exec(inner)?.[0] ?? "";
+  const tail = /[^\p{L}\p{N}]*$/u.exec(inner)?.[0] ?? "";
+  const from = extendBack(excerpt, map.start[at] ?? 0, lead);
+  const to = extendForward(excerpt, map.end[at + q.length - 1] ?? excerpt.length, tail);
 
   const lo = Math.max(0, from - radius);
   let before = excerpt.slice(lo, from);

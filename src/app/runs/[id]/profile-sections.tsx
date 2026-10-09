@@ -18,6 +18,8 @@
  * - History as a timeline (date column, hairline, org · title); working style on a muted card with trait rows
  * - Position fit: one bar row per role, weighted capability table, formula behind a disclosure, Σ(weight × status) ÷ Σ(weight) computed here
  * - Position fit table stacks under 640px (name, status, labelled weights); each capability's evidence is a full-width row below it
+ * - Motion and print live in globals.css under `.profile` (details rise, bar grow, verdict stagger, link underline), all
+ *   behind prefers-reduced-motion: no-preference; hooks are the pf-* class names
  * - Prose capped at a 65ch measure; evidence summaries carry the item name for screen readers; "·" separators bind to the
  *   text before them so a wrap never starts a line with one
  *
@@ -138,7 +140,7 @@ function EvidenceLine({ e, ctx }: { e: ProfileEvidence; ctx: Ctx }): React.JSX.E
           ) : isCvSource(info.url) ? (
             <span>{`[${String(n)}] ${CV_SOURCE_TEXT}`}</span>
           ) : (
-            <a href={quoteLink(info.url, e.quote)} target="_blank" rel="noreferrer" title={info.url} className={LINK}>
+            <a href={quoteLink(info.url, e.quote)} target="_blank" rel="noreferrer" title={info.url} className={`${LINK} pf-link`}>
               {`[${String(n)}] ${host(info.url)}`}
             </a>
           ),
@@ -184,7 +186,7 @@ function ItemRows({ items, ctx, quiet = false }: { items: ProfileItem[]; ctx: Ct
   return (
     <ul className="divide-y divide-divider">
       {items.map((it) => (
-        <li key={it.text} className="py-4">
+        <li key={it.text} className="py-3">
           <h3 className={`text-sm text-ink ${quiet ? "" : "font-semibold"}`}>{it.text}</h3>
           {it.detail !== "" && <p className={`mt-1 ${MEASURE} text-sm text-muted`}>{it.detail}</p>}
           <EvidenceList items={it.evidence} ctx={ctx} about={it.text} />
@@ -374,7 +376,7 @@ const evidenced = (f: PositionFit): string =>
 function Bar({ pct }: { pct: number }): React.JSX.Element {
   return (
     <span aria-hidden="true" className="block h-1 w-full overflow-hidden rounded-full bg-divider">
-      <span className="block h-full rounded-full bg-muted" style={{ width: `${String(Math.min(100, Math.max(0, pct)))}%` }} />
+      <span className="pf-bar block h-full rounded-full bg-muted" style={{ width: `${String(Math.min(100, Math.max(0, pct)))}%` }} />
     </span>
   );
 }
@@ -479,7 +481,7 @@ function QuestionRows({ items, start }: { items: Profile["questions"]; start: nu
   return (
     <ol start={start} className="divide-y divide-divider">
       {items.map((q, i) => (
-        <li key={q.text} className="grid grid-cols-[2rem_minmax(0,1fr)] gap-x-2 py-4">
+        <li key={q.text} className="grid grid-cols-[2rem_minmax(0,1fr)] gap-x-2 py-3">
           <span className="text-sm font-semibold text-action tabular-nums">{String(start + i).padStart(2, "0")}</span>
           <span className="text-sm">
             <span className="font-semibold text-ink">{q.text}</span>
@@ -528,7 +530,7 @@ function Sources({ ctx }: { ctx: Ctx }): React.JSX.Element | null {
                 {isCvSource(info.url) ? (
                   <span className="text-muted">{CV_SOURCE_TEXT}</span>
                 ) : (
-                  <a href={info.url} target="_blank" rel="noreferrer" className="text-action underline decoration-action/40 underline-offset-2">
+                  <a href={info.url} target="_blank" rel="noreferrer" className="pf-link text-action underline decoration-action/40 underline-offset-2 hover:decoration-action">
                     {info.url}
                   </a>
                 )}
@@ -565,7 +567,7 @@ function SummaryBox({ profile, fits, all, ctx, present }: { profile: Profile; fi
   return (
     <section className={CARD}>
       <Eyebrow>Profile at a glance</Eyebrow>
-      <dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-4 md:grid-cols-4">
+      <dl className="pf-verdict mt-4 grid grid-cols-2 gap-x-6 gap-y-4 md:grid-cols-4">
         {cells.map(({ label, value, sub, bar }) => (
           <div key={label} className="min-w-0">
             <dt className={NOTE}>{label}</dt>
@@ -617,11 +619,12 @@ export function ProfileSections({ profile, evidence, role = null }: { profile: P
     ask: profile.questions.length > 0,
   };
   const present = new Set(Object.entries(show).flatMap(([k, v]) => (v ? [k] : [])));
+  // `profile` scopes the motion and print rules in globals.css; 24px between sections on phones, 32px from md up.
   return (
-    <>
+    <div className="profile flex flex-col gap-6 md:gap-8">
       <SummaryBox profile={profile} fits={fits} all={all} ctx={ctx} present={present} />
       {(show.achievements || show.risks) && (
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="grid gap-6 md:grid-cols-2 md:gap-8">
           {show.achievements && (
             <Items
               id="achievements"
@@ -651,6 +654,6 @@ export function ProfileSections({ profile, evidence, role = null }: { profile: P
       {show.fit && <Fit fits={fits} dropped={profile.fit_dropped} ctx={ctx} />}
       {show.ask && <Questions items={profile.questions} />}
       <Sources ctx={ctx} />
-    </>
+    </div>
   );
 }

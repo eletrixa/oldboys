@@ -7,6 +7,7 @@
  * Tested:  n/a (this is the test)
  *
  * Key responsibilities:
+ * - quoteContext: trailing / leading punctuation of the quote kept in the match when the excerpt has it
  * - quoteContext: same matching as quoteInExcerpt (case, punctuation, diacritics, whitespace), original characters
  *   returned, word-boundary clipping with "…", null for empty or missing quotes
  * - quoteContexts: only cited sources, deduplicated, a context touching an Art. 9 topic dropped whole (no match either)
@@ -36,6 +37,27 @@ describe("quoteContext", () => {
   it("matches a quote that carries its own punctuation", () => {
     expect(quoteContext("“Built the payments API.”", "I built the payments-API in 2021")).toBeNull();
     expect(quoteContext("“Built the payments API.”", "I built the payments API in 2021")?.match).toBe("built the payments API");
+  });
+
+  it("keeps the quote's own closing paren, quotes and period inside the match when the excerpt has them", () => {
+    const excerpt = "Experience: Board Advisor @ snuggs (Oct 2022–May 2026) and more.";
+    expect(quoteContext("Board Advisor @ snuggs (Oct 2022–May 2026)", excerpt)).toEqual({
+      before: "Experience: ",
+      match: "Board Advisor @ snuggs (Oct 2022–May 2026)",
+      after: " and more.",
+    });
+    expect(quoteContext("“Built the payments API.”", "He said “built the payments API.” twice")?.match).toBe("“built the payments API.”");
+    expect(quoteContext("Led the team.", "I led the team. Then I left.")).toMatchObject({ match: "led the team.", after: " Then I left." });
+  });
+
+  it("takes a leading paren of the quote, and only the characters the excerpt really has", () => {
+    expect(quoteContext("(Oct 2022–May 2026)", "Advisor (Oct 2022–May 2026), Prague")).toEqual({
+      before: "Advisor ",
+      match: "(Oct 2022–May 2026)",
+      after: ", Prague",
+    });
+    expect(quoteContext("Led the team.)", "I led the team. Then")?.match).toBe("led the team.");
+    expect(quoteContext("(Led the team", "I led the team. Then")).toMatchObject({ before: "I ", match: "led the team" });
   });
 
   it("returns null for an empty, punctuation-only or missing quote", () => {

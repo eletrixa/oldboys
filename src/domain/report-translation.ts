@@ -11,10 +11,14 @@
  * - textsHash: SHA-256 over the ids and texts; it changes when the brief or its claims change, so a cached
  *   translation of an older brief is never served
  * - translationKey: the deterministic R2 key of the cached translation (`translations/<runId>/brief-<lang>.json`)
- * - translatePrompt + TranslationOutput: one strict prompt and its output schema (same ids back)
+ * - translationBatches: the texts cut into batches (TRANSLATE_BATCH_CHARS English characters, TRANSLATE_BATCH_TEXTS
+ *   texts, a text is never split, order kept) so each model call stays well under the adapter's output cap
+ * - translatePrompt + TranslationOutput: one strict prompt per batch and its output schema (same ids back)
  * - mergeTranslation: keeps only known ids with a usable text; a text that touches a GDPR Art. 9 topic while its
  *   English source did not (or grew out of proportion) falls back to English
- * - estimateTranslateUsd + TRANSLATE_BUDGET_USD: the call is refused before it runs when it could cost more
+ * - estimateTranslateUsd + TRANSLATE_BUDGET_USD: the translation (all batches, each with its system prompt) is refused
+ *   before any call when it could cost more
+ * - failedCallCost: what a failed model call still cost, when its error carries `cost_usd` (src/adapters/llm.ts)
  *
  * Design constraints:
  * - Pure: no I/O; the route (src/app/api/runs/[id]/translate/handler.ts) does the R2, D1 and LLM work
@@ -30,8 +34,17 @@ export type ReportText = { id: string; text: string };
 /** Ledger step of the translation call; its time is not research time (src/domain/run-cost.ts). */
 export const TRANSLATE_STEP = "translate";
 
-/** Most one translation may cost (USD); a brief whose estimate is higher is not translated. */
-export const TRANSLATE_BUDGET_USD = 0.08;
+/** Most one translation may cost (USD), all batches together; a brief whose estimate is higher is not translated. */
+export const TRANSLATE_BUDGET_USD = 0.12;
+
+/**
+ * One batch holds at most this many English characters and texts (about 1.5k Czech output tokens with ids and JSON,
+ * far under the adapter's output cap) and a call takes seconds, not minutes; one longer text gets a batch of its own.
+ */
+export const TRANSLATE_BATCH_CHARS = 2500;
+export const TRANSLATE_BATCH_TEXTS = 20;
+/** Batches translated at the same time (Workers allow 6 outbound connections). */
+export const TRANSLATE_CONCURRENCY = 4;
 
 /** Sonnet list price per token (src/adapters/llm.ts), the `verify` model the translation uses. */
 const IN_USD = 2 / 1_000_000;
@@ -69,11 +82,40 @@ export async function textsHash(texts: readonly ReportText[]): Promise<string> {
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-/** Upper estimate of one translation call in USD (about 4 characters per token). */
+/** The texts in order, cut into batches of at most `maxChars` characters and `maxTexts` texts; a text is never split. */
+export function translationBatches(
+  texts: readonly ReportText[],
+  maxChars = TRANSLATE_BATCH_CHARS,
+  maxTexts = TRANSLATE_BATCH_TEXTS,
+): ReportText[][] {
+  const batches: ReportText[][] = [];
+  let current: ReportText[] = [];
+  let chars = 0;
+  for (const t of texts) {
+    if (current.length > 0 && (current.length >= maxTexts || chars + t.text.length > maxChars)) {
+      batches.push(current);
+      current = [];
+      chars = 0;
+    }
+    current.push(t);
+    chars += t.text.length;
+  }
+  if (current.length > 0) batches.push(current);
+  return batches;
+}
+
+/** Upper estimate of the whole translation in USD (about 4 characters per token, the system prompt once per batch). */
 export function estimateTranslateUsd(texts: readonly ReportText[]): number {
   const chars = texts.reduce((n, t) => n + t.text.length + t.id.length, 0);
-  const inTokens = chars / 4 + PROMPT_TOKENS;
+  const inTokens = chars / 4 + PROMPT_TOKENS * translationBatches(texts).length;
   return inTokens * IN_USD + (chars / 4) * OUT_FACTOR * OUT_USD;
+}
+
+/** USD a failed model call still cost: the adapter puts `cost_usd` on the error when the provider reported usage. */
+export function failedCallCost(error: unknown): number {
+  if (typeof error !== "object" || error === null || !("cost_usd" in error)) return 0;
+  const cost = error.cost_usd;
+  return typeof cost === "number" && Number.isFinite(cost) && cost > 0 ? cost : 0;
 }
 
 const SYSTEM = [
