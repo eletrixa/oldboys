@@ -11,10 +11,12 @@
  * - Evidence lines: kind, direction, strength pill, [n] deep link, note, "source missing"; independent count per item
  * - Fit recomputed as Σ(weight × status) ÷ Σ(weight)
  * - A degraded profile renders only "Profile not built: <reason>"
+ * - Every animation and transition for the profile sits behind prefers-reduced-motion: no-preference (CSS and classes)
  *
  * Design constraints:
  * - Fixtures stay inline
  */
+import { readFileSync } from "node:fs";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
@@ -178,5 +180,39 @@ describe("ProfileSections", () => {
     const withRead = (read: string): string => html({ ...profile, personality: { ...profile.personality, read } });
     expect(withRead("A. B. C. D.")).not.toContain("more sentence");
     expect(withRead("A. B. C. D. E.")).toContain("Show 2 more sentences");
+  });
+});
+
+describe("profile motion", () => {
+  const read = (rel: string): string => readFileSync(new URL(rel, import.meta.url), "utf8");
+
+  /** CSS with every `@media (prefers-reduced-motion: no-preference) { … }` block cut out by brace matching. */
+  const outsideGuard = (css: string): string => {
+    const open = "@media (prefers-reduced-motion: no-preference)";
+    let out = css;
+    for (let at = out.indexOf(open); at !== -1; at = out.indexOf(open)) {
+      let depth = 0;
+      let end = out.indexOf("{", at);
+      do {
+        if (out[end] === "{") depth++;
+        if (out[end] === "}") depth--;
+        end++;
+      } while (depth > 0 && end < out.length);
+      out = out.slice(0, at) + out.slice(end);
+    }
+    return out;
+  };
+
+  it("keeps every animation and transition rule in globals.css inside the no-preference guard", () => {
+    const css = read("../../../globals.css");
+    expect(css).toContain("animation: pf-rise");
+    expect(outsideGuard(css)).not.toMatch(/(^|[\s;{])(animation|animation-name|transition|transition-property)\s*:/);
+  });
+
+  it("uses only motion-safe transition and animate classes in the profile and its chevron", () => {
+    const chevron = /function Chevron[\s\S]*?\n}/.exec(read("../../../ui.tsx"))?.[0] ?? "";
+    const tsx = read("../profile-sections.tsx") + chevron;
+    expect(tsx).toContain("motion-safe:transition-transform");
+    expect(tsx.match(/(?<![\w:-])(transition|animate)(-[\w[\]-]+)?(?=[\s"`])/g)).toBeNull();
   });
 });
