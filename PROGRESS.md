@@ -186,3 +186,6 @@ Each agent appends: what it starts, progress, what it finishes. Newest at the bo
 - Started: 01:56. Idea #22 (cheapest form): "Add interview to calendar (.ics)" on the run page; date, time and duration in the browser; the RFC 5545 invite carries the 30-second summary, interview questions, to-verify items and the brief link, for Google Calendar or Outlook. No integration, nothing stored.
 - Finished: 02:00. Pure `interviewInvite` (CRLF, TEXT escaping, 75-octet folding safe for Czech diacritics) + `InviteForm`. No schema change, no new endpoint; pnpm check green, wrangler dry-run bundles.
 - Files: src/app/runs/[id]/{interview-invite.ts,invite-form.tsx,__tests__/interview-invite.test.ts} (new), src/app/runs/[id]/kit-actions.tsx, CHANGELOG.md, PROGRESS.md.
+
+## 2026-10-09 · devils-advocate agent (Minas)
+- Started: 02:00. Idea #8 "Devil's advocate in verify": one extra model call tries to break each confirmed must-have FACT (someone else's work, fork or copy, tutorial or course exercise, outdated); what does not hold becomes INFERENCE and moves to "to verify at the interview" with a plain reason.
