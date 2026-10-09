@@ -23,7 +23,7 @@ import { Ctas, PROOF, Section, Title } from "./parts";
 const STEPS: readonly (readonly [string, string])[] = [
   ["Add the position", "Paste a job link or describe the role. Radar lists the must-haves, and you can edit them."],
   ["Add the candidate", "Their LinkedIn profile or CV. Radar reads public professional work for this role only."],
-  ["Get one page", "Summary, evidence per must-have, and the gaps to ask about. Usually 2 to 4 minutes."],
+  ["Get one page", "Summary, evidence per must-have, and the gaps to ask about. Usually 6 to 12 minutes."],
 ];
 
 const FAQ: readonly (readonly [string, string])[] = [
@@ -43,7 +43,7 @@ export function How(): React.JSX.Element {
     <Section id="how">
       <div className="flex flex-col gap-3">
         <Eyebrow>How it works</Eyebrow>
-        <Title lead="Three steps, 2 to 4 minutes." />
+        <Title lead="Three steps, 6 to 12 minutes." />
       </div>
       <ol className="mt-10 grid gap-8 md:grid-cols-3 md:gap-6">
         {STEPS.map(([t, b], i) => (

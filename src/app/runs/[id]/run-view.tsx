@@ -269,7 +269,7 @@ export function RunView({ id }: { id: string }): React.JSX.Element {
           </p>
         )}
         {state.status !== "done" && (
-          <p className="text-sm text-muted">Usually 2 to 4 minutes. You can leave; the brief waits in My briefs and the tray at the bottom follows it.</p>
+          <p className="text-sm text-muted">Usually 6 to 12 minutes. You can leave; the brief waits in My briefs and the tray at the bottom follows it.</p>
         )}
         {cached && (
           <SimulatedPill kind="cached" detail={`run from ${state.created_at.slice(0, 16).replace("T", " ")} UTC`} className="w-fit" />

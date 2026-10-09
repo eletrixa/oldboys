@@ -151,7 +151,7 @@ function StartFormInner({ initialRole, autoFocusRole = false, roleOptions = [] }
           {busy ? "Creating…" : "Create brief"}
         </button>
         <span className="text-sm text-muted">
-          Usually 2 to 4 minutes; you can leave this page, the brief waits in My briefs.
+          Usually 6 to 12 minutes; you can leave this page, the brief waits in My briefs.
         </span>
       </div>
       <p className="text-sm">

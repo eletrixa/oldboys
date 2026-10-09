@@ -4,9 +4,9 @@ Team **Old Boys** (Josef Buryan, Minas Arustamyan, Robert Vojacek). From Dusk Ti
 
 ## 1. Pitch
 
-Radar is a research assistant for recruiters and hiring managers. You give it a position and a candidate (a LinkedIn link or a CV). In about 2 to 4 minutes it returns a brief built from public sources: what the candidate has done, what backs each must-have of the position, what does not match, and what to ask at the interview. The rule is **"it researches, it never judges"**. Every line of the brief links to its source. A line is a FACT only when its quote is found word for word in the saved source text. Everything else is an INFERENCE or an open question. The recruiter makes the decision, not the tool.
+Radar is a research assistant for recruiters and hiring managers. You give it a position and a candidate (a LinkedIn link or a CV). In about 6 to 12 minutes it returns a brief built from public sources: what the candidate has done, what backs each must-have of the position, what does not match, and what to ask at the interview. The rule is **"it researches, it never judges"**. Every line of the brief links to its source. A line is a FACT only when its quote is found word for word in the saved source text. Everything else is an INFERENCE or an open question. The recruiter makes the decision, not the tool.
 
-## 2. Try it in 3 minutes
+## 2. Try it
 
 | Step | What to do |
 |---|---|
@@ -14,7 +14,7 @@ Radar is a research assistant for recruiters and hiring managers. You give it a 
 | 2. Get in | **Create account** (`/register`). Any e-mail address works. For the company, tick **"Company outside the Czech Republic (no IČO)"**, or leave the IČO empty and type the name by hand. An ARES lookup is optional. Limit: 10 sign-ups per hour per IP. |
 | 3. Pick a position | **New brief** (`/briefs/new`): choose a title from the role catalog (183 roles with must-haves), or open **Positions → Add a position from a posting** and paste a job-ad link (StartupJobs, Jobs.cz incl. company career sites, Greenhouse, Lever, Ashby, any page with JobPosting data). You can also type a position by hand. |
 | 4. Add a candidate | One row per person: a public LinkedIn profile URL, a pasted CV, or a PDF / text CV file. Then click **Research N candidates**. |
-| 5. Read the brief | The position's results table shows the progress. Open the brief when the status is done (usually 2 to 4 minutes). |
+| 5. Read the brief | The position's results table shows the progress. Open the brief when the status is done (usually 6 to 12 minutes). |
 | 6. See how we test it | `/validation` (public, linked in the footer): eval results, and what is real, simulated or unfinished. |
 
 Limits you may hit: 6 started runs per hour per company and 20 runs per hour across the whole site (`src/domain/run-status.ts`). Each run spends real Apify and Anthropic credit.
@@ -120,8 +120,8 @@ Weights from the case brief ([`docs/brief.md`](docs/brief.md)).
 |---|---|---|
 | Tests | **1,873 app tests passed (2 skipped) + 21 extension tests**, all green | `pnpm check` at 03:35 |
 | Eval | **84 of 95 checks, 0 unsafe misses, 11 conservative**, the same in strict mode; 0 lineup questions | [`eval/RESULTS.md`](eval/RESULTS.md) |
-| Run time (16-source runs on Josef Buryan, a consenting team member) | 2 min 56 s to 4 min 35 s | runs a0ec24b1, c43ddbf4, d994339e, 597867c5 in [`docs/ops/llm-manual-runs.md`](docs/ops/llm-manual-runs.md) |
-| Cost per run | $0.19 to $0.28 for those runs; $0.55 to $0.83 for full-profile runs (enriched profile, 20+ sources) | same file, from the ledger `cost_usd` |
+| Run time on production (full hiring runs on Josef Buryan, a consenting team member) | **6 min 40 s** with parallel collectors (run a79b1d1b, CMO, 04:46); 8 min 37 s and 11 min 30 s before them (dff2cfdb, c9c2a2b6); the UI says "usually 6 to 12 minutes" | run state `cost.duration_ms`; [`docs/ops/llm-manual-runs.md`](docs/ops/llm-manual-runs.md) |
+| Cost per run | $0.78 to $0.84 for those three production runs (enriched profile, 26 source calls); $0.19 to $0.28 for the early 16-source runs | same file, from the ledger `cost_usd` |
 | Position from a job-ad link | $0.011 to $0.027 per extraction | same file |
 | Collectors | 22 (12 Apify actors, 10 public REST APIs) | `src/recipe/sources/index.ts` |
 | Role catalog | 183 roles in 10 families | `src/domain/role-catalog/` |
