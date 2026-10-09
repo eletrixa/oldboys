@@ -233,3 +233,6 @@ Each agent appends: what it starts, progress, what it finishes. Newest at the bo
 - Wording: new pure `src/domain/call-wording.ts` (+ test): must-have third-person questions to second person ("Does the candidate have …?" → "Do you have …?", name / first name / "the candidate's" → you/your, falls back when a he/she/they is left), else "Can you tell me (a bit more) about your <title>?"; to-verify items "We read that <first clause, name → you/your>. Is that right?" or the whole text + "Is that right?" when it cannot be cut cleanly. No "We could not find public evidence" / "Our research suggests:" text; `why` unchanged. Due-diligence keeps names.
 - Limit: `COUNTED_CALL_STATUSES` (`dialing`, `done`, `refused`), `countsTowardCallLimit` and `COUNTED_CALL_SQL` in `src/domain/call.ts`; used by the approve route's atomic conditional UPDATE and by `used` in GET /api/runs/:id/calls. `failed` and `no_answer` no longer use a slot.
 - Docs: docs/ops/call-verification.md, plans/005-call-verification/06-elevenlabs-contract.md, CHANGELOG.md. pnpm check green, opennextjs build + wrangler dry-run bundle. No deploy, no secrets, no D1 change.
+
+## 2026-10-09 · exports-cs agent (Minas)
+- Started: 02:45. Idea #24 follow-up: Czech exports (interview kit, ATS note, reference questions, calendar invite) follow the report language chosen with the brief's EN | CZ switch.
