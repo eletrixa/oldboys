@@ -197,3 +197,6 @@ Each agent appends: what it starts, progress, what it finishes. Newest at the bo
 
 ## 2026-10-09 · report-cs agent (Minas)
 - Started: 02:08. Idea #24: EN | CZ switch for the brief: the recruiter reads the brief in Czech (on-demand translation of the model and template texts, cached per run; quotes stay in the original language, labelled "citace v originále"). Default English, existing runs work without a re-run.
+
+## 2026-10-09 · eval-set agent (Minas)
+- Started: 02:13. Idea #12 "Small eval set and a simulated label": synthetic personas with written ground truth run through the real pipeline seams, one score with the list of misses, a Validation page with what is real / simulated / incomplete, and simulated labels where they are missing.
