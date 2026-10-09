@@ -23,6 +23,7 @@
  *   translated texts by id (English per missing text); quotes, URLs, names and the headline stay original, one
  *   "(citace v originále)" header line when the kit shows a quote; kit-review.ts parses both languages
  * - Role fit scorecard (plans/013): scorecardLines after the findings, each line with its source links
+ * - Confidence in this brief (plans/014): trustBoxLines after the scorecard
  * - Profile signals (public accounts): the plans/012 sentences with their sources, then the not-checked lines and caveats; their interview questions join the checklist
  * - kitFileName: interview-kit-<run id prefix>.md (-cs.md in Czech), never the candidate's name
  *
@@ -40,6 +41,8 @@ import { codeProfileLines } from "./code-profile-text";
 import { askLines, signalLines } from "./profile-signals-text";
 import { scorecard } from "./scorecard";
 import { scorecardLines } from "./scorecard-text";
+import { trustBox } from "./trust-box";
+import { trustBoxLines } from "./trust-box-text";
 import { cvRows, isCvSection } from "./cv-check";
 import { type ExportText, exportFileName, exportText, toVerifyTexts } from "./export-text";
 import { ENGLISH_REPORT, type Report, type ReportLang } from "./i18n";
@@ -243,6 +246,7 @@ export function interviewKit(state: RunState, generatedAt: string, calls: readon
     ...(brief.degraded !== null ? degradedCoverage(state, brief, brief.degraded, kit) : []),
     ...(sections !== null ? findings(state, sections, kit) : brief.degraded === null ? coverage(state, brief, kit) : []),
     ...section(d.kit.scorecard, scorecardLines(scorecard(state), (id) => state.sources.find((s) => s.id === id)?.url ?? null).map((l) => `- ${escapeMd(l.text)}${linkList(l.urls)}`)),
+    ...section(d.kit.trust, trustBoxLines(trustBox(state)).map((l) => `- ${escapeMd(l.text)}${linkList(l.urls)}`)),
     ...section(
       d.kit.questions,
       [...brief.interview_questions.map((q, i) => text(tid.interviewQuestion(i), q)), ...askLines(state.profile_signals ?? null)].flatMap((q) => [`- [ ] ${escapeMd(q)}`, `  ${d.kit.notes}`]),
