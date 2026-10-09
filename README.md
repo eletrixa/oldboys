@@ -21,6 +21,20 @@ What is live, what is not:
 - Verification phone calls (plans/005): `CALL_PROVIDER=mock` unless ElevenLabs keys are set; mock output is labeled MOCK.
 - Limits: no reverse image search; Facebook profiles are not collected (public pages need a login, the lineup still shows Facebook hits from search); ISIR and Companies House are "not searched" with a reason; LinkedIn needs a public `/in/` URL from search or the form; a nightly cron (`src/workflow/purge.ts`, 03:00 UTC) deletes every run older than 7 days: raw payloads in R2, sources, claims, candidates, gaps, brief, calls, ledger and the run row.
 
+## Validation and honest limitations
+**Eval set: caught 89 of 95 checks** on five synthetic candidates (3 unsafe misses, 3 conservative). Full table: [`eval/RESULTS.md`](eval/RESULTS.md); in the app: `/validation` (public, linked from the footer).
+
+- What it is: five fictional people (`eval/personas/`, handles `evalp-*`, pages on `example.*`) with traps written in advance (namesakes in another and in the same city, a forked repo, a quote not in its source, hedged wording, a CV that differs from LinkedIn, a CV-only quote, course homework, 2016 evidence, an alias "contradiction", an AI outage) and a hand-written ground truth. `eval/harness.ts` runs each one through the real seams (seed -> SERP -> resolve -> GitHub / Stack Exchange -> identity pass -> extract -> verify incl. devil's advocate -> synthesize) with replayed ports: no network, no keys.
+- Run: `pnpm eval` prints the table and rewrites `eval/results.json` + `eval/RESULTS.md`. `pnpm check` runs the same eval (`eval/__tests__/eval.test.ts`) and fails when a check that passes today starts to miss. Fix the pipeline, never the truth.
+- Known misses: a same-name GitHub account in the same city is merged (name + city is enough for the identity rule), so its repo becomes a FACT; a CV statement quoted only from the CV is shown as "differs" instead of "not found publicly"; a claim that overstates a true source ("40 studies") is downgraded whole, so the true must-have shows as partial.
+- The eval found and fixed one bug: on CV runs the pasted CV itself was sent to the identity model as a lineup hit.
+
+Real: live public search and profiles through Apify and public APIs; every finding links to its source and is a FACT only when its quote is in the saved text and verify passed; the given LinkedIn profile or CV is the confirmed person, namesakes wait for the recruiter; intake by email, apply page, form API and StartupJobs; 7-day purge, delete now, audit record and data export; phone verification through ElevenLabs + Twilio when switched on (answers are STATEMENTs, never FACTs).
+
+Simulated (labelled in the app with one `SimulatedPill`): **MOCK** phone call with `CALL_PROVIDER=mock` (canned answers, $0); **CACHED** finished brief opened 30+ minutes later (stored copy, nothing fetched again); **NO AI** brief when the summary model is unavailable (confirmed evidence and template questions only); the eval personas and their recorded model answers; the landing page sample brief (a fictional candidate, marked "fictional example"); ARES company lookups at sign-up served from a stored copy.
+
+Incomplete: no eval on real, consenting people with written ground truth yet (only the qualitative reviews in `eval/reviews/`); the eval measures rules and wiring, not the live model's judgement; no ATS write-back ("Copy for ATS" and the `.ics` invite are copy / download only); Facebook profiles not opened; the known misses above.
+
 ## Quickstart
 ```sh
 pnpm install

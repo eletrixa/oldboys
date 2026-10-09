@@ -10,6 +10,7 @@
  * - Class strings for cards (plain, flush, peach, sage, conflict, unsure), buttons (primary, secondary, quiet, danger), fields
  *   and links so pages do not drift
  * - Eyebrow, Pill (semantic tone), SourceLink, and the SUMMARY + Chevron disclosure pattern
+ * - SimulatedPill: the one label for anything not live (MOCK call, CACHED stored run, NO AI brief); /validation lists them
  *
  * Design constraints:
  * - Semantic tokens only (canvas, surface, ink, muted, action, sage, peach, divider, ok, unsure, conflict, inference)
@@ -65,6 +66,24 @@ const PILL: Record<Tone, string> = {
 
 export function Pill({ tone, children, className = "" }: { tone: Tone; children: React.ReactNode; className?: string }): React.JSX.Element {
   return <span className={`inline-flex shrink-0 items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${PILL[tone]} ${className}`}>{children}</span>;
+}
+
+export type Simulated = "mock" | "cached" | "no-ai";
+
+const SIMULATED: Record<Simulated, { label: string; tone: Tone; title: string }> = {
+  mock: { label: "MOCK", tone: "unsure", title: "Simulated: no real phone call was made; the answers are canned." },
+  cached: { label: "CACHED", tone: "neutral", title: "Stored copy of a finished run; no source was fetched again." },
+  "no-ai": { label: "NO AI", tone: "unsure", title: "The AI summary did not run; only confirmed evidence is listed." },
+};
+
+/** Visible label for something simulated, replayed or degraded; `detail` follows the label after a middle dot. */
+export function SimulatedPill({ kind, detail, className = "" }: { kind: Simulated; detail?: string; className?: string }): React.JSX.Element {
+  const s = SIMULATED[kind];
+  return (
+    <Pill tone={s.tone} className={className}>
+      <span title={s.title}>{detail === undefined ? s.label : `${s.label} · ${detail}`}</span>
+    </Pill>
+  );
 }
 
 export function Eyebrow({ children }: { children: React.ReactNode }): React.JSX.Element {

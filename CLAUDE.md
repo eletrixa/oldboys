@@ -32,7 +32,7 @@ Worker entry `src/worker.ts` re-exports the OpenNext `fetch` and exports `Resear
 Recruiter auth: cookie sessions (`src/domain/session.ts`, D1 `sessions`), PBKDF2 passwords (`src/domain/password.ts`); the web UI never asks for RUN_TOKEN; the bearer stays for `POST /api/runs` (only) and as the machine-client alternative to a session on the call routes and `/api/roles`.
 
 ## Scripts (pnpm)
-`dev`, `build`, `preview`, `deploy`, `cf-typegen`, `typecheck`, `lint`, `test`, `test:watch`, `db:migrate:local`, `db:migrate:remote`, `roles:sql`, `check` (= typecheck && lint && test, app and extension), `ext:build`. Do not rename.
+`dev`, `build`, `preview`, `deploy`, `cf-typegen`, `typecheck`, `lint`, `test`, `test:watch`, `db:migrate:local`, `db:migrate:remote`, `roles:sql`, `eval` (synthetic eval set, writes `eval/results.json` + `eval/RESULTS.md`; the same eval runs in `pnpm test` and fails on a new miss), `check` (= typecheck && lint && test, app and extension), `ext:build`. Do not rename.
 
 ## Directory map
 - `src/domain/` pure: claim schemas today; `verify.ts` and `resolve.ts` are TODO (001 TDD steps 2–3). No I/O, ports are plain function parameters.

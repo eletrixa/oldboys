@@ -36,7 +36,7 @@
 import { useEffect, useRef } from "react";
 import type { Brief, Candidate, CandidateDecision } from "@/domain/claim";
 import { formatDuration, type RunCost } from "@/domain/run-cost";
-import { BTN_PRIMARY, BTN_QUIET, BTN_SECONDARY, CARD, CARD_PEACH, CARD_UNSURE, Chevron, Pill, SUMMARY, SourceLink, type Tone } from "../../ui";
+import { BTN_PRIMARY, BTN_QUIET, BTN_SECONDARY, CARD, CARD_PEACH, CARD_UNSURE, Chevron, Pill, SimulatedPill, SUMMARY, SourceLink, type Tone } from "../../ui";
 import { CallPanel } from "./call-panel-view";
 import { toVerifyItems } from "./challenge";
 import { originalLang } from "./claim-evidence";
@@ -379,7 +379,8 @@ function AlsoFound({ items }: { items: Evidence[] }): React.JSX.Element | null {
 function DegradedNotice({ reason }: { reason: string }): React.JSX.Element {
   const { t, text } = useReport();
   return (
-    <section className={CARD_UNSURE}>
+    <section className={`${CARD_UNSURE} flex flex-wrap items-center gap-2`}>
+      <SimulatedPill kind="no-ai" />
       <p className="text-sm text-unsure">{t.degraded(text(tid.degraded, reason))}</p>
     </section>
   );

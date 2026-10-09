@@ -413,6 +413,12 @@ describe("review 004: handles, namesakes, political pages, brief top line", () =
     expect(pickDrafts(baseContext({ subject: "Josef Buryan", sources: [kurzy] }))).toEqual([]);
   });
 
+  it("never drafts the pasted CV as a lineup hit (it is the seed's own input, found by the eval set)", () => {
+    const cv = { ...s("cv", "cv:run-1", "Petra Fiktivní\nSenior Product Manager · Olomouc"), actor: "cv", identity: "merged" as const };
+    const page = s("w", "https://example.com/petra-fiktivni", "Petra Fiktivní | Mapovna");
+    expect(pickDrafts(baseContext({ subject: "Petra Fiktivní", sources: [cv, page] })).map((d) => d.url)).toEqual([page.url]);
+  });
+
   it("asks about a profile by its title, never by slug, and skips profiles without a handle", async () => {
     const li = { ...cand("l", "https://www.linkedin.com/in/josef-buryan-1a2b/", "possibly-same-as", "linkedin", "josef-buryan-1a2b"), snippet: "Josef Buryan - CMO, Groupon | LinkedIn" };
     expect(profileQuestion(li)).toBe("Is the LinkedIn profile 'Josef Buryan - CMO, Groupon | LinkedIn' yours?");
