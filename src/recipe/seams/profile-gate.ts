@@ -4,12 +4,12 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/recipe/seams/profile-gate.ts
- * Deps:    src/domain/claim (types), src/domain/quote (quoteInExcerpt), ./evidence-strength, ./seed (CV_ACTOR), ../sources/linkedin (LINKEDIN_PROFILE_ACTORS)
+ * Deps:    src/domain/claim (types), src/domain/quote (quoteInExcerpt), ./evidence-strength, ./seed (CV_ACTOR), ../sources/linkedin (LINKEDIN_PROFILE_ACTORS), ../sources/personal-site (PERSONAL_SITE_ACTOR)
  * Tested:  src/recipe/__tests__/profile.test.ts (validEvidence, rankSources)
  *
  * Key responsibilities:
  * - validEvidence: unknown source id or quote not in the excerpt drops the line; `strength` set in code, never by the model
- * - rankSources: profile and CV first, then own posts, then press and talks, then the rest
+ * - rankSources: profile and CV first, then own posts and own website, then press and talks, then the rest
  * - sourceBlock: `[id] url` + excerpt per source up to PROMPT_CHARS, then the verified claims
  *
  * Design constraints:
@@ -20,11 +20,12 @@ import { quoteInExcerpt } from "@/domain/quote";
 import { evidenceStrength } from "@/recipe/seams/evidence-strength";
 import { CV_ACTOR } from "@/recipe/seams/seed";
 import { LINKEDIN_PROFILE_ACTORS } from "@/recipe/sources/linkedin";
+import { PERSONAL_SITE_ACTOR } from "@/recipe/sources/personal-site";
 
 const PROMPT_CHARS = 60_000;
-const POST_ACTORS = new Set(["harvestapi/linkedin-profile-posts", "apidojo/tweet-scraper", "rest/bluesky"]);
+const POST_ACTORS = new Set(["harvestapi/linkedin-profile-posts", "apidojo/tweet-scraper", "rest/bluesky", PERSONAL_SITE_ACTOR]);
 const PRESS_ACTORS = new Set(["apify/google-search-scraper", "apify/website-content-crawler"]);
-/** Sources the subject wrote: own LinkedIn profile, CV, own posts (reposts are unverified, so never confirmed). */
+/** Sources the subject wrote: own LinkedIn profile, CV, own posts, own website (reposts are unverified, so never confirmed). */
 export const OWN_WRITING = new Set([...LINKEDIN_PROFILE_ACTORS, CV_ACTOR, ...POST_ACTORS]);
 
 /** Keeps evidence whose quote is inside the excerpt of the source it names (unknown ids fail); sets `strength` in code, never from the model. */

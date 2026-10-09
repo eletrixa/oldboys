@@ -35,6 +35,7 @@ export const STEP_LABEL: Record<string, string> = {
   "streamers/youtube-scraper": "YouTube",
   "rest/bluesky": "Bluesky",
   "apify/website-content-crawler": "Website",
+  "apify/website-content-crawler#personal-site": "Personal website",
   "ares/ekonomicke-subjekty/vyhledat": "ARES registry",
   "ares/ekonomicke-subjekty-vr": "ARES public register",
 };
