@@ -8,6 +8,7 @@
  *
  * Key responsibilities:
  * - Anonymous `/` shows the landing with Create account in the body and Log in in the header
+ * - The hero evidence example: tabs switch with click and arrow keys, "Show evidence" opens and Esc closes it
  * - Anonymous `/?positionId=x` lands on `/login?next=...`
  * - After registering, heading, profile field, submit button and the Positions link are present
  * - Profile picker (plans/011): a pasted URL fills the hidden profileUrl; a name plus "Find profiles" calls
@@ -41,6 +42,18 @@ test("logged-out visitors see the landing", async ({ page }) => {
   await expect(page.getByRole("heading", { level: 1 })).toContainText("interview knowing");
   await expect(page.getByRole("main").getByRole("link", { name: "Create account" }).first()).toHaveAttribute("href", "/register");
   await expect(page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Log in" })).toHaveAttribute("href", "/login");
+});
+
+test("the hero evidence example switches tabs and opens the evidence", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("tab", { name: "evidenced" }).click();
+  const panel = page.locator("#ex-panel-evidenced");
+  await panel.getByRole("button", { name: "Show evidence" }).click();
+  await expect(panel.getByText("Quote from the source")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(panel.getByRole("button", { name: "Show evidence" })).toHaveAttribute("aria-expanded", "false");
+  await page.getByRole("tab", { name: "evidenced" }).press("ArrowRight");
+  await expect(page.getByRole("tab", { name: "partial" })).toHaveAttribute("aria-selected", "true");
 });
 
 test("home page renders the start form", async ({ page }) => {
