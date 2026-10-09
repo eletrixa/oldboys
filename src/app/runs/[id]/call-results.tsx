@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/runs/[id]/call-results.tsx
- * Deps:    react, ./call-panel
+ * Deps:    react, ./call-panel, @/app/ui (SimulatedPill)
  * Tested:  n/a (texts and badges in __tests__/call-panel.test.ts)
  *
  * Key responsibilities:
@@ -15,6 +15,7 @@
  * - Pure rendering from props; no verdict word and no score about the candidate
  * - Answers never count as public evidence: the note under the list says so
  */
+import { SimulatedPill } from "@/app/ui";
 import { ANSWER_BADGE, type CallView, callPhase, formatAt } from "./call-panel";
 
 export const SAID_NOTE = "Said by the candidate on the phone. This is not public evidence and does not change the research coverage.";
@@ -29,7 +30,7 @@ function Meta({ call }: { call: CallView }): React.JSX.Element {
   return (
     <p className="flex flex-wrap items-center gap-2 text-xs text-muted">
       {parts.join(" · ")}
-      {call.provider === "mock" && <span className="rounded bg-unsure-bg px-2 py-0.5 text-unsure">MOCK</span>}
+      {call.provider === "mock" && <SimulatedPill kind="mock" />}
     </p>
   );
 }

@@ -25,6 +25,10 @@ const LABEL_CS: Record<string, string> = {
   "Social profile search": "Hledání profilů na sociálních sítích",
   "Personal website": "Osobní web",
   "Talks and posts": "Přednášky a příspěvky",
+  "Press and awards search": "Hledání v médiích a oceněních",
+  "LinkedIn posts": "Příspěvky na LinkedIn",
+  "Employer company page": "Firemní stránka zaměstnavatele",
+  "Facebook page": "Stránka na Facebooku",
   CV: "Životopis",
 };
 

@@ -22,6 +22,7 @@ export function baseContext(over: Partial<StepContext> = {}): StepContext {
     anchor: "Brno",
     goal: "hiring",
     role: "Senior Data Engineer",
+    roleFamily: "data",
     roleSites: [],
     questions: [
       { id: "current-role", text: "Current role and employer?" },

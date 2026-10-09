@@ -9,7 +9,8 @@
  * Key responsibilities:
  * - Two modes: "From a link" (StartupJobs, Jobs.cz incl. company career sites, Greenhouse, Lever, Ashby, any page with JobPosting data)
  *   and "By hand" (title required, company, location and posting text optional)
- * - POST /api/positions; on 201 or 200 route to /positions/<id> (the detail page flags generic must-haves, so notes are not shown here)
+ * - POST /api/positions; on 201 or 200 route to /positions/<id> (the detail page flags generic must-haves, so notes are not shown here),
+ *   or back to `next` with `positionId=<id>` when the page was opened from the New brief wizard
  * - 4xx/5xx show the error next to the form and keep the input; 401 swaps the form for the log-in card (token form behind "Use the team token instead"), input kept
  *
  * Design constraints:
@@ -37,7 +38,7 @@ const TAB = "rounded-full px-4 py-2 text-sm font-medium transition-colors";
 const TAB_ON = `${TAB} bg-ink text-white`;
 const TAB_OFF = `${TAB} text-muted hover:bg-sage/60 hover:text-ink`;
 
-export function NewPositionForm(): React.JSX.Element {
+export function NewPositionForm({ next = null }: { next?: string | null }): React.JSX.Element {
   const router = useRouter();
   const [mode, setMode] = useState<Mode>("link");
   const [token, setToken] = useState<string | null>(null);
@@ -80,7 +81,8 @@ export function NewPositionForm(): React.JSX.Element {
         setError(reply.error !== undefined ? humanize(reply.error) : fallback);
         return;
       }
-      router.push(`/positions/${encodeURIComponent(reply.id)}`);
+      const id = encodeURIComponent(reply.id);
+      router.push(next === null ? `/positions/${id}` : `${next}${next.includes("?") ? "&" : "?"}positionId=${id}`);
     } catch {
       setError("We could not reach the service. Please try again.");
     } finally {

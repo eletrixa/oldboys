@@ -8,7 +8,9 @@
  *
  * Key responsibilities:
  * - One call, JSON in, JSON out; non-2xx and non-JSON throw with the status and a 160-char body snippet
- * - One retry after 2 s on 429/503
+ * - One retry after 2 s on 429/503, and on 202 for a GET only (GitHub answers 202 while it computes repo stats; a POST's 202
+ *   is "accepted" and is never re-sent); an empty body after that is `null`
+ * - Any 2xx with an empty body returns `null` (it used to throw a JSON error); collectors parse `null` to `[]`
  * - Optional per-host credentials: GitHub bearer token, Stack Exchange app key (anonymous Workers egress shares quotas)
  *
  * Design constraints:
@@ -50,7 +52,7 @@ export function makeFetchJson(creds: FetchCreds = {}): JsonFetch {
         signal: AbortSignal.timeout(TIMEOUT_MS),
       });
     let res = await attempt();
-    if (res.status === 429 || res.status === 503) {
+    if (res.status === 429 || res.status === 503 || (res.status === 202 && (init?.method ?? "GET") === "GET")) {
       await new Promise((r) => setTimeout(r, retryDelay));
       res = await attempt();
     }
@@ -58,7 +60,8 @@ export function makeFetchJson(creds: FetchCreds = {}): JsonFetch {
       const snippet = (await res.text().catch(() => "")).replace(/\s+/g, " ").trim().slice(0, SNIPPET_CHARS);
       throw new Error(`${rawUrl}: HTTP ${String(res.status)}${snippet ? ` ${snippet}` : ""}`);
     }
-    return res.json();
+    const text = await res.text();
+    return text === "" ? null : (JSON.parse(text) as unknown);
   };
 }
 

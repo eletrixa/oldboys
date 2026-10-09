@@ -29,6 +29,7 @@ const claim = (id: string, text: string, over: Partial<Claim> = {}): Claim => ({
 
 const brief = (over: Partial<Brief> = {}): Brief => ({
   run_id: "r",
+  profile: null,
   per_question: [{ question_id: "mh-ui", coverage: "evidenced", claim_ids: ["c1"], summary: "Builds UI libraries." }],
   interview_questions: ["How do you version acme-ui?"],
   to_verify: ["Start date at Acme"],

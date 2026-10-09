@@ -42,6 +42,7 @@ const brief = (over: Partial<Brief> = {}): Brief => ({
   searched_empty: [],
   removed_protected: 0,
   degraded: null,
+  profile: null,
   evidence: [{ step: "rest/github", url: "https://github.com/jnovak", excerpt: "jnovak: 12 repositories" }],
   also_found: [{ step: "apify/google-search-scraper", url: "https://www.instagram.com/someone", excerpt: "Another Jan Novak" }],
   headline: "Senior Data Engineer at Acme",

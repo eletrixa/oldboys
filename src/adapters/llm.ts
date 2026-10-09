@@ -33,7 +33,7 @@ export function makeLlmCall(apiKey: string, models: { primary: string; verify: s
       system,
       prompt,
       output: Output.object({ schema }),
-      maxOutputTokens: 8000,
+      maxOutputTokens: 32_000, // 17 questions x ~100 sources overflowed 8000 and truncated the JSON (run 88538fed)
     });
     const price = PRICE_PER_M[id] ?? { in: 4, out: 20 };
     const inTok = result.usage.inputTokens ?? 0;

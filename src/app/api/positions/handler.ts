@@ -3,7 +3,7 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/api/positions/handler.ts
- * Deps:    src/app/api/_lib/{position-body,role-rows}, src/domain/{application (types),position,role-overview}, src/app/intake/intake-rows (TagRow type)
+ * Deps:    src/app/api/_lib/{position-body,role-rows}, src/domain/{application (types),position,profile-stats,profile-url,role-overview}, src/recipe/goals, src/app/runs/[id]/source-labels, src/app/intake/intake-rows (TagRow type)
  * Tested:  src/app/api/positions/__tests__/handler.test.ts
  *
  * Key responsibilities:
@@ -11,7 +11,8 @@
  * - `listPositions`, `getPosition`, `patchPosition`: plain D1 reads and writes
  * - `must_haves_json` is parsed on the way out; a malformed value becomes `[]` and never throws
  * - `getPosition`: `runs` and the overview `group` both come from the position's hiring run rows; `candidates` (the pool, newest first, max 200,
- *   never CV text, cover letter or external id) and the bound intake `tags` are two more reads
+ *   never CV text, cover letter, external id or LinkedIn URL) and the bound intake `tags` are two more reads; each pool row carries its
+ *   run's status, progress (from the last ledger step), fit % and independent-evidence count (briefStats) for the results table
  *
  * Design constraints:
  * - Takes the D1 binding as a parameter so tests run under plain Node; no Next.js imports
@@ -21,12 +22,22 @@
 import { loadRoleRunRows } from "@/app/api/_lib/role-rows";
 import type { PatchPositionBody } from "@/app/api/_lib/position-body";
 import type { TagRow } from "@/app/intake/intake-rows";
+import { STEP_LABEL } from "@/app/runs/[id]/source-labels";
 import type { ApplicationSource, ApplicationStatus } from "@/domain/application";
 import { parseMustHaves, POSITION_ID, type Position, type PositionListItem } from "@/domain/position";
-import { buildGroup, type RoleGroup } from "@/domain/role-overview";
+import { isStalled } from "@/domain/run-status";
+import { briefStats } from "@/domain/profile-stats";
+import { nameFromHandle } from "@/domain/profile-url";
+import { buildGroup, type RoleGroup, type RoleRunRow } from "@/domain/role-overview";
+import { recipeFor } from "@/recipe/goals";
 
 export type PositionRun = { id: string; subject: string; status: string; created_at: string };
-/** One pooled person; `has_*` are 0/1 so the page can show presence without the CV or profile text. */
+/** The pooled person's run as the results table shows it: progress while running, fit % and independent lines once done. */
+export type PoolRun = { status: string; subject: string; step: string | null; pct: number; fit_pct: number | null; independent: number; stalled: boolean };
+/**
+ * One pooled person; `has_*` are 0/1 so the page can show presence without the CV or profile text. `handle` is the
+ * name-like part of the LinkedIn URL (never the URL itself); `run` is null until a hiring run of this position exists.
+ */
 export type PoolRow = {
   id: string;
   source: ApplicationSource;
@@ -38,7 +49,10 @@ export type PoolRow = {
   received_at: string;
   has_profile: number;
   has_cv: number;
+  handle: string | null;
+  run: PoolRun | null;
 };
+type PoolDbRow = Omit<PoolRow, "handle" | "run"> & { linkedin_url: string | null };
 export type PositionDetail = { position: Position; runs: PositionRun[]; group: RoleGroup | null; candidates: PoolRow[]; tags: TagRow[] };
 
 const MAX_LIST = 500;
@@ -88,6 +102,20 @@ export async function listPositions(db: D1Database): Promise<PositionListItem[]>
   return results;
 }
 
+const HIRING_STEPS = recipeFor("hiring").steps;
+
+/** Progress from the last step with a ledger row: the step label is the one now running, pct the share of steps done. */
+function poolRun(row: RoleRunRow): PoolRun {
+  const done = row.last_step === undefined || row.last_step === null ? 0 : HIRING_STEPS.findIndex((s) => s.id === row.last_step) + 1;
+  const next = HIRING_STEPS[done];
+  const actor = next !== undefined && "actor" in next ? next.actor : undefined;
+  const active = row.status === "queued" || row.status === "running";
+  const step = !active || next === undefined ? null : (actor === undefined ? undefined : STEP_LABEL[actor]) ?? next.id.replaceAll("_", " ");
+  const pct = row.status === "done" ? 100 : Math.min(99, Math.round((done / HIRING_STEPS.length) * 100));
+  const stalled = isStalled(row.status, row.last_at ?? row.created_at, new Date().toISOString());
+  return { status: row.status, subject: row.subject, step, pct, stalled, ...briefStats(row.brief_json) };
+}
+
 export async function getPosition(db: D1Database, id: string): Promise<PositionDetail | null> {
   if (!POSITION_ID.safeParse(id).success) return null;
   const [position, rows, candidates, tags] = await Promise.all([
@@ -95,22 +123,26 @@ export async function getPosition(db: D1Database, id: string): Promise<PositionD
     loadRoleRunRows(db, "i.position_id = ? AND i.goal = 'hiring'", [id]),
     db
       .prepare(
-        `SELECT id, source, name, email, status, run_id, note, received_at, linkedin_url IS NOT NULL AS has_profile, cv_text IS NOT NULL AS has_cv
+        `SELECT id, source, name, email, status, run_id, note, received_at, linkedin_url IS NOT NULL AS has_profile, cv_text IS NOT NULL AS has_cv, linkedin_url
          FROM applications WHERE position_id = ? ORDER BY received_at DESC, id DESC LIMIT ?`,
       )
       .bind(id, MAX_POOL)
-      .all<PoolRow>(),
+      .all<PoolDbRow>(),
     db
       .prepare("SELECT tag, role, goal, company, startupjobs_offer_id, position_id, created_at FROM intake_tags WHERE position_id = ? ORDER BY created_at DESC, tag")
       .bind(id)
       .all<TagRow>(),
   ]);
   if (!position) return null;
+  const byRun = new Map(rows.map((r) => [r.id, r]));
   return {
     position,
     runs: rows.map(({ id: runId, subject, status, created_at }) => ({ id: runId, subject, status, created_at })),
     group: rows.length === 0 ? null : { ...buildGroup(position.id, rows), role: position.title },
-    candidates: candidates.results,
+    candidates: candidates.results.map(({ linkedin_url, ...c }) => {
+      const run = c.run_id === null ? undefined : byRun.get(c.run_id);
+      return { ...c, handle: linkedin_url === null ? null : nameFromHandle(linkedin_url) || null, run: run === undefined ? null : poolRun(run) };
+    }),
     tags: tags.results,
   };
 }

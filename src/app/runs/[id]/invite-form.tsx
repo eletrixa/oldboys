@@ -3,12 +3,13 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/runs/[id]/invite-form.tsx
- * Deps:    react, ../../ui (Radar tokens), ./state (types), ./interview-invite
+ * Deps:    react, ../../ui (Radar tokens), ./state (types), ./interview-invite, ./i18n (Report)
  * Tested:  n/a (the invite text is tested in __tests__/interview-invite.test.ts)
  *
  * Key responsibilities:
  * - InviteForm: disclosure with labelled date, time (local, default next working day 10:00) and duration (30/45/60/90,
  *   default 60) fields and a "Download .ics" button that builds the invite at click time with this page as the brief link
+ * - The invite is in the report language (`language`, idea #24 follow-up); a Czech one downloads as interview-<id>-cs.ics
  *
  * Design constraints:
  * - Client only; no fetch, no storage; the recruiter imports the file and adds the interviewers in the calendar
@@ -19,6 +20,7 @@ import { useId, useState } from "react";
 import { BTN_SECONDARY, Chevron, FIELD, SUMMARY } from "../../ui";
 import type { RunState } from "./state";
 import { interviewInvite, inviteFileName } from "./interview-invite";
+import type { Report } from "./i18n";
 
 const DURATIONS = [30, 45, 60, 90] as const;
 
@@ -54,7 +56,7 @@ function downloadIcs(text: string, fileName: string): void {
   }, 0);
 }
 
-export function InviteForm({ state }: { state: RunState }): React.JSX.Element {
+export function InviteForm({ state, language }: { state: RunState; language: Report }): React.JSX.Element {
   const [date, setDate] = useState(() => nextWorkingDay(new Date()));
   const [time, setTime] = useState("10:00");
   const [minutes, setMinutes] = useState<number>(60);
@@ -63,8 +65,8 @@ export function InviteForm({ state }: { state: RunState }): React.JSX.Element {
 
   const download = (): void => {
     if (start === null) return;
-    const text = interviewInvite(state, { start, minutes, briefUrl: `${window.location.origin}/runs/${state.id}`, now: new Date() });
-    if (text !== null) downloadIcs(text, inviteFileName(state));
+    const text = interviewInvite(state, { start, minutes, briefUrl: `${window.location.origin}/runs/${state.id}`, now: new Date() }, language);
+    if (text !== null) downloadIcs(text, inviteFileName(state, language.lang));
   };
 
   return (

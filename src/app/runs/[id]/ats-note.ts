@@ -3,34 +3,30 @@
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/runs/[id]/ats-note.ts
- * Deps:    src/domain/audit (deletionDate), ./summary (summary30s), ./state (RunState, sortLineup, hiringFor)
+ * Deps:    src/domain/audit (deletionDate), src/domain/url (httpUrl), ./summary (summary30s), ./state (RunState, sortLineup, hiringFor), ./i18n (Report), ./report-text (splitLead, tid)
  * Tested:  src/app/runs/[id]/__tests__/ats-note.test.ts
  *
  * Key responsibilities:
  * - atsNote: subject + role, the three 30-second summary lines, up to 5 confirmed profile links, the link to the full
  *   brief and a footer ("rates the research, not the candidate" + deletion date), or null while there is no brief
+ * - Report language (idea #24): with a Czech Report the fixed strings and the date ("16. 10. 2026") are Czech and the
+ *   summary sentences use the brief's translations (tid.summary, English when missing); English output is unchanged
  *
  * Design constraints:
  * - Pure and deterministic; plain text only (ATS note fields do not render Markdown), one item per line
  * - Confirmed data only: merged candidates; possibly-same-as, rejected and brief.also_found (namesakes) never go in
  * - Rates the research, never the candidate: no scores, ranks, verdicts or traits
+ * - The subject, the role / position title the recruiter typed and the URLs are never translated
  */
 import { deletionDate } from "@/domain/audit";
+import { httpUrl } from "@/domain/url";
+import { ENGLISH_REPORT, type Report } from "./i18n";
+import { splitLead, tid } from "./report-text";
 import { hiringFor, sortLineup, type RunState } from "./state";
-import { summary30s } from "./summary";
+import { type Summary30s, summary30s } from "./summary";
 
 /** Most profile links on the note; the full brief has the rest. */
 const MAX_PROFILES = 5;
-
-/** The URL normalised, or null unless it parses as http(s). */
-function httpUrl(raw: string): string | null {
-  try {
-    const url = new URL(raw);
-    return url.protocol === "http:" || url.protocol === "https:" ? url.href : null;
-  } catch {
-    return null;
-  }
-}
 
 /** First profile URL of each merged candidate, lineup order, deduplicated, at most MAX_PROFILES. */
 function confirmedProfiles(state: RunState): string[] {
@@ -42,14 +38,39 @@ function confirmedProfiles(state: RunState): string[] {
   return [...new Set(urls)].slice(0, MAX_PROFILES);
 }
 
-/** The note, or null while there is no brief. */
-export function atsNote(state: RunState, briefUrl: string): string | null {
+/** "2026-10-16" → "16. 10. 2026" (no leading zeros). */
+function dateCs(isoDay: string): string {
+  const [y = "", m = "", d = ""] = isoDay.split("-");
+  return `${String(Number(d))}. ${String(Number(m))}. ${y}`;
+}
+
+/** One summary sentence in Czech: the lead word from the dictionary, the body translated (English when missing). */
+function summaryLineCs(summary: Summary30s, part: keyof Summary30s, report: Report): string {
+  const { lead, body } = splitLead(summary[part]);
+  const text = report.text(tid.summary(part), body);
+  return lead === null ? text : `${report.t.lead[lead]}: ${text}`;
+}
+
+/** The note, or null while there is no brief; Czech when `report` is the Czech one. */
+export function atsNote(state: RunState, briefUrl: string, report: Report = ENGLISH_REPORT): string | null {
   const summary = summary30s(state);
   if (summary === null) return null;
-  const subject = state.subject.trim() === "" ? "unnamed person" : state.subject.trim();
   const role = hiringFor(state)?.trim() ?? "";
   const profiles = confirmedProfiles(state);
   const until = deletionDate(state.created_at).slice(0, 10);
+  if (report.lang === "cs") {
+    const subject = state.subject.trim() === "" ? "jméno neuvedeno" : state.subject.trim();
+    return [
+      role === "" ? `Podklady z průzkumu: ${subject}` : `Podklady z průzkumu: ${subject}, pozice ${role}`,
+      summaryLineCs(summary, "documented", report),
+      summaryLineCs(summary, "missing", report),
+      summaryLineCs(summary, "ask", report),
+      ...(profiles.length > 0 ? [`Potvrzené profily: ${profiles.join(", ")}`] : []),
+      `Celý brief se zdroji: ${briefUrl}`,
+      `Tato poznámka hodnotí průzkum, ne kandidáta.${until === "" ? "" : ` Data z průzkumu smažeme po ${dateCs(until)}.`}`,
+    ].join("\n");
+  }
+  const subject = state.subject.trim() === "" ? "unnamed person" : state.subject.trim();
   return [
     role === "" ? `Research brief: ${subject} (no role entered)` : `Research brief: ${subject} for ${role}`,
     summary.documented,

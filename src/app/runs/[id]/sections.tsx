@@ -13,7 +13,8 @@
  *   and the retrieval date); also used for the per-question fallback
  * - Under each claim a "Show evidence" disclosure (ClaimEvidence, idea #5): quote, sources, retrieval dates, saved copy
  * - A claim the devil's advocate challenged (idea #8) gets a muted "Challenged: … — ask at the interview" line
- * - Source-only sections (platforms without claims) list their confirmed source links; empty ones are not rendered
+ * - Source-only sections (platforms without claims) list their confirmed source links; empty ones are not rendered;
+ *   social presence also lists its profile links that no claim cites
  * - SourceLink: the pasted CV renders as "Candidate's CV (pasted)" with no href (its URL is "cv:<runId>")
  * - "CV vs public record" (idea #14): the explainer line and, per claim, an outcome pill above its text (Matches
  *   public record / Differs — ask, don't assume / Not found publicly), claims grouped in that order (./cv-check)
@@ -119,7 +120,10 @@ function SectionCard({ section, claims, evidence }: { section: BriefSection; cla
   const cv = isCvSection(section.id) && claims.length > 0;
   const facts = cv ? [] : claims.filter((c) => c.kind !== "INFERENCE");
   const inferences = cv ? [] : claims.filter((c) => c.kind === "INFERENCE");
-  const links = claims.length === 0 ? [...new Set(section.source_ids.flatMap((sid) => evidence.sourceOf.get(sid)?.url ?? []))] : [];
+  // Social presence always lists its profiles; other sections list links only when no claim carries them
+  const cited = new Set(claims.flatMap((c) => c.supports));
+  const listed = claims.length === 0 ? section.source_ids : section.id === "social-presence" ? section.source_ids.filter((sid) => !cited.has(sid)) : [];
+  const links = [...new Set(listed.flatMap((sid) => evidence.sourceOf.get(sid)?.url ?? []))];
   return (
     <section className={CARD}>
       <div className="flex items-start justify-between gap-3">

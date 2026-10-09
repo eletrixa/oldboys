@@ -10,6 +10,7 @@
  * - canonicalUrl: lowercase host, no fragment, no trailing slash, no locale (`locale`, `l`) or tracking (`srsltid`,
  *   `utm_*`, `fbclid`, `igsh`) query parameters; LinkedIn country hosts fold to www.linkedin.com and a locale suffix
  *   (`/in/<handle>/cs`) is dropped, mirroring `profileKey` in src/recipe/seams/resolve.ts
+ * - httpUrl: the URL normalised, or null unless it parses as http(s) (so a malformed value never renders a javascript: link)
  *
  * Design constraints:
  * - Pure; a string that is not a URL comes back trimmed and unchanged
@@ -35,4 +36,14 @@ export function canonicalUrl(url: string): string {
     path = path.replace(/^(\/in\/[^/]+)\/[a-z]{2}$/i, "$1");
   }
   return `${u.protocol}//${host}${path}${u.search}`;
+}
+
+/** The URL normalised, or null unless it parses as http(s). */
+export function httpUrl(url: string): string | null {
+  try {
+    const u = new URL(url);
+    return u.protocol === "http:" || u.protocol === "https:" ? u.href : null;
+  } catch {
+    return null;
+  }
 }

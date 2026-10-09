@@ -8,6 +8,7 @@
  *
  * Key responsibilities:
  * - `ENGINEERING`: preselected engineering roles with EN/CZ aliases, observable must-haves and an evidence plan
+ * - `DEV` (the shared developer step list) carries `github_deep` right after `github_profile` (6 steps, at the cap)
  *
  * Design constraints:
  * - Static data, relative imports only; must-haves are observable from public web evidence
@@ -18,7 +19,7 @@ import type { RoleTemplate } from "./types";
 type Mh = RoleTemplate["must_haves"][number];
 const mh = (id: string, title: string, text: string, ...accepted_evidence: string[]): Mh => ({ id: `mh-${id}`, title, text, accepted_evidence });
 
-const DEV = ["github_profile", "stackexchange_profile", "linkedin_profile", "personal_site_crawl", "talks_serp"] as const;
+const DEV = ["github_profile", "github_deep", "stackexchange_profile", "linkedin_profile", "personal_site_crawl", "talks_serp"] as const;
 const LEAD = ["linkedin_profile", "talks_serp", "x_profile", "youtube_channel"] as const;
 
 export const ENGINEERING: RoleTemplate[] = [

@@ -1,5 +1,5 @@
 /**
- * Candidate pool of a position: add a person by hand, see everyone in one table, start enrichment for the selected.
+ * Candidates of a position: add a person by hand, the results table (status, fit, independent evidence, profile link), start enrichment.
  *
  * Project: oldboys — goal-conditioned, sourced deep research on a person or company (Apify hackathon)
  * Module:  src/app/positions/candidate-pool.tsx
@@ -8,22 +8,25 @@
  *
  * Key responsibilities:
  * - POST /api/positions/:id/candidates from the add form (needs a LinkedIn URL or CV text)
- * - Pool table in arrival order with a checkbox only for rows that can start; POST /api/positions/:id/enrich
+ * - Results table in added order (anchor #candidates) with a checkbox only for rows that can start; POST /api/positions/:id/enrich
  * - Report started runs and skipped reasons, follow them in the run tray, then ask the page to reload the detail
+ * - While any row is researching, re-GET the position detail every 5 s through onReload (one request for all rows)
  *
  * Design constraints:
- * - Client component; no ranking, score or verdict on a person
+ * - Client component; no ranking or verdict on a person, never sorted by fit (fit is the evidence share of the must-haves)
  * - Enrichment starts only on the button click (it spends budget)
  */
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { trackRun } from "@/app/_components/run-tray-store";
 import { postJson } from "@/app/_components/token";
 import type { PoolRow } from "@/app/api/positions/handler";
 import { BTN_PRIMARY, BTN_SECONDARY, CARD, FIELD, LINK, Pill } from "@/app/ui";
 import { enrichSummary, type EnrichResponse, shapePool } from "./pool-rows";
+
+const POLL_MS = 5000;
 
 type Props = { positionId: string; rows: PoolRow[]; onReload: () => Promise<void> };
 type Notice = { kind: "ok" | "error"; text: string } | null;
@@ -111,6 +114,13 @@ export function CandidatePool({ positionId, rows, onReload }: Props): React.JSX.
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<Notice>(null);
   const chosen = views.filter((v) => v.selectable && picked.has(v.id)).map((v) => v.id);
+  const researching = views.some((v) => v.researching);
+
+  useEffect(() => {
+    if (!researching) return;
+    const timer = setInterval(() => void onReload(), POLL_MS);
+    return () => { clearInterval(timer); };
+  }, [researching, onReload]);
 
   function toggle(id: string): void {
     setPicked((s) => {
@@ -142,7 +152,7 @@ export function CandidatePool({ positionId, rows, onReload }: Props): React.JSX.
   }
 
   return (
-    <section aria-labelledby="pool-heading" className="flex flex-col gap-4">
+    <section id="candidates" aria-labelledby="pool-heading" className="flex scroll-mt-6 flex-col gap-4">
       <h2 id="pool-heading" className="font-serif text-2xl">Candidates</h2>
       <AddCandidate positionId={positionId} onReload={onReload} />
       {views.length === 0 ? (
@@ -151,16 +161,16 @@ export function CandidatePool({ positionId, rows, onReload }: Props): React.JSX.
         <>
           <div className="overflow-x-auto rounded-xl border border-divider bg-surface">
             <table className="w-full text-left text-sm">
-              <caption className="sr-only">Candidate pool, newest first</caption>
+              <caption className="sr-only">Candidates in the order they were added; fit is the evidence share of this position&apos;s must-haves</caption>
               <thead className="bg-sage/50 text-xs text-muted">
                 <tr>
                   <th scope="col" className="px-3 py-2"><span className="sr-only">Select</span></th>
                   <th scope="col" className="px-3 py-2 font-medium">Name</th>
                   <th scope="col" className="px-3 py-2 font-medium">Source</th>
-                  <th scope="col" className="px-3 py-2 font-medium">Received</th>
                   <th scope="col" className="px-3 py-2 font-medium">Status</th>
-                  <th scope="col" className="px-3 py-2 font-medium">LinkedIn · CV</th>
-                  <th scope="col" className="px-3 py-2 font-medium">Run</th>
+                  <th scope="col" className="px-3 py-2 text-right font-medium">Fit</th>
+                  <th scope="col" className="px-3 py-2 text-right font-medium">Independent evidence</th>
+                  <th scope="col" className="px-3 py-2 font-medium"><span className="sr-only">Profile</span></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-divider">
@@ -180,11 +190,11 @@ export function CandidatePool({ positionId, rows, onReload }: Props): React.JSX.
                       {v.email !== null && <span className="block text-xs font-normal text-muted">{v.email}</span>}
                     </th>
                     <td className="whitespace-nowrap px-3 py-2">{v.source}</td>
-                    <td className="whitespace-nowrap px-3 py-2 text-muted">{v.received}</td>
                     <td className="px-3 py-2" title={v.note ?? undefined}><Pill tone={v.tone}>{v.status}</Pill></td>
-                    <td className="whitespace-nowrap px-3 py-2 text-muted">{v.presence}</td>
+                    <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums">{v.fit}</td>
+                    <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums">{v.independent}</td>
                     <td className="whitespace-nowrap px-3 py-2">
-                      {v.runHref === null ? <span className="text-muted">—</span> : <Link href={v.runHref} className={LINK}>Open brief</Link>}
+                      {v.runHref === null ? <span className="text-muted">—</span> : <Link href={v.runHref} className={LINK}>Open profile</Link>}
                     </td>
                   </tr>
                 ))}

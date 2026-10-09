@@ -12,7 +12,7 @@ Hackathon Case 01 (Apify): social media deep research. Input (hiring, plans/006)
 | Actors | `apify-client` with 45s timeout and `maxTotalChargeUsd`, never Apify MCP |
 | LLM seams | score, extract, verify, synthesize; `Output.array` / `Output.object` |
 | Verify | deterministic quote-in-excerpt and URL-in-ledger first, second model on residue, then a devil's advocate call (idea #8) that may only downgrade must-have FACTs; its record lives in the verify ledger row (`ref.challenge`) |
-| Identity | merge / `possibly-same-as` / ask below threshold |
+| Identity | merge / `possibly-same-as` / ask below threshold; a merge needs a strong link (given profile or anchor website / IČO, confirmed employer, cross-link to a confirmed profile), name + city alone caps at `possibly-same-as` (`resolve.ts` `corroboration`) |
 | Claims | claim + references + rank; contradictions via rank, never delete |
 | Budget | enforced in runner, never by the LLM: $0.50 and 16 paid actor runs per run (free REST fetches and LLM calls count USD only) |
 | Runner | Cloudflare Workflow `ResearchRunWorkflow` (binding `RESEARCH_RUN`), one `step.do` per recipe step, `step.waitForEvent` for lineup |
@@ -22,7 +22,9 @@ Hackathon Case 01 (Apify): social media deep research. Input (hiring, plans/006)
 | Replay | serve old ledger, labeled CACHED |
 | Verification calls (005) | Operator-approved, operator-entered numbers with recorded consent only; dialed once in `POST /api/calls/:id/approve`, never in a Workflow step; `VerificationCallWorkflow` (binding `VERIFY_CALL`) waits for the ElevenLabs webhook, ingests the transcript as a Source and writes `STATEMENT` claims (never FACT); `CALL_PROVIDER=mock` is labeled MOCK; max `RUN_CALL_MAX` calls per run |
 | Role catalog | `src/domain/role-catalog/` (one file per family, `types.ts` contract) is the source of truth for 100+ preselected roles; D1 `role_templates` is seeded from it (`pnpm roles:sql` output pasted into a migration, never hand-edited); `matchRoleTemplate` is whole-phrase on title or alias, never fuzzy; a hit skips the `role_questions` model call and feeds `role_sites_serp` via `StepContext.roleSites` |
+| GitHub deep (technical roles) | Hiring steps `github_deep` (`rest/github-deep`, REST, two waves via `Collector.followUp`) and `github_apify` (`saswave/github-profile-scraper`) run only when `StepContext.roleFamily` is in `TECHNICAL_FAMILIES` (engineering, data; `src/domain/code-profile.ts`); the collector's `digest` is written into the step ledger ref and read back as `code_profile` by the state route; numbers are excerpts in plain sentences so FACTs can quote them; stats pending (202) are named, never counted |
 | Intake (008) | Every channel (email `jobs+<tag>@asajj.cz` via Email Routing and `worker.email()`, `POST /api/intake/form` with bearer `INTAKE_TOKEN`, hosted `/apply/<tag>` + `POST /api/apply`, `POST /api/intake/startupjobs/<token>`) normalises into `IntakeInput` and calls `ingestApplication`, the only writer of `applications` and the only intake path to `startRun` (`via='intake'`); a run starts only for a known `intake_tags` tag with a LinkedIn URL or readable CV, capped by `INTAKE_PER_HOUR_CAP`; the candidate never sees a run |
+| Profile signals (012) | Platform collectors record `ProfileFacts` (`src/domain/profile-facts.ts`) in the step ledger ref `digest` for merged accounts only; `profileSignals` (`src/domain/profile-signals.ts`) derives sentences at read time in the state route (`profile_signals`), shown in a card and the interview kit; rules in `plans/012-fake-profile-signals/00-SYNTHESIS.md`; no model, no score, no verdict words |
 | Candidate pool (010) | Tag bound to a position: applications pool (status `pooled`, no auto-start); tag without position: unchanged plan 008 auto-start; manual add via `POST /api/positions/:id/candidates` (LinkedIn URL or CV); `POST /api/positions/:id/enrich` (session or bearer, max 20 ids) starts one run per selected pooled candidate with the position's must-haves, subject to `START_PER_HOUR_CAP` (origin `via='start'`) and global `RUNS_PER_HOUR_CAP`; each run updates application status to `run-started`; migration 0012 rebuilds `applications` (`position_id` added), adds `position_id` to `intake_tags` |
 
 ## Stack and bindings
@@ -32,7 +34,7 @@ Worker entry `src/worker.ts` re-exports the OpenNext `fetch` and exports `Resear
 Recruiter auth: cookie sessions (`src/domain/session.ts`, D1 `sessions`), PBKDF2 passwords (`src/domain/password.ts`); the web UI never asks for RUN_TOKEN; the bearer stays for `POST /api/runs` (only) and as the machine-client alternative to a session on the call routes and `/api/roles`.
 
 ## Scripts (pnpm)
-`dev`, `build`, `preview`, `deploy`, `cf-typegen`, `typecheck`, `lint`, `test`, `test:watch`, `db:migrate:local`, `db:migrate:remote`, `roles:sql`, `check` (= typecheck && lint && test, app and extension), `ext:build`. Do not rename.
+`dev`, `build`, `preview`, `deploy`, `cf-typegen`, `typecheck`, `lint`, `test`, `test:watch`, `db:migrate:local`, `db:migrate:remote`, `roles:sql`, `eval` (synthetic eval set, writes `eval/results.json` + `eval/RESULTS.md`; the same eval runs in `pnpm test` and fails on a new miss), `check` (= typecheck && lint && test, app and extension), `ext:build`. Do not rename.
 
 ## Directory map
 - `src/domain/` pure: claim schemas today; `verify.ts` and `resolve.ts` are TODO (001 TDD steps 2–3). No I/O, ports are plain function parameters.
@@ -93,3 +95,4 @@ Every change to `src/`, `migrations/`, `scripts/` or any root config must pass `
 - ESLint runs typescript-eslint `strictTypeChecked` + `stylisticTypeChecked` with no `warn` level; every finding fails `pnpm check`.
 - `POST /api/runs` needs `Authorization: Bearer <RUN_TOKEN>`; the value lives in `~/s/oldboys/.env` and in the Worker secret.
 - Without `GITHUB_TOKEN` the Worker gets HTTP 403 from api.github.com (anonymous limit shared by all Workers egress IPs); without `STACKEXCHANGE_KEY` Stack Exchange may answer 400 `throttle_violation`. OpenAlex needs a free `OPENALEX_API_KEY` (`api_key=` param) because the Worker's shared IP exhausts the anonymous daily budget (HTTP 429); Stack Exchange needs a Stack Apps key, otherwise 300 requests/day per IP. `fetchJson` puts the first 160 body characters in the ledger note.
+- `github_deep` makes up to ~11 GitHub REST requests per handle; without `GITHUB_TOKEN` the shared anonymous 60/h limit is exhausted by one run.

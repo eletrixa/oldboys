@@ -24,6 +24,7 @@ const cand = (platform: string, decision: Candidate["decision"], url: string): C
 });
 
 const brief = (over: Partial<Brief> = {}): Brief => ({
+  profile: null,
   run_id: "r",
   per_question: [
     { question_id: "mh-sql", coverage: "evidenced", claim_ids: ["c1"], summary: "SQL in two projects." },

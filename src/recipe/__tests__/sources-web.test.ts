@@ -123,7 +123,7 @@ describe("linkedinProfileDetail", () => {
 });
 
 describe("linkedinCompany", () => {
-  it("returns [] for hiring", () => {
+  it("returns [] for hiring without a confirmed employer page", () => {
     expect(linkedinCompany.requests(baseContext(), step)).toEqual([]);
   });
 

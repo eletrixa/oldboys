@@ -41,6 +41,7 @@ const brief = (over: Partial<Brief> = {}): Brief => ({
   searched_empty: [],
   removed_protected: 0,
   degraded: null,
+  profile: null,
   evidence: [],
   also_found: [],
   headline: "Senior Data Engineer at Acme",

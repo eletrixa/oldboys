@@ -7,7 +7,7 @@
  * Tested:  n/a
  *
  * Key responsibilities:
- * - Run src/**\/__tests__/*.test.ts under Node with the @/ alias
+ * - Run src/**\/__tests__/*.test.ts and the eval set (eval/__tests__) under Node with the @/ alias
  *
  * Design constraints:
  * - Workers pool (@cloudflare/vitest-pool-workers) deliberately not used yet; domain code must stay
@@ -19,7 +19,7 @@ import { fileURLToPath } from "node:url";
 export default defineConfig({
   test: {
     environment: "node",
-    include: ["src/**/__tests__/**/*.test.ts"],
+    include: ["src/**/__tests__/**/*.test.ts", "eval/**/__tests__/**/*.test.ts"],
   },
   resolve: {
     alias: {

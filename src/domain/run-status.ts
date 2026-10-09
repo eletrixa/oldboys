@@ -10,6 +10,7 @@
  * - Define the wire schema shared by GET /api/runs/:id and the browser extension (plans/004)
  * - Build it from plain rows (no I/O) so the route stays one query per table
  * - Decide the dedupe window for a repeated mark of the same source URL and goal
+ * - isStalled: running or queued with no ledger activity for 30 minutes (display state only)
  * - Hourly run caps: shared token, public start form, intake funnel default
  *
  * Design constraints:
@@ -72,6 +73,16 @@ export function toRunStatus(
     needsAnswer: head.status === "paused" ? [...candidates] : null,
     createdAt: head.created_at,
   });
+}
+
+/** A queued or running investigation with no ledger activity for this long was most likely killed (Workflow restart). */
+export const STALLED_AFTER_MINUTES = 30;
+
+/** Display-only: the DB status stays "running"; the user is told to start again. */
+export function isStalled(status: string, lastActivityIso: string, nowIso: string, limitMinutes = STALLED_AFTER_MINUTES): boolean {
+  if (status !== "running" && status !== "queued") return false;
+  const idle = Date.parse(nowIso) - Date.parse(lastActivityIso);
+  return Number.isFinite(idle) && idle > limitMinutes * 60_000;
 }
 
 /** A mark of the same page with the same goal inside this window reuses the earlier run. */

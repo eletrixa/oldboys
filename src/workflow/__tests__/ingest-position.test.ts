@@ -7,7 +7,7 @@
  * Tested:  n/a (this is the test)
  *
  * Key responsibilities:
- * - Cover I1-I14 of specs/positions-ingest.md: paste, LLM down, Greenhouse fetch, dedupe, 422, fallback, timeout, cap, R2 failure, race, title override, manual entry, Jobs.cz career-site widget chain, company and location overrides
+ * - Cover I1-I14 of specs/positions-ingest.md: paste, LLM down, Greenhouse fetch, dedupe, 422, fallback, timeout, cap, R2 failure, race, title override, manual entry, Jobs.cz career-site widget chain, company and location overrides; I15 role-catalog title
  *
  * Design constraints:
  * - No module mocks; the fake D1 matches SQL prefixes and throws on anything unexpected
@@ -16,6 +16,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
 import type { Ports } from "@/domain/ports";
 import type { CreatePositionBody } from "@/app/api/_lib/position-body";
+import { ROLE_CATALOG } from "@/domain/role-catalog";
 import { ingestPosition, type IngestDeps, ingestCapUsd, estimatePositionUsd } from "@/workflow/ingest-position";
 import { fakeLlm } from "@/recipe/__tests__/fakes";
 import { WIDGET_API } from "@/recipe/seams/posting-jobscz-widget";
@@ -225,6 +226,18 @@ describe("ingestPosition", () => {
     expect(mustHaves.map((m) => m.id)).toEqual(["mh-title-experience", "mh-public-work", "mh-location-fit"]);
     expect(mustHaves[2]?.text).toContain("Brno");
     expect(JSON.parse(env.puts.get("positions/pos-1.json") ?? "{}")).toMatchObject({ method: "manual", raw: "" });
+  });
+
+  it("I15: a role-catalog title alone gets the template's family and must-haves, marked edited, no LLM call", async () => {
+    const env = makeEnv();
+    const template = ROLE_CATALOG[0];
+    if (template === undefined) throw new Error("empty catalog");
+    const llm = vi.fn(() => Promise.reject(new Error("must not be called")));
+    await run(deps(env, { ports: { llm: llm as unknown as Ports["llm"] } }), { title: template.title });
+    expect(llm).not.toHaveBeenCalled();
+    const row = env.rows.get("pos-1");
+    expect(row).toMatchObject({ ingest_method: "manual", extraction: "edited", family: template.family });
+    expect(JSON.parse(row?.must_haves_json as string)).toEqual(template.must_haves);
   });
 
   it("I13: a Jobs.cz career-site page without posting text goes through the widget chain and stores the GraphQL reply as raw", async () => {

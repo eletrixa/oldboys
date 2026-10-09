@@ -42,12 +42,12 @@ function makeDb(positions: Row[], runs: Row[] = [], applications: Row[] = [], ta
       return { rows: hit ? [Object.fromEntries(Object.entries(hit).filter(([k]) => k !== "r2_key"))] : [], changes: 0 };
     }
     const mine = () => runs.filter((r) => r.position_id === a[0]).sort((x, y) => String(y.created_at).localeCompare(String(x.created_at)));
-    if (q.startsWith("SELECT i.id")) return { rows: mine().map((r) => ({ role: "x", questions_json: null, brief_json: null, sources_confirmed: 0, ...r })), changes: 0 };
+    if (q.startsWith("SELECT i.id")) return { rows: mine().map((r) => ({ role: "x", questions_json: null, brief_json: null, sources_confirmed: 0, last_step: null, ...r })), changes: 0 };
     if (q.startsWith("SELECT id, source, name")) {
       const rows = applications
         .filter((r) => r.position_id === a[0])
         .sort((x, y) => String(y.received_at).localeCompare(String(x.received_at)) || String(y.id).localeCompare(String(x.id)))
-        .map((r) => ({ has_profile: r.linkedin_url === undefined || r.linkedin_url === null ? 0 : 1, has_cv: r.cv_text === undefined || r.cv_text === null ? 0 : 1, ...Object.fromEntries(["id", "source", "name", "email", "status", "run_id", "note", "received_at"].map((k) => [k, r[k] ?? null])) }));
+        .map((r) => ({ has_profile: r.linkedin_url === undefined || r.linkedin_url === null ? 0 : 1, has_cv: r.cv_text === undefined || r.cv_text === null ? 0 : 1, ...Object.fromEntries(["id", "source", "name", "email", "status", "run_id", "note", "received_at", "linkedin_url"].map((k) => [k, r[k] ?? null])) }));
       return { rows, changes: 0 };
     }
     if (q.startsWith("SELECT tag, role")) return { rows: tags.filter((t) => t.position_id === a[0]), changes: 0 };
@@ -134,10 +134,33 @@ describe("positions functions", () => {
     ];
     const tags = [{ tag: "staff-eng", role: "Staff", goal: "hiring", startupjobs_offer_id: null, position_id: "p1", created_at: "2026-10-08T10:00:00.000Z" }];
     const detail = await getPosition(makeDb([position("p1")], [], apps, tags), "p1");
-    expect(detail?.candidates.map((c) => [c.id, c.has_profile, c.has_cv])).toEqual([["a2", 0, 1], ["a1", 1, 0]]);
-    for (const key of ["cv_text", "cover_letter", "external_id", "linkedin_url"]) expect(detail?.candidates[0]).not.toHaveProperty(key);
+    expect(detail?.candidates.map((c) => [c.id, c.has_profile, c.has_cv, c.handle, c.run])).toEqual([["a2", 0, 1, null, null], ["a1", 1, 0, "Ada", null]]);
+    for (const c of detail?.candidates ?? []) for (const key of ["cv_text", "cover_letter", "external_id", "linkedin_url"]) expect(c).not.toHaveProperty(key);
     expect(detail?.tags.map((t) => t.tag)).toEqual(["staff-eng"]);
     expect((await getPosition(makeDb([position("p1")]), "p1"))).toMatchObject({ candidates: [], tags: [] });
+  });
+
+  it("getPosition attaches each pooled run's progress, fit % and independent-evidence count", async () => {
+    const ev = { quote: "Led the launch", source_id: "s1", kind: "FACT", supports: true, strength: "strong" };
+    const profile = {
+      achievements: [{ text: "x", evidence: [ev] }], risks: [], history: [], questions: [], degraded: null,
+      personality: { disc: null, mbti: null, read: "", evidence: [] },
+      position_fit: [{ role: "Staff", fit_pct: 67, rationale: "", traits: [] }],
+    };
+    const runs = [
+      { id: "r1", position_id: "p1", subject: "Ada King", status: "running", created_at: "2026-10-09T10:00:00.000Z", last_step: "seed_profile", last_at: "2020-01-01T00:00:00.000Z" },
+      { id: "r2", position_id: "p1", subject: "Bo", status: "done", created_at: "2026-10-09T11:00:00.000Z", brief_json: JSON.stringify({ run_id: "r2", profile }) },
+    ];
+    const apps = [
+      { id: "a1", position_id: "p1", source: "manual", status: "run-started", run_id: "r1", received_at: "2026-10-08T10:00:00.000Z", linkedin_url: "https://www.linkedin.com/in/ada" },
+      { id: "a2", position_id: "p1", source: "manual", status: "run-started", run_id: "r2", received_at: "2026-10-09T10:00:00.000Z", cv_text: "cv" },
+    ];
+    const detail = await getPosition(makeDb([position("p1")], runs, apps), "p1");
+    const [done, running] = detail?.candidates ?? [];
+    expect(done?.run).toEqual({ status: "done", subject: "Bo", step: null, pct: 100, fit_pct: 67, independent: 1, stalled: false });
+    expect(running?.run).toMatchObject({ status: "running", subject: "Ada King", step: "Web search", fit_pct: null, independent: 0, stalled: true });
+    expect(running?.run?.pct).toBeGreaterThan(0);
+    expect(running?.run?.pct).toBeLessThan(100);
   });
 
   it("B6: getPosition of an unknown or implausible id returns null", async () => {
